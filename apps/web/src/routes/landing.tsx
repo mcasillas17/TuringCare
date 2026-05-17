@@ -1,21 +1,27 @@
-import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { BriefSpotlight } from "@/components/landing/brief-spotlight";
+import { CtaBand } from "@/components/landing/cta-band";
+import { Faq } from "@/components/landing/faq";
+import { Hero } from "@/components/landing/hero";
+import { HowItWorks } from "@/components/landing/how-it-works";
+import { Philosophy } from "@/components/landing/philosophy";
+import { SiteFooter } from "@/components/landing/site-footer";
+import { SiteNav } from "@/components/landing/site-nav";
+import { TrainersTeaser } from "@/components/landing/trainers-teaser";
 
 export function Landing() {
   return (
-    <div className="p-8 space-y-4">
-      <h1 className="text-3xl font-bold">TuringCare</h1>
-      <p className="text-muted-foreground">
-        Humane, force-free dog-training support. Journal behavior, build a Brief.
-      </p>
-      <div className="flex gap-3">
-        <Button asChild>
-          <Link to="/register">Get started</Link>
-        </Button>
-        <Button asChild variant="outline">
-          <Link to="/login">Log in</Link>
-        </Button>
-      </div>
+    <div className="min-h-screen bg-cream text-slate">
+      <SiteNav />
+      <main>
+        <Hero />
+        <HowItWorks />
+        <BriefSpotlight />
+        <Philosophy />
+        <TrainersTeaser />
+        <Faq />
+        <CtaBand />
+      </main>
+      <SiteFooter />
     </div>
   );
 }
