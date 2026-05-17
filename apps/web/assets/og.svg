@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#28323d"/>
+  <circle cx="1010" cy="120" r="300" fill="#4a5c6e" opacity="0.45"/>
+  <circle cx="1120" cy="40" r="160" fill="#7fb8d6" opacity="0.30"/>
+  <g fill="#c8893b" transform="translate(96 250)">
+    <ellipse cx="34" cy="40" rx="22" ry="28"/>
+    <ellipse cx="86" cy="20" rx="20" ry="26"/>
+    <ellipse cx="138" cy="32" rx="21" ry="27"/>
+    <path d="M16 96 C16 58 156 58 156 96 C156 140 116 168 86 168 C56 168 16 140 16 96 Z"/>
+  </g>
+  <text x="96" y="470" font-family="Arial, Helvetica, sans-serif" font-size="104" font-weight="800" fill="#faf6ef">TuringCare</text>
+  <text x="100" y="540" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="500" fill="#c9d4dd">Understand your dog. Train without force.</text>
+  <text x="100" y="596" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="600" fill="#e0a85a">turingcare.dog</text>
+</svg>
