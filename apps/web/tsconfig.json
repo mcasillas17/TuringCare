@@ -5,6 +5,7 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
     "noEmit": true,
+    "declaration": false,
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }
   },
