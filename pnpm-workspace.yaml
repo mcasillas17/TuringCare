@@ -5,3 +5,5 @@ allowBuilds:
   '@biomejs/biome': true
   esbuild: true
   msw: false
+  sharp: false
+  workerd: false
