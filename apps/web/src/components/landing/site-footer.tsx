@@ -21,8 +21,17 @@ export function SiteFooter() {
           </a>
         </nav>
       </div>
-      <p className="mx-auto mt-8 max-w-6xl border-t border-white/10 pt-6 text-center text-xs text-silver/70 md:text-left">
-        © {new Date().getFullYear()} TuringCare · Built for Turing 🐾
+      <p className="mx-auto mt-8 flex max-w-6xl items-center justify-center gap-2 border-t border-white/10 pt-6 text-center text-xs text-silver/70 md:justify-start md:text-left">
+        <img
+          src="/turing.jpg"
+          alt="Turing, a blue-merle Mini American Shepherd"
+          width={20}
+          height={20}
+          loading="lazy"
+          decoding="async"
+          className="size-5 rounded-full object-cover"
+        />
+        © {new Date().getFullYear()} TuringCare · Built for Turing
       </p>
     </footer>
   );

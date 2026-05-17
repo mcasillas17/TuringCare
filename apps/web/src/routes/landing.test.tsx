@@ -24,6 +24,7 @@ it("renders the key landing sections", () => {
     screen.getAllByRole("link", { name: /get started|create your free account/i }).length,
   ).toBeGreaterThan(0);
   expect(screen.queryByRole("heading", { name: /start understanding your dog today/i })).toBeNull();
+  expect(screen.getAllByRole("img", { name: /turing/i }).length).toBeGreaterThan(0);
 });
 
 it("expands an FAQ item on click", async () => {
