@@ -47,7 +47,10 @@ Design approved, plan written; build pending.
 - Spec/plan: `specs/2026-05-17-rate-limiting-design.md`, `plans/2026-05-17-rate-limiting.md`
 - Spec `b472762`, plan `54e10df`.
 
-## 2026-05-17 — Copy rephrase ("force-free" → positive framing) — IN DESIGN
-Replace "force-free"/"Train without force" with positive-reinforcement /
-reward-based phrasing across landing copy + share meta + og.png. Awaiting
-design approval.
+## 2026-05-17 — Copy rephrase ("force-free" → positive framing) — SHIPPED
+Replaced "force-free" / "Train without force" with positive-reinforcement /
+reward-based phrasing across the 7 landing components, footer, FAQ, trainers
+tag/heading, `index.html` description/og/twitter/og:image:alt, and regenerated
+`og.png` (tagline + font-size 44→40). Tests updated red→green; full gate green.
+- Spec/plan: `specs/2026-05-17-copy-rephrase-design.md`, `plans/2026-05-17-copy-rephrase.md`
+- Commits: `758cf46` (copy+tests), `05ecb13` (OG image), this log entry.
