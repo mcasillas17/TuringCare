@@ -1,0 +1,23 @@
+{
+  "name": "turingcare",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "packageManager": "pnpm@11.1.2",
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,magenta \"pnpm --filter @turingcare/api dev\" \"pnpm --filter @turingcare/web dev\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "pnpm -r test",
+    "db:generate": "pnpm --filter @turingcare/api db:generate",
+    "db:migrate": "pnpm --filter @turingcare/api db:migrate",
+    "db:push": "pnpm --filter @turingcare/api db:push"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.0"
+  }
+}
