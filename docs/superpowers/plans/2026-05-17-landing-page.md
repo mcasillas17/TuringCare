@@ -16,6 +16,20 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
 Use `git -c commit.gpgsign=false commit -m "<subject>" -m "<trailer>"`. Work on `main` (project is continuously deployed; the user will push at the end). Run web commands from repo root with `pnpm --filter @turingcare/web …`.
 
+## Color Usage Rules (WCAG AA — enforced in review)
+
+Turing's palette is unchanged; placement is constrained so all text/UI meets AA:
+
+- **Primary buttons:** `bg-slate text-cream hover:bg-slate/90` (NOT copper/white — copper-white ≈ 3.0, fails).
+- **Body/heading text on light (cream/white/sand):** `text-slate` or `text-slate-soft` only. Never `text-copper`/`text-gold`/`text-silver` for text on light.
+- **Copper/gold on light = decoration only:** gradient blobs, thick underlines/borders, dividers, dots, icon *tiles* — never the text/glyph color of meaningful small UI on light.
+- **Icon tiles on light:** `bg-slate text-cream` (crisp, AA) — not `bg-sand text-copper`.
+- **Dark sections (Philosophy, CTA band, Footer = `bg-slate`):** copper/gold/ice/silver/cream text & accents all pass here — use them for vibrancy.
+- **Light decorative tint chips** (e.g. severity pills) use a light gold/ice background with **`text-slate`** (dark text on light tint passes).
+- Decorative elements are `aria-hidden`.
+
+These rules override any conflicting class in the snippets below; snippets already reflect them.
+
 ---
 
 ## File Structure
@@ -414,19 +428,19 @@ export function SiteNav() {
             <a
               key={l.href}
               href={l.href}
-              className="text-sm font-medium text-slate-soft transition-colors hover:text-copper"
+              className="text-sm font-medium text-slate-soft underline-offset-4 transition-colors hover:text-slate hover:underline hover:decoration-copper"
             >
               {l.label}
             </a>
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" className="text-slate hover:text-copper">
+          <Button asChild variant="ghost" className="text-slate hover:bg-surface-sand">
             <Link to="/login">Log in</Link>
           </Button>
           <Button
             asChild
-            className="bg-copper text-white hover:bg-copper/90"
+            className="bg-slate text-cream hover:bg-slate/90"
           >
             <Link to="/register">Get started</Link>
           </Button>
@@ -484,7 +498,9 @@ export function Hero() {
           <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-slate md:text-6xl">
             Understand your dog.
             <br />
-            <span className="text-copper">Train without force.</span>
+            <span className="underline decoration-copper decoration-[6px] underline-offset-4">
+              Train without force.
+            </span>
           </h1>
         </Reveal>
         <Reveal delay={160}>
@@ -499,7 +515,7 @@ export function Hero() {
             <Button
               asChild
               size="lg"
-              className="bg-copper px-7 text-white hover:bg-copper/90"
+              className="bg-slate px-7 text-cream hover:bg-slate/90"
             >
               <Link to="/register">Get started — it's free</Link>
             </Button>
@@ -581,7 +597,7 @@ export function HowItWorks() {
           {STEPS.map((s, i) => (
             <Reveal key={s.title} delay={i * 110}>
               <div className="h-full rounded-2xl border border-silver/70 bg-surface p-7 shadow-sm">
-                <div className="grid size-12 place-items-center rounded-xl bg-surface-sand text-copper">
+                <div className="grid size-12 place-items-center rounded-xl bg-slate text-cream">
                   <s.icon className="size-6" />
                 </div>
                 <h3 className="mt-5 text-lg font-semibold text-slate">
@@ -644,7 +660,7 @@ export function BriefSpotlight() {
           <ul className="mt-7 space-y-3">
             {BENEFITS.map((b) => (
               <li key={b} className="flex items-start gap-3">
-                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-copper/15 text-copper">
+                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-slate text-cream">
                   <Check className="size-3.5" />
                 </span>
                 <span className="text-sm text-slate-soft">{b}</span>
@@ -926,10 +942,10 @@ export function CtaBand() {
             background: "linear-gradient(135deg, #c8893b 0%, #e0a85a 100%)",
           }}
         >
-          <h2 className="text-3xl font-bold text-white md:text-4xl">
+          <h2 className="text-3xl font-bold text-slate md:text-4xl">
             Start understanding your dog today
           </h2>
-          <p className="mx-auto mt-3 max-w-lg text-white/90">
+          <p className="mx-auto mt-3 max-w-lg text-slate/80">
             Free to start. Your journal and first Behavior Brief are ready when
             you are.
           </p>
