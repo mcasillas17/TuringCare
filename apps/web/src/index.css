@@ -128,3 +128,25 @@
     @apply font-sans;
   }
 }
+
+/* ---- TuringCare brand palette (Turing: blue-merle + copper points) ---- */
+@theme {
+  --color-cream: #faf6ef;
+  --color-surface: #ffffff;
+  --color-surface-sand: #f4eee3;
+  --color-slate: #28323d;
+  --color-slate-soft: #4a5c6e;
+  --color-silver: #c9d4dd;
+  --color-copper: #c8893b;
+  --color-gold: #e0a85a;
+  --color-ice: #7fb8d6;
+}
+
+@keyframes tc-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(2%, -3%, 0) scale(1.06); }
+}
+.tc-drift { animation: tc-drift 14s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .tc-drift { animation: none; }
+}
