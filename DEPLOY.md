@@ -35,11 +35,19 @@ The API package is `@turingcare/api` (pnpm filter name used everywhere below —
 ## 1. Database (Supabase)
 
 1. Create/open the Supabase project.
-2. **Project Settings → Database → Connection string → Transaction pooler.**
-   Copy it. Format:
-   `postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres`
+2. Dashboard **`Connect`** button (or Project Settings → Database →
+   Connection string) → choose the **Session pooler**. Copy it. Format
+   (username is `postgres.<project-ref>`, port **5432**):
+   `postgresql://postgres.<project-ref>:<url-encoded-password>@aws-1-<region>.pooler.supabase.com:5432/postgres`
+   - Use the **Session pooler (5432)**, not Transaction pooler (6543): both are
+     IPv4 (the direct `db.<ref>.supabase.co` connection is IPv6-only and
+     unreachable from GitHub Actions / Fly), but the Session pooler has no
+     PgBouncer prepared-statement caveat for `drizzle-kit migrate`.
+   - **URL-encode** the password if it contains `@ : / ? # [ ] %` (e.g.
+     `@`→`%40`). Reset it at Settings → Database → Database password if unknown.
 3. This single value is used as `DATABASE_URL` in **both** the GitHub Actions
    secret (for the `migrate` job) and the Fly secret (for the running API).
+   It is **not** committed anywhere — secrets only.
 
 No tables yet — the `migrate` job creates them from
 `apps/api/drizzle/` on the first deploy.
@@ -124,7 +132,7 @@ CMD ["node", "apps/api/dist/index.js"]
 
 ```bash
 fly secrets set --app turingcare-api \
-  DATABASE_URL='postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:6543/postgres' \
+  DATABASE_URL='postgresql://postgres.<ref>:<url-encoded-pw>@aws-1-<region>.pooler.supabase.com:5432/postgres' \
   BETTER_AUTH_SECRET="$(openssl rand -base64 32)" \
   BETTER_AUTH_URL='https://api.turingcare.dog' \
   FRONTEND_URL='https://turingcare.dog' \
@@ -135,7 +143,7 @@ fly secrets set --app turingcare-api \
 
 | Secret | Value |
 |---|---|
-| `DATABASE_URL` | Supabase Transaction-pooler URL |
+| `DATABASE_URL` | Supabase Session-pooler URL |
 | `BETTER_AUTH_SECRET` | 32+ random chars (`openssl rand -base64 32`) |
 | `BETTER_AUTH_URL` | `https://api.turingcare.dog` |
 | `FRONTEND_URL` | `https://turingcare.dog` |
@@ -182,7 +190,7 @@ Repo → Settings → Secrets and variables → Actions → New repository secre
 
 | Secret | Value |
 |---|---|
-| `DATABASE_URL` | Supabase Transaction-pooler URL (used by the `migrate` job) |
+| `DATABASE_URL` | Supabase Session-pooler URL (used by the `migrate` job) |
 | `FLY_API_TOKEN` | from `fly tokens create deploy` |
 | `CLOUDFLARE_API_TOKEN` | Pages-edit token |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
