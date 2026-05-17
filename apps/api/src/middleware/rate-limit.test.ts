@@ -36,7 +36,7 @@ describe("globalRateLimit middleware", () => {
       .on(["POST", "GET"], "/api/auth/*", (c) => c.json({ auth: true }));
   }
 
-  it("429s a normal route past the limit with Retry-After", async () => {
+  it("429s a normal route past the limit with X-Retry-After", async () => {
     const a = app(1);
     expect((await a.request("/thing")).status).toBe(200);
     const res = await a.request("/thing");
