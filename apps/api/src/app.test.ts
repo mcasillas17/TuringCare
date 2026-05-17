@@ -13,4 +13,11 @@ describe("api", () => {
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "unauthorized" });
   });
+
+  it("GET /health is never rate-limited", async () => {
+    for (let i = 0; i < 50; i++) {
+      const res = await app.request("/health");
+      expect(res.status).toBe(200);
+    }
+  });
 });

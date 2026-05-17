@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { env } from "./env";
+import { globalRateLimit } from "./middleware/rate-limit";
 
 const app = new Hono()
   .use(
@@ -15,6 +16,7 @@ const app = new Hono()
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     }),
   )
+  .use("*", globalRateLimit())
   .get("/health", (c) => c.json({ status: "ok" } as const))
   .get("/me", async (c) => {
     const session = await auth.api.getSession({ headers: c.req.raw.headers });
