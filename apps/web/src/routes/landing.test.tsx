@@ -23,6 +23,7 @@ it("renders the key landing sections", () => {
   expect(
     screen.getAllByRole("link", { name: /get started|create your free account/i }).length,
   ).toBeGreaterThan(0);
+  expect(screen.queryByRole("heading", { name: /start understanding your dog today/i })).toBeNull();
 });
 
 it("expands an FAQ item on click", async () => {

@@ -1,5 +1,3 @@
-import { Link } from "react-router-dom";
-
 export function SiteFooter() {
   return (
     <footer className="bg-slate px-5 py-12 text-silver">
@@ -21,9 +19,6 @@ export function SiteFooter() {
           <a href="#faq" className="hover:text-gold">
             FAQ
           </a>
-          <Link to="/login" className="hover:text-gold">
-            Log in
-          </Link>
         </nav>
       </div>
       <p className="mx-auto mt-8 max-w-6xl border-t border-white/10 pt-6 text-center text-xs text-silver/70 md:text-left">
