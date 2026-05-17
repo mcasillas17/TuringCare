@@ -1,0 +1,102 @@
+name: Deploy
+
+# Only pushes to main trigger a deploy.
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # Same gate as ci.yml (inlined). Must pass before anything deploys.
+  ci:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: turingcare
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d turingcare"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/turingcare
+      BETTER_AUTH_SECRET: ci-only-insecure-secret-0123456789abcdef
+      BETTER_AUTH_URL: http://localhost:3001
+      FRONTEND_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint (Biome)
+        run: pnpm biome check .
+      - name: Typecheck
+        run: pnpm -r exec tsc --noEmit
+      - name: Apply schema
+        run: pnpm --filter @turingcare/api db:migrate
+      - name: Test
+        run: pnpm -r test
+      - name: Build
+        run: pnpm -r build
+
+  # Run the real migrations against production Supabase.
+  migrate:
+    needs: ci
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migrate production database
+        run: pnpm --filter @turingcare/api db:migrate
+
+  # Deploy the API to Fly only after migrations succeed.
+  # --remote-only builds the image on Fly's builders, not the GitHub runner.
+  deploy-api:
+    needs: migrate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy to Fly
+        run: flyctl deploy --remote-only --config apps/api/fly.toml
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  # Frontend is independent of the API path — runs in parallel with
+  # migrate/deploy-api, gated only on ci.
+  deploy-web:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build frontend (prod API URL)
+        run: pnpm --filter @turingcare/web build
+        env:
+          VITE_API_URL: https://api.turingcare.dog
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name=turingcare-web --branch=main

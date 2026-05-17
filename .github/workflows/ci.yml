@@ -1,0 +1,63 @@
+name: CI
+
+# Every push (any branch) and every PR.
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    # The @turingcare/api test suite exercises Better Auth's getSession
+    # against Postgres, so CI needs a real database.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: turingcare
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d turingcare"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/turingcare
+      BETTER_AUTH_SECRET: ci-only-insecure-secret-0123456789abcdef
+      BETTER_AUTH_URL: http://localhost:3001
+      FRONTEND_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # No `version:` — pnpm/action-setup@v4 reads packageManager
+      # (pnpm@11.1.2) from package.json, matching the committed lockfile.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm biome check .
+
+      - name: Typecheck
+        run: pnpm -r exec tsc --noEmit
+
+      # Apply the schema so the DB-backed api tests can run.
+      - name: Apply schema
+        run: pnpm --filter @turingcare/api db:migrate
+
+      - name: Test
+        run: pnpm -r test
+
+      - name: Build
+        run: pnpm -r build
