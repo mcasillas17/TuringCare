@@ -1,0 +1,21 @@
+# flyctl launch added from .gitignore
+**/node_modules
+**/dist
+**/dist-node
+**/build
+**/.vite
+**/*.tsbuildinfo
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+**/apps/api/drizzle/meta/_journal.json.bak
+**/.DS_Store
+**/Thumbs.db
+**/.idea
+**/.vscode/*
+!**/.vscode/extensions.json
+**/*.log
+**/npm-debug.log*
+**/pnpm-debug.log*
+fly.toml

@@ -64,69 +64,37 @@ From the repo root:
 fly launch --no-deploy --name turingcare-api --config apps/api/fly.toml
 ```
 
-- App name **`turingcare-api`** (must match `--config apps/api/fly.toml`'s `app`).
+- App name **`turingcare-api`** (must match `apps/api/fly.toml`'s `app`).
 - Decline Postgres/Redis when prompted (we use Supabase).
-- This generates `apps/api/fly.toml` (and possibly a `Dockerfile`).
+- This generates `apps/api/fly.toml`.
 
-### 2b. Commit `fly.toml` and a working `Dockerfile`
+### 2b. `fly.toml` + `Dockerfile.api` (already committed)
 
-`flyctl deploy --remote-only` builds on Fly's builders but still needs a
-**Dockerfile that builds the pnpm workspace**. `fly launch`'s autodetected
-Dockerfile usually does **not** handle a pnpm monorepo. Use these:
+Both files are **already in the repo** (committed), so there's nothing to write
+by hand — just confirm them:
 
-`apps/api/fly.toml`:
+- **`apps/api/fly.toml`** — `fly launch` generated it with the wrong region
+  (`lax`) and port (`8080`) and no build section. It has been corrected to
+  `primary_region = 'iad'`, `internal_port = 3001`, `[env] PORT = '3001'`, and
+  `[build] dockerfile = '../../Dockerfile.api'`. **Change `primary_region` if
+  you want a different region.**
+- **`Dockerfile.api`** (repo root, build context = repo root) — runs the API
+  with **`tsx`**, not `tsc` + `node dist`. This is deliberate and required: the
+  project uses `moduleResolution: "Bundler"` (extensionless relative imports)
+  and `@turingcare/shared` is consumed as TypeScript source — Node's native ESM
+  loader can run neither, so `node dist/index.js` crashes with
+  `ERR_MODULE_NOT_FOUND`. `tsx` transpiles + resolves both, exactly like local
+  dev. Verified: the image builds, boots, and serves `/health` + register +
+  `/me` against Postgres.
 
-```toml
-app = "turingcare-api"
-primary_region = "iad"   # pick your region
+`flyctl deploy --remote-only` builds the image on Fly's builders from
+`Dockerfile.api`; `internal_port` (3001) matches the `PORT` the app binds via
+`@hono/node-server` on `0.0.0.0`.
 
-[build]
-  dockerfile = "../../Dockerfile.api"   # path relative to apps/api/
-
-[http_service]
-  internal_port = 3001                  # must match the app's PORT
-  force_https = true
-  auto_stop_machines = true
-  auto_start_machines = true
-  min_machines_running = 0
-
-[[vm]]
-  size = "shared-cpu-1x"
-```
-
-`Dockerfile.api` (repo root — build context is the repo root):
-
-```dockerfile
-FROM node:22-slim AS base
-RUN corepack enable
-WORKDIR /app
-
-FROM base AS build
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
-COPY packages/shared/package.json packages/shared/
-COPY apps/api/package.json apps/api/
-RUN pnpm install --frozen-lockfile
-COPY packages/shared packages/shared
-COPY apps/api apps/api
-RUN pnpm --filter @turingcare/api build
-
-FROM base AS deploy
-ENV NODE_ENV=production
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY packages/shared/package.json packages/shared/
-COPY apps/api/package.json apps/api/
-RUN pnpm install --frozen-lockfile --prod
-COPY --from=build /app/packages/shared packages/shared
-COPY --from=build /app/apps/api/dist apps/api/dist
-EXPOSE 3001
-CMD ["node", "apps/api/dist/index.js"]
-```
-
-`git add apps/api/fly.toml Dockerfile.api && git commit`. Both must be on
-`main` before the first deploy or `deploy-api` fails.
-
-> The app reads `PORT` (default `3001`) and binds `0.0.0.0` via
-> `@hono/node-server`. Keep `internal_port` equal to `PORT`.
+> If you ever want a leaner `node dist` image instead of `tsx`, that's a real
+> change: switch the API tsconfig to `NodeNext`, add `.js` extensions to all
+> relative imports, and add a build step to `@turingcare/shared` (emit JS +
+> types, point its `exports` at `dist`). Out of scope for this deploy setup.
 
 ### 2c. Set Fly secrets
 

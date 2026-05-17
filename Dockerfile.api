@@ -1,0 +1,25 @@
+# Build context is the repo root. Runs @turingcare/api from the pnpm workspace.
+#
+# The API is run with tsx (same as local dev), NOT `tsc` + `node dist`:
+# the project uses moduleResolution "Bundler" (extensionless relative imports)
+# and @turingcare/shared is consumed as TypeScript source, neither of which
+# Node's native ESM loader can run. tsx transpiles + resolves both correctly.
+FROM node:22-slim AS base
+RUN corepack enable
+WORKDIR /app
+
+# Install workspace deps (incl. tsx + the @turingcare/shared link).
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
+COPY packages/shared/package.json packages/shared/
+COPY apps/api/package.json apps/api/
+RUN pnpm install --frozen-lockfile
+
+# App source.
+COPY packages/shared packages/shared
+COPY apps/api apps/api
+
+ENV NODE_ENV=production
+WORKDIR /app/apps/api
+EXPOSE 3001
+# Binds 0.0.0.0:$PORT (default 3001) via @hono/node-server.
+CMD ["pnpm", "exec", "tsx", "src/index.ts"]
