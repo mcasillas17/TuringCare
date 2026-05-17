@@ -22,7 +22,7 @@ export function Philosophy() {
       <div className="mx-auto max-w-5xl">
         <Reveal className="max-w-2xl">
           <h2 className="text-3xl font-bold md:text-4xl">
-            Force-free isn't a feature. It's the whole point.
+            Positive reinforcement isn't a feature. It's the whole point.
           </h2>
           <p className="mt-4 text-silver">
             TuringCare exists because dogs learn better — and live better — without fear. The

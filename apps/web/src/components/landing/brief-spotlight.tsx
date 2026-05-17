@@ -16,7 +16,7 @@ export function BriefSpotlight() {
           <h2 className="text-3xl font-bold text-slate md:text-4xl">The Behavior Brief</h2>
           <p className="mt-4 text-slate-soft">
             Your keystone artifact. Everything you've logged, distilled into a calm, professional
-            summary a force-free trainer can act on immediately.
+            summary a reward-based trainer can act on immediately.
           </p>
           <ul className="mt-7 space-y-3">
             {BENEFITS.map((b) => (

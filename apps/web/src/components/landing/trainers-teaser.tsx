@@ -1,7 +1,7 @@
 import { Reveal } from "./reveal";
 
 const TAGS = [
-  "Force-free",
+  "Reward-based",
   "Fear-Free certified",
   "CCPDT",
   "Positive reinforcement",
@@ -19,7 +19,7 @@ export function TrainersTeaser() {
             Coming soon
           </span>
           <h2 className="mt-5 text-3xl font-bold text-slate md:text-4xl">
-            Find a force-free trainer who fits
+            Find a positive-reinforcement trainer who fits
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-slate-soft">
             A curated directory of science-based trainers — filterable by methodology, certification

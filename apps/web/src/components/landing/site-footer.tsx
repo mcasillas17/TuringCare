@@ -6,7 +6,7 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
         <div>
           <p className="text-lg font-bold text-cream">TuringCare</p>
-          <p className="mt-1 text-sm">Humane, force-free dog training support.</p>
+          <p className="mt-1 text-sm">Humane, reward-based dog training support.</p>
         </div>
         <nav
           aria-label="Footer"

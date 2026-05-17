@@ -20,7 +20,7 @@ export function Hero() {
       <div className="relative mx-auto max-w-3xl text-center">
         <Reveal>
           <span className="inline-block rounded-full border border-silver bg-surface px-4 py-1 text-xs font-semibold tracking-wide text-slate-soft uppercase">
-            Force-free · Science-based
+            Positive reinforcement · Science-based
           </span>
         </Reveal>
         <Reveal delay={80}>
@@ -28,14 +28,15 @@ export function Hero() {
             Understand your dog.
             <br />
             <span className="underline decoration-copper decoration-[6px] underline-offset-4">
-              Train without force.
+              Train with positive reinforcement.
             </span>
           </h1>
         </Reveal>
         <Reveal delay={160}>
           <p className="mx-auto mt-6 max-w-xl text-lg text-slate-soft">
             TuringCare helps puppy owners and new adopters keep a structured behavior journal — then
-            turns it into a shareable Behavior Brief your force-free trainer can actually use.
+            turns it into a shareable Behavior Brief your positive-reinforcement trainer can
+            actually use.
           </p>
         </Reveal>
         <Reveal delay={240}>

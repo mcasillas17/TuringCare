@@ -14,7 +14,9 @@ function setup() {
 
 it("renders the key landing sections", () => {
   setup();
-  expect(screen.getByRole("heading", { name: /train without force/i })).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: /train with positive reinforcement/i }),
+  ).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /three steps/i })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /the behavior brief/i })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /questions, answered/i })).toBeInTheDocument();
@@ -26,7 +28,7 @@ it("renders the key landing sections", () => {
 it("expands an FAQ item on click", async () => {
   setup();
   const trigger = screen.getByRole("button", {
-    name: /is it really force-free/i,
+    name: /is it really positive reinforcement/i,
   });
   await userEvent.click(trigger);
   expect(screen.getByText(/reward-based, science-supported/i)).toBeVisible();

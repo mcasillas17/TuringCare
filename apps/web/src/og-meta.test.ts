@@ -7,10 +7,12 @@ const root = fileURLToPath(new URL("..", import.meta.url)); // apps/web/
 
 it("index.html exposes the crawler share metadata", () => {
   const html = readFileSync(`${root}index.html`, "utf8");
-  expect(html).toContain('name="description" content="Understand your dog. Train without force."');
+  expect(html).toContain(
+    'name="description" content="Understand your dog. Train with positive reinforcement."',
+  );
   expect(html).toContain('property="og:title" content="TuringCare"');
   expect(html).toContain(
-    'property="og:description" content="Understand your dog. Train without force."',
+    'property="og:description" content="Understand your dog. Train with positive reinforcement."',
   );
   expect(html).toContain('property="og:image" content="https://turingcare.dog/og.png"');
   expect(html).toContain('property="og:url" content="https://turingcare.dog/"');

@@ -15,7 +15,7 @@ const STEPS = [
   {
     icon: FileText,
     title: "Generate a Behavior Brief",
-    body: "One tap turns your journal into a clean, shareable summary your force-free trainer can act on.",
+    body: "One tap turns your journal into a clean, shareable summary your reward-based trainer can act on.",
   },
 ];
 

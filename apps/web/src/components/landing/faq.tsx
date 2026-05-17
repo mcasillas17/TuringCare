@@ -8,7 +8,7 @@ import { Reveal } from "./reveal";
 
 const QA = [
   {
-    q: "Is it really force-free?",
+    q: "Is it really positive reinforcement?",
     a: "Yes. TuringCare is built around reward-based, science-supported methods. We don't endorse prong collars, shock, or fear-based techniques.",
   },
   {
