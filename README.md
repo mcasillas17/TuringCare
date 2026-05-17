@@ -46,7 +46,7 @@ Open http://localhost:3000, register an account, and you land on `/app`.
   React Router v7. Talks to the API same-origin via a Vite dev proxy so auth cookies
   stay first-party. Uses `hc<AppType>` for typed API calls.
 - **packages/shared** — Zod schemas shared by both apps.
-- **Postgres 16** — Docker Compose locally, Neon in production.
+- **Postgres** — Docker Compose locally, Supabase in production. Deploy: see `DEPLOY.md`.
 
 ## Directory layout
 
