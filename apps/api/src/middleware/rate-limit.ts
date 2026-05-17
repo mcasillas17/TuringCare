@@ -54,7 +54,7 @@ export function globalRateLimit(
     if (path === "/health" || path.startsWith("/api/auth/")) return next();
     const { limited, retryAfter } = check(clientIp(c.req.raw.headers), Date.now());
     if (limited) {
-      c.header("Retry-After", String(retryAfter));
+      c.header("X-Retry-After", String(retryAfter)); // X-Retry-After to match Better Auth's rate-limit header (API-wide consistency)
       return c.json({ error: "rate_limited", retryAfter } as const, 429);
     }
     return next();

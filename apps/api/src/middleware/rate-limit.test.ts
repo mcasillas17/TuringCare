@@ -41,7 +41,7 @@ describe("globalRateLimit middleware", () => {
     expect((await a.request("/thing")).status).toBe(200);
     const res = await a.request("/thing");
     expect(res.status).toBe(429);
-    expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
+    expect(Number(res.headers.get("X-Retry-After"))).toBeGreaterThan(0);
     expect(await res.json()).toEqual({
       error: "rate_limited",
       retryAfter: expect.any(Number),
