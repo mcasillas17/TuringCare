@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 const LINKS = [
   { href: "#how", label: "How it works" },
@@ -23,9 +23,7 @@ export function SiteNav() {
     <header
       className={cn(
         "fixed inset-x-0 top-0 z-50 transition-colors duration-300",
-        scrolled
-          ? "bg-cream/85 backdrop-blur border-b border-silver/60"
-          : "bg-transparent",
+        scrolled ? "bg-cream/85 backdrop-blur border-b border-silver/60" : "bg-transparent",
       )}
     >
       <nav
@@ -56,10 +54,7 @@ export function SiteNav() {
           <Button asChild variant="ghost" className="text-slate hover:bg-surface-sand">
             <Link to="/login">Log in</Link>
           </Button>
-          <Button
-            asChild
-            className="bg-slate text-cream hover:bg-slate/90"
-          >
+          <Button asChild className="bg-slate text-cream hover:bg-slate/90">
             <Link to="/register">Get started</Link>
           </Button>
         </div>

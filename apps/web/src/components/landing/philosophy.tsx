@@ -1,10 +1,19 @@
 import { Reveal } from "./reveal";
 
 const PRINCIPLES = [
-  { h: "Behavior is information", p: "Every reaction tells you what your dog needs — we help you read it." },
-  { h: "Reinforce, don't intimidate", p: "No prong, shock, or fear. Methods backed by behavioral science." },
+  {
+    h: "Behavior is information",
+    p: "Every reaction tells you what your dog needs — we help you read it.",
+  },
+  {
+    h: "Reinforce, don't intimidate",
+    p: "No prong, shock, or fear. Methods backed by behavioral science.",
+  },
   { h: "Measure, then adjust", p: "Structured logs turn guesswork into a plan you can evaluate." },
-  { h: "Owner and trainer, aligned", p: "One shared source of truth so everyone pulls the same direction." },
+  {
+    h: "Owner and trainer, aligned",
+    p: "One shared source of truth so everyone pulls the same direction.",
+  },
 ];
 
 export function Philosophy() {
@@ -16,9 +25,8 @@ export function Philosophy() {
             Force-free isn't a feature. It's the whole point.
           </h2>
           <p className="mt-4 text-silver">
-            TuringCare exists because dogs learn better — and live better —
-            without fear. The product is built around methods the science
-            actually supports.
+            TuringCare exists because dogs learn better — and live better — without fear. The
+            product is built around methods the science actually supports.
           </p>
         </Reveal>
         <div className="mt-14 grid gap-x-10 gap-y-8 sm:grid-cols-2">

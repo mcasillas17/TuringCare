@@ -13,13 +13,10 @@ export function BriefSpotlight() {
     <section id="brief" className="bg-surface-sand px-5 py-24">
       <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-2">
         <Reveal>
-          <h2 className="text-3xl font-bold text-slate md:text-4xl">
-            The Behavior Brief
-          </h2>
+          <h2 className="text-3xl font-bold text-slate md:text-4xl">The Behavior Brief</h2>
           <p className="mt-4 text-slate-soft">
-            Your keystone artifact. Everything you've logged, distilled into a
-            calm, professional summary a force-free trainer can act on
-            immediately.
+            Your keystone artifact. Everything you've logged, distilled into a calm, professional
+            summary a force-free trainer can act on immediately.
           </p>
           <ul className="mt-7 space-y-3">
             {BENEFITS.map((b) => (
@@ -59,14 +56,12 @@ export function BriefSpotlight() {
                   className="flex items-center justify-between rounded-lg bg-surface-sand px-4 py-3"
                 >
                   <span className="text-sm font-medium text-slate">{row.t}</span>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs ${row.c}`}>
-                    {row.s}
-                  </span>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs ${row.c}`}>{row.s}</span>
                 </div>
               ))}
               <div className="rounded-lg border border-dashed border-silver px-4 py-3 text-xs text-slate-soft">
-                A · "Doorbell rings" → B · "Barks, lunges 8s" → C · "Owner
-                redirects with scatter feed"
+                A · "Doorbell rings" → B · "Barks, lunges 8s" → C · "Owner redirects with scatter
+                feed"
               </div>
             </div>
           </div>

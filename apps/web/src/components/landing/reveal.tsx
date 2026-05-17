@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 import { useInView } from "@/hooks/use-in-view";
+import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
 
 export function Reveal({
   children,

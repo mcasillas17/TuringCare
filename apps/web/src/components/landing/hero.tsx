@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { Reveal } from "./reveal";
 
 export function Hero() {
@@ -34,18 +34,13 @@ export function Hero() {
         </Reveal>
         <Reveal delay={160}>
           <p className="mx-auto mt-6 max-w-xl text-lg text-slate-soft">
-            TuringCare helps puppy owners and new adopters keep a structured
-            behavior journal — then turns it into a shareable Behavior Brief your
-            force-free trainer can actually use.
+            TuringCare helps puppy owners and new adopters keep a structured behavior journal — then
+            turns it into a shareable Behavior Brief your force-free trainer can actually use.
           </p>
         </Reveal>
         <Reveal delay={240}>
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button
-              asChild
-              size="lg"
-              className="bg-slate px-7 text-cream hover:bg-slate/90"
-            >
+            <Button asChild size="lg" className="bg-slate px-7 text-cream hover:bg-slate/90">
               <Link to="/register">Get started — it's free</Link>
             </Button>
             <Button
@@ -60,8 +55,7 @@ export function Hero() {
         </Reveal>
         <Reveal delay={320}>
           <p className="mt-6 text-sm text-slate-soft/80">
-            Built by dog people — and named after Turing, a blue-merle Mini
-            American Shepherd. 🐾
+            Built by dog people — and named after Turing, a blue-merle Mini American Shepherd. 🐾
           </p>
         </Reveal>
       </div>

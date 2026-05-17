@@ -28,8 +28,7 @@ export function HowItWorks() {
             From confusion to a plan in three steps
           </h2>
           <p className="mt-4 text-slate-soft">
-            No jargon, no choke chains. Just structured observation that makes
-            training measurable.
+            No jargon, no choke chains. Just structured observation that makes training measurable.
           </p>
         </Reveal>
         <div className="mt-14 grid gap-6 md:grid-cols-3">
@@ -42,12 +41,8 @@ export function HowItWorks() {
                 >
                   <s.icon className="size-6" />
                 </div>
-                <h3 className="mt-5 text-lg font-semibold text-slate">
-                  {s.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-soft">
-                  {s.body}
-                </p>
+                <h3 className="mt-5 text-lg font-semibold text-slate">{s.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-soft">{s.body}</p>
               </div>
             </Reveal>
           ))}

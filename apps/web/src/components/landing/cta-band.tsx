@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { Reveal } from "./reveal";
 
 export function CtaBand() {
@@ -16,14 +16,9 @@ export function CtaBand() {
             Start understanding your dog today
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-slate">
-            Free to start. Your journal and first Behavior Brief are ready when
-            you are.
+            Free to start. Your journal and first Behavior Brief are ready when you are.
           </p>
-          <Button
-            asChild
-            size="lg"
-            className="mt-8 bg-slate px-8 text-cream hover:bg-slate/90"
-          >
+          <Button asChild size="lg" className="mt-8 bg-slate px-8 text-cream hover:bg-slate/90">
             <Link to="/register">Create your free account</Link>
           </Button>
         </div>

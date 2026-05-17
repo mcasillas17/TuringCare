@@ -27,4 +27,4 @@ class IO {
 }
 // Use direct assignment (not vi.stubGlobal) so that vi.unstubAllGlobals()
 // called in test afterEach hooks does not remove this stub between tests.
-(window as unknown as Record<string, unknown>)["IntersectionObserver"] = IO;
+(window as unknown as Record<string, unknown>).IntersectionObserver = IO;

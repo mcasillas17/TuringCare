@@ -12,10 +12,18 @@ export function SiteFooter() {
           aria-label="Footer"
           className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm"
         >
-          <a href="#how" className="hover:text-gold">How it works</a>
-          <a href="#brief" className="hover:text-gold">Behavior Brief</a>
-          <a href="#faq" className="hover:text-gold">FAQ</a>
-          <Link to="/login" className="hover:text-gold">Log in</Link>
+          <a href="#how" className="hover:text-gold">
+            How it works
+          </a>
+          <a href="#brief" className="hover:text-gold">
+            Behavior Brief
+          </a>
+          <a href="#faq" className="hover:text-gold">
+            FAQ
+          </a>
+          <Link to="/login" className="hover:text-gold">
+            Log in
+          </Link>
         </nav>
       </div>
       <p className="mx-auto mt-8 max-w-6xl border-t border-white/10 pt-6 text-center text-xs text-silver/70 md:text-left">

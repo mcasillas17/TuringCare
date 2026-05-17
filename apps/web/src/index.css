@@ -143,10 +143,19 @@
 }
 
 @keyframes tc-drift {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  50% { transform: translate3d(2%, -3%, 0) scale(1.06); }
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2%, -3%, 0) scale(1.06);
+  }
 }
-.tc-drift { animation: tc-drift 14s ease-in-out infinite; }
+.tc-drift {
+  animation: tc-drift 14s ease-in-out infinite;
+}
 @media (prefers-reduced-motion: reduce) {
-  .tc-drift { animation: none; }
+  .tc-drift {
+    animation: none;
+  }
 }

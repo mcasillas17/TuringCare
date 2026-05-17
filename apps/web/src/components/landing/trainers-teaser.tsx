@@ -22,9 +22,8 @@ export function TrainersTeaser() {
             Find a force-free trainer who fits
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-slate-soft">
-            A curated directory of science-based trainers — filterable by
-            methodology, certification and specialty — is on the way. Your
-            Behavior Brief will plug straight into it.
+            A curated directory of science-based trainers — filterable by methodology, certification
+            and specialty — is on the way. Your Behavior Brief will plug straight into it.
           </p>
         </Reveal>
         <Reveal delay={120}>
