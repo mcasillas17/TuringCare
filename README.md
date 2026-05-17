@@ -63,3 +63,5 @@ docker-compose.yml  Local Postgres
 - ABC behavior journal (antecedent / behavior / consequence)
 - Behavior Brief generation (`@react-pdf/renderer`, installed, unused so far)
 - Force-free trainer directory & search
+- Security hardening (rate limiting, password reset, email verification, 2FA) —
+  see [`docs/SECURITY-BACKLOG.md`](docs/SECURITY-BACKLOG.md)
