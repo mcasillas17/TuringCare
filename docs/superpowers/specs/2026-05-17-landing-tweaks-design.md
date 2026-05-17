@@ -31,25 +31,41 @@
 
 ## Part 2 — Turing photo (hero + footer; OG card unchanged)
 
-### Asset handling (privacy + performance)
+### Asset handling (privacy-critical + performance)
 
-The owner committed the original at **`apps/web/assets/turing.jpg`** (and a
-duplicate currently in `apps/web/public/turing.jpg`). The original is a
-**3072×4080, ~4 MB Pixel 7 Pro JPEG whose EXIF includes GPS coordinates**.
-`apps/web/public/` is served verbatim by Vite/Cloudflare Pages, so the raw file
-must **never** ship.
+The owner-provided original exists locally at **`apps/web/assets/turing.jpg`**
+and **`apps/web/public/turing.jpg`** — both are the **3072×4080, ~4 MB Pixel 7
+Pro JPEG whose EXIF includes GPS coordinates**. The GitHub repo is **public**, so
+the GPS-tagged original must **never enter git history** in any location.
 
-- `apps/web/assets/turing.jpg` — source of record (committed, **not** served;
-  `assets/` is source-only, like `og.svg`).
-- `apps/web/public/turing.jpg` — **overwrite** with an optimized derivative:
-  resized to ~640px on the long edge, JPEG quality ~80, **all EXIF/metadata
-  (incl. GPS) stripped**, oriented per the original's EXIF orientation. Target
-  well under ~120 KB.
-- Produced by a one-off `npx` invocation (e.g. `npx --yes sharp-cli` — same
-  transient pattern as `og.png`). **No project dependency added.** `sharp`
-  strips metadata by default; the plan must still explicitly verify the
-  resulting `public/turing.jpg` has **no EXIF/GPS** (e.g. `exiftool`/`identify`
-  or `file` no longer shows "Exif"/GPS) and correct orientation.
+Rules (user-approved):
+
+- **The GPS original is never committed anywhere.** Add the source path to
+  `.gitignore` so it cannot be staged by accident: a line
+  `apps/web/assets/turing.jpg` in the repo root `.gitignore` (it must be a
+  specific path, not all of `assets/`, since `assets/og.svg` and
+  `assets/favicon.svg` are committed). Keep `apps/web/assets/turing.jpg`
+  on disk locally only, for future regeneration.
+- **Only the scrubbed derivative is committed**, at `apps/web/public/turing.jpg`
+  (served by Vite/Cloudflare Pages). The raw 4 MB file currently sitting at that
+  path must be **replaced in place** by the derivative *before* any `git add`;
+  the raw bytes must never be the committed content.
+- Derivative spec: resized to ~640px on the long edge, JPEG quality ~80,
+  EXIF-orientation applied then **all metadata removed** — EXIF, GPS, XMP, IPTC,
+  ICC, **and any embedded thumbnail** (thumbnails can independently carry GPS).
+  Target well under ~120 KB.
+- Production: one-off transient `npx` (e.g. `npx --yes sharp-cli` resize +
+  re-encode, same pattern as `og.png`) **then** an explicit
+  `npx --yes exiftool -all= -overwrite_original apps/web/public/turing.jpg`
+  belt-and-suspenders scrub. **No project dependency added.**
+- **Mandatory verification (privacy gate):** `npx --yes exiftool
+  apps/web/public/turing.jpg` must show **no EXIF/GPS/XMP/IPTC/thumbnail** (only
+  inert basics like dimensions/filetype), and `file apps/web/public/turing.jpg`
+  must no longer report `Exif`. Additionally confirm the *committed* blob is
+  clean: `git show :apps/web/public/turing.jpg | npx --yes exiftool -` shows no
+  GPS/EXIF. If any metadata remains, the task is BLOCKED — do not commit.
+- No anti-download JS/CSS deterrents (user chose metadata-strip-only; a
+  displayed web image is inherently downloadable — not faked).
 - The controller will visually verify the optimized image (subagents can't see
   it) — must look like Turing, upright, not distorted.
 
@@ -89,12 +105,19 @@ per the earlier decision).
 
 - `grep` shows no `<CtaBand` / `cta-band` references remain; `cta-band.tsx`
   deleted; hero has no `<Button>`/`Link` import; footer has no `/login` Link.
-- `public/turing.jpg`: optimized (long edge ~640px, < ~120 KB), `file` reports
-  **no Exif**, orientation correct; `assets/turing.jpg` retained as source.
+- **Privacy gate (must pass before commit):** `npx exiftool
+  apps/web/public/turing.jpg` shows no EXIF/GPS/XMP/IPTC/thumbnail; `file`
+  reports no `Exif`; `git show :apps/web/public/turing.jpg | npx exiftool -`
+  (post-stage) is clean; `apps/web/assets/turing.jpg` is gitignored and **not**
+  tracked (`git ls-files | grep turing` lists only `public/turing.jpg`).
+- `public/turing.jpg`: optimized (long edge ~640px, < ~120 KB), orientation
+  correct, the committed content is the scrubbed derivative (not the 4 MB raw).
 - `pnpm --filter @turingcare/web test` (updated assertions pass), `typecheck`,
   `pnpm lint`, `build`, `pnpm -r exec tsc --noEmit`, `pnpm -r build` all green.
-- Scope: only `apps/web/*` + the two image files + this spec/plan +
-  PROJECT-LOG; no `package.json`/`pnpm-lock.yaml`, no `apps/api`.
+- Scope: only `apps/web/*` (incl. deleted cta-band, the scrubbed
+  `public/turing.jpg`), the root `.gitignore` line, this spec/plan, and
+  PROJECT-LOG; no `package.json`/`pnpm-lock.yaml`, no `apps/api`. The
+  GPS-tagged `assets/turing.jpg` never appears in `git diff`/history.
 
 ## Out of scope
 
