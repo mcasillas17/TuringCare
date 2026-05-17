@@ -14,6 +14,9 @@ if (!window.matchMedia) {
   }));
 }
 
+// No-op stub: planned tests only assert initial/stable state (the
+// reduced-motion short-circuit and the not-yet-intersecting case) and never
+// simulate intersection events, so capturing the callback would be unused.
 class IO {
   observe() {}
   unobserve() {}
