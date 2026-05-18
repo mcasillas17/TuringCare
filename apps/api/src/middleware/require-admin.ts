@@ -14,6 +14,9 @@ export interface AdminVars {
  * Self-healing bootstrap: any authenticated user whose email is in
  * ADMIN_EMAILS is lazily promoted to role='admin' so the operator is never
  * locked out and admin status becomes queryable data thereafter.
+ * Note: this only ever PROMOTES. Removing an email from ADMIN_EMAILS does not
+ * revoke a role already persisted to the DB — revocation requires a direct
+ * DB change (or a future admin UI).
  */
 export const requireAdmin: MiddlewareHandler<{ Variables: AdminVars }> = async (c, next) => {
   const session = await auth.api.getSession({ headers: c.req.raw.headers });

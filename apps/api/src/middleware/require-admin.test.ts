@@ -35,5 +35,7 @@ describe("requireAdmin", () => {
     const cookie = signIn.headers.get("set-cookie") ?? "";
     const res = await probe.request("/x", { headers: { cookie } });
     expect(res.status).toBe(403);
+    const [row] = await db.select({ role: user.role }).from(user).where(eq(user.email, email));
+    expect(row?.role).toBe("user");
   });
 });
