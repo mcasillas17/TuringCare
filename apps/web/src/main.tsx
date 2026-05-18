@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/i18n";
+import { PageViewTracker } from "@/lib/track";
 import { AppHome } from "@/routes/app";
 import { Landing } from "@/routes/landing";
 import { Login } from "@/routes/login";
@@ -18,6 +19,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
     <QueryClientProvider client={queryClient}>
       <LocaleProvider>
         <BrowserRouter>
+          <PageViewTracker />
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
