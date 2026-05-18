@@ -15,6 +15,21 @@ const schema = z.object({
   // Vite proxy). When set, Better Auth issues cross-subdomain,
   // SameSite=None; Secure cookies so the frontend and API subdomain share a session.
   COOKIE_DOMAIN: z.string().optional(),
+  // Comma-separated admin email allowlist. Any matching authenticated user is
+  // treated as admin and lazily promoted (user.role -> 'admin') so the operator
+  // is never locked out. Empty/unset = no bootstrap admins.
+  ADMIN_EMAILS: z
+    .string()
+    .optional()
+    .default("")
+    .transform((s) =>
+      s
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  // Events older than this many days are purged by the scheduled retention job.
+  EVENT_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
 });
 
 export const env = schema.parse(process.env);
