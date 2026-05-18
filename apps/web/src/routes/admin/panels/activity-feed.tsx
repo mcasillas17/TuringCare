@@ -1,5 +1,11 @@
 import type { Activity } from "../use-metrics";
 
+const fmt = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "short",
+  timeStyle: "short",
+  hour12: false,
+});
+
 export function ActivityFeed({ activity }: { activity: Activity }) {
   return (
     <section className="rounded-lg border bg-card p-4">
@@ -12,7 +18,7 @@ export function ActivityFeed({ activity }: { activity: Activity }) {
             </span>
             <span>{e.name}</span>
             <span className="text-xs text-muted-foreground">
-              {new Date(e.createdAt).toLocaleString()}
+              {fmt.format(new Date(e.createdAt))}
             </span>
           </li>
         ))}
