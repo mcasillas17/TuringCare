@@ -2,8 +2,12 @@ import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { expect, it } from "vitest";
+import { afterEach, expect, it } from "vitest";
 import { Landing } from "./landing";
+
+afterEach(() => {
+  localStorage.clear();
+});
 
 function setup() {
   return render(
@@ -28,6 +32,20 @@ it("renders the key landing sections", () => {
   ).toBeGreaterThan(0);
   expect(screen.queryByRole("heading", { name: /start understanding your dog today/i })).toBeNull();
   expect(screen.getAllByRole("img", { name: /turing/i }).length).toBeGreaterThan(0);
+});
+
+it("switches the landing copy to Spanish via the toggle", async () => {
+  setup();
+  expect(
+    screen.getByRole("heading", { name: /train with positive reinforcement/i }),
+  ).toBeInTheDocument();
+  const esButton = screen.getAllByRole("button", { name: "ES" })[0];
+  if (!esButton) throw new Error("ES toggle button not found");
+  await userEvent.click(esButton);
+  expect(
+    screen.getByRole("heading", { name: /ad[ií]éstralo con refuerzo positivo/i }),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: /train with positive reinforcement/i })).toBeNull();
 });
 
 it("expands an FAQ item on click", async () => {

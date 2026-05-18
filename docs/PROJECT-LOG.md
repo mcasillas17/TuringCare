@@ -77,3 +77,11 @@ vertical stack above the caption (`flex-col items-center`, ring-4 + shadow-lg).
 Footer avatar / OG image unchanged.
 - Spec/plan: `specs/2026-05-17-hero-photo-enlarge-design.md`, `plans/2026-05-17-hero-photo-enlarge.md`
 - Commit: e16ed82 (hero.tsx), this log entry.
+
+## 2026-05-17 — Spanish / i18n (sub-project B) — SHIPPED
+In-house typed i18n (en/es catalogs with compile-time parity), LocaleProvider +
+useI18n + t(), browser-locale detection + localStorage persistence, EN|ES
+LanguageToggle in the nav and on auth/app pages, all landing + auth/app copy
+localized. No backend, no deps; meta/OG stay English (<html lang> flips).
+- Spec/plan: `specs/2026-05-17-i18n-spanish-design.md`, `plans/2026-05-17-i18n-spanish.md`
+- Commits: this cycle (see `git log`).
