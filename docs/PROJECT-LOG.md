@@ -93,3 +93,11 @@ strong, device-independent contrast. No deps (lucide already present); single
 component change.
 - Spec/plan: `specs/2026-05-17-nav-paw-contrast-design.md`, `plans/2026-05-17-nav-paw-contrast.md`
 - Commits: this cycle (see `git log`).
+
+## 2026-05-18 — API cold-start / 502 fix — SHIPPED
+Fly `min_machines_running` 0→1 (keep one machine warm — no cold-start race) and
+explicit `serve({ hostname: "0.0.0.0" })` + corrected log. Root cause: scale-to-
+zero + slow `tsx` boot exceeding Fly proxy patience → 502 (the earlier trial
+5-min cap was a separate, now-resolved cause). No deps, no schema, apps/api only.
+- Spec/plan: `specs/2026-05-18-api-coldstart-fix-design.md`, `plans/2026-05-18-api-coldstart-fix.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-fix-api-coldstart.
