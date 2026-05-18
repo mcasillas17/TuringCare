@@ -93,3 +93,19 @@ strong, device-independent contrast. No deps (lucide already present); single
 component change.
 - Spec/plan: `specs/2026-05-17-nav-paw-contrast-design.md`, `plans/2026-05-17-nav-paw-contrast.md`
 - Commits: this cycle (see `git log`).
+
+## 2026-05-18 — Admin portal & usage telemetry — SHIPPED
+Self-hosted first-party telemetry: `events` table + `user.role` enum (migration
+`0002`); error-safe `recordEvent` wired into Better Auth (`user.signed_up`,
+`user.signed_in`) + `role` surfaced on the session; rate-limited
+`POST /api/events` (scalar-only, byte-capped, identity resolved server-side)
+with web `page.viewed` tracking on every route incl. pre-auth. `requireAdmin`
+(role + `ADMIN_EMAILS` self-healing, promote-only) gating
+`GET /api/admin/metrics` + `/activity` (parallelized aggregate queries, JS-ISO
+timestamps). Single-page `/admin` Recharts dashboard (Layout A): KPI strip,
+signups, active-usage, activation funnel, live activity feed; range selector;
+admin-guarded + code-split (recharts kept out of the main bundle — landing
+entry chunk −47%). 180-day retention via a scheduled GitHub Actions workflow
+(`telemetry:purge`). Full TDD; 60 tests (API 30 / web 30), gate green.
+- Spec/plan: `specs/2026-05-17-admin-telemetry-design.md`, `plans/2026-05-17-admin-telemetry.md`
+- Commits: this cycle (see `git log`; branch `worktree-feat+admin-telemetry`).
