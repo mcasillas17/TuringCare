@@ -1,6 +1,8 @@
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/i18n";
 import { PageViewTracker } from "@/lib/track";
+import { AdminDashboard } from "@/routes/admin";
+import { RequireAdmin } from "@/routes/admin/require-admin";
 import { AppHome } from "@/routes/app";
 import { Landing } from "@/routes/landing";
 import { Login } from "@/routes/login";
@@ -30,6 +32,14 @@ createRoot(document.getElementById("root") as HTMLElement).render(
                 <RequireAuth>
                   <AppHome />
                 </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <RequireAdmin>
+                  <AdminDashboard />
+                </RequireAdmin>
               }
             />
           </Routes>
