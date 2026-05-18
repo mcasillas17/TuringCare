@@ -17,6 +17,8 @@ import {
 
 /* ---------- Auth enums ---------- */
 
+// Declared before the `user` table because `const` bindings must precede any
+// table that references the enum (userRoleEnum is used in user.role below).
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 
 /* ---------- Better Auth core tables (adapter defaults) ---------- */
