@@ -36,7 +36,11 @@ describe("recordEvent", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const db = fakeDb(() => Promise.reject(new Error("db down")));
     await expect(recordEvent("user.signed_up", { userId: "u1" }, db)).resolves.toBeUndefined();
-    expect(err).toHaveBeenCalledWith("[telemetry] recordEvent failed:", "user.signed_up", expect.any(Error));
+    expect(err).toHaveBeenCalledWith(
+      "[telemetry] recordEvent failed:",
+      "user.signed_up",
+      expect.any(Error),
+    );
     err.mockRestore();
   });
 });

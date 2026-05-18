@@ -1,4 +1,4 @@
-import { db as defaultDb, type DB } from "../db";
+import { type DB, db as defaultDb } from "../db";
 import { events } from "../db/schema";
 import type { EventName } from "./events";
 

@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { auth } from "./auth";
 import { app } from "./app";
+import { auth } from "./auth";
 import { db } from "./db";
 import { events, user } from "./db/schema";
 
@@ -51,18 +51,19 @@ describe("POST /api/events", () => {
     expect(res.status).toBe(202);
 
     const [u] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
+    if (!u) throw new Error("expected user row");
     const [row] = await db
       .select()
       .from(events)
       .where(eq(events.name, "page.viewed"))
       .orderBy(desc(events.createdAt))
       .limit(1);
-    expect(row?.userId).toBe(u!.id);
+    expect(row?.userId).toBe(u.id);
     expect(row?.sessionId).toBeTruthy();
 
     // cleanup: events first (FK is set null, rows would linger), then user
-    await db.delete(events).where(eq(events.userId, u!.id));
-    await db.delete(user).where(eq(user.id, u!.id));
+    await db.delete(events).where(eq(events.userId, u.id));
+    await db.delete(user).where(eq(user.id, u.id));
   });
 
   it("rejects oversized props at the endpoint (400)", async () => {

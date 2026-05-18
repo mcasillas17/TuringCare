@@ -25,8 +25,9 @@ describe("auth lifecycle telemetry", () => {
 
     const [u] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
     expect(u).toBeTruthy();
+    if (!u) throw new Error("expected user row");
 
-    const evts = await db.select().from(events).where(eq(events.userId, u!.id));
+    const evts = await db.select().from(events).where(eq(events.userId, u.id));
     const names = evts.map((e) => e.name);
     expect(names).toContain("user.signed_up");
     expect(names).toContain("user.signed_in");
