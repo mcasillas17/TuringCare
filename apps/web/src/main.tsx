@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/sonner";
+import { LocaleProvider } from "@/i18n";
 import { AppHome } from "@/routes/app";
 import { Landing } from "@/routes/landing";
 import { Login } from "@/routes/login";
@@ -15,22 +16,24 @@ const queryClient = new QueryClient();
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route
-            path="/app"
-            element={
-              <RequireAuth>
-                <AppHome />
-              </RequireAuth>
-            }
-          />
-        </Routes>
-      </BrowserRouter>
-      <Toaster />
+      <LocaleProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route
+              path="/app"
+              element={
+                <RequireAuth>
+                  <AppHome />
+                </RequireAuth>
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+        <Toaster />
+      </LocaleProvider>
     </QueryClientProvider>
   </StrictMode>,
 );
