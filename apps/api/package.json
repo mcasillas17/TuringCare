@@ -16,7 +16,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "telemetry:purge": "tsx src/telemetry/retention-cli.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
