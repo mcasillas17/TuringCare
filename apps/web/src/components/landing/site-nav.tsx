@@ -2,6 +2,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
+import { PawPrint } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -38,7 +39,7 @@ export function SiteNav() {
             aria-hidden
             className="grid size-8 place-items-center rounded-full bg-slate text-cream"
           >
-            🐾
+            <PawPrint className="size-4" />
           </span>
           <span className="text-lg tracking-tight">TuringCare</span>
         </a>
