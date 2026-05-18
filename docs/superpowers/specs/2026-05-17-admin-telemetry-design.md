@@ -31,7 +31,9 @@ the capture helper.
 | Telemetry stack | Self-hosted, first-party (own Postgres + custom React dashboard); no third-party analytics, no external script |
 | Admin access | `user.role` enum + `ADMIN_EMAILS` env bootstrap with self-healing lazy promotion |
 | v1 dashboard views | Growth & users; Active usage (DAU/WAU/MAU); Event explorer + feature funnel; Live activity feed |
-| Event privacy | Minimal records, no free-text/PII in props, retention cap (default 365 days, auto-purge) |
+| Event privacy | Minimal records, no free-text/PII in props, retention cap (default 180 days / 6 months, auto-purge) |
+| Charting | Recharts (responsive React chart lib) |
+| Page-view scope | All routes incl. landing/pre-auth page views (anonymous `userId = null`) |
 | Dashboard layout | A — single scrolling dashboard (KPI strip + stacked panels) |
 
 ---
@@ -82,7 +84,9 @@ POSTs to a new `POST /api/events`:
   `sessionId` from the Better Auth cookie server-side (client cannot spoof
   identity).
 - v1 emits `page.viewed` (props: `{ path }`, path normalized to route
-  pattern, no query string) on React Router route change. No third-party
+  pattern, no query string) on **every** React Router route change —
+  including landing/marketing and other pre-auth routes, where `userId` is
+  `null` (anonymous) and only `sessionId` may be present. No third-party
   script, no external network call.
 
 ### 2.4 Admin auth
@@ -103,7 +107,7 @@ non-admins are redirected to `/app`.
 ### 2.5 Retention
 
 A scheduled job deletes `events` where `createdAt < now() - EVENT_RETENTION_DAYS`.
-`EVENT_RETENTION_DAYS` env, default `365`. Mechanism (Fly scheduled
+`EVENT_RETENTION_DAYS` env, default `180` (6 months). Mechanism (Fly scheduled
 machine / cron vs. an internal interval) is finalized in the implementation
 plan; the deletion query and config contract are fixed here.
 
@@ -173,9 +177,12 @@ Uses the repo's existing Vitest setup; the full gate must stay green.
 
 **Out of scope for v1:** session replay; real-time websocket feed (poll /
 manual refresh only); cohort retention curves; CSV export; per-user
-drill-down pages; heavy charting dependency (prefer lightweight inline
-SVG/bars, or at most one small chart lib — decided in the plan); in-app role
-management UI (roles via `ADMIN_EMAILS` + DB only).
+drill-down pages; in-app role management UI (roles via `ADMIN_EMAILS` + DB
+only).
+
+**Charting:** Recharts is the chosen chart library — responsive, composable,
+React-native, well-suited to the bar/line/area panels (growth, active usage,
+event volume). Added as an `apps/web` dependency.
 
 ---
 
