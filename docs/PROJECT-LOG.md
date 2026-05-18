@@ -85,3 +85,11 @@ LanguageToggle in the nav and on auth/app pages, all landing + auth/app copy
 localized. No backend, no deps; meta/OG stay English (<html lang> flips).
 - Spec/plan: `specs/2026-05-17-i18n-spanish-design.md`, `plans/2026-05-17-i18n-spanish.md`
 - Commits: this cycle (see `git log`).
+
+## 2026-05-17 — Nav paw-mark contrast fix — SHIPPED
+Replaced the OS 🐾 color-emoji in the site-nav brand badge with the lucide
+`PawPrint` vector icon (cream stroke via `currentColor` on the slate badge) —
+strong, device-independent contrast. No deps (lucide already present); single
+component change.
+- Spec/plan: `specs/2026-05-17-nav-paw-contrast-design.md`, `plans/2026-05-17-nav-paw-contrast.md`
+- Commits: this cycle (see `git log`).
