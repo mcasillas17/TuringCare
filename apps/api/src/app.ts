@@ -6,6 +6,7 @@ import { auth } from "./auth";
 import { env } from "./env";
 import { globalRateLimit } from "./middleware/rate-limit";
 import { adminApp } from "./routes/admin";
+import { dogsApp } from "./routes/dogs";
 import { eventIngestSchema } from "./telemetry/events";
 import { recordEvent } from "./telemetry/record-event";
 
@@ -32,6 +33,7 @@ const app = new Hono()
   .post("/api/validate/login", zValidator("json", loginSchema), (c) =>
     c.json({ ok: true } as const),
   )
+  .route("/api/dogs", dogsApp)
   .post("/api/events", zValidator("json", eventIngestSchema), async (c) => {
     const { name, props } = c.req.valid("json");
     // Identity is resolved server-side from the auth cookie — never trusted

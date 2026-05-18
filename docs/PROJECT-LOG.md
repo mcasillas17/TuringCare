@@ -94,6 +94,25 @@ component change.
 - Spec/plan: `specs/2026-05-17-nav-paw-contrast-design.md`, `plans/2026-05-17-nav-paw-contrast.md`
 - Commits: this cycle (see `git log`).
 
+## 2026-05-17 — Dog Profile CRUD (sub-project C) — SHIPPED
+Multi-dog, owner-scoped CRUD over the session-1 tables: 9 Hono endpoints
+(`/api/dogs` list/create/get/update/delete + concern & goal sub-lists), every
+mutating route owner-isolation-tested (404, no existence leak). Web: list →
+detail (concern/goal sub-lists + delete-confirm) → create/edit forms replacing
+the `/app` JSON placeholder; typed TanStack Query hooks via hc<AppType>. All
+copy localized (en+es parity). No DB migration, no new deps, no apps/api infra
+change. Shipped as a PR from the worktree-dog-profile-crud worktree.
+- Spec/plan: `specs/2026-05-17-dog-profile-crud-design.md`, `plans/2026-05-17-dog-profile-crud.md`
+- Commits: this branch (see `git log`).
+
+## 2026-05-18 — API cold-start / 502 fix — SHIPPED
+Fly `min_machines_running` 0→1 (keep one machine warm — no cold-start race) and
+explicit `serve({ hostname: "0.0.0.0" })` + corrected log. Root cause: scale-to-
+zero + slow `tsx` boot exceeding Fly proxy patience → 502 (the earlier trial
+5-min cap was a separate, now-resolved cause). No deps, no schema, apps/api only.
+- Spec/plan: `specs/2026-05-18-api-coldstart-fix-design.md`, `plans/2026-05-18-api-coldstart-fix.md`
+- Commits: see `git log` (merged via #1; this branch carries it forward through the merge).
+
 ## 2026-05-18 — Admin portal & usage telemetry — SHIPPED
 Self-hosted first-party telemetry: `events` table + `user.role` enum (migration
 `0002`); error-safe `recordEvent` wired into Better Auth (`user.signed_up`,

@@ -20,3 +20,16 @@ export const dogProfileSchema = z.object({
 });
 
 export type DogProfile = z.infer<typeof dogProfileSchema>;
+
+export const concernSeverity = z.enum(["mild", "moderate", "severe"]);
+
+export const behaviorConcernSchema = z.object({
+  concern: z.string().min(1, "Concern is required"),
+  severity: concernSeverity,
+});
+export type BehaviorConcernInput = z.infer<typeof behaviorConcernSchema>;
+
+export const trainingGoalSchema = z.object({
+  goal: z.string().min(1, "Goal is required"),
+});
+export type TrainingGoalInput = z.infer<typeof trainingGoalSchema>;
