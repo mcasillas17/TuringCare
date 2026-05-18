@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { AdminDashboard } from "./index";
 
 const metrics = {
@@ -13,7 +13,20 @@ const metrics = {
   funnel: [{ step: "signup", users: 7 }],
 };
 
-beforeEach(() => {
+function renderDashboard(client?: QueryClient) {
+  const qc = client ?? new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+it("renders the dashboard with KPI numbers", async () => {
   vi.stubGlobal(
     "fetch",
     vi
@@ -27,20 +40,23 @@ beforeEach(() => {
         ),
       ),
   );
-});
-afterEach(() => vi.unstubAllGlobals());
-
-it("renders the dashboard with KPI numbers", async () => {
-  render(
-    <QueryClientProvider client={new QueryClient()}>
-      <MemoryRouter>
-        <AdminDashboard />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
+  renderDashboard();
   await waitFor(() =>
     expect(screen.getByText("Total users").nextElementSibling).toHaveTextContent("7"),
   );
   expect(screen.getByText(/signups over time/i)).toBeInTheDocument();
   expect(screen.getByText(/activation funnel/i)).toBeInTheDocument();
+});
+
+it("shows loading state while metrics fetch is pending", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})));
+  renderDashboard();
+  expect(await screen.findByText(/loading metrics/i)).toBeInTheDocument();
+});
+
+it("shows error state when metrics fetch fails", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("err", { status: 500 })));
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  renderDashboard(qc);
+  await waitFor(() => expect(screen.getByText(/failed to load metrics/i)).toBeInTheDocument());
 });
