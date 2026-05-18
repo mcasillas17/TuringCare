@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dogProfileSchema } from "./dog";
+import { behaviorConcernSchema, dogProfileSchema, trainingGoalSchema } from "./dog";
 
 describe("dogProfileSchema", () => {
   it("accepts a valid profile", () => {
@@ -33,5 +33,31 @@ describe("dogProfileSchema", () => {
       vaccineStage: "unknown",
     });
     expect(r.success).toBe(false);
+  });
+});
+
+describe("behaviorConcernSchema", () => {
+  it("accepts a valid concern", () => {
+    expect(
+      behaviorConcernSchema.safeParse({ concern: "Leash reactivity", severity: "moderate" })
+        .success,
+    ).toBe(true);
+  });
+  it("rejects an empty concern", () => {
+    expect(behaviorConcernSchema.safeParse({ concern: "", severity: "mild" }).success).toBe(false);
+  });
+  it("rejects a bad severity", () => {
+    expect(
+      behaviorConcernSchema.safeParse({ concern: "Barking", severity: "extreme" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("trainingGoalSchema", () => {
+  it("accepts a valid goal", () => {
+    expect(trainingGoalSchema.safeParse({ goal: "Calm greetings" }).success).toBe(true);
+  });
+  it("rejects an empty goal", () => {
+    expect(trainingGoalSchema.safeParse({ goal: "" }).success).toBe(false);
   });
 });

@@ -1,6 +1,8 @@
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/i18n";
-import { AppHome } from "@/routes/app";
+import { DogDetail } from "@/routes/dog-detail";
+import { DogForm } from "@/routes/dog-form";
+import { DogsList } from "@/routes/dogs-list";
 import { Landing } from "@/routes/landing";
 import { Login } from "@/routes/login";
 import { Register } from "@/routes/register";
@@ -26,7 +28,31 @@ createRoot(document.getElementById("root") as HTMLElement).render(
               path="/app"
               element={
                 <RequireAuth>
-                  <AppHome />
+                  <DogsList />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/app/dogs/new"
+              element={
+                <RequireAuth>
+                  <DogForm mode="create" />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/app/dogs/:id"
+              element={
+                <RequireAuth>
+                  <DogDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/app/dogs/:id/edit"
+              element={
+                <RequireAuth>
+                  <DogForm mode="edit" />
                 </RequireAuth>
               }
             />
