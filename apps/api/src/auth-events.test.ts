@@ -8,7 +8,10 @@ const email = `evt_${Date.now()}@example.com`;
 
 afterAll(async () => {
   const rows = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
-  for (const r of rows) await db.delete(user).where(eq(user.id, r.id));
+  for (const r of rows) {
+    await db.delete(events).where(eq(events.userId, r.id));
+    await db.delete(user).where(eq(user.id, r.id));
+  }
 });
 
 describe("auth lifecycle telemetry", () => {
@@ -27,5 +30,8 @@ describe("auth lifecycle telemetry", () => {
     const names = evts.map((e) => e.name);
     expect(names).toContain("user.signed_up");
     expect(names).toContain("user.signed_in");
+
+    const signedIn = evts.find((e) => e.name === "user.signed_in");
+    expect(signedIn?.sessionId).toBeTruthy();
   });
 });

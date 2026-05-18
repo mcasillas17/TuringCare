@@ -40,6 +40,9 @@ export const auth = betterAuth({
         },
       },
     },
+    // Sign-up also creates a session, so registration legitimately emits both
+    // signed_up and signed_in. Aggregations use first-occurrence/distinct-user,
+    // so the double-emit is harmless.
     session: {
       create: {
         after: async (createdSession) => {
