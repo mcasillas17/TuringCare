@@ -1,0 +1,28 @@
+name: Telemetry retention
+
+# Daily purge of events older than EVENT_RETENTION_DAYS against prod Postgres.
+on:
+  schedule:
+    - cron: "17 4 * * *" # 04:17 UTC daily
+  workflow_dispatch: {}
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Dummy values: required by apps/api/src/env.ts validation at import, unused by this job.
+      BETTER_AUTH_SECRET: ci-only-insecure-secret-0123456789abcdef
+      BETTER_AUTH_URL: http://localhost:3001
+      FRONTEND_URL: http://localhost:3000
+      EVENT_RETENTION_DAYS: "180"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Purge old telemetry events
+        run: pnpm --filter @turingcare/api telemetry:purge

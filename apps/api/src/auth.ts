@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db";
 import * as schema from "./db/schema";
 import { env } from "./env";
+import { recordEvent } from "./telemetry/record-event";
 
 // Fly terminates TLS and forwards the real client IP. Without this Better Auth
 // cannot key the limiter on the client and logs "Rate limiting skipped: could
@@ -24,6 +25,35 @@ export const auth = betterAuth({
   basePath: "/api/auth",
   trustedOrigins: [env.FRONTEND_URL],
   emailAndPassword: { enabled: true },
+  user: {
+    additionalFields: {
+      // Surfaced on session.user so /me and the web admin guard can read it.
+      // input:false → clients can't self-assign a role at sign-up.
+      role: { type: "string", required: false, defaultValue: "user", input: false },
+    },
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (createdUser) => {
+          await recordEvent("user.signed_up", { userId: createdUser.id });
+        },
+      },
+    },
+    // Sign-up also creates a session, so registration legitimately emits both
+    // signed_up and signed_in. Aggregations use first-occurrence/distinct-user,
+    // so the double-emit is harmless.
+    session: {
+      create: {
+        after: async (createdSession) => {
+          await recordEvent("user.signed_in", {
+            userId: createdSession.userId,
+            sessionId: createdSession.id,
+          });
+        },
+      },
+    },
+  },
   advanced,
   rateLimit: {
     enabled: true,

@@ -21,3 +21,6 @@ pnpm-debug.log*
 # Owner-provided source photo with EXIF/GPS — never commit; only the
 # scrubbed apps/web/public/turing.jpg derivative is committed.
 apps/web/assets/turing.jpg
+
+# Brainstorm visual-companion scratch
+.superpowers/

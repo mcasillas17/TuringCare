@@ -5,7 +5,10 @@ import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { env } from "./env";
 import { globalRateLimit } from "./middleware/rate-limit";
+import { adminApp } from "./routes/admin";
 import { dogsApp } from "./routes/dogs";
+import { eventIngestSchema } from "./telemetry/events";
+import { recordEvent } from "./telemetry/record-event";
 
 const app = new Hono()
   .use(
@@ -31,6 +34,19 @@ const app = new Hono()
     c.json({ ok: true } as const),
   )
   .route("/api/dogs", dogsApp)
+  .post("/api/events", zValidator("json", eventIngestSchema), async (c) => {
+    const { name, props } = c.req.valid("json");
+    // Identity is resolved server-side from the auth cookie — never trusted
+    // from the client. Anonymous (pre-auth, e.g. landing) is allowed.
+    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    await recordEvent(name, {
+      userId: session?.user.id ?? null,
+      sessionId: session?.session.id ?? null,
+      props,
+    });
+    return c.json({ ok: true } as const, 202);
+  })
+  .route("/api/admin", adminApp)
   .on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 export { app };
