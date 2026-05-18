@@ -67,3 +67,79 @@ describe("dogs: list & create", () => {
     expect(((await bList.json()) as { dogs: unknown[] }).dogs).toEqual([]);
   });
 });
+
+describe("dogs: get/update/delete", () => {
+  const users: TestUser[] = [];
+  afterEach(async () => {
+    for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
+  });
+
+  async function makeDog(u: TestUser) {
+    const res = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify(validDog),
+    });
+    return ((await res.json()) as { dog: { id: string } }).dog;
+  }
+
+  it("GET /api/dogs/:id returns the dog with empty concerns & goals", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const res = await app.request(`/api/dogs/${dog.id}`, { headers: u.authHeaders });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      dog: { id: dog.id, name: "Biscuit" },
+      concerns: [],
+      goals: [],
+    });
+  });
+
+  it("PUT updates the core profile", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const res = await app.request(`/api/dogs/${dog.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ ...validDog, name: "Biscuit II" }),
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dog: { name: string } }).dog.name).toBe("Biscuit II");
+  });
+
+  it("DELETE removes the dog", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const del = await app.request(`/api/dogs/${dog.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+    expect(del.status).toBe(200);
+    const after = await app.request(`/api/dogs/${dog.id}`, { headers: u.authHeaders });
+    expect(after.status).toBe(404);
+  });
+
+  it("owner isolation: another user gets 404 on get/put/delete", async () => {
+    const a = await createTestUser();
+    const b = await createTestUser();
+    users.push(a, b);
+    const dog = await makeDog(a);
+    expect((await app.request(`/api/dogs/${dog.id}`, { headers: b.authHeaders })).status).toBe(404);
+    expect(
+      (
+        await app.request(`/api/dogs/${dog.id}`, {
+          method: "PUT",
+          headers: b.authHeaders,
+          body: JSON.stringify(validDog),
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (await app.request(`/api/dogs/${dog.id}`, { method: "DELETE", headers: b.authHeaders }))
+        .status,
+    ).toBe(404);
+  });
+});
