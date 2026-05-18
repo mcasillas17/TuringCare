@@ -34,6 +34,9 @@ describe("/api/admin", () => {
     expect(body).toHaveProperty("active");
     expect(body).toHaveProperty("eventVolume");
     expect(body).toHaveProperty("funnel");
+    expect(typeof (body as { kpis: { totalUsers: number } }).kpis.totalUsers).toBe("number");
+    expect((body as { kpis: { totalUsers: number } }).kpis.totalUsers).toBeGreaterThanOrEqual(1);
+    expect((body as { funnel: unknown[] }).funnel).toHaveLength(4);
 
     const act = await app.request("/api/admin/activity", { headers: { cookie } });
     expect(act.status).toBe(200);

@@ -22,52 +22,6 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
     const days = rangeDays(c.req.query("days"));
     const since = sql`now() - (${days} || ' days')::interval`;
 
-    const { rows: totalUsersRows } = await db.execute<{ totalUsers: number }>(
-      sql`select count(*)::int as "totalUsers" from "user"`,
-    );
-    const totalUsers = scalarRow(totalUsersRows).totalUsers;
-    const { rows: newUsersRows } = await db.execute<{ newUsers: number }>(
-      sql`select count(*)::int as "newUsers" from "user" where created_at >= ${since}`,
-    );
-    const newUsers = scalarRow(newUsersRows).newUsers;
-    const { rows: dauRows } = await db.execute<{ dau: number }>(
-      sql`select count(distinct user_id)::int as dau from events
-          where user_id is not null and created_at >= now() - interval '1 day'`,
-    );
-    const dau = scalarRow(dauRows).dau;
-    const { rows: wauRows } = await db.execute<{ wau: number }>(
-      sql`select count(distinct user_id)::int as wau from events
-          where user_id is not null and created_at >= now() - interval '7 days'`,
-    );
-    const wau = scalarRow(wauRows).wau;
-    const { rows: mauRows } = await db.execute<{ mau: number }>(
-      sql`select count(distinct user_id)::int as mau from events
-          where user_id is not null and created_at >= now() - interval '30 days'`,
-    );
-    const mau = scalarRow(mauRows).mau;
-    const { rows: eventCountRows } = await db.execute<{ eventCount: number }>(
-      sql`select count(*)::int as "eventCount" from events where created_at >= ${since}`,
-    );
-    const eventCount = scalarRow(eventCountRows).eventCount;
-
-    const { rows: signups } = await db.execute<{ day: string; count: number }>(
-      sql`select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,
-                 count(*)::int as count
-          from "user" where created_at >= ${since}
-          group by 1 order by 1`,
-    );
-    const { rows: active } = await db.execute<{ day: string; count: number }>(
-      sql`select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,
-                 count(distinct user_id)::int as count
-          from events where user_id is not null and created_at >= ${since}
-          group by 1 order by 1`,
-    );
-    const { rows: eventVolume } = await db.execute<{ name: string; count: number }>(
-      sql`select name, count(*)::int as count
-          from events where created_at >= ${since}
-          group by 1 order by 2 desc`,
-    );
-
     const funnelRow = async (eventName: string) => {
       const { rows } = await db.execute<{ n: number }>(
         sql`select count(distinct user_id)::int as n from events
@@ -75,11 +29,86 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       );
       return scalarRow(rows).n;
     };
+
+    // All of these queries are independent, so run them concurrently.
+    const [
+      totalUsers,
+      newUsers,
+      dau,
+      wau,
+      mau,
+      eventCount,
+      signups,
+      active,
+      eventVolume,
+      firstDog,
+      firstJournal,
+      firstBrief,
+    ] = await Promise.all([
+      db
+        .execute<{ totalUsers: number }>(sql`select count(*)::int as "totalUsers" from "user"`)
+        .then((r) => scalarRow(r.rows).totalUsers),
+      db
+        .execute<{ newUsers: number }>(
+          sql`select count(*)::int as "newUsers" from "user" where created_at >= ${since}`,
+        )
+        .then((r) => scalarRow(r.rows).newUsers),
+      db
+        .execute<{ dau: number }>(
+          sql`select count(distinct user_id)::int as dau from events
+              where user_id is not null and created_at >= now() - interval '1 day'`,
+        )
+        .then((r) => scalarRow(r.rows).dau),
+      db
+        .execute<{ wau: number }>(
+          sql`select count(distinct user_id)::int as wau from events
+              where user_id is not null and created_at >= now() - interval '7 days'`,
+        )
+        .then((r) => scalarRow(r.rows).wau),
+      db
+        .execute<{ mau: number }>(
+          sql`select count(distinct user_id)::int as mau from events
+              where user_id is not null and created_at >= now() - interval '30 days'`,
+        )
+        .then((r) => scalarRow(r.rows).mau),
+      db
+        .execute<{ eventCount: number }>(
+          sql`select count(*)::int as "eventCount" from events where created_at >= ${since}`,
+        )
+        .then((r) => scalarRow(r.rows).eventCount),
+      db
+        .execute<{ day: string; count: number }>(
+          sql`select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,
+                     count(*)::int as count
+              from "user" where created_at >= ${since}
+              group by 1 order by 1`,
+        )
+        .then((r) => r.rows),
+      db
+        .execute<{ day: string; count: number }>(
+          sql`select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,
+                     count(distinct user_id)::int as count
+              from events where user_id is not null and created_at >= ${since}
+              group by 1 order by 1`,
+        )
+        .then((r) => r.rows),
+      db
+        .execute<{ name: string; count: number }>(
+          sql`select name, count(*)::int as count
+              from events where created_at >= ${since}
+              group by 1 order by 2 desc`,
+        )
+        .then((r) => r.rows),
+      funnelRow("dog.created"),
+      funnelRow("journal.entry_created"),
+      funnelRow("brief.generated"),
+    ]);
+
     const funnel = [
       { step: "signup", users: totalUsers },
-      { step: "first_dog", users: await funnelRow("dog.created") },
-      { step: "first_journal", users: await funnelRow("journal.entry_created") },
-      { step: "first_brief", users: await funnelRow("brief.generated") },
+      { step: "first_dog", users: firstDog },
+      { step: "first_journal", users: firstJournal },
+      { step: "first_brief", users: firstBrief },
     ];
 
     const mauSafe = mau || 1;
