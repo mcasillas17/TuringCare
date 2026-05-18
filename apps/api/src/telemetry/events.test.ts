@@ -30,6 +30,9 @@ describe("event catalog", () => {
 
   it("isKnownEvent recognizes server event names", () => {
     expect(isKnownEvent("user.signed_up")).toBe(true);
+    expect(isKnownEvent("page.viewed")).toBe(true);
     expect(isKnownEvent("nope.fake")).toBe(false);
+    expect(isKnownEvent("")).toBe(false);
+    expect(isKnownEvent("user.signed_up ")).toBe(false);
   });
 });

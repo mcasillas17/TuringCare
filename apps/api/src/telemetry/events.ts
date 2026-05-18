@@ -28,7 +28,7 @@ export const eventIngestSchema = z.object({
   props: z
     .record(scalar)
     .default({})
-    .refine((p) => JSON.stringify(p).length <= 1024, "props too large"),
+    .refine((p) => Buffer.byteLength(JSON.stringify(p), "utf8") <= 1024, "props too large"),
 });
 
 export type EventIngest = z.infer<typeof eventIngestSchema>;
