@@ -49,3 +49,9 @@ it("redirects a non-admin to /app", async () => {
   setup();
   await waitFor(() => expect(screen.getByText("app home")).toBeInTheDocument());
 });
+
+it("redirects an unauthenticated visitor to /app", async () => {
+  mockMe(null);
+  setup();
+  await waitFor(() => expect(screen.getByText("app home")).toBeInTheDocument());
+});
