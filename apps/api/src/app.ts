@@ -5,6 +5,7 @@ import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { env } from "./env";
 import { globalRateLimit } from "./middleware/rate-limit";
+import { adminApp } from "./routes/admin";
 import { eventIngestSchema } from "./telemetry/events";
 import { recordEvent } from "./telemetry/record-event";
 
@@ -43,6 +44,7 @@ const app = new Hono()
     });
     return c.json({ ok: true } as const, 202);
   })
+  .route("/api/admin", adminApp)
   .on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 export { app };
