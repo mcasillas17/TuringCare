@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { useCreateDog, useUpdateDog } from "@/lib/dogs";
+import { useCreateDog, useDog, useUpdateDog } from "@/lib/dogs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type DogProfile, dogProfileSchema } from "@turingcare/shared";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -15,14 +16,32 @@ export function DogForm({ mode }: { mode: "create" | "edit" }) {
   const { id } = useParams();
   const create = useCreateDog();
   const update = useUpdateDog(id ?? "");
+  const { data: dogData, isLoading, isError } = useDog(mode === "edit" ? (id ?? "") : "");
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<DogProfile>({
     resolver: zodResolver(dogProfileSchema),
     defaultValues: { spayedNeutered: false },
   });
+
+  useEffect(() => {
+    if (mode === "edit" && dogData?.dog) {
+      const dog = dogData.dog;
+      reset({
+        name: dog.name,
+        breed: dog.breed ?? "",
+        size: dog.size,
+        sex: dog.sex,
+        source: dog.source,
+        vaccineStage: dog.vaccineStage,
+        spayedNeutered: dog.spayedNeutered,
+        notes: dog.notes ?? "",
+      });
+    }
+  }, [mode, dogData, reset]);
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -34,6 +53,13 @@ export function DogForm({ mode }: { mode: "create" | "edit" }) {
       toast.error(t("dogs.saveFailed"));
     }
   });
+
+  if (mode === "edit" && isLoading) {
+    return <p className="p-8">{t("common.loading")}</p>;
+  }
+  if (mode === "edit" && isError) {
+    return <p className="p-8 text-red-600">{t("dogs.loadError")}</p>;
+  }
 
   return (
     <div className="mx-auto max-w-lg p-8">
