@@ -4,37 +4,25 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { useI18n } from "@/i18n";
 import { Reveal } from "./reveal";
 
-const QA = [
-  {
-    q: "Is it really positive reinforcement?",
-    a: "Yes. TuringCare is built around reward-based, science-supported methods. We don't endorse prong collars, shock, or fear-based techniques.",
-  },
-  {
-    q: "Do I need a trainer to start?",
-    a: "No. Start the behavior journal on your own today. When you're ready, the Behavior Brief makes bringing in a trainer painless.",
-  },
-  {
-    q: "What is a Behavior Brief?",
-    a: "An exportable summary of your dog's profile, concerns, goals and ABC journal entries — formatted so a trainer can understand the situation in minutes.",
-  },
-  {
-    q: "Is my data private?",
-    a: "Your journal is tied to your account and only shared when you choose to export or send a Brief. We don't sell data.",
-  },
-  {
-    q: "What does it cost?",
-    a: "The core journal and Behavior Brief are free while we're early. Get started today and you'll keep your data as the product grows.",
-  },
-];
-
 export function Faq() {
+  const { t } = useI18n();
+
+  const QA = [
+    { q: t("faq.q1"), a: t("faq.a1") },
+    { q: t("faq.q2"), a: t("faq.a2") },
+    { q: t("faq.q3"), a: t("faq.a3") },
+    { q: t("faq.q4"), a: t("faq.a4") },
+    { q: t("faq.q5"), a: t("faq.a5") },
+  ];
+
   return (
     <section id="faq" className="bg-surface-sand px-5 py-24">
       <div className="mx-auto max-w-2xl">
         <Reveal className="text-center">
-          <h2 className="text-3xl font-bold text-slate md:text-4xl">Questions, answered</h2>
+          <h2 className="text-3xl font-bold text-slate md:text-4xl">{t("faq.title")}</h2>
         </Reveal>
         <Reveal delay={100} className="mt-10">
           <Accordion type="single" collapsible className="w-full">

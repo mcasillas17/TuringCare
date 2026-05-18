@@ -1,16 +1,12 @@
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-const LINKS = [
-  { href: "#how", label: "How it works" },
-  { href: "#brief", label: "Behavior Brief" },
-  { href: "#trainers", label: "Trainers" },
-  { href: "#faq", label: "FAQ" },
-];
-
 export function SiteNav() {
+  const { t } = useI18n();
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -18,6 +14,13 @@ export function SiteNav() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  const LINKS = [
+    { href: "#how", label: t("nav.howItWorks") },
+    { href: "#brief", label: t("nav.brief") },
+    { href: "#trainers", label: t("nav.trainers") },
+    { href: "#faq", label: t("nav.faq") },
+  ];
 
   return (
     <header
@@ -51,11 +54,12 @@ export function SiteNav() {
           ))}
         </div>
         <div className="flex items-center gap-2">
+          <LanguageToggle />
           <Button asChild variant="ghost" className="text-slate hover:bg-surface-sand">
-            <Link to="/login">Log in</Link>
+            <Link to="/login">{t("nav.login")}</Link>
           </Button>
           <Button asChild className="bg-slate text-cream hover:bg-slate/90">
-            <Link to="/register">Get started</Link>
+            <Link to="/register">{t("nav.getStarted")}</Link>
           </Button>
         </div>
       </nav>

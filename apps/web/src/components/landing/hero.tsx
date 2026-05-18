@@ -1,6 +1,8 @@
+import { useI18n } from "@/i18n";
 import { Reveal } from "./reveal";
 
 export function Hero() {
+  const { t } = useI18n();
   return (
     <section
       id="top"
@@ -18,24 +20,20 @@ export function Hero() {
       <div className="relative mx-auto max-w-3xl text-center">
         <Reveal>
           <span className="inline-block rounded-full border border-silver bg-surface px-4 py-1 text-xs font-semibold tracking-wide text-slate-soft uppercase">
-            Positive reinforcement · Science-based
+            {t("hero.eyebrow")}
           </span>
         </Reveal>
         <Reveal delay={80}>
           <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-slate md:text-6xl">
-            Understand your dog.
+            {t("hero.headline")}
             <br />
             <span className="underline decoration-copper decoration-[6px] underline-offset-4">
-              Train with positive reinforcement.
+              {t("hero.headlineEmphasis")}
             </span>
           </h1>
         </Reveal>
         <Reveal delay={160}>
-          <p className="mx-auto mt-6 max-w-xl text-lg text-slate-soft">
-            TuringCare helps puppy owners and new adopters keep a structured behavior journal — then
-            turns it into a shareable Behavior Brief your positive-reinforcement trainer can
-            actually use.
-          </p>
+          <p className="mx-auto mt-6 max-w-xl text-lg text-slate-soft">{t("hero.subcopy")}</p>
         </Reveal>
         <Reveal delay={240}>
           <div className="mt-8 flex flex-col items-center gap-4">
@@ -49,7 +47,7 @@ export function Hero() {
               className="size-40 rounded-full object-cover shadow-lg ring-4 ring-copper/40"
             />
             <p className="max-w-sm text-center text-sm text-slate-soft/80">
-              Built by dog people — and named after Turing, a blue-merle Mini American Shepherd.
+              {t("hero.turingCaption")}
             </p>
           </div>
         </Reveal>

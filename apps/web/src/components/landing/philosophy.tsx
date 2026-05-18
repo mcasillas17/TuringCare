@@ -1,33 +1,22 @@
+import { useI18n } from "@/i18n";
 import { Reveal } from "./reveal";
 
-const PRINCIPLES = [
-  {
-    h: "Behavior is information",
-    p: "Every reaction tells you what your dog needs — we help you read it.",
-  },
-  {
-    h: "Reinforce, don't intimidate",
-    p: "No prong, shock, or fear. Methods backed by behavioral science.",
-  },
-  { h: "Measure, then adjust", p: "Structured logs turn guesswork into a plan you can evaluate." },
-  {
-    h: "Owner and trainer, aligned",
-    p: "One shared source of truth so everyone pulls the same direction.",
-  },
-];
-
 export function Philosophy() {
+  const { t } = useI18n();
+
+  const PRINCIPLES = [
+    { h: t("philosophy.p1h"), p: t("philosophy.p1p") },
+    { h: t("philosophy.p2h"), p: t("philosophy.p2p") },
+    { h: t("philosophy.p3h"), p: t("philosophy.p3p") },
+    { h: t("philosophy.p4h"), p: t("philosophy.p4p") },
+  ];
+
   return (
     <section className="bg-slate px-5 py-24 text-cream">
       <div className="mx-auto max-w-5xl">
         <Reveal className="max-w-2xl">
-          <h2 className="text-3xl font-bold md:text-4xl">
-            Positive reinforcement isn't a feature. It's the whole point.
-          </h2>
-          <p className="mt-4 text-silver">
-            TuringCare exists because dogs learn better — and live better — without fear. The
-            product is built around methods the science actually supports.
-          </p>
+          <h2 className="text-3xl font-bold md:text-4xl">{t("philosophy.title")}</h2>
+          <p className="mt-4 text-silver">{t("philosophy.subcopy")}</p>
         </Reveal>
         <div className="mt-14 grid gap-x-10 gap-y-8 sm:grid-cols-2">
           {PRINCIPLES.map((pr, i) => (

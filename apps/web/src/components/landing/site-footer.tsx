@@ -1,23 +1,26 @@
+import { useI18n } from "@/i18n";
+
 export function SiteFooter() {
+  const { t } = useI18n();
   return (
     <footer className="bg-slate px-5 py-12 text-silver">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
         <div>
-          <p className="text-lg font-bold text-cream">TuringCare</p>
-          <p className="mt-1 text-sm">Humane, reward-based dog training support.</p>
+          <p className="text-lg font-bold text-cream">{t("footer.brand")}</p>
+          <p className="mt-1 text-sm">{t("footer.tagline")}</p>
         </div>
         <nav
           aria-label="Footer"
           className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm"
         >
           <a href="#how" className="hover:text-gold">
-            How it works
+            {t("footer.navHow")}
           </a>
           <a href="#brief" className="hover:text-gold">
-            Behavior Brief
+            {t("footer.navBrief")}
           </a>
           <a href="#faq" className="hover:text-gold">
-            FAQ
+            {t("footer.navFaq")}
           </a>
         </nav>
       </div>
@@ -31,7 +34,7 @@ export function SiteFooter() {
           decoding="async"
           className="size-5 rounded-full object-cover"
         />
-        © {new Date().getFullYear()} TuringCare · Built for Turing
+        © {new Date().getFullYear()} TuringCare · {t("footer.builtFor")}
       </p>
     </footer>
   );
