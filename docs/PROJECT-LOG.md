@@ -60,3 +60,13 @@ tag/heading, `index.html` description/og/twitter/og:image:alt, and regenerated
 `og.png` (tagline + font-size 44→40). Tests updated red→green; full gate green.
 - Spec/plan: `specs/2026-05-17-copy-rephrase-design.md`, `plans/2026-05-17-copy-rephrase.md`
 - Commits: `758cf46` (copy+tests), `05ecb13` (OG image), this log entry.
+
+## 2026-05-17 — Landing tweaks (CTAs top-bar-only + Turing photo) — SHIPPED
+Removed all in-page CTAs (hero buttons, deleted CtaBand section, footer login
+link) — CTAs live only in the sticky SiteNav. Added Turing's real photo to the
+hero caption + footer, served as a 640×850, ~109 KB, EXIF/GPS/XMP-stripped
+derivative; the GPS-tagged original is gitignored and never enters the public
+repo (verified at JPEG-marker level).
+- Spec/plan: `specs/2026-05-17-landing-tweaks-design.md`, `plans/2026-05-17-landing-tweaks.md`
+- Commits: ecaf0e0 (CTA removal), 79060e4 (scrubbed image+gitignore),
+  1827d86 (hero+footer photo), this log entry.
