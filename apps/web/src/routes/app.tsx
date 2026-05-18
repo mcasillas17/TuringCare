@@ -1,4 +1,6 @@
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { signOut } from "@/lib/auth-client";
 import { useQuery } from "@tanstack/react-query";
@@ -7,6 +9,7 @@ import { toast } from "sonner";
 
 export function AppHome() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const { data, isLoading } = useQuery({
     queryKey: ["me"],
     queryFn: async () => {
@@ -17,10 +20,11 @@ export function AppHome() {
   });
 
   return (
-    <div className="p-8 space-y-4">
-      <h1 className="text-2xl font-bold">Your dashboard</h1>
+    <div className="relative p-8 space-y-4">
+      <LanguageToggle className="absolute right-4 top-4" />
+      <h1 className="text-2xl font-bold">{t("app.title")}</h1>
       {isLoading ? (
-        <p>Loading…</p>
+        <p>{t("app.loading")}</p>
       ) : (
         <pre className="bg-muted p-4 rounded text-sm">{JSON.stringify(data, null, 2)}</pre>
       )}
@@ -28,11 +32,11 @@ export function AppHome() {
         variant="outline"
         onClick={async () => {
           await signOut();
-          toast.success("Signed out");
+          toast.success(t("app.signedOut"));
           navigate("/login");
         }}
       >
-        Sign out
+        {t("app.signOut")}
       </Button>
     </div>
   );
