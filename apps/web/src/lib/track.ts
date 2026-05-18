@@ -14,7 +14,8 @@ export function track(name: string, props: Record<string, unknown> = {}): void {
 }
 
 /** Mount once inside the Router: emits page.viewed on every route change
- * (including landing/pre-auth, where the server records userId = null). */
+ * (including landing/pre-auth, where the server records userId = null).
+ * In dev (StrictMode) effects remount, so each view fires twice — expected, dev-only. */
 export function PageViewTracker(): null {
   const { pathname } = useLocation();
   useEffect(() => {
