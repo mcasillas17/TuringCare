@@ -93,3 +93,14 @@ strong, device-independent contrast. No deps (lucide already present); single
 component change.
 - Spec/plan: `specs/2026-05-17-nav-paw-contrast-design.md`, `plans/2026-05-17-nav-paw-contrast.md`
 - Commits: this cycle (see `git log`).
+
+## 2026-05-17 — Dog Profile CRUD (sub-project C) — SHIPPED
+Multi-dog, owner-scoped CRUD over the session-1 tables: 9 Hono endpoints
+(`/api/dogs` list/create/get/update/delete + concern & goal sub-lists), every
+mutating route owner-isolation-tested (404, no existence leak). Web: list →
+detail (concern/goal sub-lists + delete-confirm) → create/edit forms replacing
+the `/app` JSON placeholder; typed TanStack Query hooks via hc<AppType>. All
+copy localized (en+es parity). No DB migration, no new deps, no apps/api infra
+change. Shipped as a PR from the worktree-dog-profile-crud worktree.
+- Spec/plan: `specs/2026-05-17-dog-profile-crud-design.md`, `plans/2026-05-17-dog-profile-crud.md`
+- Commits: this branch (see `git log`).
