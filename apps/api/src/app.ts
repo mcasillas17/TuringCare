@@ -5,6 +5,7 @@ import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { env } from "./env";
 import { globalRateLimit } from "./middleware/rate-limit";
+import { dogsApp } from "./routes/dogs";
 
 const app = new Hono()
   .use(
@@ -29,6 +30,7 @@ const app = new Hono()
   .post("/api/validate/login", zValidator("json", loginSchema), (c) =>
     c.json({ ok: true } as const),
   )
+  .route("/api/dogs", dogsApp)
   .on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 export { app };
