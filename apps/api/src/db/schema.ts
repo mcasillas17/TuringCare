@@ -4,7 +4,9 @@ import {
   boolean,
   check,
   date,
+  index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -12,6 +14,10 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+
+/* ---------- Auth enums ---------- */
+
+export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 
 /* ---------- Better Auth core tables (adapter defaults) ---------- */
 
@@ -21,6 +27,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  role: userRoleEnum("role").notNull().default("user"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -174,6 +181,24 @@ export const rateLimit = pgTable("rate_limit", {
   count: integer("count").notNull(),
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
+
+/* ---------- Telemetry ---------- */
+
+export const events = pgTable(
+  "events",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    props: jsonb("props").notNull().default(sql`'{}'::jsonb`),
+    sessionId: text("session_id").references(() => session.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("events_name_created_at_idx").on(t.name, t.createdAt),
+    index("events_created_at_idx").on(t.createdAt),
+  ],
+);
 
 /* ---------- Relations ---------- */
 
