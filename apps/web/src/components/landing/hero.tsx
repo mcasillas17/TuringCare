@@ -38,17 +38,17 @@ export function Hero() {
           </p>
         </Reveal>
         <Reveal delay={240}>
-          <div className="mt-6 flex items-center justify-center gap-3">
+          <div className="mt-8 flex flex-col items-center gap-4">
             <img
               src="/turing.jpg"
               alt="Turing, a blue-merle Mini American Shepherd"
-              width={48}
-              height={48}
+              width={160}
+              height={160}
               loading="lazy"
               decoding="async"
-              className="size-12 shrink-0 rounded-full object-cover ring-2 ring-copper/40"
+              className="size-40 rounded-full object-cover shadow-lg ring-4 ring-copper/40"
             />
-            <p className="text-sm text-slate-soft/80">
+            <p className="max-w-sm text-center text-sm text-slate-soft/80">
               Built by dog people — and named after Turing, a blue-merle Mini American Shepherd.
             </p>
           </div>
