@@ -20,7 +20,6 @@ const schema = z.object({
   // is never locked out. Empty/unset = no bootstrap admins.
   ADMIN_EMAILS: z
     .string()
-    .optional()
     .default("")
     .transform((s) =>
       s
