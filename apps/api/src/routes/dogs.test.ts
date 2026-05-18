@@ -143,3 +143,85 @@ describe("dogs: get/update/delete", () => {
     ).toBe(404);
   });
 });
+
+describe("dogs: concerns & goals", () => {
+  const users: TestUser[] = [];
+  afterEach(async () => {
+    for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
+  });
+  async function makeDog(u: TestUser) {
+    const res = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify(validDog),
+    });
+    return ((await res.json()) as { dog: { id: string } }).dog;
+  }
+
+  it("adds and removes a concern; appears in GET", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const add = await app.request(`/api/dogs/${dog.id}/concerns`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ concern: "Leash reactivity", severity: "moderate" }),
+    });
+    expect(add.status).toBe(201);
+    const { concern } = (await add.json()) as { concern: { id: string } };
+
+    const got = await app.request(`/api/dogs/${dog.id}`, { headers: u.authHeaders });
+    expect(((await got.json()) as { concerns: unknown[] }).concerns).toHaveLength(1);
+
+    const del = await app.request(`/api/dogs/${dog.id}/concerns/${concern.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+    expect(del.status).toBe(200);
+    const after = await app.request(`/api/dogs/${dog.id}`, { headers: u.authHeaders });
+    expect(((await after.json()) as { concerns: unknown[] }).concerns).toEqual([]);
+  });
+
+  it("adds and removes a goal", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const add = await app.request(`/api/dogs/${dog.id}/goals`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ goal: "Calm greetings" }),
+    });
+    expect(add.status).toBe(201);
+    const { goal } = (await add.json()) as { goal: { id: string } };
+    const del = await app.request(`/api/dogs/${dog.id}/goals/${goal.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+    expect(del.status).toBe(200);
+  });
+
+  it("invalid concern body → 400", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const res = await app.request(`/api/dogs/${dog.id}/concerns`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ concern: "", severity: "nope" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("owner isolation: cannot add a concern to another user's dog", async () => {
+    const a = await createTestUser();
+    const b = await createTestUser();
+    users.push(a, b);
+    const dog = await makeDog(a);
+    const res = await app.request(`/api/dogs/${dog.id}/concerns`, {
+      method: "POST",
+      headers: b.authHeaders,
+      body: JSON.stringify({ concern: "x", severity: "mild" }),
+    });
+    expect(res.status).toBe(404);
+  });
+});

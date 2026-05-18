@@ -1,5 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
-import { dogProfileSchema } from "@turingcare/shared";
+import { behaviorConcernSchema, dogProfileSchema, trainingGoalSchema } from "@turingcare/shared";
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
@@ -74,5 +74,41 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     await db.delete(dogs).where(eq(dogs.id, dog.id));
+    return c.json({ ok: true } as const);
+  })
+  .post("/:id/concerns", zValidator("json", behaviorConcernSchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const [concern] = await db
+      .insert(behaviorConcerns)
+      .values({ ...c.req.valid("json"), dogId: dog.id })
+      .returning();
+    return c.json({ concern }, 201);
+  })
+  .delete("/:id/concerns/:concernId", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    await db
+      .delete(behaviorConcerns)
+      .where(
+        and(eq(behaviorConcerns.id, c.req.param("concernId")), eq(behaviorConcerns.dogId, dog.id)),
+      );
+    return c.json({ ok: true } as const);
+  })
+  .post("/:id/goals", zValidator("json", trainingGoalSchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const [goal] = await db
+      .insert(trainingGoals)
+      .values({ ...c.req.valid("json"), dogId: dog.id })
+      .returning();
+    return c.json({ goal }, 201);
+  })
+  .delete("/:id/goals/:goalId", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    await db
+      .delete(trainingGoals)
+      .where(and(eq(trainingGoals.id, c.req.param("goalId")), eq(trainingGoals.dogId, dog.id)));
     return c.json({ ok: true } as const);
   });
