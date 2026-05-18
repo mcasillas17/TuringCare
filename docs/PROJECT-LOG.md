@@ -70,3 +70,10 @@ repo (verified at JPEG-marker level).
 - Spec/plan: `specs/2026-05-17-landing-tweaks-design.md`, `plans/2026-05-17-landing-tweaks.md`
 - Commits: ecaf0e0 (CTA removal), 79060e4 (scrubbed image+gitignore),
   1827d86 (hero+footer photo), this log entry.
+
+## 2026-05-17 — Hero photo enlarge/center — SHIPPED
+Hero Turing photo enlarged 48px→160px (`size-40`), re-laid-out as a centered
+vertical stack above the caption (`flex-col items-center`, ring-4 + shadow-lg).
+Footer avatar / OG image unchanged.
+- Spec/plan: `specs/2026-05-17-hero-photo-enlarge-design.md`, `plans/2026-05-17-hero-photo-enlarge.md`
+- Commit: e16ed82 (hero.tsx), this log entry.
