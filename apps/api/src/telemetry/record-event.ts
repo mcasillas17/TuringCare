@@ -9,8 +9,9 @@ export interface RecordEventArgs {
 }
 
 /**
- * Fire-and-forget telemetry write. NEVER throws into the caller's request
- * path: a failed/absent events table must not break signup or any user flow.
+ * Error-safe telemetry write. Callers `await` it, but it NEVER throws into
+ * the request path: a failed/absent events table must not break signup or
+ * any user flow. The DB error is swallowed and logged.
  */
 export async function recordEvent(
   name: EventName,
