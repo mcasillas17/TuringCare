@@ -36,13 +36,29 @@ it("ActivityFeed lists events", () => {
         id: "1",
         name: "user.signed_in",
         userId: "abcdef123",
-        createdAt: "2026-05-17T10:00:00+00:00",
+        createdAt: "2026-05-17T10:00:00Z",
         props: {},
       },
     ],
   };
   render(<ActivityFeed activity={activity} />);
   expect(screen.getByText("user.signed_in")).toBeInTheDocument();
+});
+
+it("ActivityFeed does not throw on a malformed date and shows the raw string", () => {
+  const activity: Activity = {
+    items: [
+      {
+        id: "3",
+        name: "user.signed_in",
+        userId: "abcdef123",
+        createdAt: "2026-05-17T10:00:00+00",
+        props: {},
+      },
+    ],
+  };
+  expect(() => render(<ActivityFeed activity={activity} />)).not.toThrow();
+  expect(screen.getByText("2026-05-17T10:00:00+00")).toBeInTheDocument();
 });
 
 it("Funnel renders with empty data without throwing", () => {
@@ -56,7 +72,7 @@ it("ActivityFeed shows anon for null userId", () => {
         id: "2",
         name: "page.viewed",
         userId: null,
-        createdAt: "2026-05-17T10:00:00+00:00",
+        createdAt: "2026-05-17T10:00:00Z",
         props: {},
       },
     ],

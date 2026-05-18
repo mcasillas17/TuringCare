@@ -42,7 +42,11 @@ describe("/api/admin", () => {
     expect(act.status).toBe(200);
     // app.request().json() is typed `unknown` in this Hono version (it does not
     // infer like the hc<AppType> client); narrow before property access.
-    const actBody = (await act.json()) as { items: unknown[] };
+    const actBody = (await act.json()) as { items: { createdAt: string }[] };
     expect(Array.isArray(actBody.items)).toBe(true);
+    const firstItem = actBody.items[0];
+    if (firstItem) {
+      expect(Number.isNaN(new Date(firstItem.createdAt).getTime())).toBe(false);
+    }
   });
 });

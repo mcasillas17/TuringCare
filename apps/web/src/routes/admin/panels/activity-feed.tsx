@@ -6,6 +6,11 @@ const fmt = new Intl.DateTimeFormat("en-US", {
   hour12: false,
 });
 
+function formatWhen(s: string): string {
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? s : fmt.format(d);
+}
+
 export function ActivityFeed({ activity }: { activity: Activity }) {
   return (
     <section className="rounded-lg border bg-card p-4">
@@ -17,9 +22,7 @@ export function ActivityFeed({ activity }: { activity: Activity }) {
               {e.userId ? e.userId.slice(0, 8) : "anon"}
             </span>
             <span>{e.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {fmt.format(new Date(e.createdAt))}
-            </span>
+            <span className="text-xs text-muted-foreground">{formatWhen(e.createdAt)}</span>
           </li>
         ))}
       </ul>

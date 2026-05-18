@@ -138,7 +138,7 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       props: unknown;
     }>(
       sql`select id, name, user_id as "userId",
-                 to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') as "createdAt",
+                 to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
                  props
           from events order by created_at desc limit 100`,
     );
