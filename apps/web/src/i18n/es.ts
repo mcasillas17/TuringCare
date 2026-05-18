@@ -1,8 +1,5 @@
 import type { Messages } from "./types";
 
-/** Widened version of Messages that accepts any string values while still enforcing key parity. */
-type Catalog = { [S in keyof Messages]: { [K in keyof Messages[S]]: string } };
-
 export const es = {
   language: { label: "Idioma", en: "EN", es: "ES" },
   nav: {
@@ -125,4 +122,4 @@ export const es = {
     signedOut: "Sesión cerrada",
   },
   common: { loading: "Cargando…" },
-} satisfies Catalog;
+} satisfies Messages;
