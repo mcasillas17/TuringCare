@@ -48,7 +48,7 @@ export function DogForm({ mode }: { mode: "create" | "edit" }) {
       const dog =
         mode === "create" ? await create.mutateAsync(values) : await update.mutateAsync(values);
       toast.success(t("dogs.saved"));
-      navigate(dog ? `/app/dogs/${dog.id}` : "/app");
+      navigate(dog ? `/app/dogs/${dog.id}` : "/app/dogs");
     } catch {
       toast.error(t("dogs.saveFailed"));
     }
@@ -121,7 +121,7 @@ export function DogForm({ mode }: { mode: "create" | "edit" }) {
           <Button type="submit" disabled={isSubmitting} className="bg-slate text-cream">
             {isSubmitting ? t("dogs.saving") : t("dogs.save")}
           </Button>
-          <Button type="button" variant="outline" onClick={() => navigate("/app")}>
+          <Button type="button" variant="outline" onClick={() => navigate("/app/dogs")}>
             {t("dogs.cancel")}
           </Button>
         </div>

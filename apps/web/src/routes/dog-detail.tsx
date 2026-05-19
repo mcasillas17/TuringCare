@@ -50,7 +50,7 @@ export function DogDetail() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link to="/app" className="text-sm text-slate-soft hover:underline">
+      <Link to="/app/dogs" className="text-sm text-slate-soft hover:underline">
         ← {t("dogs.back")}
       </Link>
       <div className="flex items-center justify-between">
@@ -67,7 +67,7 @@ export function DogDetail() {
                   try {
                     await del.mutateAsync(dog.id);
                     toast.success(t("dogs.deleted"));
-                    navigate("/app");
+                    navigate("/app/dogs");
                   } catch {
                     toast.error(t("dogs.saveFailed"));
                   }
