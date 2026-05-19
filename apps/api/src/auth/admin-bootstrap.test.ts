@@ -1,18 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { resolveAdminRole } from "./admin-bootstrap";
 
-function fakeDb() {
-  const set = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
-  const update = vi.fn().mockReturnValue({ set });
-  return {
-    db: { update } as unknown as Parameters<typeof resolveAdminRole>[1] extends infer D
-      ? never
-      : never,
-    update,
-    set,
-  };
-}
-
 describe("resolveAdminRole", () => {
   it("returns existing role and does NOT write when email is not on the allowlist", async () => {
     const update = vi.fn();
