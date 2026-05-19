@@ -165,10 +165,12 @@ flaky provider can't break sign-up or password-reset (logs only userId + err
 message — no token/url/PII). `requireEmailVerification` stays OFF — zero
 user-facing change. `RESEND_API_KEY` + `EMAIL_FROM` env/Fly secrets + DEPLOY.md
 domain-verification checklist (verify endpoint is
-`/api/auth/request-password-reset`). Full TDD; gate green (105 tests). Unblocks
-P2 (email verification) and P3 (password recovery).
+`/api/auth/request-password-reset`). Full TDD; gate green (API 63 / web 34 /
+shared 8). Unblocks P2 (email verification) and P3 (password recovery).
 - Spec/plan: `specs/2026-05-19-transactional-email-design.md`, `plans/2026-05-19-transactional-email.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-feat+transactional-email.
-- Follow-up noted: the `"/forget-password"` rate-limit customRule in `auth.ts`
-  is a Better Auth limiter alias; the real reset route is
-  `/api/auth/request-password-reset` — confirm the 3/60s limit applies (separate task).
+- Cleanup follow-up (not a gap): the `"/forget-password"` rate-limit customRule
+  in `auth.ts` is exact-match and does not hit the real `/request-password-reset`
+  route — but Better Auth's built-in default special rule already enforces 3/60s
+  on `/request-password-reset`, so reset IS rate-limited. The custom rule is just
+  redundant/misleading; a later task should drop it or rename to the real path.
