@@ -159,3 +159,18 @@
     animation: none;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .brief-print,
+  .brief-print * {
+    visibility: visible;
+  }
+  .brief-print {
+    position: absolute;
+    inset: 0;
+    padding: 24px;
+  }
+}
