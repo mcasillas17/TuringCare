@@ -137,3 +137,14 @@ correct; the client just wasn't sending the cookie). Dev unaffected (same-origin
 via Vite proxy). One-line change, no deps.
 - Spec/plan: `specs/2026-05-19-api-client-credentials-design.md`, `plans/2026-05-19-api-client-credentials.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-fix-api-credentials.
+
+## 2026-05-19 — App Shell + Journal/Brief/Trainers/Profile/Settings (sub-project D) — SHIPPED
+Persistent app shell (icon rail + shared <BrandMark/> banner + responsive
+drawer, layout route behind RequireAuth, Admin link admin-only) + Overview
+aggregate, re-homed Dogs (chrome stripped), owner-scoped Behavior Journal,
+deterministic Behavior Brief (generate/finalize/print/copy, no AI), Trainers
+directory (filter/detail), Profile (edit name) + Settings (language/sign-out).
+All copy en+es with parity. One PR; internally ~18 reviewed TDD tasks; no
+migration, no new deps, no apps/api infra change.
+- Spec/plan: `specs/2026-05-19-app-shell-design.md`, `plans/2026-05-19-app-shell.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-app-shell-redesign.
