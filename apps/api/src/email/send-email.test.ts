@@ -49,4 +49,24 @@ describe("sendEmail", () => {
     ).rejects.toBeInstanceOf(EmailSendError);
     expect(send).not.toHaveBeenCalled();
   });
+
+  it("throws EmailSendError when both html and text are empty (client not called)", async () => {
+    const send = vi.fn();
+    await expect(
+      sendEmail(
+        { to: "u@example.com", subject: "Hi", html: "", text: "" },
+        { client: { emails: { send } }, apiKey: "re_x", from: "f" },
+      ),
+    ).rejects.toBeInstanceOf(EmailSendError);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("falls back to env EMAIL_FROM when deps.from is omitted (logs in dev mode)", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    await sendEmail(
+      { to: "u@example.com", subject: "Hi", html: "<p>x</p>", text: "x" },
+      { apiKey: undefined },
+    );
+    expect(info).toHaveBeenCalledWith("[email:dev]", { to: "u@example.com", subject: "Hi" });
+  });
 });
