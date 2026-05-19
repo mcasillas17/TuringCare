@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db as defaultDb, type DB } from "../db";
+import { type DB, db as defaultDb } from "../db";
 import { user } from "../db/schema";
 import { env } from "../env";
 
@@ -18,7 +18,7 @@ export interface ResolveAdminRoleDeps {
  * bootstrap self-heals on the first authenticated request, whichever path.
  */
 export async function resolveAdminRole(
-  sessionUser: { id: string; email: string; role?: string },
+  sessionUser: { id: string; email: string; role?: string | null },
   deps: ResolveAdminRoleDeps = {},
 ): Promise<Role> {
   const database = deps.database ?? defaultDb;

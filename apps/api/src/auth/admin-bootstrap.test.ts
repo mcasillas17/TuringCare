@@ -4,13 +4,21 @@ import { resolveAdminRole } from "./admin-bootstrap";
 function fakeDb() {
   const set = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
   const update = vi.fn().mockReturnValue({ set });
-  return { db: { update } as unknown as Parameters<typeof resolveAdminRole>[1] extends infer D ? never : never, update, set };
+  return {
+    db: { update } as unknown as Parameters<typeof resolveAdminRole>[1] extends infer D
+      ? never
+      : never,
+    update,
+    set,
+  };
 }
 
 describe("resolveAdminRole", () => {
   it("returns existing role and does NOT write when email is not on the allowlist", async () => {
     const update = vi.fn();
-    const db = { update } as unknown as NonNullable<Parameters<typeof resolveAdminRole>[1]>["database"];
+    const db = { update } as unknown as NonNullable<
+      Parameters<typeof resolveAdminRole>[1]
+    >["database"];
     const role = await resolveAdminRole(
       { id: "u1", email: "nobody@example.com", role: "user" },
       { database: db, adminEmails: ["admin@x.com"] },
@@ -23,7 +31,9 @@ describe("resolveAdminRole", () => {
     const where = vi.fn().mockResolvedValue(undefined);
     const set = vi.fn().mockReturnValue({ where });
     const update = vi.fn().mockReturnValue({ set });
-    const db = { update } as unknown as NonNullable<Parameters<typeof resolveAdminRole>[1]>["database"];
+    const db = { update } as unknown as NonNullable<
+      Parameters<typeof resolveAdminRole>[1]
+    >["database"];
     const role = await resolveAdminRole(
       { id: "u1", email: "Admin@X.com", role: "user" },
       { database: db, adminEmails: ["admin@x.com"] },
@@ -35,7 +45,9 @@ describe("resolveAdminRole", () => {
 
   it("is idempotent: already admin on allowlist → no DB write", async () => {
     const update = vi.fn();
-    const db = { update } as unknown as NonNullable<Parameters<typeof resolveAdminRole>[1]>["database"];
+    const db = { update } as unknown as NonNullable<
+      Parameters<typeof resolveAdminRole>[1]
+    >["database"];
     const role = await resolveAdminRole(
       { id: "u1", email: "admin@x.com", role: "admin" },
       { database: db, adminEmails: ["admin@x.com"] },
@@ -46,7 +58,9 @@ describe("resolveAdminRole", () => {
 
   it("defaults missing role to 'user'", async () => {
     const update = vi.fn();
-    const db = { update } as unknown as NonNullable<Parameters<typeof resolveAdminRole>[1]>["database"];
+    const db = { update } as unknown as NonNullable<
+      Parameters<typeof resolveAdminRole>[1]
+    >["database"];
     const role = await resolveAdminRole(
       { id: "u1", email: "x@y.com" },
       { database: db, adminEmails: [] },
