@@ -29,6 +29,12 @@ const schema = z.object({
     ),
   // Events older than this many days are purged by the scheduled retention job.
   EVENT_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+  // Resend API key. UNSET locally/CI → email runs in log-only mode (no network,
+  // no real send). Set as a Fly secret in production.
+  RESEND_API_KEY: z.string().optional(),
+  // From address for all transactional email. Prod uses the verified
+  // send.turingcare.dog subdomain; local default is a harmless placeholder.
+  EMAIL_FROM: z.string().default("TuringCare <noreply@send.turingcare.dog>"),
 });
 
 export const env = schema.parse(process.env);
