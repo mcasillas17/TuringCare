@@ -152,3 +152,23 @@ full gate green (91 tests). Immediate prod unblock was a manual
 `UPDATE "user" SET role='admin'`.
 - Spec/plan: `specs/2026-05-18-admin-bootstrap-selfheal-design.md`, `plans/2026-05-18-admin-bootstrap-selfheal.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-fix+admin-bootstrap-selfheal.
+
+## 2026-05-19 — Transactional email provider (P1) — SHIPPED
+Security backlog P1. Provider-isolated `email/send-email.ts` (Resend SDK; only
+file importing it) with a log-only no-op fallback when `RESEND_API_KEY` is
+unset (local/CI never send, no network, never throw); `EmailSendError` chains
+cause; body/identity guards. Pure `email/templates.ts`
+(verification + reset, inline-styled HTML + text, paste-link fallback). Better
+Auth `emailAndPassword.sendResetPassword` + `emailVerification`
+(`sendOnSignUp:true`, `sendVerificationEmail`) wired with swallow-on-error so a
+flaky provider can't break sign-up or password-reset (logs only userId + err
+message — no token/url/PII). `requireEmailVerification` stays OFF — zero
+user-facing change. `RESEND_API_KEY` + `EMAIL_FROM` env/Fly secrets + DEPLOY.md
+domain-verification checklist (verify endpoint is
+`/api/auth/request-password-reset`). Full TDD; gate green (105 tests). Unblocks
+P2 (email verification) and P3 (password recovery).
+- Spec/plan: `specs/2026-05-19-transactional-email-design.md`, `plans/2026-05-19-transactional-email.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-feat+transactional-email.
+- Follow-up noted: the `"/forget-password"` rate-limit customRule in `auth.ts`
+  is a Better Auth limiter alias; the real reset route is
+  `/api/auth/request-password-reset` — confirm the 3/60s limit applies (separate task).
