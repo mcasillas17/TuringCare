@@ -128,3 +128,12 @@ entry chunk −47%). 180-day retention via a scheduled GitHub Actions workflow
 (`telemetry:purge`). Full TDD; 60 tests (API 30 / web 30), gate green.
 - Spec/plan: `specs/2026-05-17-admin-telemetry-design.md`, `plans/2026-05-17-admin-telemetry.md`
 - Commits: this cycle (see `git log`; branch `worktree-feat+admin-telemetry`).
+
+## 2026-05-19 — API client cross-origin credentials fix — SHIPPED
+`apps/web/src/lib/api.ts` hono client now sends `credentials: "include"`, so the
+session cookie is attached on cross-origin (`turingcare.dog` → `api.turingcare.dog`)
+calls. Root cause of the prod 401 on `/api/dogs` (CORS/COOKIE_DOMAIN were already
+correct; the client just wasn't sending the cookie). Dev unaffected (same-origin
+via Vite proxy). One-line change, no deps.
+- Spec/plan: `specs/2026-05-19-api-client-credentials-design.md`, `plans/2026-05-19-api-client-credentials.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-fix-api-credentials.
