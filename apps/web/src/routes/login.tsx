@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/BrandMark";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,9 @@ export function Login() {
   return (
     <div className="relative p-8 max-w-sm mx-auto">
       <LanguageToggle className="absolute right-4 top-4" />
+      <Link to="/" className="mb-6 flex justify-center">
+        <BrandMark />
+      </Link>
       <Card>
         <CardHeader>
           <CardTitle>{t("auth.loginTitle")}</CardTitle>
