@@ -134,10 +134,12 @@ mail). Deploy is not blocked by DNS propagation.
 
 1. Create a Resend account; create an API key.
 2. In Resend, add domain `send.turingcare.dog`. Add the generated **SPF**,
-   **DKIM**, and a **DMARC** record to Cloudflare DNS for `turingcare.dog`.
+   **DKIM**, and a **DMARC** record to Cloudflare DNS for `turingcare.dog`
+   (Resend's dashboard shows the exact record names/hostnames to enter).
    Wait until Resend shows the domain **Verified**.
 3. Set the Fly secrets:
    ```bash
+   # (skip if you already set these in §2c)
    fly secrets set --app turingcare-api \
      RESEND_API_KEY='re_...' \
      EMAIL_FROM='TuringCare <noreply@send.turingcare.dog>'
@@ -260,7 +262,7 @@ known-good deployment → **⋯ → Rollback to this deployment**. Instant; no r
 | Where | Secrets |
 |---|---|
 | GitHub Actions | `DATABASE_URL`, `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
-| Fly (`turingcare-api`) | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `FRONTEND_URL`, `COOKIE_DOMAIN` |
+| Fly (`turingcare-api`) | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `FRONTEND_URL`, `COOKIE_DOMAIN`, `RESEND_API_KEY`, `EMAIL_FROM` |
 
 | Name | Must equal |
 |---|---|
