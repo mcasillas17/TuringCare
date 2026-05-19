@@ -62,7 +62,7 @@ export function DogForm({ mode }: { mode: "create" | "edit" }) {
   }
 
   return (
-    <div className="mx-auto max-w-lg p-8">
+    <div className="mx-auto max-w-lg">
       <h1 className="mb-6 text-2xl font-bold text-slate">
         {mode === "create" ? t("dogs.createTitle") : t("dogs.editTitle")}
       </h1>

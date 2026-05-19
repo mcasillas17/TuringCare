@@ -1,4 +1,3 @@
-import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import {
@@ -50,8 +49,7 @@ export function DogDetail() {
   };
 
   return (
-    <div className="relative mx-auto max-w-2xl p-8 space-y-6">
-      <LanguageToggle className="absolute right-4 top-4" />
+    <div className="mx-auto max-w-2xl space-y-6">
       <Link to="/app" className="text-sm text-slate-soft hover:underline">
         ← {t("dogs.back")}
       </Link>
