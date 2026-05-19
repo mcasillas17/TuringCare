@@ -2,27 +2,10 @@ import { zValidator } from "@hono/zod-validator";
 import { behaviorConcernSchema, dogProfileSchema, trainingGoalSchema } from "@turingcare/shared";
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { createMiddleware } from "hono/factory";
-import { auth } from "../auth";
 import { db } from "../db";
+import { findOwnedDog } from "../db/owned-dog";
 import { behaviorConcerns, dogs, trainingGoals } from "../db/schema";
-
-type Vars = { userId: string };
-
-const requireUser = createMiddleware<{ Variables: Vars }>(async (c, next) => {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  if (!session) return c.json({ error: "unauthorized" } as const, 401);
-  c.set("userId", session.user.id);
-  await next();
-});
-
-async function findOwnedDog(userId: string, dogId: string) {
-  const [dog] = await db
-    .select()
-    .from(dogs)
-    .where(and(eq(dogs.id, dogId), eq(dogs.ownerId, userId)));
-  return dog ?? null;
-}
+import { type Vars, requireUser } from "../middleware/require-user";
 
 export const dogsApp = new Hono<{ Variables: Vars }>()
   .use("*", requireUser)
