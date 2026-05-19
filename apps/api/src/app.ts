@@ -3,6 +3,7 @@ import { loginSchema, registerSchema } from "@turingcare/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
+import { resolveAdminRole } from "./auth/admin-bootstrap";
 import { env } from "./env";
 import { globalRateLimit } from "./middleware/rate-limit";
 import { adminApp } from "./routes/admin";
@@ -25,7 +26,8 @@ const app = new Hono()
   .get("/me", async (c) => {
     const session = await auth.api.getSession({ headers: c.req.raw.headers });
     if (!session) return c.json({ error: "unauthorized" } as const, 401);
-    return c.json({ user: session.user });
+    const role = await resolveAdminRole(session.user);
+    return c.json({ user: { ...session.user, role } });
   })
   .post("/api/validate/register", zValidator("json", registerSchema), (c) =>
     c.json({ ok: true } as const),
