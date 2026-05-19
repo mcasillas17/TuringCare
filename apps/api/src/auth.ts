@@ -2,6 +2,8 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db";
 import * as schema from "./db/schema";
+import { sendEmail } from "./email/send-email";
+import { passwordResetEmail, verificationEmail } from "./email/templates";
 import { env } from "./env";
 import { recordEvent } from "./telemetry/record-event";
 
@@ -24,7 +26,32 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   basePath: "/api/auth",
   trustedOrigins: [env.FRONTEND_URL],
-  emailAndPassword: { enabled: true },
+  emailAndPassword: {
+    enabled: true,
+    sendResetPassword: async ({ user, url }) => {
+      try {
+        await sendEmail({ to: user.email, ...passwordResetEmail(url) });
+      } catch (err) {
+        console.error("[auth] sendResetPassword failed", {
+          userId: user.id,
+          err: err instanceof Error ? err.message : "unknown",
+        });
+      }
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      try {
+        await sendEmail({ to: user.email, ...verificationEmail(url) });
+      } catch (err) {
+        console.error("[auth] sendVerificationEmail failed", {
+          userId: user.id,
+          err: err instanceof Error ? err.message : "unknown",
+        });
+      }
+    },
+  },
   user: {
     additionalFields: {
       // Surfaced on session.user so /me and the web admin guard can read it.
