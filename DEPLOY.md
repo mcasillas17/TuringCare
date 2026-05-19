@@ -104,7 +104,9 @@ fly secrets set --app turingcare-api \
   BETTER_AUTH_SECRET="$(openssl rand -base64 32)" \
   BETTER_AUTH_URL='https://api.turingcare.dog' \
   FRONTEND_URL='https://turingcare.dog' \
-  COOKIE_DOMAIN='.turingcare.dog'
+  COOKIE_DOMAIN='.turingcare.dog' \
+  RESEND_API_KEY='re_...' \
+  EMAIL_FROM='TuringCare <noreply@send.turingcare.dog>'
 ```
 
 **Fly secrets required:**
@@ -116,12 +118,32 @@ fly secrets set --app turingcare-api \
 | `BETTER_AUTH_URL` | `https://api.turingcare.dog` |
 | `FRONTEND_URL` | `https://turingcare.dog` |
 | `COOKIE_DOMAIN` | `.turingcare.dog` |
+| `RESEND_API_KEY` | Resend API key (domain `send.turingcare.dog` verified) |
+| `EMAIL_FROM` | `TuringCare <noreply@send.turingcare.dog>` |
 
 > `COOKIE_DOMAIN` was added during the deploy audit. The frontend and API are
 > different subdomains, so without it Better Auth's default `SameSite=Lax`
 > cookie is **not** sent on cross-site requests and login won't persist.
 > Setting it makes Better Auth issue cross-subdomain `SameSite=None; Secure`
 > cookies. Leave it **unset** locally.
+
+### Transactional email (Resend) — one-time setup
+
+Until these are done, production runs email in **log-only mode** (no crash, no
+mail). Deploy is not blocked by DNS propagation.
+
+1. Create a Resend account; create an API key.
+2. In Resend, add domain `send.turingcare.dog`. Add the generated **SPF**,
+   **DKIM**, and a **DMARC** record to Cloudflare DNS for `turingcare.dog`.
+   Wait until Resend shows the domain **Verified**.
+3. Set the Fly secrets:
+   ```bash
+   fly secrets set --app turingcare-api \
+     RESEND_API_KEY='re_...' \
+     EMAIL_FROM='TuringCare <noreply@send.turingcare.dog>'
+   ```
+4. Verify: trigger `/api/auth/request-password-reset` for a test account and
+   confirm delivery (check Resend dashboard logs).
 
 ---
 
