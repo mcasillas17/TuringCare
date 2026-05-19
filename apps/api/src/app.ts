@@ -8,6 +8,7 @@ import { globalRateLimit } from "./middleware/rate-limit";
 import { adminApp } from "./routes/admin";
 import { dogsApp } from "./routes/dogs";
 import { overviewApp } from "./routes/overview";
+import { trainersApp } from "./routes/trainers";
 import { eventIngestSchema } from "./telemetry/events";
 import { recordEvent } from "./telemetry/record-event";
 
@@ -48,6 +49,7 @@ const app = new Hono()
     return c.json({ ok: true } as const, 202);
   })
   .route("/api/overview", overviewApp)
+  .route("/api/trainers", trainersApp)
   .route("/api/admin", adminApp)
   .on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
