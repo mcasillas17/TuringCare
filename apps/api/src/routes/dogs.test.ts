@@ -225,3 +225,76 @@ describe("dogs: concerns & goals", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("dogs: journal", () => {
+  const users: TestUser[] = [];
+  afterEach(async () => {
+    for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
+  });
+  async function makeDog(u: TestUser) {
+    const r = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify(validDog),
+    });
+    return ((await r.json()) as { dog: { id: string } }).dog;
+  }
+  const entry = {
+    occurredAt: "2026-05-19T10:00",
+    antecedent: "Doorbell",
+    behavior: "Barked 8s",
+    consequence: "Scatter fed",
+    intensity: 3,
+  };
+
+  it("adds, lists, deletes a journal entry", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const add = await app.request(`/api/dogs/${dog.id}/journal`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify(entry),
+    });
+    expect(add.status).toBe(201);
+    const { entry: created } = (await add.json()) as { entry: { id: string } };
+    const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
+    expect(((await list.json()) as { entries: unknown[] }).entries).toHaveLength(1);
+    const del = await app.request(`/api/dogs/${dog.id}/journal/${created.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+    expect(del.status).toBe(200);
+    const after = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
+    expect(((await after.json()) as { entries: unknown[] }).entries).toEqual([]);
+  });
+  it("rejects invalid entry (400)", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const r = await app.request(`/api/dogs/${dog.id}/journal`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ ...entry, intensity: 9 }),
+    });
+    expect(r.status).toBe(400);
+  });
+  it("owner isolation: other user 404 on list/add", async () => {
+    const a = await createTestUser();
+    const b = await createTestUser();
+    users.push(a, b);
+    const dog = await makeDog(a);
+    expect(
+      (await app.request(`/api/dogs/${dog.id}/journal`, { headers: b.authHeaders })).status,
+    ).toBe(404);
+    expect(
+      (
+        await app.request(`/api/dogs/${dog.id}/journal`, {
+          method: "POST",
+          headers: b.authHeaders,
+          body: JSON.stringify(entry),
+        })
+      ).status,
+    ).toBe(404);
+  });
+});

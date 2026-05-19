@@ -1,10 +1,15 @@
 import { zValidator } from "@hono/zod-validator";
-import { behaviorConcernSchema, dogProfileSchema, trainingGoalSchema } from "@turingcare/shared";
+import {
+  behaviorConcernSchema,
+  dogProfileSchema,
+  journalEntrySchema,
+  trainingGoalSchema,
+} from "@turingcare/shared";
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
-import { behaviorConcerns, dogs, trainingGoals } from "../db/schema";
+import { behaviorConcerns, dogs, journalEntries, trainingGoals } from "../db/schema";
 import { type Vars, requireUser } from "../middleware/require-user";
 
 export const dogsApp = new Hono<{ Variables: Vars }>()
@@ -93,5 +98,42 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     await db
       .delete(trainingGoals)
       .where(and(eq(trainingGoals.id, c.req.param("goalId")), eq(trainingGoals.dogId, dog.id)));
+    return c.json({ ok: true } as const);
+  })
+  .get("/:id/journal", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const entries = await db
+      .select()
+      .from(journalEntries)
+      .where(eq(journalEntries.dogId, dog.id))
+      .orderBy(desc(journalEntries.occurredAt));
+    return c.json({ entries });
+  })
+  .post("/:id/journal", zValidator("json", journalEntrySchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const b = c.req.valid("json");
+    const [entry] = await db
+      .insert(journalEntries)
+      .values({
+        dogId: dog.id,
+        occurredAt: new Date(b.occurredAt),
+        antecedent: b.antecedent,
+        behavior: b.behavior,
+        consequence: b.consequence,
+        intensity: b.intensity,
+        location: b.location ?? null,
+        notes: b.notes ?? null,
+      })
+      .returning();
+    return c.json({ entry }, 201);
+  })
+  .delete("/:id/journal/:entryId", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    await db
+      .delete(journalEntries)
+      .where(and(eq(journalEntries.id, c.req.param("entryId")), eq(journalEntries.dogId, dog.id)));
     return c.json({ ok: true } as const);
   });
