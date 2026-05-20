@@ -13,10 +13,10 @@ afterEach(() => {
 
 it("posts a page.viewed event for the current path", async () => {
   render(
-    <MemoryRouter initialEntries={["/app"]}>
+    <MemoryRouter initialEntries={["/my"]}>
       <PageViewTracker />
       <Routes>
-        <Route path="/app" element={<div>app</div>} />
+        <Route path="/my" element={<div>app</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -27,15 +27,15 @@ it("posts a page.viewed event for the current path", async () => {
   );
   const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
   const body = JSON.parse(firstCall[1].body as string);
-  expect(body).toEqual({ name: "page.viewed", props: { path: "/app" } });
+  expect(body).toEqual({ name: "page.viewed", props: { path: "/my" } });
 });
 
 it("fires a new page.viewed on route change", async () => {
   render(
-    <MemoryRouter initialEntries={["/app"]}>
+    <MemoryRouter initialEntries={["/my"]}>
       <PageViewTracker />
       <Routes>
-        <Route path="/app" element={<Link to="/other">go</Link>} />
+        <Route path="/my" element={<Link to="/other">go</Link>} />
         <Route path="/other" element={<div>other</div>} />
       </Routes>
     </MemoryRouter>,
@@ -45,7 +45,7 @@ it("fires a new page.viewed on route change", async () => {
   const paths = fetchMock.mock.calls.map(
     (c) => JSON.parse((c as [string, RequestInit])[1].body as string).props.path,
   );
-  expect(paths).toContain("/app");
+  expect(paths).toContain("/my");
   expect(paths).toContain("/other");
 });
 
@@ -53,10 +53,10 @@ it("swallows fetch failures without throwing", () => {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
   expect(() =>
     render(
-      <MemoryRouter initialEntries={["/app"]}>
+      <MemoryRouter initialEntries={["/my"]}>
         <PageViewTracker />
         <Routes>
-          <Route path="/app" element={<div>app</div>} />
+          <Route path="/my" element={<div>app</div>} />
         </Routes>
       </MemoryRouter>,
     ),

@@ -54,7 +54,7 @@ export function SiteNav() {
           <LanguageToggle />
           {session ? (
             <Button asChild className="bg-slate text-cream hover:bg-slate/90">
-              <Link to="/app">{t("nav.openApp")}</Link>
+              <Link to="/my">{t("nav.openApp")}</Link>
             </Button>
           ) : (
             <>

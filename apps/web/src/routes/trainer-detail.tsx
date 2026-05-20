@@ -10,7 +10,7 @@ export function TrainerDetail() {
   if (isError || !tr) return <p className="text-red-600">{t("trainersDir.loadError")}</p>;
   return (
     <div className="mx-auto max-w-2xl space-y-3">
-      <Link to="/app/trainers" className="text-sm text-slate-soft hover:underline">
+      <Link to="/my/trainers" className="text-sm text-slate-soft hover:underline">
         ← {t("trainersDir.back")}
       </Link>
       <h1 className="text-2xl font-bold text-slate">{tr.name}</h1>
