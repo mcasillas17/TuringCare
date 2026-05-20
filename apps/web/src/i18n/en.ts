@@ -188,6 +188,7 @@ export const en = {
     expand: "Expand menu",
     collapse: "Collapse menu",
     menu: "Menu",
+    closeMenu: "Close menu",
   },
   overview: {
     title: "Overview",
@@ -241,6 +242,8 @@ export const en = {
     version: "Version",
     loadError: "Couldn't load the Brief.",
     genFailed: "Generation failed",
+    generated: "Brief generated",
+    copyFailed: "Copy failed",
   },
   trainersDir: {
     title: "Trainers",
