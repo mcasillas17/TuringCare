@@ -152,3 +152,14 @@ full gate green (91 tests). Immediate prod unblock was a manual
 `UPDATE "user" SET role='admin'`.
 - Spec/plan: `specs/2026-05-18-admin-bootstrap-selfheal-design.md`, `plans/2026-05-18-admin-bootstrap-selfheal.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-fix+admin-bootstrap-selfheal.
+
+## 2026-05-19 — App Shell + Journal/Brief/Trainers/Profile/Settings (sub-project D) — SHIPPED
+Persistent app shell (icon rail + shared <BrandMark/> banner + responsive
+drawer, layout route behind RequireAuth, Admin link admin-only) + Overview
+aggregate, re-homed Dogs (chrome stripped), owner-scoped Behavior Journal,
+deterministic Behavior Brief (generate/finalize/print/copy, no AI), Trainers
+directory (filter/detail), Profile (edit name) + Settings (language/sign-out).
+All copy en+es with parity. One PR; internally ~18 reviewed TDD tasks; no
+migration, no new deps, no apps/api infra change.
+- Spec/plan: `specs/2026-05-19-app-shell-design.md`, `plans/2026-05-19-app-shell.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-app-shell-redesign.
