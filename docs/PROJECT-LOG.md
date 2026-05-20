@@ -138,6 +138,21 @@ via Vite proxy). One-line change, no deps.
 - Spec/plan: `specs/2026-05-19-api-client-credentials-design.md`, `plans/2026-05-19-api-client-credentials.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-fix-api-credentials.
 
+## 2026-05-18 — Admin bootstrap self-heal (hotfix) — SHIPPED
+Fixed a bootstrap deadlock from the admin-telemetry ship (#3): the web
+`RequireAdmin` guard reads `GET /me` for `role`, but `/me` never ran the
+`ADMIN_EMAILS` lazy-promotion — it lived only in `requireAdmin` (gating
+`/api/admin/*`), which the guard never reaches because it redirects to `/app`
+first. A freshly-allowlisted user could never become admin via the UI.
+Extracted a shared `resolveAdminRole` helper (promote-only, DI-testable) now
+called by BOTH `requireAdmin` and `/me`, so the allowlist self-heals on the
+first authenticated request. `requireAdmin` behavior unchanged (401/403/
+adminUser). Tests: 4 unit (DI fakes) + real-DB self-heal + 2 `/me` integration;
+full gate green (91 tests). Immediate prod unblock was a manual
+`UPDATE "user" SET role='admin'`.
+- Spec/plan: `specs/2026-05-18-admin-bootstrap-selfheal-design.md`, `plans/2026-05-18-admin-bootstrap-selfheal.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-fix+admin-bootstrap-selfheal.
+
 ## 2026-05-19 — App Shell + Journal/Brief/Trainers/Profile/Settings (sub-project D) — SHIPPED
 Persistent app shell (icon rail + shared <BrandMark/> banner + responsive
 drawer, layout route behind RequireAuth, Admin link admin-only) + Overview
