@@ -190,6 +190,7 @@ export const es = {
     expand: "Expandir menú",
     collapse: "Contraer menú",
     menu: "Menú",
+    closeMenu: "Cerrar menú",
   },
   overview: {
     title: "Resumen",
@@ -243,6 +244,8 @@ export const es = {
     version: "Versión",
     loadError: "No se pudo cargar el resumen.",
     genFailed: "No se pudo generar",
+    generated: "Resumen generado",
+    copyFailed: "No se pudo copiar",
   },
   trainersDir: {
     title: "Adiestradores",

@@ -44,7 +44,7 @@ export function Brief() {
               onClick={async () => {
                 try {
                   await gen.mutateAsync();
-                  toast.success(t("brief.title"));
+                  toast.success(t("brief.generated"));
                 } catch {
                   toast.error(t("brief.genFailed"));
                 }
@@ -74,7 +74,7 @@ export function Brief() {
                       await navigator.clipboard.writeText(brief.summary);
                       toast.success(t("brief.copied"));
                     } catch {
-                      toast.error(t("brief.genFailed"));
+                      toast.error(t("brief.copyFailed"));
                     }
                   }}
                 >
