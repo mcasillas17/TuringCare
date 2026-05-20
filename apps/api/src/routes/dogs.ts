@@ -1,28 +1,17 @@
 import { zValidator } from "@hono/zod-validator";
-import { behaviorConcernSchema, dogProfileSchema, trainingGoalSchema } from "@turingcare/shared";
+import {
+  behaviorConcernSchema,
+  dogProfileSchema,
+  journalEntrySchema,
+  trainingGoalSchema,
+} from "@turingcare/shared";
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { createMiddleware } from "hono/factory";
-import { auth } from "../auth";
 import { db } from "../db";
-import { behaviorConcerns, dogs, trainingGoals } from "../db/schema";
-
-type Vars = { userId: string };
-
-const requireUser = createMiddleware<{ Variables: Vars }>(async (c, next) => {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  if (!session) return c.json({ error: "unauthorized" } as const, 401);
-  c.set("userId", session.user.id);
-  await next();
-});
-
-async function findOwnedDog(userId: string, dogId: string) {
-  const [dog] = await db
-    .select()
-    .from(dogs)
-    .where(and(eq(dogs.id, dogId), eq(dogs.ownerId, userId)));
-  return dog ?? null;
-}
+import { findOwnedDog } from "../db/owned-dog";
+import { behaviorConcerns, briefs, dogs, journalEntries, trainingGoals } from "../db/schema";
+import { composeBrief } from "../lib/brief";
+import { type Vars, requireUser } from "../middleware/require-user";
 
 export const dogsApp = new Hono<{ Variables: Vars }>()
   .use("*", requireUser)
@@ -111,4 +100,99 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .delete(trainingGoals)
       .where(and(eq(trainingGoals.id, c.req.param("goalId")), eq(trainingGoals.dogId, dog.id)));
     return c.json({ ok: true } as const);
+  })
+  .get("/:id/journal", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const entries = await db
+      .select()
+      .from(journalEntries)
+      .where(eq(journalEntries.dogId, dog.id))
+      .orderBy(desc(journalEntries.occurredAt));
+    return c.json({ entries });
+  })
+  .post("/:id/journal", zValidator("json", journalEntrySchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const b = c.req.valid("json");
+    const [entry] = await db
+      .insert(journalEntries)
+      .values({
+        dogId: dog.id,
+        occurredAt: new Date(b.occurredAt),
+        antecedent: b.antecedent,
+        behavior: b.behavior,
+        consequence: b.consequence,
+        intensity: b.intensity,
+        location: b.location ?? null,
+        notes: b.notes ?? null,
+      })
+      .returning();
+    return c.json({ entry }, 201);
+  })
+  .delete("/:id/journal/:entryId", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    await db
+      .delete(journalEntries)
+      .where(and(eq(journalEntries.id, c.req.param("entryId")), eq(journalEntries.dogId, dog.id)));
+    return c.json({ ok: true } as const);
+  })
+  .get("/:id/brief", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const [brief] = await db
+      .select()
+      .from(briefs)
+      .where(eq(briefs.dogId, dog.id))
+      .orderBy(desc(briefs.version))
+      .limit(1);
+    return c.json({ brief: brief ?? null });
+  })
+  .post("/:id/brief", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const [concerns, goals, entries, [last]] = await Promise.all([
+      db.select().from(behaviorConcerns).where(eq(behaviorConcerns.dogId, dog.id)),
+      db.select().from(trainingGoals).where(eq(trainingGoals.dogId, dog.id)),
+      db.select().from(journalEntries).where(eq(journalEntries.dogId, dog.id)),
+      db
+        .select()
+        .from(briefs)
+        .where(eq(briefs.dogId, dog.id))
+        .orderBy(desc(briefs.version))
+        .limit(1),
+    ]);
+    const summary = composeBrief({
+      dog: { name: dog.name, breed: dog.breed, size: dog.size, sex: dog.sex },
+      concerns: concerns.map((x) => ({ concern: x.concern, severity: x.severity })),
+      goals: goals.map((x) => ({ goal: x.goal })),
+      entries: entries.map((e) => ({
+        behavior: e.behavior,
+        intensity: e.intensity,
+        occurredAt: e.occurredAt.toISOString(),
+      })),
+    });
+    const [brief] = await db
+      .insert(briefs)
+      .values({ dogId: dog.id, summary, version: (last?.version ?? 0) + 1, status: "draft" })
+      .returning();
+    return c.json({ brief }, 201);
+  })
+  .put("/:id/brief", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const [latest] = await db
+      .select()
+      .from(briefs)
+      .where(eq(briefs.dogId, dog.id))
+      .orderBy(desc(briefs.version))
+      .limit(1);
+    if (!latest) return c.json({ error: "not_found" } as const, 404);
+    const [brief] = await db
+      .update(briefs)
+      .set({ status: "finalized" })
+      .where(eq(briefs.id, latest.id))
+      .returning();
+    return c.json({ brief });
   });
