@@ -7,6 +7,7 @@ export const en = {
     faq: "FAQ",
     login: "Log in",
     getStarted: "Get started",
+    openApp: "Open app",
   },
   hero: {
     eyebrow: "Positive reinforcement · Science-based",

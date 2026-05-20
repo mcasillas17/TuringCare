@@ -9,6 +9,7 @@ export const es = {
     faq: "Preguntas",
     login: "Iniciar sesión",
     getStarted: "Empezar",
+    openApp: "Abrir app",
   },
   hero: {
     eyebrow: "Refuerzo positivo · Con base científica",
