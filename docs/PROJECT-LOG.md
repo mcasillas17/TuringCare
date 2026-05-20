@@ -163,3 +163,13 @@ All copy en+es with parity. One PR; internally ~18 reviewed TDD tasks; no
 migration, no new deps, no apps/api infra change.
 - Spec/plan: `specs/2026-05-19-app-shell-design.md`, `plans/2026-05-19-app-shell.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-app-shell-redesign.
+
+## 2026-05-19 — App Shell i18n polish re-sweep — SHIPPED
+Three small text-key fixes authored on the App Shell branch after the PR's
+GitHub merge (orphaned by timing) — re-applied: localize the AppShell drawer
+overlay `aria-label` via `shell.closeMenu` (no more hardcoded English on an
+a11y attribute); dedicated `brief.generated` toast on Generate success (was
+reusing `brief.title`); `brief.copyFailed` for the Copy catch (was reusing
+`brief.genFailed`). 3 new i18n keys in en+es with parity. 4 files, 9 lines.
+- Cherry-pick of the original 158bb97 onto a fresh branch off origin/main.
+- Shipped as a PR from worktree-polish-i18n-resweep.
