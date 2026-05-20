@@ -152,3 +152,12 @@ full gate green (91 tests). Immediate prod unblock was a manual
 `UPDATE "user" SET role='admin'`.
 - Spec/plan: `specs/2026-05-18-admin-bootstrap-selfheal-design.md`, `plans/2026-05-18-admin-bootstrap-selfheal.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-fix+admin-bootstrap-selfheal.
+
+## 2026-05-19 — Landing logged-in CTA — SHIPPED
+Landing `site-nav` shows a single "Open app" button → `/app` when the user is
+logged in (Better Auth `useSession`, cached — no extra round-trip); the
+existing Log in / Get started pair renders for anonymous visitors. One new
+i18n key (`nav.openApp`) in both en + es. Focused `site-nav.test.tsx` covers
+the logged-in path via `vi.mock`; landing.test stays green for logged-out.
+- Spec/plan: `specs/2026-05-19-landing-loggedin-cta-design.md`, `plans/2026-05-19-landing-loggedin-cta.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-landing-loggedin-cta.
