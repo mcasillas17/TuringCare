@@ -1,13 +1,15 @@
+import { BrandMark } from "@/components/BrandMark";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
-import { PawPrint } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 export function SiteNav() {
   const { t } = useI18n();
+  const { data: session } = useSession();
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -35,13 +37,7 @@ export function SiteNav() {
         className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5"
       >
         <a href="#top" className="flex items-center gap-2 font-bold text-slate">
-          <span
-            aria-hidden
-            className="grid size-8 place-items-center rounded-full bg-slate text-cream"
-          >
-            <PawPrint className="size-4" />
-          </span>
-          <span className="text-lg tracking-tight">TuringCare</span>
+          <BrandMark />
         </a>
         <div className="hidden items-center gap-7 md:flex">
           {LINKS.map((l) => (
@@ -56,12 +52,20 @@ export function SiteNav() {
         </div>
         <div className="flex items-center gap-2">
           <LanguageToggle />
-          <Button asChild variant="ghost" className="text-slate hover:bg-surface-sand">
-            <Link to="/login">{t("nav.login")}</Link>
-          </Button>
-          <Button asChild className="bg-slate text-cream hover:bg-slate/90">
-            <Link to="/register">{t("nav.getStarted")}</Link>
-          </Button>
+          {session ? (
+            <Button asChild className="bg-slate text-cream hover:bg-slate/90">
+              <Link to="/app">{t("nav.openApp")}</Link>
+            </Button>
+          ) : (
+            <>
+              <Button asChild variant="ghost" className="text-slate hover:bg-surface-sand">
+                <Link to="/login">{t("nav.login")}</Link>
+              </Button>
+              <Button asChild className="bg-slate text-cream hover:bg-slate/90">
+                <Link to="/register">{t("nav.getStarted")}</Link>
+              </Button>
+            </>
+          )}
         </div>
       </nav>
     </header>

@@ -153,6 +153,26 @@ full gate green (91 tests). Immediate prod unblock was a manual
 - Spec/plan: `specs/2026-05-18-admin-bootstrap-selfheal-design.md`, `plans/2026-05-18-admin-bootstrap-selfheal.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-fix+admin-bootstrap-selfheal.
 
+## 2026-05-19 — App Shell + Journal/Brief/Trainers/Profile/Settings (sub-project D) — SHIPPED
+Persistent app shell (icon rail + shared <BrandMark/> banner + responsive
+drawer, layout route behind RequireAuth, Admin link admin-only) + Overview
+aggregate, re-homed Dogs (chrome stripped), owner-scoped Behavior Journal,
+deterministic Behavior Brief (generate/finalize/print/copy, no AI), Trainers
+directory (filter/detail), Profile (edit name) + Settings (language/sign-out).
+All copy en+es with parity. One PR; internally ~18 reviewed TDD tasks; no
+migration, no new deps, no apps/api infra change.
+- Spec/plan: `specs/2026-05-19-app-shell-design.md`, `plans/2026-05-19-app-shell.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-app-shell-redesign.
+
+## 2026-05-19 — Landing logged-in CTA — SHIPPED
+Landing `site-nav` shows a single "Open app" button → `/app` when the user is
+logged in (Better Auth `useSession`, cached — no extra round-trip); the
+existing Log in / Get started pair renders for anonymous visitors. One new
+i18n key (`nav.openApp`) in both en + es. Focused `site-nav.test.tsx` covers
+the logged-in path via `vi.mock`; landing.test stays green for logged-out.
+- Spec/plan: `specs/2026-05-19-landing-loggedin-cta-design.md`, `plans/2026-05-19-landing-loggedin-cta.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-landing-loggedin-cta.
+
 ## 2026-05-19 — Transactional email provider (P1) — SHIPPED
 Security backlog P1. Provider-isolated `email/send-email.ts` (Resend SDK; only
 file importing it) with a log-only no-op fallback when `RESEND_API_KEY` is
