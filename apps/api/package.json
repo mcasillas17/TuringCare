@@ -28,6 +28,7 @@
     "drizzle-orm": "^0.45.2",
     "hono": "^4.6.0",
     "pg": "^8.13.0",
+    "resend": "^6.12.3",
     "zod": "^3.24.0"
   },
   "devDependencies": {
