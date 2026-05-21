@@ -48,6 +48,11 @@ export function Login() {
               <Label htmlFor="password">{t("auth.password")}</Label>
               <Input id="password" name="password" type="password" required />
             </div>
+            <div className="text-right -mt-2">
+              <Link className="underline text-sm text-muted-foreground" to="/forgot-password">
+                {t("auth.forgotLink")}
+              </Link>
+            </div>
             <Button type="submit" disabled={pending} className="w-full">
               {pending ? t("auth.loginPending") : t("auth.loginSubmit")}
             </Button>
