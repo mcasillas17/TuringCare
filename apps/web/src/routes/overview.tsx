@@ -38,14 +38,14 @@ export function Overview() {
               {dogs?.map((d) => (
                 <Link
                   key={d.id}
-                  to={`/app/dogs/${d.id}`}
+                  to={`/my/dogs/${d.id}`}
                   className="rounded border border-silver bg-white p-3 hover:bg-surface-sand"
                 >
                   🐕 <span className="font-semibold text-slate">{d.name}</span>
                 </Link>
               ))}
               <Link
-                to="/app/dogs/new"
+                to="/my/dogs/new"
                 className="rounded border border-dashed border-copper p-3 text-copper"
               >
                 + {t("overview.qAddDog")}
@@ -70,23 +70,23 @@ export function Overview() {
         </div>
         <div className="space-y-2">
           <h2 className="font-semibold text-slate">{t("overview.quick")}</h2>
-          <Link to="/app/journal" className="block rounded bg-slate p-2 text-center text-cream">
+          <Link to="/my/journal" className="block rounded bg-slate p-2 text-center text-cream">
             {t("overview.qLog")}
           </Link>
           <Link
-            to="/app/dogs/new"
+            to="/my/dogs/new"
             className="block rounded border border-silver bg-white p-2 text-center"
           >
             {t("overview.qAddDog")}
           </Link>
           <Link
-            to="/app/brief"
+            to="/my/brief"
             className="block rounded border border-silver bg-white p-2 text-center"
           >
             {t("overview.qBrief")}
           </Link>
           <Link
-            to="/app/trainers"
+            to="/my/trainers"
             className="block rounded border border-silver bg-white p-2 text-center"
           >
             {t("overview.qTrainer")}

@@ -194,3 +194,15 @@ shared 8). Unblocks P2 (email verification) and P3 (password recovery).
   route — but Better Auth's built-in default special rule already enforces 3/60s
   on `/request-password-reset`, so reset IS rate-limited. The custom rule is just
   redundant/misleading; a later task should drop it or rename to the real path.
+
+## 2026-05-20 — Authenticated route prefix /app → /my — SHIPPED
+Mechanical rename of every authenticated route literal across the web app +
+tests (21 files, 63/-63): `/app` → `/my`, `/app/dogs` → `/my/dogs`, etc.
+AppShell nav-items + NavLink active check + brand `<Link to>`, landing
+"Open app" CTA, post-login/register navigation, admin redirect target, and
+every in-app `<Link>`/`navigate(…)`/test fixture retargeted in one pass via
+a regex-precise sed (zero `/app` route literals remain). No backend, no i18n
+strings, no deps, no infra; `/login`/`/register`/`/`/`/admin` untouched.
+Tests pass at 44/17 (string fixtures updated in place).
+- Spec/plan: `specs/2026-05-20-rename-app-to-my-design.md`, `plans/2026-05-20-rename-app-to-my.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-rename-app-to-my.

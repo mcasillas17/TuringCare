@@ -22,7 +22,7 @@ describe("SiteNav (logged in)", () => {
         </MemoryRouter>
       </LocaleProvider>,
     );
-    expect(screen.getByRole("link", { name: /open app/i })).toHaveAttribute("href", "/app");
+    expect(screen.getByRole("link", { name: /open app/i })).toHaveAttribute("href", "/my");
     expect(screen.queryByRole("link", { name: /log in/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /get started/i })).toBeNull();
   });

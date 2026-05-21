@@ -31,7 +31,7 @@ function setup() {
               </RequireAdmin>
             }
           />
-          <Route path="/app" element={<div>app home</div>} />
+          <Route path="/my" element={<div>app home</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

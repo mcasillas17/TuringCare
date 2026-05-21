@@ -5,6 +5,6 @@ import { Navigate } from "react-router-dom";
 export function RequireAdmin({ children }: { children: ReactNode }) {
   const { data, isPending, isError } = useMe();
   if (isPending) return <p className="p-8">Loading…</p>;
-  if (isError || data?.role !== "admin") return <Navigate to="/app" replace />;
+  if (isError || data?.role !== "admin") return <Navigate to="/my" replace />;
   return <>{children}</>;
 }

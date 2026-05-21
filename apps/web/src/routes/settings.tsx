@@ -17,7 +17,7 @@ export function Settings() {
       </section>
       <section className="space-y-2">
         <h2 className="font-semibold text-slate">{t("settings.account")}</h2>
-        <Link to="/app/profile" className="block underline">
+        <Link to="/my/profile" className="block underline">
           {t("settings.editProfile")}
         </Link>
         <Button

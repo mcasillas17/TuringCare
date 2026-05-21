@@ -17,7 +17,7 @@ export function DogsList() {
         {dogs?.map((d) => (
           <li key={d.id}>
             <Link
-              to={`/app/dogs/${d.id}`}
+              to={`/my/dogs/${d.id}`}
               className="block rounded border border-silver p-4 hover:bg-surface-sand"
             >
               <span className="font-semibold text-slate">{d.name}</span>
@@ -26,7 +26,7 @@ export function DogsList() {
           </li>
         ))}
       </ul>
-      <Button onClick={() => navigate("/app/dogs/new")} className="bg-slate text-cream">
+      <Button onClick={() => navigate("/my/dogs/new")} className="bg-slate text-cream">
         {t("dogs.add")}
       </Button>
     </div>
