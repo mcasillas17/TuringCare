@@ -386,3 +386,128 @@ describe("dogs: brief", () => {
     ).toBe(404);
   });
 });
+
+describe("dogs: journal PUT", () => {
+  const users: TestUser[] = [];
+  afterEach(async () => {
+    for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
+  });
+  async function makeDog(u: TestUser, body = validDog) {
+    const r = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify(body),
+    });
+    return ((await r.json()) as { dog: { id: string } }).dog;
+  }
+  async function makeEntry(u: TestUser, dogId: string) {
+    const r = await app.request(`/api/dogs/${dogId}/journal`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        occurredAt: "2026-05-19T10:00",
+        antecedent: "Doorbell",
+        behavior: "Barked 8s",
+        consequence: "Scatter fed",
+        intensity: 3,
+      }),
+    });
+    return ((await r.json()) as { entry: { id: string } }).entry;
+  }
+
+  it("PUT updates an existing entry incl. the four new fields", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const e = await makeEntry(u, dog.id);
+    const r = await app.request(`/api/dogs/${dog.id}/journal/${e.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        occurredAt: "2026-05-19T10:00",
+        antecedent: "Doorbell",
+        behavior: "Barked, recovered fast",
+        consequence: "Scatter fed",
+        intensity: 2,
+        durationSeconds: 8,
+        recoverySeconds: 20,
+        peoplePresent: "Just owner",
+        ownerResponse: "Stayed calm",
+      }),
+    });
+    expect(r.status).toBe(200);
+    const { entry: updated } = (await r.json()) as {
+      entry: {
+        behavior: string;
+        intensity: number;
+        durationSeconds: number | null;
+        peoplePresent: string | null;
+        ownerResponse: string | null;
+      };
+    };
+    expect(updated.behavior).toBe("Barked, recovered fast");
+    expect(updated.intensity).toBe(2);
+    expect(updated.durationSeconds).toBe(8);
+    expect(updated.peoplePresent).toBe("Just owner");
+    expect(updated.ownerResponse).toBe("Stayed calm");
+  });
+
+  it("PUT 400 on invalid intensity", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const e = await makeEntry(u, dog.id);
+    const r = await app.request(`/api/dogs/${dog.id}/journal/${e.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        occurredAt: "2026-05-19T10:00",
+        antecedent: "Doorbell",
+        behavior: "x",
+        consequence: "y",
+        intensity: 9,
+      }),
+    });
+    expect(r.status).toBe(400);
+  });
+
+  it("PUT owner-isolation: other user → 404", async () => {
+    const a = await createTestUser();
+    const b = await createTestUser();
+    users.push(a, b);
+    const dog = await makeDog(a);
+    const e = await makeEntry(a, dog.id);
+    const r = await app.request(`/api/dogs/${dog.id}/journal/${e.id}`, {
+      method: "PUT",
+      headers: b.authHeaders,
+      body: JSON.stringify({
+        occurredAt: "2026-05-19T10:00",
+        antecedent: "Doorbell",
+        behavior: "x",
+        consequence: "y",
+        intensity: 3,
+      }),
+    });
+    expect(r.status).toBe(404);
+  });
+
+  it("PUT cross-dog: entryId from a different dog of same user → 404", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog1 = await makeDog(u);
+    const dog2 = await makeDog(u, { ...validDog, name: "Pancake" });
+    const e1 = await makeEntry(u, dog1.id);
+    const r = await app.request(`/api/dogs/${dog2.id}/journal/${e1.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        occurredAt: "2026-05-19T10:00",
+        antecedent: "Doorbell",
+        behavior: "x",
+        consequence: "y",
+        intensity: 3,
+      }),
+    });
+    expect(r.status).toBe(404);
+  });
+});
