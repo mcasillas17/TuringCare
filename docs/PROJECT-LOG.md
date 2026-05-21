@@ -194,3 +194,22 @@ shared 8). Unblocks P2 (email verification) and P3 (password recovery).
   route — but Better Auth's built-in default special rule already enforces 3/60s
   on `/request-password-reset`, so reset IS rate-limited. The custom rule is just
   redundant/misleading; a later task should drop it or rename to the real path.
+
+## 2026-05-21 — Password reset frontend (P3) — SHIPPED
+Security backlog P3, riding the same PR as P1. `/forgot-password` (single
+email field, calls Better Auth's `requestPasswordReset({ email, redirectTo:
+<origin>/reset-password })`, anti-enumeration generic success view regardless
+of API outcome) + `/reset-password` (token from `?token=`, two-field form
+min-8 + matches-confirm, calls `resetPassword({ newPassword, token })`,
+toast + redirect to `/login` on success, invalid-link state when token is
+missing) + `Forgot password?` link on `/login`. Re-exports
+`requestPasswordReset` + `resetPassword` from `auth-client.ts`; new i18n keys
+en+es with parity (compile-time guard); accessible `<h2>` headings inside
+shadcn `CardTitle`. Full TDD; gate green (API 75 / web 54 / shared 8 = 137).
+Closes the loop on the email pipe shipped earlier this PR.
+- Spec/plan: `specs/2026-05-20-password-reset-frontend-design.md`, `plans/2026-05-20-password-reset-frontend.md`
+- Commits: this branch (see `git log`). Bundled in the worktree-feat+transactional-email PR.
+- Naming note: the plan said `forgetPassword` for the Better Auth client method;
+  the real name in 1.6.11 is `requestPasswordReset` (verified against the
+  installed package). The code uses `requestPasswordReset`; the spec/plan docs
+  retain the historical naming.
