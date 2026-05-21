@@ -297,6 +297,36 @@ describe("dogs: journal", () => {
       ).status,
     ).toBe(404);
   });
+  it("POST persists the four optional capture fields", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const r = await app.request(`/api/dogs/${dog.id}/journal`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        ...entry,
+        durationSeconds: 12,
+        recoverySeconds: 45,
+        peoplePresent: "Owner + walker",
+        ownerResponse: "Asked for sit",
+      }),
+    });
+    expect(r.status).toBe(201);
+    const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
+    const { entries } = (await list.json()) as {
+      entries: {
+        durationSeconds: number | null;
+        recoverySeconds: number | null;
+        peoplePresent: string | null;
+        ownerResponse: string | null;
+      }[];
+    };
+    expect(entries[0].durationSeconds).toBe(12);
+    expect(entries[0].recoverySeconds).toBe(45);
+    expect(entries[0].peoplePresent).toBe("Owner + walker");
+    expect(entries[0].ownerResponse).toBe("Asked for sit");
+  });
 });
 
 describe("dogs: brief", () => {

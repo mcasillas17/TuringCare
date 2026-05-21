@@ -126,6 +126,10 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         intensity: b.intensity,
         location: b.location ?? null,
         notes: b.notes ?? null,
+        durationSeconds: b.durationSeconds ?? null,
+        recoverySeconds: b.recoverySeconds ?? null,
+        peoplePresent: b.peoplePresent ?? null,
+        ownerResponse: b.ownerResponse ?? null,
       })
       .returning();
     return c.json({ entry }, 201);
