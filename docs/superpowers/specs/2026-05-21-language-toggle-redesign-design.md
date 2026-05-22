@@ -12,13 +12,23 @@ Two related complaints, one fix:
 
 1. The plain `EN | ES` text gets visually lost next to login/register links on
    the landing nav and the app-shell header.
-2. The toggle isn't consistently in the top-right corner on those surfaces.
+2. The toggle isn't visually separated from the CTAs it sits beside on those
+   surfaces.
+
+**Placement reality (discovered while planning):** on both the landing nav and
+the app-shell header the top-right corner is already occupied by CTA buttons
+(Log in / Get started / Open app; Sign out). Absolutely-positioning the toggle
+into that corner would overlap them. So instead of a corner slot, on those two
+surfaces the toggle stays in the existing top-right actions cluster but is set
+apart with the flags **plus a thin vertical divider + spacing** between it and
+the CTAs. Auth pages keep their true corner anchor (nothing to collide with).
 
 **In scope:**
 - Component update: add 🇺🇸 EN / 🇲🇽 ES (flag + label) inside the existing
   `LanguageToggle` component, preserving its API (no prop changes).
-- Move the toggle out of the inline nav row on `site-nav.tsx` and the inline
-  header on `AppShell.tsx` into a top-right anchored slot.
+- Landing `site-nav.tsx` + `AppShell.tsx`: keep the toggle in the right-side
+  actions cluster; add a vertical divider + spacing between the toggle and the
+  CTA buttons so it reads as a separate control.
 - Tests: a focused `LanguageToggle.test.tsx`.
 
 **Out of scope:**
@@ -37,7 +47,7 @@ Two related complaints, one fix:
 | Button content | `<span aria-hidden>🇺🇸</span> EN` and `<span aria-hidden>🇲🇽</span> ES` |
 | Accessible name | Just `EN` / `ES` (flag is decorative; aria-hidden) |
 | API change | None — same `<LanguageToggle className?>` signature |
-| Mount-site scope | Only landing `site-nav.tsx` and `AppShell.tsx` repositioning; auth/Settings unchanged |
+| Mount-site scope | Landing `site-nav.tsx` + `AppShell.tsx` get flags + a divider in the existing right cluster (NOT absolute corner — corner is taken by CTAs); auth/Settings unchanged |
 | Flag fallback | Acceptable: on browsers that don't render flag emojis (some Windows), the user sees `🇺🇸 EN` rendered as letter pair + label — still distinguishable |
 
 ---
@@ -77,13 +87,14 @@ accessible name still reads "EN" / "ES" from the existing `language.en` /
 | Surface | Today | Change |
 |---|---|---|
 | `/login`, `/register`, `/forgot-password`, `/reset-password` | `absolute right-4 top-4` | Unchanged |
-| Landing `site-nav.tsx` | Inline in the right-side nav row | Move out of the nav row; render as an absolutely-positioned child of the nav container at `top-3 right-4` (still inside `<header class="sticky …">`). The nav row's other items (Log in / Get started / Open app) reflow without it. |
-| `AppShell.tsx` header | Inline among header chrome | Same: rendered with `className="absolute top-3 right-4"` on the shell header (which is already `relative`). |
+| Landing `site-nav.tsx` | First item in the right-side actions cluster (`<div class="flex items-center gap-2">`), flush against the CTAs | Keep in the cluster; insert a vertical divider element (`<span aria-hidden class="h-5 w-px bg-silver/70" />`) BETWEEN `<LanguageToggle/>` and the CTA buttons; bump the cluster gap so the toggle reads as separate. |
+| `AppShell.tsx` header | First item in the right-side cluster (`<div class="flex items-center gap-2">`), flush against Sign out | Same divider element between `<LanguageToggle/>` and the Sign-out button. |
 | `Settings.tsx` | Inline in the settings list | Unchanged |
 
-No new wrapper components. Each affected file changes only the
-`<LanguageToggle …/>` call site to pass the appropriate `className` for
-absolute placement.
+No new wrapper components and no absolute positioning on these two surfaces
+(the corner is occupied by CTAs). Each affected file gains one divider `<span>`
+between the toggle and its neighboring buttons. The divider colour reuses the
+existing `silver` palette token already used for nav borders.
 
 ---
 
@@ -123,9 +134,9 @@ absolute placement.
 ## 6. Deliverable order
 
 1. Update `LanguageToggle.tsx` + new `LanguageToggle.test.tsx` (TDD).
-2. Reposition in `site-nav.tsx` (move toggle out of the nav row, pass
-   `className="absolute top-3 right-4"`).
-3. Reposition in `AppShell.tsx` (same `className`).
+2. `site-nav.tsx`: add a vertical divider `<span>` between the toggle and the
+   CTA buttons in the right-side cluster.
+3. `AppShell.tsx`: same divider between the toggle and the Sign-out button.
 4. Full gate + PROJECT-LOG entry. The branch is then ready to finish via
    `superpowers:finishing-a-development-branch` (this is the last sub-project
    riding on the current PR).
