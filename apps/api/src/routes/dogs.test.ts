@@ -322,10 +322,13 @@ describe("dogs: journal", () => {
         ownerResponse: string | null;
       }[];
     };
-    expect(entries[0].durationSeconds).toBe(12);
-    expect(entries[0].recoverySeconds).toBe(45);
-    expect(entries[0].peoplePresent).toBe("Owner + walker");
-    expect(entries[0].ownerResponse).toBe("Asked for sit");
+    expect(entries).toHaveLength(1);
+    const [first] = entries;
+    if (!first) throw new Error("expected one entry");
+    expect(first.durationSeconds).toBe(12);
+    expect(first.recoverySeconds).toBe(45);
+    expect(first.peoplePresent).toBe("Owner + walker");
+    expect(first.ownerResponse).toBe("Asked for sit");
   });
 });
 
