@@ -134,39 +134,30 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .returning();
     return c.json({ entry }, 201);
   })
-  .put(
-    "/:id/journal/:entryId",
-    zValidator("json", journalEntrySchema),
-    async (c) => {
-      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
-      if (!dog) return c.json({ error: "not_found" } as const, 404);
-      const b = c.req.valid("json");
-      const [entry] = await db
-        .update(journalEntries)
-        .set({
-          occurredAt: new Date(b.occurredAt),
-          antecedent: b.antecedent,
-          behavior: b.behavior,
-          consequence: b.consequence,
-          intensity: b.intensity,
-          location: b.location ?? null,
-          notes: b.notes ?? null,
-          durationSeconds: b.durationSeconds ?? null,
-          recoverySeconds: b.recoverySeconds ?? null,
-          peoplePresent: b.peoplePresent ?? null,
-          ownerResponse: b.ownerResponse ?? null,
-        })
-        .where(
-          and(
-            eq(journalEntries.id, c.req.param("entryId")),
-            eq(journalEntries.dogId, dog.id),
-          ),
-        )
-        .returning();
-      if (!entry) return c.json({ error: "not_found" } as const, 404);
-      return c.json({ entry });
-    },
-  )
+  .put("/:id/journal/:entryId", zValidator("json", journalEntrySchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const b = c.req.valid("json");
+    const [entry] = await db
+      .update(journalEntries)
+      .set({
+        occurredAt: new Date(b.occurredAt),
+        antecedent: b.antecedent,
+        behavior: b.behavior,
+        consequence: b.consequence,
+        intensity: b.intensity,
+        location: b.location ?? null,
+        notes: b.notes ?? null,
+        durationSeconds: b.durationSeconds ?? null,
+        recoverySeconds: b.recoverySeconds ?? null,
+        peoplePresent: b.peoplePresent ?? null,
+        ownerResponse: b.ownerResponse ?? null,
+      })
+      .where(and(eq(journalEntries.id, c.req.param("entryId")), eq(journalEntries.dogId, dog.id)))
+      .returning();
+    if (!entry) return c.json({ error: "not_found" } as const, 404);
+    return c.json({ entry });
+  })
   .delete("/:id/journal/:entryId", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
