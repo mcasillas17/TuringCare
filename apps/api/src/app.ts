@@ -7,6 +7,7 @@ import { resolveAdminRole } from "./auth/admin-bootstrap";
 import { env } from "./env";
 import { globalRateLimit } from "./middleware/rate-limit";
 import { adminApp } from "./routes/admin";
+import { adminTrainersApp } from "./routes/admin-trainers";
 import { dogsApp } from "./routes/dogs";
 import { overviewApp } from "./routes/overview";
 import { profileApp } from "./routes/profile";
@@ -55,6 +56,7 @@ const app = new Hono()
   .route("/api/trainers", trainersApp)
   .route("/api/profile", profileApp)
   .route("/api/admin", adminApp)
+  .route("/api/admin/trainers", adminTrainersApp)
   .on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 export { app };
