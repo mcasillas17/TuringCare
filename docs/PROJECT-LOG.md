@@ -273,3 +273,16 @@ redirect to `/my`. Full TDD (new `redirect-if-authed`/`register` tests +
 extended `login` test). Gate green (API 80 / web 66 / shared 19).
 - Spec: `specs/2026-05-22-auth-redirects-fix-design.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-fix+auth-redirects.
+
+## 2026-05-23 — Training progress tracking — SHIPPED
+Full Goal → Skills → Sessions training-progress subsystem: two new Drizzle
+tables (`training_skills`, `practice_sessions`) with idempotent backfill,
+owner-scoped Hono routes under `/api/dogs/:id`, default same-named skills for
+new goals, `loadProgress()` shared by the progress endpoint and Behavior Brief,
+and a dog-detail `<ProgressPanel>` with confidence chips, skill CRUD, session
+logging/deletion, and en/es parity. No new deps; package manifests unchanged.
+Gates green: API 97/97 (+17), web 72/72 (+6), shared 24/24 (+5), tsc 0,
+lint 0, build OK. Shipped as a PR from worktree-training-progress.
+- Spec/plan: `specs/2026-05-22-training-progress-design.md`,
+  `plans/2026-05-22-training-progress.md`
+- Commits: this branch (see `git log`).
