@@ -402,3 +402,24 @@ lint 0, build OK. Shipped as a PR from worktree-training-progress.
 - Spec/plan: `specs/2026-05-22-training-progress-design.md`,
   `plans/2026-05-22-training-progress.md`
 - Commits: this branch (see `git log`).
+
+## 2026-05-23 — Settings completeness: change-password + delete-account — SHIPPED
+The Settings page was a skeleton: language toggle, sign-out, link to
+profile. Now it's a real page. **Change password** form (current + new +
+confirm, zod-validated, calls Better Auth's `changePassword` client
+method; toast on success, helpful error on wrong-current). **Delete
+account** double-confirm flow (intro panel → expand → type "delete" to
+unlock the Confirm button → call Better Auth's `deleteUser` → sign out →
+navigate home). Sectioned layout: Language / Account / Change password /
+Danger zone. ~20 new i18n keys with en/es parity (one shared literal
+`"delete"` is allowlisted in the parity test). Server-side: a single-line
+config flip in `apps/api/src/auth.ts` (`user.deleteUser.enabled: true`)
+to satisfy Better Auth's opt-in requirement on `POST /delete-user`; no
+schema changes — the existing FK cascades from `user` → `dogs` (and
+through to journal/briefs/training/concerns/goals/brief_sends) handle
+all data cleanup. Gates green: tsc 0, lint 0, web tests 116/116 (+16),
+build OK.
+- Spec/plan: `specs/2026-05-23-settings-completeness-design.md`,
+  `plans/2026-05-23-settings-completeness.md`
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-settings-completeness.
