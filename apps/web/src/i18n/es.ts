@@ -276,6 +276,12 @@ export const es = {
     version: "Versión",
     loadError: "No se pudo cargar el resumen.",
     genFailed: "No se pudo generar",
+    share: "Enlace para compartir",
+    createShareLink: "Crear enlace",
+    stopSharing: "Dejar de compartir",
+    copyLink: "Copiar enlace",
+    linkCopied: "Enlace copiado",
+    shareFailed: "No se pudo actualizar el enlace",
   },
   trainersDir: {
     title: "Adiestradores",

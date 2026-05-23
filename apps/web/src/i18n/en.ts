@@ -274,6 +274,12 @@ export const en = {
     version: "Version",
     loadError: "Couldn't load the Brief.",
     genFailed: "Generation failed",
+    share: "Share link",
+    createShareLink: "Create share link",
+    stopSharing: "Stop sharing",
+    copyLink: "Copy link",
+    linkCopied: "Link copied",
+    shareFailed: "Couldn't update sharing",
   },
   trainersDir: {
     title: "Trainers",
