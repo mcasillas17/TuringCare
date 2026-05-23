@@ -206,3 +206,23 @@ strings, no deps, no infra; `/login`/`/register`/`/`/`/admin` untouched.
 Tests pass at 44/17 (string fixtures updated in place).
 - Spec/plan: `specs/2026-05-20-rename-app-to-my-design.md`, `plans/2026-05-20-rename-app-to-my.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-rename-app-to-my.
+
+## 2026-05-21 — Behavior Journal: edit + 4 missing capture fields — SHIPPED
+Extended the per-dog ABC journal with a PUT endpoint and surfaced the four
+nullable `journal_entries` columns the schema was designed to capture:
+`durationSeconds`, `recoverySeconds`, `peoplePresent`, `ownerResponse`. The
+journal page lists entries as compact rows; clicking a row expands the card
+to show all 11 capture fields; a pencil affordance toggles inline edit-in-place
+(RHF + zodResolver, Save / Cancel). Create-form gained the four new optional
+fields with an "optional" hint. API: PUT is owner-scoped + double-scoped by
+dogId (cross-dog entryId returns 404, mirrors the DELETE pattern). Each
+EntryCard derives its displayed entry from `useUpdateEntry.data ?? entry` so
+the cache stays the single source of truth (no useState mirror, no stale-prop
+bug after refetch). 11 new i18n keys with en/es parity; one new component
+test file (3 cases) + 5 new api/shared cases. No DB migration (columns
+already nullable), no new deps, no infra changes. Gates green: API 80/80,
+web 47/47, shared 19/19, tsc 0, lint 0, build OK.
+- Spec/plan: `specs/2026-05-21-journal-edit-and-fields-design.md`,
+  `plans/2026-05-21-journal-edit-and-fields.md`
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-journal-edit-and-fields.
