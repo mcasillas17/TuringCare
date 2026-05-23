@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
 import {
   behaviorConcernSchema,
@@ -27,6 +28,7 @@ import {
 } from "../db/schema";
 import { renderBriefEmail } from "../email/brief-email";
 import { sendEmail } from "../email/send-email";
+import { env } from "../env";
 import { composeBrief } from "../lib/brief";
 import { loadProgress } from "../lib/progress";
 import { type Vars, requireUser } from "../middleware/require-user";
@@ -307,6 +309,36 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .orderBy(desc(briefs.version))
       .limit(1);
     return c.json({ brief: brief ?? null });
+  })
+  .post("/:id/brief/share", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const [brief] = await db
+      .select()
+      .from(briefs)
+      .where(eq(briefs.dogId, dog.id))
+      .orderBy(desc(briefs.version))
+      .limit(1);
+    if (!brief) return c.json({ error: "no_brief" } as const, 404);
+    let token = brief.shareToken;
+    if (!token) {
+      token = randomBytes(18).toString("base64url");
+      await db.update(briefs).set({ shareToken: token }).where(eq(briefs.id, brief.id));
+    }
+    return c.json({ token, url: `${env.FRONTEND_URL}/b/${token}` });
+  })
+  .delete("/:id/brief/share", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const [brief] = await db
+      .select()
+      .from(briefs)
+      .where(eq(briefs.dogId, dog.id))
+      .orderBy(desc(briefs.version))
+      .limit(1);
+    if (!brief) return c.json({ error: "not_found" } as const, 404);
+    await db.update(briefs).set({ shareToken: null }).where(eq(briefs.id, brief.id));
+    return c.json({ ok: true } as const);
   })
   .post("/:id/brief", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));

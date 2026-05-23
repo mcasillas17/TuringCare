@@ -1,7 +1,13 @@
 import { SendPanel } from "@/components/brief/send-panel";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { useBrief, useFinalizeBrief, useGenerateBrief } from "@/lib/brief";
+import {
+  useBrief,
+  useFinalizeBrief,
+  useGenerateBrief,
+  useRevokeShare,
+  useShareBrief,
+} from "@/lib/brief";
 import { useDogs } from "@/lib/dogs";
 import { Suspense, lazy, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -21,6 +27,9 @@ export function Brief() {
   const dog = dogs?.find((d) => d.id === dogId);
   const gen = useGenerateBrief(dogId);
   const fin = useFinalizeBrief(dogId);
+  const share = useShareBrief(dogId);
+  const revoke = useRevokeShare(dogId);
+  const shareUrl = brief?.shareToken ? `${window.location.origin}/b/${brief.shareToken}` : null;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -95,6 +104,56 @@ export function Brief() {
                 >
                   {t("brief.copy")}
                 </Button>
+                {shareUrl ? (
+                  <>
+                    <input
+                      readOnly
+                      aria-label={t("brief.share")}
+                      value={shareUrl}
+                      className="w-64 rounded border border-silver bg-white px-2 py-1 text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(shareUrl);
+                          toast.success(t("brief.linkCopied"));
+                        } catch {
+                          toast.error(t("brief.shareFailed"));
+                        }
+                      }}
+                    >
+                      {t("brief.copyLink")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={revoke.isPending}
+                      onClick={async () => {
+                        try {
+                          await revoke.mutateAsync();
+                        } catch {
+                          toast.error(t("brief.shareFailed"));
+                        }
+                      }}
+                    >
+                      {t("brief.stopSharing")}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    disabled={share.isPending}
+                    onClick={async () => {
+                      try {
+                        await share.mutateAsync();
+                      } catch {
+                        toast.error(t("brief.shareFailed"));
+                      }
+                    }}
+                  >
+                    {t("brief.createShareLink")}
+                  </Button>
+                )}
               </>
             )}
           </div>

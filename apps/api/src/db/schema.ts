@@ -182,6 +182,7 @@ export const briefs = pgTable("briefs", {
   status: briefStatusEnum("status").notNull().default("draft"),
   summary: text("summary").notNull(),
   version: integer("version").notNull().default(1),
+  shareToken: text("share_token").unique(),
 });
 
 export const briefSends = pgTable("brief_sends", {

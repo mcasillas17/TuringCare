@@ -42,3 +42,25 @@ export function useFinalizeBrief(dogId: string) {
     },
   });
 }
+export function useShareBrief(dogId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await b.share.$post({ param: { id: dogId } });
+      if (!res.ok) throw new Error("share_failed");
+      return (await res.json()) as { token: string; url: string };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["brief", dogId] }),
+  });
+}
+export function useRevokeShare(dogId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await b.share.$delete({ param: { id: dogId } });
+      if (!res.ok) throw new Error("revoke_failed");
+      return (await res.json()) as { ok: true };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["brief", dogId] }),
+  });
+}
