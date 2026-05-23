@@ -31,6 +31,8 @@ import { sendEmail } from "../email/send-email";
 import { env } from "../env";
 import { composeBrief } from "../lib/brief";
 import { loadProgress } from "../lib/progress";
+import { LLMError } from "../llm/anthropic";
+import { polishBrief } from "../llm/polish-brief";
 import { type Vars, requireUser } from "../middleware/require-user";
 
 export const dogsApp = new Hono<{ Variables: Vars }>()
@@ -339,6 +341,33 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!brief) return c.json({ error: "not_found" } as const, 404);
     await db.update(briefs).set({ shareToken: null }).where(eq(briefs.id, brief.id));
     return c.json({ ok: true } as const);
+  })
+  .post("/:id/brief/narrative", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const [brief] = await db
+      .select()
+      .from(briefs)
+      .where(eq(briefs.dogId, dog.id))
+      .orderBy(desc(briefs.version))
+      .limit(1);
+    if (!brief) return c.json({ error: "no_brief" } as const, 404);
+    let narrative: string;
+    try {
+      narrative = await polishBrief(brief.summary);
+    } catch (err) {
+      if (err instanceof LLMError && err.code === "not_configured") {
+        return c.json({ error: "llm_not_configured" } as const, 503);
+      }
+      console.error("brief narrative failed", err);
+      return c.json({ error: "llm_failed" } as const, 502);
+    }
+    const [updated] = await db
+      .update(briefs)
+      .set({ narrative, narrativeModel: env.BRIEF_LLM_MODEL, narrativeGeneratedAt: new Date() })
+      .where(eq(briefs.id, brief.id))
+      .returning();
+    return c.json({ brief: updated });
   })
   .post("/:id/brief", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));

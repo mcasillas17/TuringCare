@@ -10,6 +10,7 @@ export const shareApp = new Hono().get("/brief/:token", async (c) => {
     .select({
       dogName: dogs.name,
       summary: briefs.summary,
+      narrative: briefs.narrative,
       status: briefs.status,
       version: briefs.version,
       generatedAt: briefs.generatedAt,
