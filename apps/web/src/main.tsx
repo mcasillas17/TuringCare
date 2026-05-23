@@ -13,6 +13,7 @@ import { Landing } from "@/routes/landing";
 import { Login } from "@/routes/login";
 import { Overview } from "@/routes/overview";
 import { Profile } from "@/routes/profile";
+import { RedirectIfAuthed } from "@/routes/redirect-if-authed";
 import { Register } from "@/routes/register";
 import { RequireAuth } from "@/routes/require-auth";
 import { ResetPassword } from "@/routes/reset-password";
@@ -39,8 +40,22 @@ createRoot(document.getElementById("root") as HTMLElement).render(
           <PageViewTracker />
           <Routes>
             <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+            <Route
+              path="/login"
+              element={
+                <RedirectIfAuthed>
+                  <Login />
+                </RedirectIfAuthed>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <RedirectIfAuthed>
+                  <Register />
+                </RedirectIfAuthed>
+              }
+            />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route

@@ -7,11 +7,10 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n";
 import { signIn } from "@/lib/auth-client";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 export function Login() {
-  const navigate = useNavigate();
   const { t } = useI18n();
   const [pending, setPending] = useState(false);
 
@@ -25,7 +24,11 @@ export function Login() {
     });
     setPending(false);
     if (error) return toast.error(error.message ?? t("auth.loginFailed"));
-    navigate("/my");
+    // Full-load navigation (not react-router navigate): Better Auth refreshes the
+    // useSession atom on a deferred timer after sign-in, so an in-app navigate to
+    // the RequireAuth-gated /my would read a stale null session and bounce back to
+    // /login. A document load re-initializes the session from the now-set cookie.
+    window.location.assign("/my");
   }
 
   return (

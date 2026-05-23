@@ -1,0 +1,41 @@
+import { LocaleProvider } from "@/i18n";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
+const signUpEmailMock = vi.fn();
+vi.mock("@/lib/auth-client", () => ({
+  signUp: { email: (...a: unknown[]) => signUpEmailMock(...a) },
+}));
+
+const { Register } = await import("./register");
+
+let assignMock: ReturnType<typeof vi.fn>;
+beforeEach(() => {
+  signUpEmailMock.mockReset();
+  assignMock = vi.fn();
+  vi.stubGlobal("location", {
+    assign: assignMock,
+    origin: "http://localhost",
+    href: "http://localhost/register",
+  });
+});
+afterEach(() => vi.unstubAllGlobals());
+
+it("on successful registration, does a full-load navigation to /my", async () => {
+  signUpEmailMock.mockResolvedValue({ data: { user: {} }, error: null });
+  render(
+    <LocaleProvider>
+      <MemoryRouter>
+        <Register />
+      </MemoryRouter>
+    </LocaleProvider>,
+  );
+  await userEvent.type(screen.getByLabelText(/name/i), "Mae");
+  await userEvent.type(screen.getByLabelText(/email/i), "u@example.com");
+  await userEvent.type(screen.getByLabelText(/password/i), "password-123");
+  await userEvent.click(screen.getByRole("button", { name: /create account/i }));
+  expect(signUpEmailMock).toHaveBeenCalledOnce();
+  expect(assignMock).toHaveBeenCalledWith("/my");
+});

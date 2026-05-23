@@ -7,11 +7,10 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n";
 import { signUp } from "@/lib/auth-client";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 export function Register() {
-  const navigate = useNavigate();
   const { t } = useI18n();
   const [pending, setPending] = useState(false);
 
@@ -27,7 +26,9 @@ export function Register() {
     setPending(false);
     if (error) return toast.error(error.message ?? t("auth.registerFailed"));
     toast.success(t("auth.registered"));
-    navigate("/my");
+    // Full-load navigation (see login.tsx): avoids the post-sign-up stale
+    // useSession atom bouncing off the RequireAuth gate at /my.
+    window.location.assign("/my");
   }
 
   return (
