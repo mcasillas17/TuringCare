@@ -290,4 +290,23 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .returning();
 
     return c.json({ send }, 201);
+  })
+  .get("/:id/brief/sends", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+
+    const sends = await db
+      .select({
+        id: briefSends.id,
+        briefId: briefSends.briefId,
+        recipient: briefSends.recipient,
+        message: briefSends.message,
+        sentAt: briefSends.sentAt,
+      })
+      .from(briefSends)
+      .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
+      .where(eq(briefs.dogId, dog.id))
+      .orderBy(desc(briefSends.sentAt));
+
+    return c.json({ sends });
   });

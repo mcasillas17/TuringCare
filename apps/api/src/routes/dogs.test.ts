@@ -637,4 +637,55 @@ describe("dogs: brief send", () => {
   // single line of code (`return c.json({ error: "send_failed" }, 502)`); the
   // plan permits skipping this integration test rather than fighting vitest's
   // module-cache semantics. Revisit if/when we add a DI seam to the route.
+
+  it("GET sends: returns newest-first", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    // Send twice
+    await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "first@example.com" }),
+    });
+    await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "second@example.com" }),
+    });
+    const r = await app.request(`/api/dogs/${dog.id}/brief/sends`, {
+      headers: u.authHeaders,
+    });
+    expect(r.status).toBe(200);
+    const { sends } = (await r.json()) as { sends: Array<{ recipient: string }> };
+    expect(sends).toHaveLength(2);
+    const [first, second] = sends;
+    if (!first || !second) throw new Error("expected two sends");
+    expect(first.recipient).toBe("second@example.com");  // newest
+    expect(second.recipient).toBe("first@example.com");
+  });
+
+  it("GET sends: owner-isolation — user B → 404", async () => {
+    const a = await createTestUser();
+    const b = await createTestUser();
+    users.push(a, b);
+    const dog = await makeDog(a);
+    const r = await app.request(`/api/dogs/${dog.id}/brief/sends`, {
+      headers: b.authHeaders,
+    });
+    expect(r.status).toBe(404);
+  });
+
+  it("GET sends: empty when no sends exist", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const r = await app.request(`/api/dogs/${dog.id}/brief/sends`, {
+      headers: u.authHeaders,
+    });
+    expect(r.status).toBe(200);
+    const { sends } = (await r.json()) as { sends: unknown[] };
+    expect(sends).toEqual([]);
+  });
 });
