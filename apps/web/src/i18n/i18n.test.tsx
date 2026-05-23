@@ -32,7 +32,16 @@ describe("i18n catalogs", () => {
     const untranslated = flat(es)
       .filter(([k, v]) => v === enF[k])
       .map(([k]) => k)
-      .filter((k) => !["footer.brand", "language.en", "language.es"].includes(k));
+      .filter(
+        (k) =>
+          ![
+            "footer.brand",
+            "language.en",
+            "language.es",
+            "language.nameEn",
+            "language.nameEs",
+          ].includes(k),
+      );
     expect(untranslated).toEqual([]);
   });
 });
