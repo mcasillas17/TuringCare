@@ -267,6 +267,8 @@ export const en = {
     finalized: "Finalized",
     draft: "Draft",
     print: "Print",
+    downloadPdf: "Download PDF",
+    preparingPdf: "Preparing PDF…",
     copy: "Copy",
     copied: "Copied to clipboard",
     version: "Version",

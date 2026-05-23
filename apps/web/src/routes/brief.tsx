@@ -2,17 +2,22 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useBrief, useFinalizeBrief, useGenerateBrief } from "@/lib/brief";
 import { useDogs } from "@/lib/dogs";
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+// Lazy-load so the heavy @react-pdf/renderer bundle is code-split out of the
+// main app chunk and only fetched when a brief is shown.
+const BriefDownloadButton = lazy(() => import("@/components/brief-download-button"));
+
 export function Brief() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { id: routeId } = useParams();
   const { data: dogs } = useDogs();
   const [picked, setPicked] = useState("");
   const dogId = routeId ?? picked ?? "";
   const { data: brief, isError } = useBrief(dogId);
+  const dog = dogs?.find((d) => d.id === dogId);
   const gen = useGenerateBrief(dogId);
   const fin = useFinalizeBrief(dogId);
 
@@ -67,6 +72,15 @@ export function Brief() {
                 <Button variant="outline" onClick={() => window.print()}>
                   {t("brief.print")}
                 </Button>
+                <Suspense
+                  fallback={
+                    <Button variant="outline" disabled>
+                      {t("brief.preparingPdf")}
+                    </Button>
+                  }
+                >
+                  <BriefDownloadButton brief={brief} dog={dog} />
+                </Suspense>
                 <Button
                   variant="outline"
                   onClick={async () => {

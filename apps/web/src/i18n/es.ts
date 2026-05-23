@@ -269,6 +269,8 @@ export const es = {
     finalized: "Definitivo",
     draft: "Borrador",
     print: "Imprimir",
+    downloadPdf: "Descargar PDF",
+    preparingPdf: "Preparando PDF…",
     copy: "Copiar",
     copied: "Copiado al portapapeles",
     version: "Versión",
