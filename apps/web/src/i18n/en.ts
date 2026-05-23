@@ -366,6 +366,11 @@ export const en = {
     editProfile: "Edit profile",
   },
   common: { loading: "Loading…" },
+  notFound: {
+    title: "Page not found",
+    body: "This page doesn't exist or has moved. Let's get you back.",
+    home: "Back to home",
+  },
   verifyBanner: {
     message: "Please verify your email — check your inbox",
     resend: "Resend",

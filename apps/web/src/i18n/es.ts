@@ -368,6 +368,11 @@ export const es = {
     editProfile: "Editar perfil",
   },
   common: { loading: "Cargando…" },
+  notFound: {
+    title: "Página no encontrada",
+    body: "Esta página no existe o ha sido movida. Te llevamos de vuelta.",
+    home: "Volver al inicio",
+  },
   verifyBanner: {
     message: "Verifica tu correo — revisa tu bandeja de entrada",
     resend: "Reenviar",

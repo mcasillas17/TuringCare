@@ -11,6 +11,7 @@ import { ForgotPassword } from "@/routes/forgot-password";
 import { Journal } from "@/routes/journal";
 import { Landing } from "@/routes/landing";
 import { Login } from "@/routes/login";
+import { NotFound } from "@/routes/not-found";
 import { Overview } from "@/routes/overview";
 import { Profile } from "@/routes/profile";
 import { RedirectIfAuthed } from "@/routes/redirect-if-authed";
@@ -104,6 +105,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
                 </RequireAdmin>
               }
             />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
         <Toaster />
