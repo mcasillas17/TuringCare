@@ -115,9 +115,10 @@ chip.
 - **Add** endonym keys `language.nameEn` = `"English"` and `language.nameEs` =
   `"Español"` (identical values in both files); the component selects the
   *other* locale's endonym for the `{lang}` var.
-- **Remove** `language.label` (was the `role="group"` label, now unused) and its
-  `MessageKey` type entry. Verified its only reference is `LanguageToggle.tsx`
-  itself, which this refactor rewrites — safe to delete.
+- **Remove** `language.label` (was the `role="group"` label, now unused). Verified
+  its only reference is `LanguageToggle.tsx` itself, which this refactor rewrites —
+  safe to delete. `MessageKey` is auto-derived from `typeof en`, so the type
+  updates automatically — **no `types.ts` edit needed**.
 
 ### 5. Testing
 
@@ -163,8 +164,8 @@ Exactly **two** existing test files exercise the toggle (verified by grep for
 - `apps/web/src/components/landing/site-nav.tsx` — reorder right cluster.
 - `apps/web/src/routes/admin/index.tsx` — add chip to header.
 - `apps/web/src/routes/admin/trainers.tsx` — add chip to header.
-- `apps/web/src/i18n/en.ts`, `apps/web/src/i18n/es.ts`, `apps/web/src/i18n/types.ts`
-  — i18n key add/remove + type update.
+- `apps/web/src/i18n/en.ts`, `apps/web/src/i18n/es.ts` — i18n key add/remove
+  (`MessageKey` auto-derives from `en.ts`; `types.ts` is unchanged).
 - `apps/web/src/components/LanguageToggle.test.tsx` — rewrite for single chip.
 - `apps/web/src/routes/landing.test.tsx` — update the Spanish-switch test to
   click the chip.
