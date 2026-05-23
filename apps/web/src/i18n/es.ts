@@ -96,6 +96,8 @@ export const es = {
     navHow: "Cómo funciona",
     navBrief: "Resumen de conducta",
     navFaq: "Preguntas",
+    privacy: "Privacidad",
+    terms: "Términos",
     builtFor: "Hecho para Turing",
   },
   auth: {
@@ -134,6 +136,10 @@ export const es = {
     resetSuccess: "Contraseña actualizada. Inicia sesión con tu nueva contraseña.",
     resetInvalidLink: "Este enlace no es válido o ya expiró. Solicita uno nuevo.",
     resetFailed: "No se pudo restablecer la contraseña.",
+  },
+  register: {
+    agreementPrefix: "Al registrarte aceptas nuestros",
+    agreementJoin: " y ",
   },
   app: {
     title: "Tu panel",

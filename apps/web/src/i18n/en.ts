@@ -94,6 +94,8 @@ export const en = {
     navHow: "How it works",
     navBrief: "Behavior Brief",
     navFaq: "FAQ",
+    privacy: "Privacy",
+    terms: "Terms",
     builtFor: "Built for Turing",
   },
   auth: {
@@ -132,6 +134,10 @@ export const en = {
     resetSuccess: "Password updated. Sign in with your new password.",
     resetInvalidLink: "This reset link is missing or invalid. Request a new one.",
     resetFailed: "Could not reset the password.",
+  },
+  register: {
+    agreementPrefix: "By signing up you agree to our",
+    agreementJoin: " and ",
   },
   app: {
     title: "Your dashboard",
