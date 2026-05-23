@@ -94,3 +94,32 @@ describe("brief share mint/revoke", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("public GET /api/share/brief/:token", () => {
+  it("returns whitelisted fields for a valid token and 404 after revoke/for unknown", async () => {
+    const email = `pub_${Date.now()}@example.com`;
+    emails.push(email);
+    const cookie = await signedUpCookie(email);
+    const dogId = await createDogWithBrief(cookie);
+    const mint = await app.request(`/api/dogs/${dogId}/brief/share`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    const { token } = (await mint.json()) as { token: string };
+
+    const pub = await app.request(`/api/share/brief/${token}`);
+    expect(pub.status).toBe(200);
+    const body = (await pub.json()) as { brief: Record<string, unknown> };
+    expect(body.brief.dogName).toBe("Rex");
+    expect(typeof body.brief.summary).toBe("string");
+    expect(body.brief).toHaveProperty("version");
+    expect(body.brief).not.toHaveProperty("userId");
+    expect(body.brief).not.toHaveProperty("dogId");
+    expect(body.brief).not.toHaveProperty("shareToken");
+
+    expect((await app.request("/api/share/brief/does-not-exist")).status).toBe(404);
+
+    await app.request(`/api/dogs/${dogId}/brief/share`, { method: "DELETE", headers: { cookie } });
+    expect((await app.request(`/api/share/brief/${token}`)).status).toBe(404);
+  });
+});
