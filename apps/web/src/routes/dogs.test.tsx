@@ -20,6 +20,26 @@ function mockFetchOnce(body: unknown, status = 200) {
   );
 }
 
+function mockDogDetailFetch() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const body = url.includes("/progress")
+        ? { goals: [] }
+        : {
+            dog: { id: "d1", name: "Biscuit", breed: "Aussie", size: "medium", sex: "female" },
+            concerns: [{ id: "c1", concern: "Leash reactivity", severity: "moderate" }],
+            goals: [{ id: "g1", goal: "Calm greetings" }],
+          };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }),
+  );
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -55,11 +75,7 @@ describe("DogsList", () => {
 
 describe("DogDetail", () => {
   it("renders profile + concerns + goals", async () => {
-    mockFetchOnce({
-      dog: { id: "d1", name: "Biscuit", breed: "Aussie", size: "medium", sex: "female" },
-      concerns: [{ id: "c1", concern: "Leash reactivity", severity: "moderate" }],
-      goals: [{ id: "g1", goal: "Calm greetings" }],
-    });
+    mockDogDetailFetch();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={qc}>
@@ -75,6 +91,7 @@ describe("DogDetail", () => {
     await waitFor(() => expect(screen.getByText("Biscuit")).toBeInTheDocument());
     expect(screen.getByText(/Leash reactivity/)).toBeInTheDocument();
     expect(screen.getByText("Calm greetings")).toBeInTheDocument();
+    expect(await screen.findByText(/Training progress/i)).toBeInTheDocument();
   });
 });
 

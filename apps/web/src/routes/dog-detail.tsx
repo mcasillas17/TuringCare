@@ -1,3 +1,4 @@
+import { ProgressPanel } from "@/components/progress/progress-panel";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import {
@@ -182,6 +183,8 @@ export function DogDetail() {
           </Button>
         </div>
       </section>
+
+      <ProgressPanel dogId={id} />
     </div>
   );
 }

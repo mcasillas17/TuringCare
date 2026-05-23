@@ -353,3 +353,16 @@ accessed via type cast `(data.user as { emailVerified?: boolean }).emailVerified
 Gate: biome clean, tsc clean, web tests 71/71, build clean.
 - Spec: `specs/2026-05-22-email-verify-banner-design.md`
 - Commits: branch `feat/verify-email-banner`.
+
+## 2026-05-23 — Training progress tracking — SHIPPED
+Full Goal → Skills → Sessions training-progress subsystem: two new Drizzle
+tables (`training_skills`, `practice_sessions`) with idempotent backfill,
+owner-scoped Hono routes under `/api/dogs/:id`, default same-named skills for
+new goals, `loadProgress()` shared by the progress endpoint and Behavior Brief,
+and a dog-detail `<ProgressPanel>` with confidence chips, skill CRUD, session
+logging/deletion, and en/es parity. No new deps; package manifests unchanged.
+Gates green: API 97/97 (+17), web 72/72 (+6), shared 24/24 (+5), tsc 0,
+lint 0, build OK. Shipped as a PR from worktree-training-progress.
+- Spec/plan: `specs/2026-05-22-training-progress-design.md`,
+  `plans/2026-05-22-training-progress.md`
+- Commits: this branch (see `git log`).
