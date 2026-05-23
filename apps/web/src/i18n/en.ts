@@ -142,6 +142,9 @@ export const en = {
   dogs: {
     listTitle: "Your dogs",
     empty: "No dogs yet. Add your first dog to start a profile.",
+    emptyTitle: "No dogs yet",
+    emptyBody: "Add your dog to start logging behavior, setting goals, and generating Briefs.",
+    emptyCta: "Add your first dog →",
     add: "Add dog",
     back: "Back to dogs",
     edit: "Edit profile",
