@@ -449,7 +449,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       dogName: dog.name,
       ownerName: owner.name ?? owner.email,
       message: body.message ?? null,
-      summary: brief.summary,
+      summary: brief.narrative ?? brief.summary,
     });
 
     try {

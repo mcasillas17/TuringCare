@@ -40,6 +40,22 @@ it("renders the shared brief from the public endpoint", async () => {
   await waitFor(() => expect(screen.getByText(/Behavior Brief — Rex/)).toBeInTheDocument());
 });
 
+it("prefers the narrative over the structured summary when present", async () => {
+  mockFetch(200, {
+    brief: {
+      dogName: "Rex",
+      summary: "Structured text",
+      narrative: "Warm prose for the trainer.",
+      status: "finalized",
+      version: 2,
+      generatedAt: "2026-05-22T00:00:00Z",
+    },
+  });
+  setup();
+  await waitFor(() => expect(screen.getByText("Warm prose for the trainer.")).toBeInTheDocument());
+  expect(screen.queryByText("Structured text")).not.toBeInTheDocument();
+});
+
 it("shows a not-available view on 404", async () => {
   mockFetch(404, { error: "not_found" });
   setup();

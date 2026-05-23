@@ -34,7 +34,7 @@ export function SharedBrief() {
             >
               <BriefDownloadButton
                 brief={{
-                  summary: data.summary,
+                  summary: data.narrative ?? data.summary,
                   status: data.status,
                   version: data.version,
                   generatedAt: data.generatedAt,
@@ -47,7 +47,7 @@ export function SharedBrief() {
             <div className="mb-2 font-semibold text-copper">
               {t("brief.version")} {data.version}
             </div>
-            {data.summary}
+            {data.narrative ?? data.summary}
           </article>
         </>
       )}

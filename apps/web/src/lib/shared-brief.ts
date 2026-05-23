@@ -4,6 +4,7 @@ import { api } from "./api";
 export type SharedBrief = {
   dogName: string;
   summary: string;
+  narrative: string | null;
   status: string;
   version: number;
   generatedAt: string;
