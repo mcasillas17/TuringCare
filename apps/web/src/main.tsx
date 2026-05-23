@@ -7,6 +7,7 @@ import { Brief } from "@/routes/brief";
 import { DogDetail } from "@/routes/dog-detail";
 import { DogForm } from "@/routes/dog-form";
 import { DogsList } from "@/routes/dogs-list";
+import { ForgotPassword } from "@/routes/forgot-password";
 import { Journal } from "@/routes/journal";
 import { Landing } from "@/routes/landing";
 import { Login } from "@/routes/login";
@@ -14,6 +15,7 @@ import { Overview } from "@/routes/overview";
 import { Profile } from "@/routes/profile";
 import { Register } from "@/routes/register";
 import { RequireAuth } from "@/routes/require-auth";
+import { ResetPassword } from "@/routes/reset-password";
 import { Settings } from "@/routes/settings";
 import { TrainerDetail } from "@/routes/trainer-detail";
 import { Trainers } from "@/routes/trainers";
@@ -39,6 +41,8 @@ createRoot(document.getElementById("root") as HTMLElement).render(
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route
               element={
                 <RequireAuth>

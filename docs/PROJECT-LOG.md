@@ -226,3 +226,33 @@ web 47/47, shared 19/19, tsc 0, lint 0, build OK.
   `plans/2026-05-21-journal-edit-and-fields.md`
 - Commits: this branch (see `git log`). Shipped as a PR from
   worktree-journal-edit-and-fields.
+
+## 2026-05-21 — Password reset frontend (P3) — SHIPPED
+Security backlog P3 (the email pipe P1 shipped separately via PR #7).
+`/forgot-password` (single email field, calls Better Auth's
+`requestPasswordReset({ email, redirectTo: <origin>/reset-password })`,
+anti-enumeration generic success view regardless of API outcome) +
+`/reset-password` (token from `?token=`, two-field form min-8 +
+matches-confirm, calls `resetPassword({ newPassword, token })`, toast +
+redirect to `/login` on success, invalid-link state when token is missing) +
+`Forgot password?` link on `/login`. Re-exports `requestPasswordReset` +
+`resetPassword` from `auth-client.ts`; new i18n keys en+es with parity
+(compile-time guard); accessible `<h2>` headings inside shadcn `CardTitle`.
+Full TDD.
+- Spec/plan: `specs/2026-05-20-password-reset-frontend-design.md`, `plans/2026-05-20-password-reset-frontend.md`
+- Naming note: the plan said `forgetPassword` for the Better Auth client method;
+  the real name in 1.6.11 is `requestPasswordReset` (verified against the
+  installed package). The code uses `requestPasswordReset`; the spec/plan docs
+  retain the historical naming.
+
+## 2026-05-22 — Language toggle redesign — SHIPPED
+`LanguageToggle` now shows 🇺🇸 EN / 🇲🇽 ES (flag emoji wrapped in
+`aria-hidden`, so the accessible name stays "EN"/"ES"). Component API unchanged
+— all 7 mount sites keep working. On the landing nav and app-shell header
+(where the top-right corner is occupied by CTAs) a decorative vertical divider
+(`h-5 w-px bg-silver/70`) now separates the toggle from the neighboring buttons
+so it reads as a distinct control — no absolute repositioning. Auth pages
+(already corner-anchored) and Settings (intentional inline) unchanged. New
+`LanguageToggle.test.tsx` (accessible name stays EN/ES proving aria-hidden,
+flags present in DOM, locale switch). Full TDD.
+- Spec/plan: `specs/2026-05-21-language-toggle-redesign-design.md`, `plans/2026-05-21-language-toggle-redesign.md`

@@ -9,4 +9,5 @@ export const authClient = createAuthClient({
   basePath: "/api/auth",
 });
 
-export const { signIn, signUp, signOut, useSession } = authClient;
+export const { signIn, signUp, signOut, useSession, requestPasswordReset, resetPassword } =
+  authClient;

@@ -106,6 +106,7 @@ export function AppShell() {
         </div>
         <div className="flex items-center gap-2">
           <LanguageToggle />
+          <span aria-hidden="true" className="h-5 w-px bg-silver/70" />
           <Button
             variant="outline"
             onClick={async () => {
