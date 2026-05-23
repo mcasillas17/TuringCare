@@ -31,6 +31,7 @@ vi.mock("@/lib/brief", async (importOriginal) => {
     useBrief: vi.fn(actual.useBrief),
     useShareBrief: vi.fn(actual.useShareBrief),
     useRevokeShare: vi.fn(actual.useRevokeShare),
+    useGenerateNarrative: vi.fn(actual.useGenerateNarrative),
   };
 });
 
@@ -43,6 +44,7 @@ beforeEach(async () => {
   vi.mocked(briefLib.useBrief).mockImplementation(realBrief.useBrief);
   vi.mocked(briefLib.useShareBrief).mockImplementation(realBrief.useShareBrief);
   vi.mocked(briefLib.useRevokeShare).mockImplementation(realBrief.useRevokeShare);
+  vi.mocked(briefLib.useGenerateNarrative).mockImplementation(realBrief.useGenerateNarrative);
 });
 
 function stubFetch() {
@@ -95,14 +97,15 @@ type MockBrief = {
   summary: string;
   version: number;
   shareToken?: string | null;
+  narrative?: string | null;
 };
 
-function renderBrief() {
+function renderBrief(dogId = "d1") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
-        <MemoryRouter initialEntries={["/my/dogs/d1/brief"]}>
+        <MemoryRouter initialEntries={[`/my/dogs/${dogId}/brief`]}>
           <Routes>
             <Route path="/my/dogs/:id/brief" element={<Brief />} />
           </Routes>
@@ -126,6 +129,9 @@ function stubBriefHook(brief: MockBrief) {
   );
   vi.mocked(briefLib.useRevokeShare).mockReturnValue(
     mutation as unknown as ReturnType<typeof briefLib.useRevokeShare>,
+  );
+  vi.mocked(briefLib.useGenerateNarrative).mockReturnValue(
+    mutation as unknown as ReturnType<typeof briefLib.useGenerateNarrative>,
   );
 }
 
@@ -191,5 +197,49 @@ describe("Brief", () => {
     const input = await screen.findByDisplayValue(/\/b\/tok123/);
     expect(input).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /stop sharing/i })).toBeInTheDocument();
+  });
+});
+
+describe("Brief narrative control", () => {
+  it("shows Generate when there's no narrative, and Regenerate + toggle once present", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    vi.mocked(briefLib.useGenerateNarrative).mockReturnValue({
+      mutateAsync,
+      isPending: false,
+    } as unknown as ReturnType<typeof briefLib.useGenerateNarrative>);
+
+    vi.mocked(briefLib.useBrief).mockReturnValue({
+      data: {
+        id: "b1",
+        summary: "Structured text",
+        narrative: null,
+        status: "draft",
+        version: 1,
+        generatedAt: "2026-05-22T00:00:00.000Z",
+        shareToken: null,
+      },
+      isError: false,
+    } as unknown as ReturnType<typeof briefLib.useBrief>);
+    const { unmount } = renderBrief("d1");
+    expect(await screen.findByText("✨ Generate readable version")).toBeInTheDocument();
+    expect(screen.getByText("Structured text")).toBeInTheDocument();
+    unmount();
+
+    vi.mocked(briefLib.useBrief).mockReturnValue({
+      data: {
+        id: "b1",
+        summary: "Structured text",
+        narrative: "Warm prose here.",
+        status: "draft",
+        version: 1,
+        generatedAt: "2026-05-22T00:00:00.000Z",
+        shareToken: null,
+      },
+      isError: false,
+    } as unknown as ReturnType<typeof briefLib.useBrief>);
+    renderBrief("d1");
+    expect(await screen.findByText("Warm prose here.")).toBeInTheDocument();
+    expect(screen.getByText("↻ Regenerate")).toBeInTheDocument();
+    expect(screen.getByText("Show structured")).toBeInTheDocument();
   });
 });

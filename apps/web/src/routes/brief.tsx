@@ -5,6 +5,7 @@ import {
   useBrief,
   useFinalizeBrief,
   useGenerateBrief,
+  useGenerateNarrative,
   useRevokeShare,
   useShareBrief,
 } from "@/lib/brief";
@@ -29,6 +30,9 @@ export function Brief() {
   const fin = useFinalizeBrief(dogId);
   const share = useShareBrief(dogId);
   const revoke = useRevokeShare(dogId);
+  const narrative = useGenerateNarrative(dogId);
+  const [showStructured, setShowStructured] = useState(false);
+  const briefBody = brief?.narrative && !showStructured ? brief.narrative : brief?.summary;
   const shareUrl = brief?.shareToken ? `${window.location.origin}/b/${brief.shareToken}` : null;
 
   return (
@@ -89,13 +93,21 @@ export function Brief() {
                     </Button>
                   }
                 >
-                  <BriefDownloadButton brief={brief} dog={dog} />
+                  <BriefDownloadButton
+                    brief={{
+                      summary: brief.narrative ?? brief.summary,
+                      status: brief.status,
+                      version: brief.version,
+                      generatedAt: brief.generatedAt,
+                    }}
+                    dog={dog}
+                  />
                 </Suspense>
                 <Button
                   variant="outline"
                   onClick={async () => {
                     try {
-                      await navigator.clipboard.writeText(brief.summary);
+                      await navigator.clipboard.writeText(brief.narrative ?? brief.summary);
                       toast.success(t("brief.copied"));
                     } catch {
                       toast.error(t("brief.genFailed"));
@@ -104,6 +116,32 @@ export function Brief() {
                 >
                   {t("brief.copy")}
                 </Button>
+                <Button
+                  variant="outline"
+                  disabled={narrative.isPending}
+                  onClick={async () => {
+                    try {
+                      await narrative.mutateAsync();
+                    } catch (e) {
+                      toast.error(
+                        e instanceof Error && e.message === "not_configured"
+                          ? t("brief.narrativeUnavailable")
+                          : t("brief.narrativeFailed"),
+                      );
+                    }
+                  }}
+                >
+                  {narrative.isPending
+                    ? t("brief.narrativeGenerating")
+                    : brief.narrative
+                      ? t("brief.regenerateNarrative")
+                      : t("brief.generateNarrative")}
+                </Button>
+                {brief.narrative && (
+                  <Button variant="outline" onClick={() => setShowStructured((s) => !s)}>
+                    {showStructured ? t("brief.showNarrative") : t("brief.showStructured")}
+                  </Button>
+                )}
                 {shareUrl ? (
                   <>
                     <input
@@ -165,7 +203,10 @@ export function Brief() {
                 {t("brief.version")} {brief.version} ·{" "}
                 {brief.status === "finalized" ? t("brief.finalized") : t("brief.draft")}
               </div>
-              {brief.summary}
+              {brief.narrative && !showStructured && (
+                <div className="mb-2 text-xs italic text-slate-soft">{t("brief.aiGenerated")}</div>
+              )}
+              {briefBody}
             </article>
           )}
           <SendPanel dogId={dogId} briefStatus={brief?.status ?? null} />

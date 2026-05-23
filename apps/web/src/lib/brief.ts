@@ -42,6 +42,17 @@ export function useFinalizeBrief(dogId: string) {
     },
   });
 }
+export function useGenerateNarrative(dogId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await b.narrative.$post({ param: { id: dogId } });
+      if (!res.ok) throw new Error(res.status === 503 ? "not_configured" : "narrative_failed");
+      return (await res.json()).brief;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["brief", dogId] }),
+  });
+}
 export function useShareBrief(dogId: string) {
   const qc = useQueryClient();
   return useMutation({
