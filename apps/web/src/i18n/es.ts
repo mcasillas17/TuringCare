@@ -246,7 +246,11 @@ export const es = {
     title: "Diario de conducta",
     pickDog: "Elige un perro",
     noDogs: "Agrega un perro primero para empezar el diario.",
+    noDogsCta: "Agregar un perro →",
     empty: "Aún no hay entradas.",
+    emptyTitle: "Aún no hay entradas",
+    emptyBody:
+      "Usa el formulario de abajo para registrar tu primera observación. Captura el Antecedente → Conducta → Consecuencia y califica la intensidad.",
     add: "Agregar entrada",
     occurredAt: "Cuándo",
     antecedent: "Antecedente",

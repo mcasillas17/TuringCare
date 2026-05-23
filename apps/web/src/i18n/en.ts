@@ -243,7 +243,11 @@ export const en = {
     title: "Behavior Journal",
     pickDog: "Choose a dog",
     noDogs: "Add a dog first to start journaling.",
+    noDogsCta: "Add a dog →",
     empty: "No entries yet.",
+    emptyTitle: "No entries yet",
+    emptyBody:
+      "Use the form below to log your first behavior observation. Capture the Antecedent → Behavior → Consequence and rate the intensity.",
     add: "Add entry",
     occurredAt: "When",
     antecedent: "Antecedent",

@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { type JournalEntryInput, journalEntrySchema } from "@turingcare/shared";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
@@ -28,7 +29,18 @@ export function Journal() {
     defaultValues: { intensity: 3 },
   });
 
-  if (dogs && dogs.length === 0) return <p className="text-slate-soft">{t("journal.noDogs")}</p>;
+  if (dogs && dogs.length === 0)
+    return (
+      <div className="mx-auto max-w-2xl space-y-4">
+        <h1 className="text-2xl font-bold text-slate">{t("journal.title")}</h1>
+        <section className="space-y-3 rounded border border-silver bg-white p-6 text-center">
+          <p className="text-slate-soft">{t("journal.noDogs")}</p>
+          <Link to="/my/dogs/new" className="inline-block rounded bg-slate px-4 py-2 text-cream">
+            {t("journal.noDogsCta")}
+          </Link>
+        </section>
+      </div>
+    );
 
   const onSubmit = handleSubmit(async (v) => {
     try {
@@ -57,7 +69,12 @@ export function Journal() {
       </label>
 
       {isError && <p className="text-red-600">{t("journal.loadError")}</p>}
-      {entries?.length === 0 && <p className="text-slate-soft">{t("journal.empty")}</p>}
+      {entries?.length === 0 && (
+        <section className="space-y-2 rounded border border-silver bg-white p-6 text-center">
+          <h2 className="text-lg font-semibold text-slate">{t("journal.emptyTitle")}</h2>
+          <p className="text-slate-soft">{t("journal.emptyBody")}</p>
+        </section>
+      )}
       <ul className="space-y-2">
         {entries?.map((e) => (
           <EntryCard
