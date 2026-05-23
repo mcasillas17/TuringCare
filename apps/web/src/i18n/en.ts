@@ -224,6 +224,17 @@ export const en = {
     qBrief: "Generate Brief",
     qTrainer: "Find a trainer",
     noBrief: "None yet",
+    welcomeTitle: "Welcome to TuringCare 👋",
+    welcomeBody:
+      "Let's get your dog set up. Add a profile to start logging behavior and tracking training progress.",
+    startHereCta: "Add your first dog →",
+    nudgeNoEntriesTitle: "Ready to log your first entry?",
+    nudgeNoEntriesBody: "Capture a behavior the next time it happens. It only takes a moment.",
+    nudgeNoEntriesCta: "Open the journal →",
+    nudgeNoBriefTitle: "Generate your first Brief",
+    nudgeNoBriefBody:
+      "Once you have a few entries, the Behavior Brief becomes useful to share with a trainer.",
+    nudgeNoBriefCta: "Generate a Brief →",
   },
   journal: {
     title: "Behavior Journal",
