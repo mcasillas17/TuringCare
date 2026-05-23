@@ -353,3 +353,17 @@ accessed via type cast `(data.user as { emailVerified?: boolean }).emailVerified
 Gate: biome clean, tsc clean, web tests 71/71, build clean.
 - Spec: `specs/2026-05-22-email-verify-banner-design.md`
 - Commits: branch `feat/verify-email-banner`.
+
+## 2026-05-22 — Behavior Brief sharing (read-only link) — SHIPPED
+MVP #4. Owners share a dog's Behavior Brief via a revocable, read-only public
+link `/b/<token>` (no recipient login). `briefs.shareToken` (unique, nullable;
+migration 0003) snapshots the shared brief version. Owner-scoped
+`POST/DELETE /api/dogs/:id/brief/share` mint (idempotent, crypto-random
+base64url) / revoke; existing `GET …/brief` now carries `shareToken`. Public
+`GET /api/share/brief/:token` returns a strict whitelist (dogName, summary,
+status, version, generatedAt) — no userId/dog id/token; revoked + unknown both
+404. Web: Share control on the brief page (create/copy/stop) + public
+`SharedBrief` page reusing the PDF download (with generatedAt). en+es parity.
+Full TDD; gate green (API 92 / web 87 / shared 19).
+- Spec/plan: `specs/2026-05-22-brief-sharing-design.md`, `plans/2026-05-22-brief-sharing.md`
+- Commits: this branch (see `git log`). Shipped as a PR from feat+brief-sharing.
