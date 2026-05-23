@@ -1,6 +1,5 @@
 export const en = {
   language: {
-    label: "Language",
     en: "EN",
     es: "ES",
     switchTo: "Switch to {lang}",

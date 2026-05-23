@@ -2,7 +2,6 @@ import type { Messages } from "./types";
 
 export const es = {
   language: {
-    label: "Idioma",
     en: "EN",
     es: "ES",
     switchTo: "Cambiar a {lang}",
