@@ -16,7 +16,7 @@ export interface PolishBriefDeps {
  * transport failure -> LLMError("failed"). The facts come only from `summary`.
  */
 export async function polishBrief(summary: string, deps: PolishBriefDeps = {}): Promise<string> {
-  if (!summary.trim()) throw new LLMError("polishBrief: summary is required");
+  if (!summary.trim()) throw new Error("polishBrief: summary is required");
 
   // `in` check (not `?? env`): tests force not-configured via { apiKey: undefined }
   // without touching env; production callers omit deps -> env.ANTHROPIC_API_KEY.
