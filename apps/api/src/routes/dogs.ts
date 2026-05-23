@@ -3,7 +3,8 @@ import {
   behaviorConcernSchema,
   briefSendSchema,
   dogProfileSchema,
-  journalEntrySchema,
+  journalEntryCreateSchema,
+  journalEntryUpdateSchema,
   practiceSessionSchema,
   skillConfidenceSchema,
   trainingGoalSchema,
@@ -242,7 +243,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .orderBy(desc(journalEntries.occurredAt));
     return c.json({ entries });
   })
-  .post("/:id/journal", zValidator("json", journalEntrySchema), async (c) => {
+  .post("/:id/journal", zValidator("json", journalEntryCreateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const b = c.req.valid("json");
@@ -250,40 +251,48 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .insert(journalEntries)
       .values({
         dogId: dog.id,
-        occurredAt: new Date(b.occurredAt),
-        antecedent: b.antecedent,
-        behavior: b.behavior,
-        consequence: b.consequence,
-        intensity: b.intensity,
-        location: b.location ?? null,
-        notes: b.notes ?? null,
-        durationSeconds: b.durationSeconds ?? null,
-        recoverySeconds: b.recoverySeconds ?? null,
-        peoplePresent: b.peoplePresent ?? null,
-        ownerResponse: b.ownerResponse ?? null,
+        kind: b.kind,
+        occurredAt: b.occurredAt ? new Date(b.occurredAt) : new Date(),
+        note: b.note,
+        trend: b.kind === "daily_checkin" ? b.trend : null,
+        antecedent: b.kind === "moment" ? (b.antecedent ?? null) : null,
+        behavior: b.kind === "moment" ? (b.behavior ?? null) : null,
+        consequence: b.kind === "moment" ? (b.consequence ?? null) : null,
+        intensity: b.kind === "moment" ? (b.intensity ?? null) : null,
+        location: b.kind === "moment" ? (b.location ?? null) : null,
+        notes: b.kind === "moment" ? (b.notes ?? null) : null,
+        durationSeconds: b.kind === "moment" ? (b.durationSeconds ?? null) : null,
+        recoverySeconds: b.kind === "moment" ? (b.recoverySeconds ?? null) : null,
+        peoplePresent: b.kind === "moment" ? (b.peoplePresent ?? null) : null,
+        ownerResponse: b.kind === "moment" ? (b.ownerResponse ?? null) : null,
       })
       .returning();
     return c.json({ entry }, 201);
   })
-  .put("/:id/journal/:entryId", zValidator("json", journalEntrySchema), async (c) => {
+  .put("/:id/journal/:entryId", zValidator("json", journalEntryUpdateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const b = c.req.valid("json");
+    const changes: Partial<typeof journalEntries.$inferInsert> = {};
+    if (b.kind !== undefined) changes.kind = b.kind;
+    if (b.occurredAt !== undefined) changes.occurredAt = new Date(b.occurredAt);
+    if (b.note !== undefined) changes.note = b.note;
+    if (b.trend !== undefined) changes.trend = b.trend;
+    if (b.kind === "moment") changes.trend = null;
+    if (b.antecedent !== undefined) changes.antecedent = b.antecedent ?? null;
+    if (b.behavior !== undefined) changes.behavior = b.behavior ?? null;
+    if (b.consequence !== undefined) changes.consequence = b.consequence ?? null;
+    if (b.intensity !== undefined) changes.intensity = b.intensity ?? null;
+    if (b.location !== undefined) changes.location = b.location ?? null;
+    if (b.notes !== undefined) changes.notes = b.notes ?? null;
+    if (b.durationSeconds !== undefined) changes.durationSeconds = b.durationSeconds ?? null;
+    if (b.recoverySeconds !== undefined) changes.recoverySeconds = b.recoverySeconds ?? null;
+    if (b.peoplePresent !== undefined) changes.peoplePresent = b.peoplePresent ?? null;
+    if (b.ownerResponse !== undefined) changes.ownerResponse = b.ownerResponse ?? null;
+
     const [entry] = await db
       .update(journalEntries)
-      .set({
-        occurredAt: new Date(b.occurredAt),
-        antecedent: b.antecedent,
-        behavior: b.behavior,
-        consequence: b.consequence,
-        intensity: b.intensity,
-        location: b.location ?? null,
-        notes: b.notes ?? null,
-        durationSeconds: b.durationSeconds ?? null,
-        recoverySeconds: b.recoverySeconds ?? null,
-        peoplePresent: b.peoplePresent ?? null,
-        ownerResponse: b.ownerResponse ?? null,
-      })
+      .set(changes)
       .where(and(eq(journalEntries.id, c.req.param("entryId")), eq(journalEntries.dogId, dog.id)))
       .returning();
     if (!entry) return c.json({ error: "not_found" } as const, 404);
@@ -328,7 +337,10 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       concerns: concerns.map((x) => ({ concern: x.concern, severity: x.severity })),
       goals: goals.map((x) => ({ goal: x.goal })),
       entries: entries.map((e) => ({
+        note: e.note,
         behavior: e.behavior,
+        antecedent: e.antecedent,
+        consequence: e.consequence,
         intensity: e.intensity,
         occurredAt: e.occurredAt.toISOString(),
       })),

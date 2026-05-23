@@ -9,6 +9,7 @@ import { globalRateLimit } from "./middleware/rate-limit";
 import { adminApp } from "./routes/admin";
 import { adminTrainersApp } from "./routes/admin-trainers";
 import { dogsApp } from "./routes/dogs";
+import { journalApp } from "./routes/journal";
 import { overviewApp } from "./routes/overview";
 import { profileApp } from "./routes/profile";
 import { trainersApp } from "./routes/trainers";
@@ -40,6 +41,7 @@ const app = new Hono()
     c.json({ ok: true } as const),
   )
   .route("/api/dogs", dogsApp)
+  .route("/api/journal", journalApp)
   .post("/api/events", zValidator("json", eventIngestSchema), async (c) => {
     const { name, props } = c.req.valid("json");
     // Identity is resolved server-side from the auth cookie — never trusted

@@ -251,14 +251,12 @@ describe("dogs: journal", () => {
     return ((await r.json()) as { dog: { id: string } }).dog;
   }
   const entry = {
-    occurredAt: "2026-05-19T10:00",
-    antecedent: "Doorbell",
-    behavior: "Barked 8s",
-    consequence: "Scatter fed",
+    kind: "moment",
+    note: "Barked at the doorbell",
     intensity: 3,
   };
 
-  it("adds, lists, deletes a journal entry", async () => {
+  it("adds, lists, updates, and deletes a note-first moment", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
@@ -268,7 +266,38 @@ describe("dogs: journal", () => {
       body: JSON.stringify(entry),
     });
     expect(add.status).toBe(201);
-    const { entry: created } = (await add.json()) as { entry: { id: string } };
+    const { entry: created } = (await add.json()) as {
+      entry: {
+        id: string;
+        note: string;
+        kind: string;
+        occurredAt: string;
+        antecedent: string | null;
+        behavior: string | null;
+        consequence: string | null;
+        intensity: number | null;
+      };
+    };
+    expect(created).toMatchObject({
+      note: "Barked at the doorbell",
+      kind: "moment",
+      antecedent: null,
+      behavior: null,
+      consequence: null,
+      intensity: 3,
+    });
+    expect(new Date(created.occurredAt).toString()).not.toBe("Invalid Date");
+
+    const update = await app.request(`/api/dogs/${dog.id}/journal/${created.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ antecedent: "Doorbell rang" }),
+    });
+    expect(update.status).toBe(200);
+    expect(((await update.json()) as { entry: { antecedent: string } }).entry.antecedent).toBe(
+      "Doorbell rang",
+    );
+
     const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
     expect(((await list.json()) as { entries: unknown[] }).entries).toHaveLength(1);
     const del = await app.request(`/api/dogs/${dog.id}/journal/${created.id}`, {
@@ -289,6 +318,30 @@ describe("dogs: journal", () => {
       body: JSON.stringify({ ...entry, intensity: 9 }),
     });
     expect(r.status).toBe(400);
+  });
+  it("creates a daily check-in with trend and no intensity", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const add = await app.request(`/api/dogs/${dog.id}/journal`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        kind: "daily_checkin",
+        trend: "better",
+        note: "Settled faster after lunch.",
+      }),
+    });
+    expect(add.status).toBe(201);
+    const body = (await add.json()) as {
+      entry: { kind: string; trend: string; note: string; intensity: number | null };
+    };
+    expect(body.entry).toMatchObject({
+      kind: "daily_checkin",
+      trend: "better",
+      note: "Settled faster after lunch.",
+      intensity: null,
+    });
   });
   it("owner isolation: other user 404 on list/add", async () => {
     const a = await createTestUser();
@@ -793,6 +846,8 @@ describe("dogs: journal PUT", () => {
       method: "POST",
       headers: u.authHeaders,
       body: JSON.stringify({
+        kind: "moment",
+        note: "Barked at the doorbell",
         occurredAt: "2026-05-19T10:00",
         antecedent: "Doorbell",
         behavior: "Barked 8s",

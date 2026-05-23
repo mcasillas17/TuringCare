@@ -38,10 +38,8 @@ describe("overview", () => {
       method: "POST",
       headers: u.authHeaders,
       body: JSON.stringify({
-        occurredAt: "2026-05-19T10:00",
-        antecedent: "a",
-        behavior: "Barked",
-        consequence: "c",
+        kind: "moment",
+        note: "Barked",
         intensity: 3,
       }),
     });
