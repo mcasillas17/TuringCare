@@ -1,59 +1,121 @@
 import { describe, expect, it } from "vitest";
-import { journalEntrySchema } from "./journal";
+import {
+  journalDailyCheckInCreateSchema,
+  journalEntryCreateSchema,
+  journalEntryUpdateSchema,
+  journalMomentCreateSchema,
+} from "./journal";
 
-describe("journalEntrySchema", () => {
-  const base = {
-    occurredAt: "2026-05-19T10:00",
-    antecedent: "Doorbell rang",
-    behavior: "Barked and lunged",
-    consequence: "Owner redirected with food",
-    intensity: 3,
-  };
-  it("accepts a valid entry", () => {
-    expect(journalEntrySchema.safeParse(base).success).toBe(true);
-  });
-  it("accepts optional location/notes", () => {
+describe("journalMomentCreateSchema", () => {
+  it("accepts a note-only moment with optional intensity", () => {
     expect(
-      journalEntrySchema.safeParse({ ...base, location: "Front door", notes: "n" }).success,
+      journalMomentCreateSchema.safeParse({
+        kind: "moment",
+        note: "Barked at the delivery truck",
+        intensity: 3,
+      }).success,
     ).toBe(true);
   });
-  it("rejects empty behavior", () => {
-    expect(journalEntrySchema.safeParse({ ...base, behavior: "" }).success).toBe(false);
-  });
-  it("rejects intensity out of 1..5", () => {
-    expect(journalEntrySchema.safeParse({ ...base, intensity: 6 }).success).toBe(false);
-    expect(journalEntrySchema.safeParse({ ...base, intensity: 0 }).success).toBe(false);
-  });
-  it("rejects missing occurredAt", () => {
-    const { occurredAt, ...rest } = base;
-    expect(journalEntrySchema.safeParse(rest).success).toBe(false);
-  });
-  it("accepts the four optional capture fields", () => {
+
+  it("accepts optional ABC and context details without requiring them", () => {
     expect(
-      journalEntrySchema.safeParse({
-        ...base,
+      journalMomentCreateSchema.safeParse({
+        kind: "moment",
+        note: "Jumped at the window",
+        occurredAt: "2026-05-22T10:00",
+        antecedent: "Truck drove by",
+        behavior: "Barked twice",
+        consequence: "Owner redirected to mat",
+        location: "Living room",
         durationSeconds: 12,
-        recoverySeconds: 30,
+        recoverySeconds: 45,
+        peoplePresent: "Owner",
+        ownerResponse: "Scattered kibble",
+        notes: "Recovered quickly",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an empty note and out-of-range intensity", () => {
+    expect(journalMomentCreateSchema.safeParse({ kind: "moment", note: "   " }).success).toBe(
+      false,
+    );
+    expect(
+      journalMomentCreateSchema.safeParse({
+        kind: "moment",
+        note: "Too high",
+        intensity: 6,
+      }).success,
+    ).toBe(false);
+    expect(
+      journalMomentCreateSchema.safeParse({
+        kind: "moment",
+        note: "Too low",
+        intensity: 0,
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("journalDailyCheckInCreateSchema", () => {
+  it("accepts a daily check-in with trend and note", () => {
+    expect(
+      journalDailyCheckInCreateSchema.safeParse({
+        kind: "daily_checkin",
+        trend: "better",
+        note: "Settled faster during dinner.",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a daily check-in without a trend", () => {
+    expect(
+      journalDailyCheckInCreateSchema.safeParse({
+        kind: "daily_checkin",
+        note: "Quiet afternoon",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("journalEntryCreateSchema", () => {
+  it("discriminates moments from daily check-ins", () => {
+    expect(journalEntryCreateSchema.safeParse({ kind: "moment", note: "Growled once" }).success).toBe(
+      true,
+    );
+    expect(
+      journalEntryCreateSchema.safeParse({
+        kind: "daily_checkin",
+        trend: "same",
+        note: "About the same today",
+      }).success,
+    ).toBe(true);
+    expect(journalEntryCreateSchema.safeParse({ kind: "daily_checkin", note: "Missing trend" }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("journalEntryUpdateSchema", () => {
+  it("accepts partial follow-up and structured detail updates", () => {
+    expect(journalEntryUpdateSchema.safeParse({ antecedent: "Doorbell rang" }).success).toBe(true);
+    expect(
+      journalEntryUpdateSchema.safeParse({
+        note: "Updated note",
+        intensity: null,
+        durationSeconds: 20,
+        recoverySeconds: null,
         peoplePresent: "Owner + walker",
         ownerResponse: "Asked for sit",
       }).success,
     ).toBe(true);
   });
-  it("treats the four capture fields as fully optional", () => {
-    expect(
-      journalEntrySchema.safeParse({ ...base, durationSeconds: null, recoverySeconds: null })
-        .success,
-    ).toBe(true);
-    expect(
-      journalEntrySchema.safeParse({ ...base, peoplePresent: null, ownerResponse: null }).success,
-    ).toBe(true);
-  });
-  it("rejects negative durationSeconds / recoverySeconds", () => {
-    expect(journalEntrySchema.safeParse({ ...base, durationSeconds: -5 }).success).toBe(false);
-    expect(journalEntrySchema.safeParse({ ...base, recoverySeconds: -1 }).success).toBe(false);
-  });
-  it("rejects non-string peoplePresent / ownerResponse", () => {
-    expect(journalEntrySchema.safeParse({ ...base, peoplePresent: 123 }).success).toBe(false);
-    expect(journalEntrySchema.safeParse({ ...base, ownerResponse: 7 }).success).toBe(false);
+
+  it("validates note, intensity, trend, and numeric detail fields when present", () => {
+    expect(journalEntryUpdateSchema.safeParse({ note: "" }).success).toBe(false);
+    expect(journalEntryUpdateSchema.safeParse({ intensity: 9 }).success).toBe(false);
+    expect(journalEntryUpdateSchema.safeParse({ trend: "easier" }).success).toBe(false);
+    expect(journalEntryUpdateSchema.safeParse({ durationSeconds: -1 }).success).toBe(false);
+    expect(journalEntryUpdateSchema.safeParse({ recoverySeconds: -1 }).success).toBe(false);
   });
 });
