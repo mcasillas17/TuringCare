@@ -3,6 +3,7 @@ import {
   behaviorConcernSchema,
   dogProfileSchema,
   journalEntrySchema,
+  practiceSessionSchema,
   skillConfidenceSchema,
   trainingGoalSchema,
   trainingSkillSchema,
@@ -17,6 +18,7 @@ import {
   briefs,
   dogs,
   journalEntries,
+  practiceSessions,
   trainingGoals,
   trainingSkills,
 } from "../db/schema";
@@ -180,6 +182,41 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .delete(trainingSkills)
       .where(eq(trainingSkills.id, skill.id))
       .returning({ id: trainingSkills.id });
+    if (!deleted) return c.json({ error: "not_found" } as const, 404);
+    return c.json({ ok: true } as const);
+  })
+  .post("/:id/skills/:skillId/sessions", zValidator("json", practiceSessionSchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+    if (!skill) return c.json({ error: "not_found" } as const, 404);
+    const body = c.req.valid("json");
+    const [session] = await db
+      .insert(practiceSessions)
+      .values({
+        skillId: skill.id,
+        occurredAt: new Date(body.occurredAt),
+        durationMinutes: body.durationMinutes ?? null,
+        notes: body.notes ?? null,
+      })
+      .returning();
+    if (!session) throw new Error("failed to create practice session");
+    return c.json({ session }, 201);
+  })
+  .delete("/:id/skills/:skillId/sessions/:sessionId", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+    if (!skill) return c.json({ error: "not_found" } as const, 404);
+    const [deleted] = await db
+      .delete(practiceSessions)
+      .where(
+        and(
+          eq(practiceSessions.id, c.req.param("sessionId")),
+          eq(practiceSessions.skillId, skill.id),
+        ),
+      )
+      .returning({ id: practiceSessions.id });
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })

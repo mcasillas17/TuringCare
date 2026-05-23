@@ -565,6 +565,126 @@ describe("dogs: progress skills", () => {
   });
 });
 
+describe("dogs: progress sessions", () => {
+  const users: TestUser[] = [];
+  afterEach(async () => {
+    for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
+  });
+
+  async function makeDog(u: TestUser, name = validDog.name) {
+    const r = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ ...validDog, name }),
+    });
+    return ((await r.json()) as { dog: { id: string } }).dog;
+  }
+
+  async function makeGoal(dogId: string) {
+    const [goal] = await db
+      .insert(trainingGoals)
+      .values({ dogId, goal: "Calm greetings" })
+      .returning();
+    if (!goal) throw new Error("expected goal");
+    return goal;
+  }
+
+  async function makeSkill(goalId: string) {
+    const [skill] = await db
+      .insert(trainingSkills)
+      .values({ goalId, name: "Door-knock threshold", confidence: 3 })
+      .returning();
+    if (!skill) throw new Error("expected skill");
+    return skill;
+  }
+
+  it("POST /skills/:skillId/sessions logs a session and progress summarizes it", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const goal = await makeGoal(dog.id);
+    const skill = await makeSkill(goal.id);
+
+    const res = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/sessions`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        occurredAt: "2026-05-22T10:00:00.000Z",
+        durationMinutes: 12,
+        notes: "Held sit through two knocks",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const { session } = (await res.json()) as { session: { id: string; notes: string | null } };
+    expect(session.notes).toBe("Held sit through two knocks");
+
+    const progress = await app.request(`/api/dogs/${dog.id}/progress`, { headers: u.authHeaders });
+    const body = (await progress.json()) as {
+      goals: Array<{
+        skills: Array<{
+          sessionCount: number;
+          lastSessionAt: string | null;
+          lastNote: string | null;
+          sessions: unknown[];
+        }>;
+      }>;
+    };
+    const firstSkill = body.goals[0]?.skills[0];
+    if (!firstSkill) throw new Error("expected progress skill");
+    expect(firstSkill.sessionCount).toBe(1);
+    expect(firstSkill.lastSessionAt).toBe("2026-05-22T10:00:00.000Z");
+    expect(firstSkill.lastNote).toBe("Held sit through two knocks");
+    expect(firstSkill.sessions).toHaveLength(1);
+  });
+
+  it("DELETE /skills/:skillId/sessions/:sessionId removes a session from progress", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const goal = await makeGoal(dog.id);
+    const skill = await makeSkill(goal.id);
+    const [session] = await db
+      .insert(practiceSessions)
+      .values({
+        skillId: skill.id,
+        occurredAt: new Date("2026-05-22T10:00:00.000Z"),
+        notes: "Held sit",
+      })
+      .returning();
+    if (!session) throw new Error("expected session");
+
+    const res = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/sessions/${session.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+
+    expect(res.status).toBe(200);
+    const progress = await app.request(`/api/dogs/${dog.id}/progress`, { headers: u.authHeaders });
+    const body = (await progress.json()) as {
+      goals: Array<{ skills: Array<{ sessionCount: number }> }>;
+    };
+    expect(body.goals[0]?.skills[0]?.sessionCount).toBe(0);
+  });
+
+  it("returns 404 when logging a session for a skill from another dog path", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u, "Biscuit");
+    const otherDog = await makeDog(u, "Pancake");
+    const otherGoal = await makeGoal(otherDog.id);
+    const otherSkill = await makeSkill(otherGoal.id);
+
+    const res = await app.request(`/api/dogs/${dog.id}/skills/${otherSkill.id}/sessions`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ occurredAt: "2026-05-22T10:00:00.000Z" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("dogs: brief", () => {
   const users: TestUser[] = [];
   afterEach(async () => {
