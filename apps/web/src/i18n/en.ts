@@ -357,6 +357,7 @@ export const en = {
     title: "Trainers",
     subtitle: "Find a positive-reinforcement trainer.",
     empty: "No trainers match yet.",
+    emptyFiltered: "No trainers match your filters.",
     filterState: "State",
     filterSpecialty: "Specialty",
     filterMethodology: "Methodology",

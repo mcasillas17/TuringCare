@@ -360,6 +360,7 @@ export const es = {
     title: "Adiestradores",
     subtitle: "Encuentra un adiestrador de refuerzo positivo.",
     empty: "Ningún adiestrador coincide aún.",
+    emptyFiltered: "Ningún adiestrador coincide con tus filtros.",
     filterState: "Estado",
     filterSpecialty: "Especialidad",
     filterMethodology: "Metodología",
