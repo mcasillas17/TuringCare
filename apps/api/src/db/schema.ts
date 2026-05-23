@@ -177,7 +177,10 @@ export const journalEntries = pgTable(
   },
   (t) => [
     check("journal_intensity_range", sql`${t.intensity} IS NULL OR ${t.intensity} BETWEEN 1 AND 5`),
-    check("journal_daily_checkin_trend", sql`${t.kind} <> 'daily_checkin' OR ${t.trend} IS NOT NULL`),
+    check(
+      "journal_daily_checkin_trend",
+      sql`${t.kind} <> 'daily_checkin' OR ${t.trend} IS NOT NULL`,
+    ),
     check("journal_moment_trend_null", sql`${t.kind} <> 'moment' OR ${t.trend} IS NULL`),
   ],
 );

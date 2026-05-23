@@ -45,7 +45,11 @@ export function PostSaveFollowUps({ entry, dogId, onDone }: Props) {
         />
       </label>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" disabled={upd.isPending || !antecedent.trim()} onClick={() => void answer()}>
+        <Button
+          type="button"
+          disabled={upd.isPending || !antecedent.trim()}
+          onClick={() => void answer()}
+        >
           {t("journal.postSaveAnswer")}
         </Button>
         <Button type="button" variant="outline" onClick={onDone}>

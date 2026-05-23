@@ -80,9 +80,9 @@ describe("journalDailyCheckInCreateSchema", () => {
 
 describe("journalEntryCreateSchema", () => {
   it("discriminates moments from daily check-ins", () => {
-    expect(journalEntryCreateSchema.safeParse({ kind: "moment", note: "Growled once" }).success).toBe(
-      true,
-    );
+    expect(
+      journalEntryCreateSchema.safeParse({ kind: "moment", note: "Growled once" }).success,
+    ).toBe(true);
     expect(
       journalEntryCreateSchema.safeParse({
         kind: "daily_checkin",
@@ -90,9 +90,9 @@ describe("journalEntryCreateSchema", () => {
         note: "About the same today",
       }).success,
     ).toBe(true);
-    expect(journalEntryCreateSchema.safeParse({ kind: "daily_checkin", note: "Missing trend" }).success).toBe(
-      false,
-    );
+    expect(
+      journalEntryCreateSchema.safeParse({ kind: "daily_checkin", note: "Missing trend" }).success,
+    ).toBe(false);
   });
 });
 
@@ -115,7 +115,9 @@ describe("journalEntryUpdateSchema", () => {
     expect(journalEntryUpdateSchema.safeParse({ note: "" }).success).toBe(false);
     expect(journalEntryUpdateSchema.safeParse({ intensity: 9 }).success).toBe(false);
     expect(journalEntryUpdateSchema.safeParse({ trend: "easier" }).success).toBe(false);
-    expect(journalEntryUpdateSchema.safeParse({ kind: "moment", trend: "better" }).success).toBe(false);
+    expect(journalEntryUpdateSchema.safeParse({ kind: "moment", trend: "better" }).success).toBe(
+      false,
+    );
     expect(journalEntryUpdateSchema.safeParse({ kind: "moment", trend: null }).success).toBe(true);
     expect(journalEntryUpdateSchema.safeParse({ durationSeconds: -1 }).success).toBe(false);
     expect(journalEntryUpdateSchema.safeParse({ recoverySeconds: -1 }).success).toBe(false);

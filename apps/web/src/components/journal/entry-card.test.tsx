@@ -1,11 +1,12 @@
 import { LocaleProvider } from "@/i18n";
+import type { JournalEntry } from "@/lib/journal";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EntryCard } from "./entry-card";
 
-const baseEntry = {
+const baseEntry: JournalEntry = {
   id: "e1",
   dogId: "d1",
   kind: "moment",
@@ -23,7 +24,7 @@ const baseEntry = {
   peoplePresent: "Owner + walker",
   ownerResponse: "Asked for sit",
   dog: { id: "d1", name: "Biscuit" },
-} as const;
+};
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -73,10 +74,13 @@ describe("EntryCard", () => {
         const body = init?.body ? JSON.parse(String(init.body)) : undefined;
         calls.push({ url, method: init?.method, body });
         if (init?.method === "PUT") {
-          return new Response(JSON.stringify({ entry: { ...baseEntry, antecedent: "Doorbell rang" } }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ entry: { ...baseEntry, antecedent: "Doorbell rang" } }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
         }
         return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
       }),
@@ -86,7 +90,9 @@ describe("EntryCard", () => {
 
     await user.click(screen.getByRole("button", { name: "Expand entry" }));
     await user.click(await screen.findByRole("button", { name: "Edit details" }));
-    const antecedent = (await screen.findByDisplayValue("Truck stopped outside")) as HTMLInputElement;
+    const antecedent = (await screen.findByDisplayValue(
+      "Truck stopped outside",
+    )) as HTMLInputElement;
     await user.clear(antecedent);
     await user.type(antecedent, "Doorbell rang");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
@@ -101,5 +107,31 @@ describe("EntryCard", () => {
         ),
       ).toBe(true),
     );
+  });
+
+  it("does not expose moment-only details when editing a daily check-in", async () => {
+    const user = userEvent.setup();
+    setup({
+      ...baseEntry,
+      kind: "daily_checkin",
+      trend: "same",
+    });
+
+    await user.click(screen.getByRole("button", { name: "Expand entry" }));
+    await user.click(await screen.findByRole("button", { name: "Edit details" }));
+
+    expect(await screen.findByLabelText("Note")).toBeInTheDocument();
+    expect(screen.getByLabelText("When")).toBeInTheDocument();
+    expect(screen.getByLabelText("Trend")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Intensity/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Antecedent")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Behavior")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Consequence")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Location/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Duration/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Recovery/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/People present/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Your response/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Notes/)).not.toBeInTheDocument();
   });
 });

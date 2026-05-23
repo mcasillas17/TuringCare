@@ -36,7 +36,7 @@ export function Journal() {
   const [searchParams, setSearchParams] = useSearchParams();
   const filterDogId = searchParams.get("dogId") ?? "";
   const { data: dogs } = useDogs();
-  const dogList = dogs ?? [];
+  const dogList = useMemo(() => dogs ?? [], [dogs]);
   const { data: entries, isError } = useJournal(filterDogId || undefined);
   const [selectedDogId, setSelectedDogId] = useState(filterDogId);
   const [mode, setMode] = useState<Mode>("moment");
@@ -48,14 +48,14 @@ export function Journal() {
   );
 
   useEffect(() => {
-    if (filterDogId) {
-      setSelectedDogId(filterDogId);
-      return;
-    }
-    const onlyDog = dogList[0];
-    if (!selectedDogId && dogList.length === 1 && onlyDog) {
-      setSelectedDogId(onlyDog.id);
-    }
+    setSelectedDogId((currentDogId) => {
+      if (filterDogId) return filterDogId;
+
+      const onlyDog = dogList[0];
+      if (!currentDogId && dogList.length === 1 && onlyDog) return onlyDog.id;
+
+      return currentDogId;
+    });
   }, [dogList, filterDogId]);
 
   const withDogSummary = (entry: JournalEntry): JournalEntry => ({

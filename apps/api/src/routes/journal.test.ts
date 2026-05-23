@@ -63,7 +63,10 @@ describe("global journal", () => {
       entries: Array<{ note: string; dog: { id: string; name: string } }>;
     };
     expect(body.entries).toHaveLength(2);
-    expect(body.entries.map((entry) => entry.note)).toEqual(["Newer pancake note", "Older biscuit note"]);
+    expect(body.entries.map((entry) => entry.note)).toEqual([
+      "Newer pancake note",
+      "Older biscuit note",
+    ]);
     expect(body.entries.map((entry) => entry.dog)).toEqual([
       { id: pancake.id, name: "Pancake" },
       { id: biscuit.id, name: "Biscuit" },

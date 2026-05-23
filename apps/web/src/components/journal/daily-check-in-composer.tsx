@@ -78,7 +78,7 @@ export function DailyCheckInComposer({ dogs, selectedDogId, onDogChange, onSaved
           </select>
         </label>
       )}
-      <div className="flex flex-wrap gap-2">
+      <fieldset className="flex flex-wrap gap-2" aria-label={t("journal.trend")}>
         {trends.map((value) => (
           <Button
             key={value}
@@ -90,7 +90,7 @@ export function DailyCheckInComposer({ dogs, selectedDogId, onDogChange, onSaved
             {trendLabel[value]}
           </Button>
         ))}
-      </div>
+      </fieldset>
       <label className="block" htmlFor="daily-check-in-note">
         <span className="text-sm font-medium text-slate">{t("journal.quickNote")}</span>
         <textarea

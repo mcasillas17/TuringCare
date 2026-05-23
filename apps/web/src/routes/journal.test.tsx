@@ -104,9 +104,9 @@ describe("Journal", () => {
         calls.some(
           (call) =>
             call.method === "POST" &&
-            expect.objectContaining({ kind: "moment", note: "Barked at delivery truck" }).asymmetricMatch(
-              call.body,
-            ),
+            expect
+              .objectContaining({ kind: "moment", note: "Barked at delivery truck" })
+              .asymmetricMatch(call.body),
         ),
       ).toBe(true),
     );
@@ -122,10 +122,13 @@ describe("Journal", () => {
         const body = init?.body ? JSON.parse(String(init.body)) : undefined;
         calls.push({ path, method: init?.method, body });
         if (init?.method === "POST" && path.includes("/journal")) {
-          return new Response(JSON.stringify({ entry: { ...momentEntry, kind: "daily_checkin", trend: "better" } }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({ entry: { ...momentEntry, kind: "daily_checkin", trend: "better" } }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
         }
         const responseBody = path === "/api/journal" ? { entries: [] } : { dogs: [dog] };
         return new Response(JSON.stringify(responseBody), {
@@ -139,6 +142,7 @@ describe("Journal", () => {
     renderJournal();
 
     await user.click(await screen.findByRole("button", { name: "Daily check-in" }));
+    expect(screen.getByRole("group", { name: "Trend" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Better" }));
     await user.type(screen.getByLabelText("Quick note"), "Settled faster today");
     await user.click(screen.getByRole("button", { name: "Save check-in" }));

@@ -26,28 +26,37 @@ type Props = {
 
 export function StructuredDetailsEditor({ entry, submitting, onSave, onCancel }: Props) {
   const { t } = useI18n();
+  const isDailyCheckIn = entry.kind === "daily_checkin";
+  const defaultValues: JournalEntryUpdateInput = isDailyCheckIn
+    ? {
+        kind: entry.kind,
+        note: entry.note,
+        occurredAt: String(entry.occurredAt).slice(0, 16),
+        trend: entry.trend ?? "same",
+      }
+    : {
+        kind: entry.kind,
+        note: entry.note,
+        occurredAt: String(entry.occurredAt).slice(0, 16),
+        trend: entry.trend ?? null,
+        antecedent: entry.antecedent ?? undefined,
+        behavior: entry.behavior ?? undefined,
+        consequence: entry.consequence ?? undefined,
+        intensity: entry.intensity ?? undefined,
+        location: entry.location ?? undefined,
+        notes: entry.notes ?? undefined,
+        durationSeconds: entry.durationSeconds ?? undefined,
+        recoverySeconds: entry.recoverySeconds ?? undefined,
+        peoplePresent: entry.peoplePresent ?? undefined,
+        ownerResponse: entry.ownerResponse ?? undefined,
+      };
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<JournalEntryUpdateInput>({
     resolver: zodResolver(journalEntryUpdateSchema),
-    defaultValues: {
-      kind: entry.kind,
-      note: entry.note,
-      occurredAt: String(entry.occurredAt).slice(0, 16),
-      trend: entry.trend ?? (entry.kind === "daily_checkin" ? "same" : null),
-      antecedent: entry.antecedent ?? undefined,
-      behavior: entry.behavior ?? undefined,
-      consequence: entry.consequence ?? undefined,
-      intensity: entry.intensity ?? undefined,
-      location: entry.location ?? undefined,
-      notes: entry.notes ?? undefined,
-      durationSeconds: entry.durationSeconds ?? undefined,
-      recoverySeconds: entry.recoverySeconds ?? undefined,
-      peoplePresent: entry.peoplePresent ?? undefined,
-      ownerResponse: entry.ownerResponse ?? undefined,
-    },
+    defaultValues,
   });
 
   const trendLabel = {
@@ -71,7 +80,12 @@ export function StructuredDetailsEditor({ entry, submitting, onSave, onCancel }:
     >
       <label className="block" htmlFor={`journal-note-${entry.id}`}>
         <span className="text-sm font-medium text-slate">{t("journal.note")}</span>
-        <textarea id={`journal-note-${entry.id}`} className={input} rows={3} {...register("note")} />
+        <textarea
+          id={`journal-note-${entry.id}`}
+          className={input}
+          rows={3}
+          {...register("note")}
+        />
         {fieldError(errors.note?.message)}
       </label>
       <label className="block" htmlFor={`journal-occurred-${entry.id}`}>
@@ -85,7 +99,7 @@ export function StructuredDetailsEditor({ entry, submitting, onSave, onCancel }:
         {fieldError(errors.occurredAt?.message)}
       </label>
 
-      {entry.kind === "daily_checkin" ? (
+      {isDailyCheckIn ? (
         <label className="block" htmlFor={`journal-trend-${entry.id}`}>
           <span className="text-sm font-medium text-slate">{t("journal.trend")}</span>
           <select id={`journal-trend-${entry.id}`} className={input} {...register("trend")}>
@@ -137,81 +151,81 @@ export function StructuredDetailsEditor({ entry, submitting, onSave, onCancel }:
               {...register("consequence", { setValueAs: emptyToNull })}
             />
           </label>
+          <label className="block" htmlFor={`journal-location-${entry.id}`}>
+            <span className="text-sm font-medium text-slate">
+              {t("journal.location")}
+              {optional}
+            </span>
+            <input
+              id={`journal-location-${entry.id}`}
+              className={input}
+              {...register("location", { setValueAs: emptyToNull })}
+            />
+          </label>
+          <label className="block" htmlFor={`journal-duration-${entry.id}`}>
+            <span className="text-sm font-medium text-slate">
+              {t("journal.duration")}
+              {optional}
+            </span>
+            <input
+              id={`journal-duration-${entry.id}`}
+              type="number"
+              min={0}
+              className={input}
+              {...register("durationSeconds", { setValueAs: numberOrNull })}
+            />
+          </label>
+          <label className="block" htmlFor={`journal-recovery-${entry.id}`}>
+            <span className="text-sm font-medium text-slate">
+              {t("journal.recovery")}
+              {optional}
+            </span>
+            <input
+              id={`journal-recovery-${entry.id}`}
+              type="number"
+              min={0}
+              className={input}
+              {...register("recoverySeconds", { setValueAs: numberOrNull })}
+            />
+          </label>
+          <label className="block" htmlFor={`journal-people-${entry.id}`}>
+            <span className="text-sm font-medium text-slate">
+              {t("journal.peoplePresent")}
+              {optional}
+            </span>
+            <input
+              id={`journal-people-${entry.id}`}
+              className={input}
+              {...register("peoplePresent", { setValueAs: emptyToNull })}
+            />
+          </label>
+          <label className="block" htmlFor={`journal-owner-response-${entry.id}`}>
+            <span className="text-sm font-medium text-slate">
+              {t("journal.ownerResponse")}
+              {optional}
+            </span>
+            <textarea
+              id={`journal-owner-response-${entry.id}`}
+              className={input}
+              rows={2}
+              {...register("ownerResponse", { setValueAs: emptyToNull })}
+            />
+          </label>
+          <label className="block" htmlFor={`journal-notes-${entry.id}`}>
+            <span className="text-sm font-medium text-slate">
+              {t("journal.notes")}
+              {optional}
+            </span>
+            <textarea
+              id={`journal-notes-${entry.id}`}
+              className={input}
+              rows={2}
+              {...register("notes", { setValueAs: emptyToNull })}
+            />
+          </label>
         </>
       )}
 
-      <label className="block" htmlFor={`journal-location-${entry.id}`}>
-        <span className="text-sm font-medium text-slate">
-          {t("journal.location")}
-          {optional}
-        </span>
-        <input
-          id={`journal-location-${entry.id}`}
-          className={input}
-          {...register("location", { setValueAs: emptyToNull })}
-        />
-      </label>
-      <label className="block" htmlFor={`journal-duration-${entry.id}`}>
-        <span className="text-sm font-medium text-slate">
-          {t("journal.duration")}
-          {optional}
-        </span>
-        <input
-          id={`journal-duration-${entry.id}`}
-          type="number"
-          min={0}
-          className={input}
-          {...register("durationSeconds", { setValueAs: numberOrNull })}
-        />
-      </label>
-      <label className="block" htmlFor={`journal-recovery-${entry.id}`}>
-        <span className="text-sm font-medium text-slate">
-          {t("journal.recovery")}
-          {optional}
-        </span>
-        <input
-          id={`journal-recovery-${entry.id}`}
-          type="number"
-          min={0}
-          className={input}
-          {...register("recoverySeconds", { setValueAs: numberOrNull })}
-        />
-      </label>
-      <label className="block" htmlFor={`journal-people-${entry.id}`}>
-        <span className="text-sm font-medium text-slate">
-          {t("journal.peoplePresent")}
-          {optional}
-        </span>
-        <input
-          id={`journal-people-${entry.id}`}
-          className={input}
-          {...register("peoplePresent", { setValueAs: emptyToNull })}
-        />
-      </label>
-      <label className="block" htmlFor={`journal-owner-response-${entry.id}`}>
-        <span className="text-sm font-medium text-slate">
-          {t("journal.ownerResponse")}
-          {optional}
-        </span>
-        <textarea
-          id={`journal-owner-response-${entry.id}`}
-          className={input}
-          rows={2}
-          {...register("ownerResponse", { setValueAs: emptyToNull })}
-        />
-      </label>
-      <label className="block" htmlFor={`journal-notes-${entry.id}`}>
-        <span className="text-sm font-medium text-slate">
-          {t("journal.notes")}
-          {optional}
-        </span>
-        <textarea
-          id={`journal-notes-${entry.id}`}
-          className={input}
-          rows={2}
-          {...register("notes", { setValueAs: emptyToNull })}
-        />
-      </label>
       <div className="flex gap-2">
         <Button type="submit" disabled={isSubmitting || submitting} className="bg-slate text-cream">
           {isSubmitting || submitting ? t("journal.saving") : t("journal.update")}
