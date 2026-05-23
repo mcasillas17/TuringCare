@@ -21,6 +21,9 @@ export function LanguageToggle({ className }: { className?: string }) {
             locale === l ? "text-copper" : "text-slate-soft hover:text-slate",
           )}
         >
+          <span aria-hidden="true" className="mr-1">
+            {l === "en" ? "🇺🇸" : "🇲🇽"}
+          </span>
           {t(`language.${l}` as "language.en" | "language.es")}
         </button>
       ))}
