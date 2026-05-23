@@ -44,7 +44,10 @@ export function Brief() {
           <select
             className="w-full rounded border border-silver bg-white px-3 py-2 text-sm"
             value={picked}
-            onChange={(e) => setPicked(e.target.value)}
+            onChange={(e) => {
+              setPicked(e.target.value);
+              setShowStructured(false);
+            }}
           >
             <option value="">—</option>
             {dogs?.map((d) => (
@@ -137,6 +140,9 @@ export function Brief() {
                       ? t("brief.regenerateNarrative")
                       : t("brief.generateNarrative")}
                 </Button>
+                {!brief.narrative && (
+                  <p className="w-full text-xs text-slate-soft">{t("brief.narrativeNote")}</p>
+                )}
                 {brief.narrative && (
                   <Button variant="outline" onClick={() => setShowStructured((s) => !s)}>
                     {showStructured ? t("brief.showNarrative") : t("brief.showStructured")}

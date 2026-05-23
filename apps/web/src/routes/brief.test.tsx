@@ -223,6 +223,9 @@ describe("Brief narrative control", () => {
     const { unmount } = renderBrief("d1");
     expect(await screen.findByText("✨ Generate readable version")).toBeInTheDocument();
     expect(screen.getByText("Structured text")).toBeInTheDocument();
+    expect(
+      screen.getByText("Generates a readable version using AI from your logged data."),
+    ).toBeInTheDocument();
     unmount();
 
     vi.mocked(briefLib.useBrief).mockReturnValue({
@@ -241,5 +244,8 @@ describe("Brief narrative control", () => {
     expect(await screen.findByText("Warm prose here.")).toBeInTheDocument();
     expect(screen.getByText("↻ Regenerate")).toBeInTheDocument();
     expect(screen.getByText("Show structured")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Generates a readable version using AI from your logged data."),
+    ).not.toBeInTheDocument();
   });
 });
