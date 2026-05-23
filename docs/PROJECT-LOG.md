@@ -256,3 +256,20 @@ so it reads as a distinct control — no absolute repositioning. Auth pages
 `LanguageToggle.test.tsx` (accessible name stays EN/ES proving aria-hidden,
 flags present in DOM, locale switch). Full TDD.
 - Spec/plan: `specs/2026-05-21-language-toggle-redesign-design.md`, `plans/2026-05-21-language-toggle-redesign.md`
+
+## 2026-05-22 — Auth redirects fix — SHIPPED
+Two related defects in authenticated-redirect behavior. (A) After a valid
+login, the page stayed on `/login`: `signIn.email` → synchronous
+`navigate("/my")` raced Better Auth's `useSession` atom, which it refreshes on
+a deferred `setTimeout(…,10)` after auth; `RequireAuth` read the still-stale
+`{data:null,isPending:false}` (the landing `site-nav` had already resolved the
+atom to null) and bounced back to `/login`. Fix: `login.tsx`/`register.tsx`
+now do a full-load `window.location.assign("/my")` after success, so the
+session re-initializes from the set cookie with no race (root-caused via
+systematic-debugging; cookie persistence confirmed fine — manual `/my` load
+worked). (B) Authenticated users hitting `/login`/`/register` saw the form —
+added `RedirectIfAuthed` (mirror of `RequireAuth`) wrapping both routes →
+redirect to `/my`. Full TDD (new `redirect-if-authed`/`register` tests +
+extended `login` test). Gate green (API 80 / web 66 / shared 19).
+- Spec: `specs/2026-05-22-auth-redirects-fix-design.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-fix+auth-redirects.
