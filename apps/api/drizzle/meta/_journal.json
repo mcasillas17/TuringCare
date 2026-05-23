@@ -36,6 +36,13 @@
       "when": 1779512719316,
       "tag": "0004_lowly_the_hood",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779518657644,
+      "tag": "0005_journal_quick_capture",
+      "breakpoints": true
     }
   ]
 }

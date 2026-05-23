@@ -82,6 +82,8 @@ export const dogSourceEnum = pgEnum("dog_source", ["breeder", "rescue", "shelter
 export const vaccineStageEnum = pgEnum("vaccine_stage", ["in_progress", "complete", "unknown"]);
 export const concernSeverityEnum = pgEnum("concern_severity", ["mild", "moderate", "severe"]);
 export const briefStatusEnum = pgEnum("brief_status", ["draft", "finalized"]);
+export const journalEntryKindEnum = pgEnum("journal_entry_kind", ["moment", "daily_checkin"]);
+export const journalTrendEnum = pgEnum("journal_trend", ["better", "same", "harder"]);
 
 /* ---------- Domain tables ---------- */
 
@@ -157,11 +159,14 @@ export const journalEntries = pgTable(
     dogId: uuid("dog_id")
       .notNull()
       .references(() => dogs.id, { onDelete: "cascade" }),
+    kind: journalEntryKindEnum("kind").notNull().default("moment"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-    antecedent: text("antecedent").notNull(),
-    behavior: text("behavior").notNull(),
-    consequence: text("consequence").notNull(),
-    intensity: integer("intensity").notNull(),
+    note: text("note").notNull(),
+    trend: journalTrendEnum("trend"),
+    antecedent: text("antecedent"),
+    behavior: text("behavior"),
+    consequence: text("consequence"),
+    intensity: integer("intensity"),
     durationSeconds: integer("duration_seconds"),
     recoverySeconds: integer("recovery_seconds"),
     location: text("location"),
@@ -170,7 +175,11 @@ export const journalEntries = pgTable(
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check("intensity_range", sql`${t.intensity} BETWEEN 1 AND 5`)],
+  (t) => [
+    check("journal_intensity_range", sql`${t.intensity} IS NULL OR ${t.intensity} BETWEEN 1 AND 5`),
+    check("journal_daily_checkin_trend", sql`${t.kind} <> 'daily_checkin' OR ${t.trend} IS NOT NULL`),
+    check("journal_moment_trend_null", sql`${t.kind} <> 'moment' OR ${t.trend} IS NULL`),
+  ],
 );
 
 export const briefs = pgTable("briefs", {
