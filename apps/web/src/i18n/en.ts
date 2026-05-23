@@ -280,6 +280,8 @@ export const en = {
     copyLink: "Copy link",
     linkCopied: "Link copied",
     shareFailed: "Couldn't update sharing",
+    sharedTitle: "Shared Behavior Brief",
+    shareUnavailable: "This share link isn't available.",
   },
   trainersDir: {
     title: "Trainers",

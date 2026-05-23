@@ -18,6 +18,7 @@ import { Register } from "@/routes/register";
 import { RequireAuth } from "@/routes/require-auth";
 import { ResetPassword } from "@/routes/reset-password";
 import { Settings } from "@/routes/settings";
+import { SharedBrief } from "@/routes/shared-brief";
 import { TrainerDetail } from "@/routes/trainer-detail";
 import { Trainers } from "@/routes/trainers";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -62,6 +63,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
             />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/b/:token" element={<SharedBrief />} />
             <Route
               element={
                 <RequireAuth>

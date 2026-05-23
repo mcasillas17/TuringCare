@@ -282,6 +282,8 @@ export const es = {
     copyLink: "Copiar enlace",
     linkCopied: "Enlace copiado",
     shareFailed: "No se pudo actualizar el enlace",
+    sharedTitle: "Resumen de conducta compartido",
+    shareUnavailable: "Este enlace no está disponible.",
   },
   trainersDir: {
     title: "Adiestradores",
