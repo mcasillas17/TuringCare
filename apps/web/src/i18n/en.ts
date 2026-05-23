@@ -219,7 +219,7 @@ export const en = {
     recent: "Recent activity",
     noActivity: "No activity yet.",
     quick: "Quick actions",
-    qLog: "Log behavior",
+    qLog: "Log moment",
     qAddDog: "Add dog",
     qBrief: "Generate Brief",
     qTrainer: "Find a trainer",

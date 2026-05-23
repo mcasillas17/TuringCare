@@ -221,7 +221,7 @@ export const es = {
     recent: "Actividad reciente",
     noActivity: "Aún no hay actividad.",
     quick: "Acciones rápidas",
-    qLog: "Registrar conducta",
+    qLog: "Registrar momento",
     qAddDog: "Agregar perro",
     qBrief: "Generar resumen",
     qTrainer: "Buscar adiestrador",

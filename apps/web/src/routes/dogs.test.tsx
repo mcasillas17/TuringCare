@@ -89,6 +89,10 @@ describe("DogDetail", () => {
       </QueryClientProvider>,
     );
     await waitFor(() => expect(screen.getByText("Biscuit")).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: /Log moment/i })).toHaveAttribute(
+      "href",
+      "/my/journal?dogId=d1",
+    );
     expect(screen.getByText(/Leash reactivity/)).toBeInTheDocument();
     expect(screen.getByText("Calm greetings")).toBeInTheDocument();
     expect(await screen.findByText(/Training progress/i)).toBeInTheDocument();

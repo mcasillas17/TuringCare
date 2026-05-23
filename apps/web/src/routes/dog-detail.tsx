@@ -60,6 +60,9 @@ export function DogDetail() {
           <Button asChild variant="outline">
             <Link to={`/my/dogs/${dog.id}/edit`}>{t("dogs.edit")}</Link>
           </Button>
+          <Button asChild className="bg-slate text-cream">
+            <Link to={`/my/journal?dogId=${dog.id}`}>{t("journal.logMoment")}</Link>
+          </Button>
           {confirming ? (
             <>
               <Button
