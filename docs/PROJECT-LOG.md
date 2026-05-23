@@ -364,7 +364,7 @@ carries `shareToken`. Public `GET /api/share/brief/:token` returns a strict
 whitelist (dogName, summary, status, version, generatedAt) — no userId/dog
 id/token; revoked + unknown both 404. Web: Share control on the brief page
 (create/copy/stop) + public `SharedBrief` page reusing the PDF download (with
-generatedAt). en+es parity. Full TDD; gate green (API 113 / web 96 / shared 24).
+generatedAt). en+es parity. Full TDD; gate green (API 126 / web 100 / shared 28).
 - Spec/plan: `specs/2026-05-22-brief-sharing-design.md`, `plans/2026-05-22-brief-sharing.md`
 - Commits: this branch (see `git log`). Shipped as a PR from feat+brief-sharing.
 
