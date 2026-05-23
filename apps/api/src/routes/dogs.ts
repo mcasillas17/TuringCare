@@ -3,13 +3,23 @@ import {
   behaviorConcernSchema,
   dogProfileSchema,
   journalEntrySchema,
+  skillConfidenceSchema,
   trainingGoalSchema,
+  trainingSkillSchema,
 } from "@turingcare/shared";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, max } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
-import { behaviorConcerns, briefs, dogs, journalEntries, trainingGoals } from "../db/schema";
+import { findOwnedSkill } from "../db/owned-skill";
+import {
+  behaviorConcerns,
+  briefs,
+  dogs,
+  journalEntries,
+  trainingGoals,
+  trainingSkills,
+} from "../db/schema";
 import { composeBrief } from "../lib/brief";
 import { loadProgress } from "../lib/progress";
 import { type Vars, requireUser } from "../middleware/require-user";
@@ -106,6 +116,72 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     return c.json(await loadProgress(dog.id));
+  })
+  .post("/:id/goals/:goalId/skills", zValidator("json", trainingSkillSchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const [goal] = await db
+      .select()
+      .from(trainingGoals)
+      .where(and(eq(trainingGoals.id, c.req.param("goalId")), eq(trainingGoals.dogId, dog.id)))
+      .limit(1);
+    if (!goal) return c.json({ error: "not_found" } as const, 404);
+    const [last] = await db
+      .select({ position: max(trainingSkills.position) })
+      .from(trainingSkills)
+      .where(eq(trainingSkills.goalId, goal.id));
+    const [skill] = await db
+      .insert(trainingSkills)
+      .values({
+        ...c.req.valid("json"),
+        goalId: goal.id,
+        position: (last?.position ?? -1) + 1,
+      })
+      .returning();
+    if (!skill) throw new Error("failed to create skill");
+    return c.json({ skill }, 201);
+  })
+  .put("/:id/skills/:skillId", zValidator("json", trainingSkillSchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+    if (!skill) return c.json({ error: "not_found" } as const, 404);
+    const [updated] = await db
+      .update(trainingSkills)
+      .set(c.req.valid("json"))
+      .where(eq(trainingSkills.id, skill.id))
+      .returning();
+    if (!updated) throw new Error("failed to update skill");
+    return c.json({ skill: updated });
+  })
+  .patch(
+    "/:id/skills/:skillId/confidence",
+    zValidator("json", skillConfidenceSchema),
+    async (c) => {
+      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+      if (!skill) return c.json({ error: "not_found" } as const, 404);
+      const [updated] = await db
+        .update(trainingSkills)
+        .set(c.req.valid("json"))
+        .where(eq(trainingSkills.id, skill.id))
+        .returning();
+      if (!updated) throw new Error("failed to update skill confidence");
+      return c.json({ skill: updated });
+    },
+  )
+  .delete("/:id/skills/:skillId", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+    if (!skill) return c.json({ error: "not_found" } as const, 404);
+    const [deleted] = await db
+      .delete(trainingSkills)
+      .where(eq(trainingSkills.id, skill.id))
+      .returning({ id: trainingSkills.id });
+    if (!deleted) return c.json({ error: "not_found" } as const, 404);
+    return c.json({ ok: true } as const);
   })
   .get("/:id/journal", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
