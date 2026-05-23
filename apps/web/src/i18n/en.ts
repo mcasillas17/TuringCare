@@ -307,6 +307,13 @@ export const en = {
     editProfile: "Edit profile",
   },
   common: { loading: "Loading…" },
+  verifyBanner: {
+    message: "Please verify your email — check your inbox",
+    resend: "Resend",
+    dismiss: "Dismiss",
+    resendSuccess: "Verification email sent",
+    resendError: "Could not send verification email",
+  },
 } as const;
 
 export type En = typeof en;

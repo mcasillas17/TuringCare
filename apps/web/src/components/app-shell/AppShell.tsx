@@ -1,6 +1,7 @@
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
+import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { useI18n } from "@/i18n";
 import { signOut } from "@/lib/auth-client";
 import { useMe } from "@/lib/me";
@@ -119,6 +120,7 @@ export function AppShell() {
           </Button>
         </div>
       </header>
+      <VerifyEmailBanner />
       <div className="flex flex-1">
         <div className="hidden md:block">{rail}</div>
         {drawerOpen && (

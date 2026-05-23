@@ -297,3 +297,16 @@ invalid / 404 PUT+DELETE unknown id; web `trainers.test.tsx` covers form render
 API 88 / web 68, build incl. code-split `trainers` chunk).
 - Spec: `specs/2026-05-22-trainer-admin-design.md`
 - Endpoints: `POST/PUT/DELETE /api/admin/trainers[/:id]`
+
+## 2026-05-22 — Email verification soft banner (P2) — SHIPPED
+Soft email-verification banner for logged-in users whose address is not yet
+verified. No lock-out (`requireEmailVerification` stays off). Shows a slim
+dismissible banner "Please verify your email — check your inbox" with a Resend
+button (calls `sendVerificationEmail` via Better Auth) and a dismiss (×). Toast
+feedback on send success/failure. All copy i18n'd in en+es. `emailVerified`
+accessed via type cast `(data.user as { emailVerified?: boolean }).emailVerified`
+(mirrors the `role?` cast in `require-admin.ts`). `VerifyEmailBanner` mounted in
+`AppShell` below the header, above page content. 5 TDD unit tests (all green).
+Gate: biome clean, tsc clean, web tests 71/71, build clean.
+- Spec: `specs/2026-05-22-email-verify-banner-design.md`
+- Commits: branch `feat/verify-email-banner`.

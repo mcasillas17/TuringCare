@@ -309,4 +309,11 @@ export const es = {
     editProfile: "Editar perfil",
   },
   common: { loading: "Cargando…" },
+  verifyBanner: {
+    message: "Verifica tu correo — revisa tu bandeja de entrada",
+    resend: "Reenviar",
+    dismiss: "Descartar",
+    resendSuccess: "Correo de verificación enviado",
+    resendError: "No se pudo enviar el correo de verificación",
+  },
 } satisfies Messages;
