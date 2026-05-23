@@ -11,6 +11,7 @@ import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
 import { behaviorConcerns, briefs, dogs, journalEntries, trainingGoals } from "../db/schema";
 import { composeBrief } from "../lib/brief";
+import { loadProgress } from "../lib/progress";
 import { type Vars, requireUser } from "../middleware/require-user";
 
 export const dogsApp = new Hono<{ Variables: Vars }>()
@@ -100,6 +101,11 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .delete(trainingGoals)
       .where(and(eq(trainingGoals.id, c.req.param("goalId")), eq(trainingGoals.dogId, dog.id)));
     return c.json({ ok: true } as const);
+  })
+  .get("/:id/progress", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    return c.json(await loadProgress(dog.id));
   })
   .get("/:id/journal", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
