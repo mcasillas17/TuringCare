@@ -1,3 +1,4 @@
+import { SendPanel } from "@/components/brief/send-panel";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useBrief, useFinalizeBrief, useGenerateBrief } from "@/lib/brief";
@@ -108,6 +109,7 @@ export function Brief() {
               {brief.summary}
             </article>
           )}
+          <SendPanel dogId={dogId} briefStatus={brief?.status ?? null} />
         </>
       )}
     </div>
