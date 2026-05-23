@@ -316,3 +316,27 @@ build green (PDF lib confirmed split into its own `brief-download-button`
 chunk).
 - Spec: `specs/2026-05-22-brief-pdf-design.md`
 - Commits: this branch (see `git log`). Shipped as a PR from feat/brief-pdf.
+
+## 2026-05-22 — Trainer admin management — SHIPPED
+Admin-only trainer CRUD so the public directory has real data to show. New
+shared Zod `trainerInputSchema` (`packages/shared/src/trainer.ts`, exported
+from the index) mirroring the `trainers` columns — `name`/`city`/`state`
+required, `methodologyTags`/`certifications`/`specialties` string arrays
+defaulting to `[]`, the rest nullable/optional. New admin sub-app
+`apps/api/src/routes/admin-trainers.ts` (`requireAdmin`) mounted in `app.ts`
+under `/api/admin/trainers`, chained off the app so `AppType` stays typed for
+the web `hc<AppType>` client: `POST /api/admin/trainers` (201 create),
+`PUT /api/admin/trainers/:id` (200 / 404 unknown), `DELETE
+/api/admin/trainers/:id` (200 / 404 unknown). Bodies validated with the shared
+schema (zValidator → 400). Public `GET /api/trainers` + `/:id` unchanged. Web:
+internal English-only `/admin/trainers` page (`apps/web/src/routes/admin/
+trainers.tsx` + `use-trainers.ts` hooks) behind `RequireAdmin`, list + add +
+edit + delete, arrays as comma-separated inputs, linked from the admin
+dashboard. No fabricated data shipped — admins enter real trainers. Full TDD
+(red→green): API `admin-trainers.test.ts` covers 401 anon / 403 non-admin /
+201 create + public list / 200 update / 200 delete + directory removal / 400
+invalid / 404 PUT+DELETE unknown id; web `trainers.test.tsx` covers form render
++ create-mutation call (mock `@/lib/api`). Gate green (biome clean, tsc clean,
+API 88 / web 68, build incl. code-split `trainers` chunk).
+- Spec: `specs/2026-05-22-trainer-admin-design.md`
+- Endpoints: `POST/PUT/DELETE /api/admin/trainers[/:id]`

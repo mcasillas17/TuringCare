@@ -24,3 +24,9 @@ apps/web/assets/turing.jpg
 
 # Brainstorm visual-companion scratch
 .superpowers/
+
+# Claude Code local state: git worktrees under .claude/worktrees/, the
+# user-local settings file (settings.local.json), scheduled-task lockfiles,
+# etc. Nothing under .claude/ belongs in the repo. Other agent dirs
+# (.cursor/, .aider*, .continue/, .codeium/) can join when they appear.
+.claude/
