@@ -33,7 +33,12 @@ export function SharedBrief() {
               }
             >
               <BriefDownloadButton
-                brief={{ summary: data.summary, status: data.status, version: data.version }}
+                brief={{
+                  summary: data.summary,
+                  status: data.status,
+                  version: data.version,
+                  generatedAt: data.generatedAt,
+                }}
                 dog={{ name: data.dogName }}
               />
             </Suspense>
