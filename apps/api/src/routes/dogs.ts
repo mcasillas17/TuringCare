@@ -32,6 +32,14 @@ import { composeBrief } from "../lib/brief";
 import { loadProgress } from "../lib/progress";
 import { type Vars, requireUser } from "../middleware/require-user";
 
+const invalidJournalField = (path: "occurredAt" | "trend", message: string) =>
+  ({
+    success: false,
+    error: {
+      issues: [{ code: "custom", path: [path], message }],
+    },
+  }) as const;
+
 export const dogsApp = new Hono<{ Variables: Vars }>()
   .use("*", requireUser)
   .get("/", async (c) => {
@@ -247,12 +255,16 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const b = c.req.valid("json");
+    const occurredAt = b.occurredAt ? new Date(b.occurredAt) : new Date();
+    if (Number.isNaN(occurredAt.getTime())) {
+      return c.json(invalidJournalField("occurredAt", "Invalid date"), 400);
+    }
     const [entry] = await db
       .insert(journalEntries)
       .values({
         dogId: dog.id,
         kind: b.kind,
-        occurredAt: b.occurredAt ? new Date(b.occurredAt) : new Date(),
+        occurredAt,
         note: b.note,
         trend: b.kind === "daily_checkin" ? b.trend : null,
         antecedent: b.kind === "moment" ? (b.antecedent ?? null) : null,
@@ -273,22 +285,54 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const b = c.req.valid("json");
+    const [existing] = await db
+      .select()
+      .from(journalEntries)
+      .where(and(eq(journalEntries.id, c.req.param("entryId")), eq(journalEntries.dogId, dog.id)))
+      .limit(1);
+    if (!existing) return c.json({ error: "not_found" } as const, 404);
+
     const changes: Partial<typeof journalEntries.$inferInsert> = {};
+    const nextKind = b.kind ?? existing.kind;
     if (b.kind !== undefined) changes.kind = b.kind;
-    if (b.occurredAt !== undefined) changes.occurredAt = new Date(b.occurredAt);
+    if (b.occurredAt !== undefined) {
+      const occurredAt = new Date(b.occurredAt);
+      if (Number.isNaN(occurredAt.getTime())) {
+        return c.json(invalidJournalField("occurredAt", "Invalid date"), 400);
+      }
+      changes.occurredAt = occurredAt;
+    }
     if (b.note !== undefined) changes.note = b.note;
-    if (b.trend !== undefined) changes.trend = b.trend;
-    if (b.kind === "moment") changes.trend = null;
-    if (b.antecedent !== undefined) changes.antecedent = b.antecedent ?? null;
-    if (b.behavior !== undefined) changes.behavior = b.behavior ?? null;
-    if (b.consequence !== undefined) changes.consequence = b.consequence ?? null;
-    if (b.intensity !== undefined) changes.intensity = b.intensity ?? null;
-    if (b.location !== undefined) changes.location = b.location ?? null;
-    if (b.notes !== undefined) changes.notes = b.notes ?? null;
-    if (b.durationSeconds !== undefined) changes.durationSeconds = b.durationSeconds ?? null;
-    if (b.recoverySeconds !== undefined) changes.recoverySeconds = b.recoverySeconds ?? null;
-    if (b.peoplePresent !== undefined) changes.peoplePresent = b.peoplePresent ?? null;
-    if (b.ownerResponse !== undefined) changes.ownerResponse = b.ownerResponse ?? null;
+
+    if (nextKind === "daily_checkin") {
+      const nextTrend = b.trend === undefined ? existing.trend : b.trend;
+      if (!nextTrend) {
+        return c.json(invalidJournalField("trend", "Trend is required for daily check-ins"), 400);
+      }
+      changes.trend = nextTrend;
+      changes.antecedent = null;
+      changes.behavior = null;
+      changes.consequence = null;
+      changes.intensity = null;
+      changes.location = null;
+      changes.notes = null;
+      changes.durationSeconds = null;
+      changes.recoverySeconds = null;
+      changes.peoplePresent = null;
+      changes.ownerResponse = null;
+    } else {
+      changes.trend = null;
+      if (b.antecedent !== undefined) changes.antecedent = b.antecedent ?? null;
+      if (b.behavior !== undefined) changes.behavior = b.behavior ?? null;
+      if (b.consequence !== undefined) changes.consequence = b.consequence ?? null;
+      if (b.intensity !== undefined) changes.intensity = b.intensity ?? null;
+      if (b.location !== undefined) changes.location = b.location ?? null;
+      if (b.notes !== undefined) changes.notes = b.notes ?? null;
+      if (b.durationSeconds !== undefined) changes.durationSeconds = b.durationSeconds ?? null;
+      if (b.recoverySeconds !== undefined) changes.recoverySeconds = b.recoverySeconds ?? null;
+      if (b.peoplePresent !== undefined) changes.peoplePresent = b.peoplePresent ?? null;
+      if (b.ownerResponse !== undefined) changes.ownerResponse = b.ownerResponse ?? null;
+    }
 
     const [entry] = await db
       .update(journalEntries)
