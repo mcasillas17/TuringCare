@@ -1,7 +1,14 @@
 import type { Messages } from "./types";
 
 export const es = {
-  language: { label: "Idioma", en: "EN", es: "ES" },
+  language: {
+    label: "Idioma",
+    en: "EN",
+    es: "ES",
+    switchTo: "Cambiar a {lang}",
+    nameEn: "English",
+    nameEs: "Español",
+  },
   nav: {
     howItWorks: "Cómo funciona",
     brief: "Resumen de conducta",
