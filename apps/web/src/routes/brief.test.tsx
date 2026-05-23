@@ -26,29 +26,31 @@ function stubFetch() {
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
-      const body = url.includes("/brief")
-        ? {
-            brief: {
-              id: "b1",
-              dogId: "d1",
-              generatedAt: "2026-05-19T10:00:00.000Z",
-              status: "draft",
-              summary: "Behavior Brief — Biscuit\nConcerns: ...",
-              version: 1,
-            },
-          }
-        : {
-            dogs: [
-              {
-                id: "d1",
-                name: "Biscuit",
-                breed: "Border Collie",
-                dateOfBirth: "2022-05-19",
-                size: "medium",
-                sex: "female",
+      const body = url.includes("/brief/sends")
+        ? { sends: [] }
+        : url.includes("/brief")
+          ? {
+              brief: {
+                id: "b1",
+                dogId: "d1",
+                generatedAt: "2026-05-19T10:00:00.000Z",
+                status: "draft",
+                summary: "Behavior Brief — Biscuit\nConcerns: ...",
+                version: 1,
               },
-            ],
-          };
+            }
+          : {
+              dogs: [
+                {
+                  id: "d1",
+                  name: "Biscuit",
+                  breed: "Border Collie",
+                  dateOfBirth: "2022-05-19",
+                  size: "medium",
+                  sex: "female",
+                },
+              ],
+            };
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { "Content-Type": "application/json" },

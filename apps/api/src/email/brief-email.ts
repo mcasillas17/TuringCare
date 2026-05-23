@@ -38,11 +38,7 @@ ${messageBlock}
 <p style="margin:16px 0 0;font-size:11px;color:#9ca3af">TuringCare · humane, reward-based dog training support</p>
 </td></tr></table></body></html>`;
 
-  const textParts = [
-    `Behavior Brief: ${args.dogName}`,
-    `Shared by ${args.ownerName}`,
-    "",
-  ];
+  const textParts = [`Behavior Brief: ${args.dogName}`, `Shared by ${args.ownerName}`, ""];
   if (args.message) {
     textParts.push(args.message, "", "---", "");
   }

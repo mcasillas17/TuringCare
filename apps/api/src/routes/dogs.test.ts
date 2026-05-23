@@ -662,7 +662,7 @@ describe("dogs: brief send", () => {
     expect(sends).toHaveLength(2);
     const [first, second] = sends;
     if (!first || !second) throw new Error("expected two sends");
-    expect(first.recipient).toBe("second@example.com");  // newest
+    expect(first.recipient).toBe("second@example.com"); // newest
     expect(second.recipient).toBe("first@example.com");
   });
 
