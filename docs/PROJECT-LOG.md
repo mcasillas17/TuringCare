@@ -357,13 +357,26 @@ Gate: biome clean, tsc clean, web tests 71/71, build clean.
 ## 2026-05-22 — Behavior Brief sharing (read-only link) — SHIPPED
 MVP #4. Owners share a dog's Behavior Brief via a revocable, read-only public
 link `/b/<token>` (no recipient login). `briefs.shareToken` (unique, nullable;
-migration 0003) snapshots the shared brief version. Owner-scoped
-`POST/DELETE /api/dogs/:id/brief/share` mint (idempotent, crypto-random
-base64url) / revoke; existing `GET …/brief` now carries `shareToken`. Public
-`GET /api/share/brief/:token` returns a strict whitelist (dogName, summary,
-status, version, generatedAt) — no userId/dog id/token; revoked + unknown both
-404. Web: Share control on the brief page (create/copy/stop) + public
-`SharedBrief` page reusing the PDF download (with generatedAt). en+es parity.
-Full TDD; gate green (API 92 / web 87 / shared 19).
+migration 0004 after merge with training-progress) snapshots the shared brief
+version. Owner-scoped `POST/DELETE /api/dogs/:id/brief/share` mint (idempotent,
+crypto-random base64url) / revoke; existing `GET …/brief` now carries
+`shareToken`. Public `GET /api/share/brief/:token` returns a strict whitelist
+(dogName, summary, status, version, generatedAt) — no userId/dog id/token;
+revoked + unknown both 404. Web: Share control on the brief page
+(create/copy/stop) + public `SharedBrief` page reusing the PDF download (with
+generatedAt). en+es parity. Full TDD; gate green (API 92 / web 87 / shared 19).
 - Spec/plan: `specs/2026-05-22-brief-sharing-design.md`, `plans/2026-05-22-brief-sharing.md`
 - Commits: this branch (see `git log`). Shipped as a PR from feat+brief-sharing.
+
+## 2026-05-23 — Training progress tracking — SHIPPED
+Full Goal → Skills → Sessions training-progress subsystem: two new Drizzle
+tables (`training_skills`, `practice_sessions`) with idempotent backfill,
+owner-scoped Hono routes under `/api/dogs/:id`, default same-named skills for
+new goals, `loadProgress()` shared by the progress endpoint and Behavior Brief,
+and a dog-detail `<ProgressPanel>` with confidence chips, skill CRUD, session
+logging/deletion, and en/es parity. No new deps; package manifests unchanged.
+Gates green: API 97/97 (+17), web 72/72 (+6), shared 24/24 (+5), tsc 0,
+lint 0, build OK. Shipped as a PR from worktree-training-progress.
+- Spec/plan: `specs/2026-05-22-training-progress-design.md`,
+  `plans/2026-05-22-training-progress.md`
+- Commits: this branch (see `git log`).
