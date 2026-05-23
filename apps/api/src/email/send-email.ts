@@ -17,6 +17,7 @@ export interface ResendLike {
       subject: string;
       html: string;
       text: string;
+      reply_to?: string;
     }): Promise<{ data: unknown; error: unknown }>;
   };
 }
@@ -26,6 +27,7 @@ export interface SendEmailArgs {
   subject: string;
   html: string;
   text: string;
+  replyTo?: string;
 }
 
 export interface SendEmailDeps {
@@ -63,13 +65,15 @@ export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): 
 
   let result: { data: unknown; error: unknown };
   try {
-    result = await client.emails.send({
+    const sendArgs: Parameters<ResendLike["emails"]["send"]>[0] = {
       from,
       to: args.to,
       subject: args.subject,
       html: args.html,
       text: args.text,
-    });
+    };
+    if (args.replyTo) sendArgs.reply_to = args.replyTo;
+    result = await client.emails.send(sendArgs);
   } catch (cause) {
     throw new EmailSendError(
       `sendEmail: transport failure: ${cause instanceof Error ? cause.message : "unknown"}`,

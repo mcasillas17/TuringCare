@@ -1,5 +1,5 @@
 {
-  "id": "c0bcf257-bb55-4f8d-9867-3cd579e38e51",
+  "id": "3ead7430-6829-4ab1-b664-67535d3aa3cc",
   "prevId": "7ea860c8-c1a8-4ea0-8dc3-efa19d45d5cc",
   "version": "7",
   "dialect": "postgresql",
@@ -171,6 +171,71 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.brief_sends": {
+      "name": "brief_sends",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "brief_id": {
+          "name": "brief_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recipient": {
+          "name": "recipient",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sent_at": {
+          "name": "sent_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "sent_by_user_id": {
+          "name": "sent_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "brief_sends_brief_id_briefs_id_fk": {
+          "name": "brief_sends_brief_id_briefs_id_fk",
+          "tableFrom": "brief_sends",
+          "tableTo": "briefs",
+          "columnsFrom": [
+            "brief_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.briefs": {
       "name": "briefs",
       "schema": "",
@@ -215,12 +280,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": 1
-        },
-        "share_token": {
-          "name": "share_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -240,15 +299,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "briefs_share_token_unique": {
-          "name": "briefs_share_token_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "share_token"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

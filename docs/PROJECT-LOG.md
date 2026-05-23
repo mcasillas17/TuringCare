@@ -357,16 +357,38 @@ Gate: biome clean, tsc clean, web tests 71/71, build clean.
 ## 2026-05-22 — Behavior Brief sharing (read-only link) — SHIPPED
 MVP #4. Owners share a dog's Behavior Brief via a revocable, read-only public
 link `/b/<token>` (no recipient login). `briefs.shareToken` (unique, nullable;
-migration 0004 after merge with training-progress) snapshots the shared brief
-version. Owner-scoped `POST/DELETE /api/dogs/:id/brief/share` mint (idempotent,
-crypto-random base64url) / revoke; existing `GET …/brief` now carries
-`shareToken`. Public `GET /api/share/brief/:token` returns a strict whitelist
-(dogName, summary, status, version, generatedAt) — no userId/dog id/token;
-revoked + unknown both 404. Web: Share control on the brief page
+migration 0005 after merging training-progress and email-a-brief) snapshots the
+shared brief version. Owner-scoped `POST/DELETE /api/dogs/:id/brief/share` mint
+(idempotent, crypto-random base64url) / revoke; existing `GET …/brief` now
+carries `shareToken`. Public `GET /api/share/brief/:token` returns a strict
+whitelist (dogName, summary, status, version, generatedAt) — no userId/dog
+id/token; revoked + unknown both 404. Web: Share control on the brief page
 (create/copy/stop) + public `SharedBrief` page reusing the PDF download (with
-generatedAt). en+es parity. Full TDD; gate green (API 92 / web 87 / shared 19).
+generatedAt). en+es parity. Full TDD; gate green (API 113 / web 96 / shared 24).
 - Spec/plan: `specs/2026-05-22-brief-sharing-design.md`, `plans/2026-05-22-brief-sharing.md`
 - Commits: this branch (see `git log`). Shipped as a PR from feat+brief-sharing.
+
+## 2026-05-22 — Email a Behavior Brief to a trainer — SHIPPED
+Closes the last broken link in the MVP test loop. Owner generates → marks
+finalized → sends to any email address with an optional personal note. New
+`brief_sends` audit table (cascade-on-brief-delete); new POST
+`/api/dogs/:id/brief/send` (409 if draft, 502 if Resend fails — no swallow,
+owner needs explicit feedback); new GET `/api/dogs/:id/brief/sends` for the
+history list (innerJoin scoped by dog ownership; `sentByUserId` omitted from
+the response projection). Reply-To is the owner's email so trainers reply
+directly to the owner. `sendEmail` wrapper extended with a `replyTo` arg
+piped to Resend's `reply_to`; existing callers unchanged. New `<SendPanel>`
+on the Brief page: form is finalized-gated (Send button hidden + hint shown
+on drafts; defense-in-depth 409 on server), history list below; hidden
+entirely when no brief exists. RHF + zodResolver with `noValidate` so zod
+owns validation. 13 new `briefSend` i18n keys with en/es parity. 502 test
+deferred with TODO (vi.doMock + module re-import vs. one-line branch — not
+worth the cost; flagged for follow-up if a DI seam emerges). Gates green:
+api 105/105, web 90/90, shared 23/23, tsc 0, lint 0, build OK.
+- Spec/plan: `specs/2026-05-22-email-a-brief-design.md`,
+  `plans/2026-05-22-email-a-brief.md`
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-email-a-brief.
 
 ## 2026-05-23 — Training progress tracking — SHIPPED
 Full Goal → Skills → Sessions training-progress subsystem: two new Drizzle
