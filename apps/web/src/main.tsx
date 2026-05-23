@@ -13,6 +13,7 @@ import { Landing } from "@/routes/landing";
 import { Login } from "@/routes/login";
 import { NotFound } from "@/routes/not-found";
 import { Overview } from "@/routes/overview";
+import { Privacy } from "@/routes/privacy";
 import { Profile } from "@/routes/profile";
 import { RedirectIfAuthed } from "@/routes/redirect-if-authed";
 import { Register } from "@/routes/register";
@@ -20,6 +21,7 @@ import { RequireAuth } from "@/routes/require-auth";
 import { ResetPassword } from "@/routes/reset-password";
 import { Settings } from "@/routes/settings";
 import { SharedBrief } from "@/routes/shared-brief";
+import { Terms } from "@/routes/terms";
 import { TrainerDetail } from "@/routes/trainer-detail";
 import { Trainers } from "@/routes/trainers";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -64,6 +66,8 @@ createRoot(document.getElementById("root") as HTMLElement).render(
             />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
             <Route path="/b/:token" element={<SharedBrief />} />
             <Route
               element={
