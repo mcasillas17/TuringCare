@@ -52,6 +52,7 @@ export function SiteNav() {
         </div>
         <div className="flex items-center gap-2">
           <LanguageToggle />
+          <span aria-hidden="true" className="h-5 w-px bg-silver/70" />
           {session ? (
             <Button asChild className="bg-slate text-cream hover:bg-slate/90">
               <Link to="/app">{t("nav.openApp")}</Link>
