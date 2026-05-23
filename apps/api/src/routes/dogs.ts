@@ -306,10 +306,11 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   .post("/:id/brief", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const [concerns, goals, entries, [last]] = await Promise.all([
+    const [concerns, goals, entries, progress, [last]] = await Promise.all([
       db.select().from(behaviorConcerns).where(eq(behaviorConcerns.dogId, dog.id)),
       db.select().from(trainingGoals).where(eq(trainingGoals.dogId, dog.id)),
       db.select().from(journalEntries).where(eq(journalEntries.dogId, dog.id)),
+      loadProgress(dog.id),
       db
         .select()
         .from(briefs)
@@ -326,6 +327,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         intensity: e.intensity,
         occurredAt: e.occurredAt.toISOString(),
       })),
+      progress: progress.goals,
     });
     const [brief] = await db
       .insert(briefs)

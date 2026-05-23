@@ -714,6 +714,26 @@ describe("dogs: brief", () => {
     const none = await app.request(`/api/dogs/${dog.id}/brief`, { headers: u.authHeaders });
     expect(none.status).toBe(200);
     expect(((await none.json()) as { brief: unknown }).brief).toBeNull();
+    const goalRes = await app.request(`/api/dogs/${dog.id}/goals`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ goal: "Calm greetings" }),
+    });
+    const { skill } = (await goalRes.json()) as { skill: { id: string } };
+    await app.request(`/api/dogs/${dog.id}/skills/${skill.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ name: "Door-knock threshold", confidence: 3 }),
+    });
+    await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/sessions`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        occurredAt: "2026-05-22T10:00:00.000Z",
+        durationMinutes: 12,
+        notes: "Held sit through two knocks",
+      }),
+    });
     const gen = await app.request(`/api/dogs/${dog.id}/brief`, {
       method: "POST",
       headers: u.authHeaders,
@@ -725,6 +745,8 @@ describe("dogs: brief", () => {
     expect(brief.version).toBe(1);
     expect(brief.status).toBe("draft");
     expect(brief.summary).toContain("Biscuit");
+    expect(brief.summary).toContain("Training progress:");
+    expect(brief.summary).toContain("Door-knock threshold");
     const gen2 = await app.request(`/api/dogs/${dog.id}/brief`, {
       method: "POST",
       headers: u.authHeaders,
@@ -737,6 +759,7 @@ describe("dogs: brief", () => {
     expect(fin.status).toBe(200);
     expect(((await fin.json()) as { brief: { status: string } }).brief.status).toBe("finalized");
   });
+
   it("owner isolation: other user 404", async () => {
     const a = await createTestUser();
     const b = await createTestUser();
