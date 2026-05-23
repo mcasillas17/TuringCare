@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
+import { db } from "../db";
+import { practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
 import { type TestUser, createTestUser } from "../test-helpers";
 
 const validDog = {
@@ -192,7 +194,16 @@ describe("dogs: concerns & goals", () => {
       body: JSON.stringify({ goal: "Calm greetings" }),
     });
     expect(add.status).toBe(201);
-    const { goal } = (await add.json()) as { goal: { id: string } };
+    const { goal, skill } = (await add.json()) as {
+      goal: { id: string };
+      skill: { name: string; confidence: number; position: number };
+    };
+    expect(skill.name).toBe("Calm greetings");
+    expect(skill.confidence).toBe(1);
+    expect(skill.position).toBe(0);
+    const progress = await app.request(`/api/dogs/${dog.id}/progress`, { headers: u.authHeaders });
+    const progressBody = (await progress.json()) as { goals: Array<{ skills: unknown[] }> };
+    expect(progressBody.goals[0]?.skills).toHaveLength(1);
     const del = await app.request(`/api/dogs/${dog.id}/goals/${goal.id}`, {
       method: "DELETE",
       headers: u.authHeaders,
@@ -332,6 +343,357 @@ describe("dogs: journal", () => {
   });
 });
 
+describe("dogs: progress overview", () => {
+  const users: TestUser[] = [];
+  afterEach(async () => {
+    for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
+  });
+  async function makeDog(u: TestUser) {
+    const r = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify(validDog),
+    });
+    return ((await r.json()) as { dog: { id: string } }).dog;
+  }
+
+  it("GET /progress returns goals, skills, averages, and recent sessions", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const [goal] = await db
+      .insert(trainingGoals)
+      .values({ dogId: dog.id, goal: "Calm greetings" })
+      .returning();
+    if (!goal) throw new Error("expected goal");
+    const [skill] = await db
+      .insert(trainingSkills)
+      .values({ goalId: goal.id, name: "Door-knock threshold", confidence: 3, position: 1 })
+      .returning();
+    if (!skill) throw new Error("expected skill");
+    await db.insert(practiceSessions).values({
+      skillId: skill.id,
+      occurredAt: new Date("2026-05-22T10:00:00.000Z"),
+      durationMinutes: 12,
+      notes: "Held sit through two knocks",
+    });
+
+    const res = await app.request(`/api/dogs/${dog.id}/progress`, { headers: u.authHeaders });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      goals: Array<{
+        goal: string;
+        avgConfidence: number | null;
+        skills: Array<{
+          name: string;
+          confidence: number;
+          sessionCount: number;
+          lastNote: string | null;
+          sessions: Array<{ id: string; notes: string | null }>;
+        }>;
+      }>;
+    };
+    expect(body.goals).toHaveLength(1);
+    expect(body.goals[0]?.goal).toBe("Calm greetings");
+    expect(body.goals[0]?.avgConfidence).toBe(3);
+    expect(
+      body.goals[0]?.skills.some(
+        (s) =>
+          s.name === "Door-knock threshold" &&
+          s.sessionCount === 1 &&
+          s.lastNote === "Held sit through two knocks" &&
+          s.sessions.length === 1,
+      ),
+    ).toBe(true);
+  });
+
+  it("GET /progress is owner scoped", async () => {
+    const a = await createTestUser();
+    const b = await createTestUser();
+    users.push(a, b);
+    const dog = await makeDog(a);
+    const res = await app.request(`/api/dogs/${dog.id}/progress`, { headers: b.authHeaders });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("dogs: progress skills", () => {
+  const users: TestUser[] = [];
+  afterEach(async () => {
+    for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
+  });
+
+  async function makeDog(u: TestUser, name = validDog.name) {
+    const r = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ ...validDog, name }),
+    });
+    return ((await r.json()) as { dog: { id: string } }).dog;
+  }
+
+  async function makeGoal(dogId: string, goalName = "Calm greetings") {
+    const [goal] = await db.insert(trainingGoals).values({ dogId, goal: goalName }).returning();
+    if (!goal) throw new Error("expected goal");
+    return goal;
+  }
+
+  async function makeSkill(goalId: string, name = "Calm greetings", position = 0) {
+    const [skill] = await db
+      .insert(trainingSkills)
+      .values({ goalId, name, confidence: 1, position })
+      .returning();
+    if (!skill) throw new Error("expected skill");
+    return skill;
+  }
+
+  it("POST /goals/:goalId/skills creates the next-position skill", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const goal = await makeGoal(dog.id);
+    await makeSkill(goal.id, "Calm greetings", 0);
+
+    const res = await app.request(`/api/dogs/${dog.id}/goals/${goal.id}/skills`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ name: "Door-knock threshold", confidence: 3 }),
+    });
+
+    expect(res.status).toBe(201);
+    const { skill } = (await res.json()) as {
+      skill: { name: string; confidence: number; position: number };
+    };
+    expect(skill.name).toBe("Door-knock threshold");
+    expect(skill.confidence).toBe(3);
+    expect(skill.position).toBe(1);
+  });
+
+  it("PUT /skills/:skillId updates name and confidence", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const goal = await makeGoal(dog.id);
+    const skill = await makeSkill(goal.id);
+
+    const res = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ name: "Greet on mat", confidence: 4 }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { skill: { name: string; confidence: number } };
+    expect(body.skill.name).toBe("Greet on mat");
+    expect(body.skill.confidence).toBe(4);
+  });
+
+  it("PATCH /skills/:skillId/confidence updates only confidence", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const goal = await makeGoal(dog.id);
+    const skill = await makeSkill(goal.id, "Door-knock threshold");
+
+    const res = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/confidence`, {
+      method: "PATCH",
+      headers: u.authHeaders,
+      body: JSON.stringify({ confidence: 5 }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { skill: { name: string; confidence: number } };
+    expect(body.skill.name).toBe("Door-knock threshold");
+    expect(body.skill.confidence).toBe(5);
+  });
+
+  it("DELETE /skills/:skillId removes the skill from progress", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const goal = await makeGoal(dog.id);
+    const skill = await makeSkill(goal.id, "Door-knock threshold");
+
+    const res = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+
+    expect(res.status).toBe(200);
+    const progress = await app.request(`/api/dogs/${dog.id}/progress`, { headers: u.authHeaders });
+    const body = (await progress.json()) as { goals: Array<{ skills: unknown[] }> };
+    expect(body.goals[0]?.skills).toEqual([]);
+  });
+
+  it("returns 404 for another owner's skill", async () => {
+    const a = await createTestUser();
+    const b = await createTestUser();
+    users.push(a, b);
+    const dog = await makeDog(a);
+    const goal = await makeGoal(dog.id);
+    const skill = await makeSkill(goal.id);
+
+    const res = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}`, {
+      method: "PUT",
+      headers: b.authHeaders,
+      body: JSON.stringify({ name: "Nope", confidence: 2 }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when adding a skill to another dog's goal through this dog path", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u, "Biscuit");
+    const otherDog = await makeDog(u, "Pancake");
+    const otherGoal = await makeGoal(otherDog.id);
+
+    const res = await app.request(`/api/dogs/${dog.id}/goals/${otherGoal.id}/skills`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ name: "Wrong dog", confidence: 2 }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("allows PATCH in CORS preflight for confidence updates", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const goal = await makeGoal(dog.id);
+    const skill = await makeSkill(goal.id);
+
+    const options = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/confidence`, {
+      method: "OPTIONS",
+      headers: { Origin: "http://localhost:3000", "Access-Control-Request-Method": "PATCH" },
+    });
+
+    expect(options.headers.get("access-control-allow-methods")).toContain("PATCH");
+  });
+});
+
+describe("dogs: progress sessions", () => {
+  const users: TestUser[] = [];
+  afterEach(async () => {
+    for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
+  });
+
+  async function makeDog(u: TestUser, name = validDog.name) {
+    const r = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ ...validDog, name }),
+    });
+    return ((await r.json()) as { dog: { id: string } }).dog;
+  }
+
+  async function makeGoal(dogId: string) {
+    const [goal] = await db
+      .insert(trainingGoals)
+      .values({ dogId, goal: "Calm greetings" })
+      .returning();
+    if (!goal) throw new Error("expected goal");
+    return goal;
+  }
+
+  async function makeSkill(goalId: string) {
+    const [skill] = await db
+      .insert(trainingSkills)
+      .values({ goalId, name: "Door-knock threshold", confidence: 3 })
+      .returning();
+    if (!skill) throw new Error("expected skill");
+    return skill;
+  }
+
+  it("POST /skills/:skillId/sessions logs a session and progress summarizes it", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const goal = await makeGoal(dog.id);
+    const skill = await makeSkill(goal.id);
+
+    const res = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/sessions`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        occurredAt: "2026-05-22T10:00:00.000Z",
+        durationMinutes: 12,
+        notes: "Held sit through two knocks",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const { session } = (await res.json()) as { session: { id: string; notes: string | null } };
+    expect(session.notes).toBe("Held sit through two knocks");
+
+    const progress = await app.request(`/api/dogs/${dog.id}/progress`, { headers: u.authHeaders });
+    const body = (await progress.json()) as {
+      goals: Array<{
+        skills: Array<{
+          sessionCount: number;
+          lastSessionAt: string | null;
+          lastNote: string | null;
+          sessions: unknown[];
+        }>;
+      }>;
+    };
+    const firstSkill = body.goals[0]?.skills[0];
+    if (!firstSkill) throw new Error("expected progress skill");
+    expect(firstSkill.sessionCount).toBe(1);
+    expect(firstSkill.lastSessionAt).toBe("2026-05-22T10:00:00.000Z");
+    expect(firstSkill.lastNote).toBe("Held sit through two knocks");
+    expect(firstSkill.sessions).toHaveLength(1);
+  });
+
+  it("DELETE /skills/:skillId/sessions/:sessionId removes a session from progress", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const goal = await makeGoal(dog.id);
+    const skill = await makeSkill(goal.id);
+    const [session] = await db
+      .insert(practiceSessions)
+      .values({
+        skillId: skill.id,
+        occurredAt: new Date("2026-05-22T10:00:00.000Z"),
+        notes: "Held sit",
+      })
+      .returning();
+    if (!session) throw new Error("expected session");
+
+    const res = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/sessions/${session.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+
+    expect(res.status).toBe(200);
+    const progress = await app.request(`/api/dogs/${dog.id}/progress`, { headers: u.authHeaders });
+    const body = (await progress.json()) as {
+      goals: Array<{ skills: Array<{ sessionCount: number }> }>;
+    };
+    expect(body.goals[0]?.skills[0]?.sessionCount).toBe(0);
+  });
+
+  it("returns 404 when logging a session for a skill from another dog path", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u, "Biscuit");
+    const otherDog = await makeDog(u, "Pancake");
+    const otherGoal = await makeGoal(otherDog.id);
+    const otherSkill = await makeSkill(otherGoal.id);
+
+    const res = await app.request(`/api/dogs/${dog.id}/skills/${otherSkill.id}/sessions`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ occurredAt: "2026-05-22T10:00:00.000Z" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("dogs: brief", () => {
   const users: TestUser[] = [];
   afterEach(async () => {
@@ -352,6 +714,26 @@ describe("dogs: brief", () => {
     const none = await app.request(`/api/dogs/${dog.id}/brief`, { headers: u.authHeaders });
     expect(none.status).toBe(200);
     expect(((await none.json()) as { brief: unknown }).brief).toBeNull();
+    const goalRes = await app.request(`/api/dogs/${dog.id}/goals`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ goal: "Calm greetings" }),
+    });
+    const { skill } = (await goalRes.json()) as { skill: { id: string } };
+    await app.request(`/api/dogs/${dog.id}/skills/${skill.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ name: "Door-knock threshold", confidence: 3 }),
+    });
+    await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/sessions`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        occurredAt: "2026-05-22T10:00:00.000Z",
+        durationMinutes: 12,
+        notes: "Held sit through two knocks",
+      }),
+    });
     const gen = await app.request(`/api/dogs/${dog.id}/brief`, {
       method: "POST",
       headers: u.authHeaders,
@@ -363,6 +745,8 @@ describe("dogs: brief", () => {
     expect(brief.version).toBe(1);
     expect(brief.status).toBe("draft");
     expect(brief.summary).toContain("Biscuit");
+    expect(brief.summary).toContain("Training progress:");
+    expect(brief.summary).toContain("Door-knock threshold");
     const gen2 = await app.request(`/api/dogs/${dog.id}/brief`, {
       method: "POST",
       headers: u.authHeaders,
@@ -375,6 +759,7 @@ describe("dogs: brief", () => {
     expect(fin.status).toBe(200);
     expect(((await fin.json()) as { brief: { status: string } }).brief.status).toBe("finalized");
   });
+
   it("owner isolation: other user 404", async () => {
     const a = await createTestUser();
     const b = await createTestUser();
