@@ -35,6 +35,12 @@ const schema = z.object({
   // From address for all transactional email. Prod uses the verified
   // send.turingcare.dog subdomain; local default is a harmless placeholder.
   EMAIL_FROM: z.string().default("TuringCare <noreply@send.turingcare.dog>"),
+  // Anthropic API key for the optional AI "narrative" brief. UNSET locally/CI →
+  // the narrative route returns 503 (feature unavailable); the deterministic
+  // brief is unaffected. Set as a Fly secret in production.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  // Model used to polish the brief summary into prose.
+  BRIEF_LLM_MODEL: z.string().default("claude-haiku-4-5"),
 });
 
 export const env = schema.parse(process.env);

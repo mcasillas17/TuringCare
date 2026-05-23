@@ -20,6 +20,7 @@
     "telemetry:purge": "tsx src/telemetry/retention-cli.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0",
     "@hono/node-server": "^1.13.0",
     "@hono/zod-validator": "^0.4.0",
     "@react-pdf/renderer": "^4.1.0",

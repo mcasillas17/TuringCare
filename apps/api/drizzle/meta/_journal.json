@@ -43,6 +43,13 @@
       "when": 1779513369154,
       "tag": "0005_melted_terror",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779520252459,
+      "tag": "0006_clumsy_rictor",
+      "breakpoints": true
     }
   ]
 }

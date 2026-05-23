@@ -183,6 +183,9 @@ export const briefs = pgTable("briefs", {
   summary: text("summary").notNull(),
   version: integer("version").notNull().default(1),
   shareToken: text("share_token").unique(),
+  narrative: text("narrative"),
+  narrativeModel: text("narrative_model"),
+  narrativeGeneratedAt: timestamp("narrative_generated_at", { withTimezone: true }),
 });
 
 export const briefSends = pgTable("brief_sends", {
