@@ -50,14 +50,14 @@ export function DogDetail() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link to="/app/dogs" className="text-sm text-slate-soft hover:underline">
+      <Link to="/my/dogs" className="text-sm text-slate-soft hover:underline">
         ← {t("dogs.back")}
       </Link>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate">{dog.name}</h1>
         <div className="flex gap-2">
           <Button asChild variant="outline">
-            <Link to={`/app/dogs/${dog.id}/edit`}>{t("dogs.edit")}</Link>
+            <Link to={`/my/dogs/${dog.id}/edit`}>{t("dogs.edit")}</Link>
           </Button>
           {confirming ? (
             <>
@@ -67,7 +67,7 @@ export function DogDetail() {
                   try {
                     await del.mutateAsync(dog.id);
                     toast.success(t("dogs.deleted"));
-                    navigate("/app/dogs");
+                    navigate("/my/dogs");
                   } catch {
                     toast.error(t("dogs.saveFailed"));
                   }

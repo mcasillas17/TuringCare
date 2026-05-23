@@ -45,3 +45,20 @@ export function useDeleteEntry(dogId: string) {
     },
   });
 }
+export function useUpdateEntry(dogId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { entryId: string; body: JournalEntryInput }) => {
+      const res = await j[":entryId"].$put({
+        param: { id: dogId, entryId: args.entryId },
+        json: args.body,
+      });
+      if (!res.ok) throw new Error("update_failed");
+      return (await res.json()).entry;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["journal", dogId] });
+      qc.invalidateQueries({ queryKey: ["overview"] });
+    },
+  });
+}

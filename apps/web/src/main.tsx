@@ -50,18 +50,18 @@ createRoot(document.getElementById("root") as HTMLElement).render(
                 </RequireAuth>
               }
             >
-              <Route path="/app" element={<Overview />} />
-              <Route path="/app/dogs" element={<DogsList />} />
-              <Route path="/app/dogs/new" element={<DogForm mode="create" />} />
-              <Route path="/app/dogs/:id" element={<DogDetail />} />
-              <Route path="/app/dogs/:id/edit" element={<DogForm mode="edit" />} />
-              <Route path="/app/dogs/:id/brief" element={<Brief />} />
-              <Route path="/app/journal" element={<Journal />} />
-              <Route path="/app/brief" element={<Brief />} />
-              <Route path="/app/trainers" element={<Trainers />} />
-              <Route path="/app/trainers/:id" element={<TrainerDetail />} />
-              <Route path="/app/profile" element={<Profile />} />
-              <Route path="/app/settings" element={<Settings />} />
+              <Route path="/my" element={<Overview />} />
+              <Route path="/my/dogs" element={<DogsList />} />
+              <Route path="/my/dogs/new" element={<DogForm mode="create" />} />
+              <Route path="/my/dogs/:id" element={<DogDetail />} />
+              <Route path="/my/dogs/:id/edit" element={<DogForm mode="edit" />} />
+              <Route path="/my/dogs/:id/brief" element={<Brief />} />
+              <Route path="/my/journal" element={<Journal />} />
+              <Route path="/my/brief" element={<Brief />} />
+              <Route path="/my/trainers" element={<Trainers />} />
+              <Route path="/my/trainers/:id" element={<TrainerDetail />} />
+              <Route path="/my/profile" element={<Profile />} />
+              <Route path="/my/settings" element={<Settings />} />
             </Route>
             <Route
               path="/admin"

@@ -27,7 +27,7 @@ export function Register() {
     setPending(false);
     if (error) return toast.error(error.message ?? t("auth.registerFailed"));
     toast.success(t("auth.registered"));
-    navigate("/app");
+    navigate("/my");
   }
 
   return (

@@ -41,9 +41,9 @@ describe("Brief", () => {
     render(
       <QueryClientProvider client={qc}>
         <LocaleProvider>
-          <MemoryRouter initialEntries={["/app/dogs/d1/brief"]}>
+          <MemoryRouter initialEntries={["/my/dogs/d1/brief"]}>
             <Routes>
-              <Route path="/app/dogs/:id/brief" element={<Brief />} />
+              <Route path="/my/dogs/:id/brief" element={<Brief />} />
             </Routes>
           </MemoryRouter>
         </LocaleProvider>

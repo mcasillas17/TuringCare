@@ -28,4 +28,32 @@ describe("journalEntrySchema", () => {
     const { occurredAt, ...rest } = base;
     expect(journalEntrySchema.safeParse(rest).success).toBe(false);
   });
+  it("accepts the four optional capture fields", () => {
+    expect(
+      journalEntrySchema.safeParse({
+        ...base,
+        durationSeconds: 12,
+        recoverySeconds: 30,
+        peoplePresent: "Owner + walker",
+        ownerResponse: "Asked for sit",
+      }).success,
+    ).toBe(true);
+  });
+  it("treats the four capture fields as fully optional", () => {
+    expect(
+      journalEntrySchema.safeParse({ ...base, durationSeconds: null, recoverySeconds: null })
+        .success,
+    ).toBe(true);
+    expect(
+      journalEntrySchema.safeParse({ ...base, peoplePresent: null, ownerResponse: null }).success,
+    ).toBe(true);
+  });
+  it("rejects negative durationSeconds / recoverySeconds", () => {
+    expect(journalEntrySchema.safeParse({ ...base, durationSeconds: -5 }).success).toBe(false);
+    expect(journalEntrySchema.safeParse({ ...base, recoverySeconds: -1 }).success).toBe(false);
+  });
+  it("rejects non-string peoplePresent / ownerResponse", () => {
+    expect(journalEntrySchema.safeParse({ ...base, peoplePresent: 123 }).success).toBe(false);
+    expect(journalEntrySchema.safeParse({ ...base, ownerResponse: 7 }).success).toBe(false);
+  });
 });

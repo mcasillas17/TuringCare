@@ -58,7 +58,7 @@ export function AppShell() {
           <NavLink
             key={i.to}
             to={i.to}
-            end={i.to === "/app"}
+            end={i.to === "/my"}
             onClick={() => setDrawerOpen(false)}
             className={({ isActive }) =>
               cn(
@@ -96,7 +96,7 @@ export function AppShell() {
           >
             <Menu className="size-6 text-slate" />
           </button>
-          <Link to="/app">
+          <Link to="/my">
             <BrandMark />
           </Link>
           <span className="hidden text-slate-soft sm:inline">·</span>

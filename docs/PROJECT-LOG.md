@@ -195,20 +195,51 @@ shared 8). Unblocks P2 (email verification) and P3 (password recovery).
   on `/request-password-reset`, so reset IS rate-limited. The custom rule is just
   redundant/misleading; a later task should drop it or rename to the real path.
 
+## 2026-05-20 — Authenticated route prefix /app → /my — SHIPPED
+Mechanical rename of every authenticated route literal across the web app +
+tests (21 files, 63/-63): `/app` → `/my`, `/app/dogs` → `/my/dogs`, etc.
+AppShell nav-items + NavLink active check + brand `<Link to>`, landing
+"Open app" CTA, post-login/register navigation, admin redirect target, and
+every in-app `<Link>`/`navigate(…)`/test fixture retargeted in one pass via
+a regex-precise sed (zero `/app` route literals remain). No backend, no i18n
+strings, no deps, no infra; `/login`/`/register`/`/`/`/admin` untouched.
+Tests pass at 44/17 (string fixtures updated in place).
+- Spec/plan: `specs/2026-05-20-rename-app-to-my-design.md`, `plans/2026-05-20-rename-app-to-my.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-rename-app-to-my.
+
+## 2026-05-21 — Behavior Journal: edit + 4 missing capture fields — SHIPPED
+Extended the per-dog ABC journal with a PUT endpoint and surfaced the four
+nullable `journal_entries` columns the schema was designed to capture:
+`durationSeconds`, `recoverySeconds`, `peoplePresent`, `ownerResponse`. The
+journal page lists entries as compact rows; clicking a row expands the card
+to show all 11 capture fields; a pencil affordance toggles inline edit-in-place
+(RHF + zodResolver, Save / Cancel). Create-form gained the four new optional
+fields with an "optional" hint. API: PUT is owner-scoped + double-scoped by
+dogId (cross-dog entryId returns 404, mirrors the DELETE pattern). Each
+EntryCard derives its displayed entry from `useUpdateEntry.data ?? entry` so
+the cache stays the single source of truth (no useState mirror, no stale-prop
+bug after refetch). 11 new i18n keys with en/es parity; one new component
+test file (3 cases) + 5 new api/shared cases. No DB migration (columns
+already nullable), no new deps, no infra changes. Gates green: API 80/80,
+web 47/47, shared 19/19, tsc 0, lint 0, build OK.
+- Spec/plan: `specs/2026-05-21-journal-edit-and-fields-design.md`,
+  `plans/2026-05-21-journal-edit-and-fields.md`
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-journal-edit-and-fields.
+
 ## 2026-05-21 — Password reset frontend (P3) — SHIPPED
-Security backlog P3, riding the same PR as P1. `/forgot-password` (single
-email field, calls Better Auth's `requestPasswordReset({ email, redirectTo:
-<origin>/reset-password })`, anti-enumeration generic success view regardless
-of API outcome) + `/reset-password` (token from `?token=`, two-field form
-min-8 + matches-confirm, calls `resetPassword({ newPassword, token })`,
-toast + redirect to `/login` on success, invalid-link state when token is
-missing) + `Forgot password?` link on `/login`. Re-exports
-`requestPasswordReset` + `resetPassword` from `auth-client.ts`; new i18n keys
-en+es with parity (compile-time guard); accessible `<h2>` headings inside
-shadcn `CardTitle`. Full TDD; gate green (API 75 / web 54 / shared 8 = 137).
-Closes the loop on the email pipe shipped earlier this PR.
+Security backlog P3 (the email pipe P1 shipped separately via PR #7).
+`/forgot-password` (single email field, calls Better Auth's
+`requestPasswordReset({ email, redirectTo: <origin>/reset-password })`,
+anti-enumeration generic success view regardless of API outcome) +
+`/reset-password` (token from `?token=`, two-field form min-8 +
+matches-confirm, calls `resetPassword({ newPassword, token })`, toast +
+redirect to `/login` on success, invalid-link state when token is missing) +
+`Forgot password?` link on `/login`. Re-exports `requestPasswordReset` +
+`resetPassword` from `auth-client.ts`; new i18n keys en+es with parity
+(compile-time guard); accessible `<h2>` headings inside shadcn `CardTitle`.
+Full TDD.
 - Spec/plan: `specs/2026-05-20-password-reset-frontend-design.md`, `plans/2026-05-20-password-reset-frontend.md`
-- Commits: this branch (see `git log`). Bundled in the worktree-feat+transactional-email PR.
 - Naming note: the plan said `forgetPassword` for the Better Auth client method;
   the real name in 1.6.11 is `requestPasswordReset` (verified against the
   installed package). The code uses `requestPasswordReset`; the spec/plan docs
@@ -223,7 +254,5 @@ Closes the loop on the email pipe shipped earlier this PR.
 so it reads as a distinct control — no absolute repositioning. Auth pages
 (already corner-anchored) and Settings (intentional inline) unchanged. New
 `LanguageToggle.test.tsx` (accessible name stays EN/ES proving aria-hidden,
-flags present in DOM, locale switch). Full TDD; gate green
-(API 75 / web 57 / shared 8 = 140).
+flags present in DOM, locale switch). Full TDD.
 - Spec/plan: `specs/2026-05-21-language-toggle-redesign-design.md`, `plans/2026-05-21-language-toggle-redesign.md`
-- Commits: this branch (see `git log`). Bundled in the worktree-feat+transactional-email PR.

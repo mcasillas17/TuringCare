@@ -24,10 +24,10 @@ function setup() {
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
-        <MemoryRouter initialEntries={["/app"]}>
+        <MemoryRouter initialEntries={["/my"]}>
           <Routes>
             <Route element={<AppShell />}>
-              <Route path="/app" element={<div>OVERVIEW-CONTENT</div>} />
+              <Route path="/my" element={<div>OVERVIEW-CONTENT</div>} />
             </Route>
           </Routes>
         </MemoryRouter>

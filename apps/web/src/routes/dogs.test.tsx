@@ -29,9 +29,9 @@ function renderList() {
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
-        <MemoryRouter initialEntries={["/app"]}>
+        <MemoryRouter initialEntries={["/my"]}>
           <Routes>
-            <Route path="/app" element={<DogsList />} />
+            <Route path="/my" element={<DogsList />} />
           </Routes>
         </MemoryRouter>
       </LocaleProvider>
@@ -64,9 +64,9 @@ describe("DogDetail", () => {
     render(
       <QueryClientProvider client={qc}>
         <LocaleProvider>
-          <MemoryRouter initialEntries={["/app/dogs/d1"]}>
+          <MemoryRouter initialEntries={["/my/dogs/d1"]}>
             <Routes>
-              <Route path="/app/dogs/:id" element={<DogDetail />} />
+              <Route path="/my/dogs/:id" element={<DogDetail />} />
             </Routes>
           </MemoryRouter>
         </LocaleProvider>
@@ -99,9 +99,9 @@ describe("DogForm edit mode", () => {
     render(
       <QueryClientProvider client={qc}>
         <LocaleProvider>
-          <MemoryRouter initialEntries={["/app/dogs/d1/edit"]}>
+          <MemoryRouter initialEntries={["/my/dogs/d1/edit"]}>
             <Routes>
-              <Route path="/app/dogs/:id/edit" element={<DogForm mode="edit" />} />
+              <Route path="/my/dogs/:id/edit" element={<DogForm mode="edit" />} />
             </Routes>
           </MemoryRouter>
         </LocaleProvider>

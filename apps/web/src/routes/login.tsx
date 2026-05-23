@@ -25,7 +25,7 @@ export function Login() {
     });
     setPending(false);
     if (error) return toast.error(error.message ?? t("auth.loginFailed"));
-    navigate("/app");
+    navigate("/my");
   }
 
   return (
