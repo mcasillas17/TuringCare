@@ -1,3 +1,4 @@
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ActiveUsage } from "./panels/active-usage";
@@ -37,6 +38,8 @@ export function AdminDashboard() {
               </option>
             ))}
           </select>
+          <span aria-hidden="true" className="h-5 w-px bg-silver/70" />
+          <LanguageToggle />
         </div>
       </header>
 
