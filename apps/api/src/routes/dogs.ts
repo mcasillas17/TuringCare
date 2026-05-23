@@ -100,11 +100,18 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   .post("/:id/goals", zValidator("json", trainingGoalSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const body = c.req.valid("json");
     const [goal] = await db
       .insert(trainingGoals)
-      .values({ ...c.req.valid("json"), dogId: dog.id })
+      .values({ ...body, dogId: dog.id })
       .returning();
-    return c.json({ goal }, 201);
+    if (!goal) throw new Error("failed to create training goal");
+    const [skill] = await db
+      .insert(trainingSkills)
+      .values({ goalId: goal.id, name: body.goal, confidence: 1, position: 0 })
+      .returning();
+    if (!skill) throw new Error("failed to create default skill");
+    return c.json({ goal, skill }, 201);
   })
   .delete("/:id/goals/:goalId", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));

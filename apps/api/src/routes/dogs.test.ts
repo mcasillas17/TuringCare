@@ -194,7 +194,16 @@ describe("dogs: concerns & goals", () => {
       body: JSON.stringify({ goal: "Calm greetings" }),
     });
     expect(add.status).toBe(201);
-    const { goal } = (await add.json()) as { goal: { id: string } };
+    const { goal, skill } = (await add.json()) as {
+      goal: { id: string };
+      skill: { name: string; confidence: number; position: number };
+    };
+    expect(skill.name).toBe("Calm greetings");
+    expect(skill.confidence).toBe(1);
+    expect(skill.position).toBe(0);
+    const progress = await app.request(`/api/dogs/${dog.id}/progress`, { headers: u.authHeaders });
+    const progressBody = (await progress.json()) as { goals: Array<{ skills: unknown[] }> };
+    expect(progressBody.goals[0]?.skills).toHaveLength(1);
     const del = await app.request(`/api/dogs/${dog.id}/goals/${goal.id}`, {
       method: "DELETE",
       headers: u.authHeaders,
