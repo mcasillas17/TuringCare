@@ -274,6 +274,86 @@ extended `login` test). Gate green (API 80 / web 66 / shared 19).
 - Spec: `specs/2026-05-22-auth-redirects-fix-design.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-fix+auth-redirects.
 
+## 2026-05-22 — Behavior Brief PDF export — SHIPPED
+
+The Behavior Brief page could only Print or Copy plain text; trainers/owners
+wanted a branded, shareable artifact. Added a one-click **Download PDF** control
+that renders a branded TuringCare PDF entirely client-side from data already on
+the page — no API endpoints, no DB changes, strictly additive (Print + Copy
+untouched). Built on `@react-pdf/renderer`, which was already in the monorepo
+lockfile (a dep of `apps/api`, `^4.1.0` → resolved 4.5.1); wired the same
+specifier into `apps/web` so install reused the existing resolution (3-line
+lockfile diff, zero new external packages).
+
+Three pieces: (1) a **pure model builder** `buildBriefPdfModel(...)`
+(`apps/web/src/lib/brief-pdf-model.ts`) mapping brief + dog → a flat
+serializable model (title, dog profile, age derived from DOB as "N yr"/"N mo",
+`Intl`-formatted generated date, summary, safe `behavior-brief-<slug>.pdf`
+filename; missing fields → `null`, no dog → "Unknown"); (2) a branded
+**`BriefPdfDocument`** component (copper-accented header, white dog-profile card,
+summary, fixed version/date footer; brand palette mirrors `index.css`; default
+fonts only — no external assets); (3) a **`BriefDownloadButton`** wrapping
+`PDFDownloadLink`, **lazy-loaded** in `brief.tsx` via `React.lazy` + `Suspense`
+so the ~1.5 MB @react-pdf bundle code-splits out of the main app chunk and only
+loads when a brief is shown. New i18n keys `brief.downloadPdf` /
+`brief.preparingPdf` added to en + es (parity guard preserved).
+
+Concerns/goals are not separately rendered: the brief page only loads
+`useDogs()` + `useBrief()` (not `useDog(:id)`), so per "only fields actually
+available" the PDF shows the dog profile + the brief summary text (which the
+server composer already fills with concerns/goals/journal).
+
+TDD: model test written first and observed red, then implemented (7 cases:
+mapping, age in yr/mo, date format, missing fields, no-dog fallback, filename
+slug). @react-pdf's `PDFDownloadLink` throws "web specific API" under jsdom
+(Node build), so `brief.test.tsx` mocks the lazy `brief-download-button` module
+to a plain anchor whose filename comes from the real `buildBriefPdfModel`;
+`brief-pdf-document.test.tsx` asserts the document builds a valid React tree
+without throwing (no PDF-byte assertions — jsdom can't render @react-pdf).
+
+Gate green: biome clean, `tsc --noEmit` clean, web tests 76 pass (26 files),
+build green (PDF lib confirmed split into its own `brief-download-button`
+chunk).
+- Spec: `specs/2026-05-22-brief-pdf-design.md`
+- Commits: this branch (see `git log`). Shipped as a PR from feat/brief-pdf.
+
+## 2026-05-22 — Trainer admin management — SHIPPED
+Admin-only trainer CRUD so the public directory has real data to show. New
+shared Zod `trainerInputSchema` (`packages/shared/src/trainer.ts`, exported
+from the index) mirroring the `trainers` columns — `name`/`city`/`state`
+required, `methodologyTags`/`certifications`/`specialties` string arrays
+defaulting to `[]`, the rest nullable/optional. New admin sub-app
+`apps/api/src/routes/admin-trainers.ts` (`requireAdmin`) mounted in `app.ts`
+under `/api/admin/trainers`, chained off the app so `AppType` stays typed for
+the web `hc<AppType>` client: `POST /api/admin/trainers` (201 create),
+`PUT /api/admin/trainers/:id` (200 / 404 unknown), `DELETE
+/api/admin/trainers/:id` (200 / 404 unknown). Bodies validated with the shared
+schema (zValidator → 400). Public `GET /api/trainers` + `/:id` unchanged. Web:
+internal English-only `/admin/trainers` page (`apps/web/src/routes/admin/
+trainers.tsx` + `use-trainers.ts` hooks) behind `RequireAdmin`, list + add +
+edit + delete, arrays as comma-separated inputs, linked from the admin
+dashboard. No fabricated data shipped — admins enter real trainers. Full TDD
+(red→green): API `admin-trainers.test.ts` covers 401 anon / 403 non-admin /
+201 create + public list / 200 update / 200 delete + directory removal / 400
+invalid / 404 PUT+DELETE unknown id; web `trainers.test.tsx` covers form render
++ create-mutation call (mock `@/lib/api`). Gate green (biome clean, tsc clean,
+API 88 / web 68, build incl. code-split `trainers` chunk).
+- Spec: `specs/2026-05-22-trainer-admin-design.md`
+- Endpoints: `POST/PUT/DELETE /api/admin/trainers[/:id]`
+
+## 2026-05-22 — Email verification soft banner (P2) — SHIPPED
+Soft email-verification banner for logged-in users whose address is not yet
+verified. No lock-out (`requireEmailVerification` stays off). Shows a slim
+dismissible banner "Please verify your email — check your inbox" with a Resend
+button (calls `sendVerificationEmail` via Better Auth) and a dismiss (×). Toast
+feedback on send success/failure. All copy i18n'd in en+es. `emailVerified`
+accessed via type cast `(data.user as { emailVerified?: boolean }).emailVerified`
+(mirrors the `role?` cast in `require-admin.ts`). `VerifyEmailBanner` mounted in
+`AppShell` below the header, above page content. 5 TDD unit tests (all green).
+Gate: biome clean, tsc clean, web tests 71/71, build clean.
+- Spec: `specs/2026-05-22-email-verify-banner-design.md`
+- Commits: branch `feat/verify-email-banner`.
+
 ## 2026-05-23 — Training progress tracking — SHIPPED
 Full Goal → Skills → Sessions training-progress subsystem: two new Drizzle
 tables (`training_skills`, `practice_sessions`) with idempotent backfill,

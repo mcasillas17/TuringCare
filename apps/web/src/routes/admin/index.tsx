@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ActiveUsage } from "./panels/active-usage";
 import { ActivityFeed } from "./panels/activity-feed";
 import { Funnel } from "./panels/funnel";
@@ -17,21 +18,26 @@ export function AdminDashboard() {
     <div className="mx-auto max-w-5xl space-y-4 p-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">TuringCare · Admin</h1>
-        <label htmlFor="range-select" className="sr-only">
-          Date range
-        </label>
-        <select
-          id="range-select"
-          className="rounded border bg-background px-2 py-1 text-sm"
-          value={days}
-          onChange={(e) => setDays(Number(e.target.value))}
-        >
-          {RANGES.map((r) => (
-            <option key={r} value={r}>
-              Last {r}d
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <Link to="/admin/trainers" className="text-sm underline">
+            Manage trainers
+          </Link>
+          <label htmlFor="range-select" className="sr-only">
+            Date range
+          </label>
+          <select
+            id="range-select"
+            className="rounded border bg-background px-2 py-1 text-sm"
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+          >
+            {RANGES.map((r) => (
+              <option key={r} value={r}>
+                Last {r}d
+              </option>
+            ))}
+          </select>
+        </div>
       </header>
 
       {metrics.isPending ? (
