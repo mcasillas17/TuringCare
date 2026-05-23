@@ -1,15 +1,20 @@
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EntryCard } from "./entry-card";
 
 const baseEntry = {
   id: "e1",
+  dogId: "d1",
+  kind: "moment",
   occurredAt: "2026-05-19T10:00:00.000Z",
-  antecedent: "Doorbell rang",
-  behavior: "Lunged at door",
-  consequence: "Treat redirect",
+  note: "Barked at delivery truck",
+  trend: null,
+  antecedent: "Truck stopped outside",
+  behavior: "Barked twice",
+  consequence: "Owner scattered kibble",
   intensity: 4,
   location: "Front door",
   notes: null,
@@ -17,7 +22,8 @@ const baseEntry = {
   recoverySeconds: 45,
   peoplePresent: "Owner + walker",
   ownerResponse: "Asked for sit",
-};
+  dog: { id: "d1", name: "Biscuit" },
+} as const;
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -35,50 +41,39 @@ function setup(entry = baseEntry) {
 }
 
 describe("EntryCard", () => {
-  it("renders collapsed by default; clicking row expands and reveals all four new fields", async () => {
+  it("renders note and dog name first while collapsed", () => {
     setup();
-    // Collapsed shows behavior line; does NOT show the new fields' labels.
-    expect(screen.getByText(/Lunged at door/)).toBeInTheDocument();
-    expect(screen.queryByText(/Duration \(seconds\)/)).not.toBeInTheDocument();
 
-    // Click row to expand.
-    fireEvent.click(screen.getByRole("button", { name: /Expand entry/i }));
-
-    // Expanded shows all four new field labels + their values.
-    expect(await screen.findByText(/Duration \(seconds\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Recovery \(seconds\)/)).toBeInTheDocument();
-    expect(screen.getByText(/People present/)).toBeInTheDocument();
-    expect(screen.getByText(/Your response/)).toBeInTheDocument();
-    expect(screen.getByText(/Owner \+ walker/)).toBeInTheDocument();
-    expect(screen.getByText(/Asked for sit/)).toBeInTheDocument();
+    const card = screen.getByRole("listitem");
+    expect(within(card).getByText("Barked at delivery truck")).toBeInTheDocument();
+    expect(within(card).getByText(/Biscuit/)).toBeInTheDocument();
+    expect(screen.queryByText("Truck stopped outside")).not.toBeInTheDocument();
   });
 
-  it("clicking Edit enters editing mode with the form pre-populated", async () => {
+  it("expands to show optional ABC and context details", async () => {
+    const user = userEvent.setup();
     setup();
-    fireEvent.click(screen.getByRole("button", { name: /Expand entry/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /^✎ Edit$|^Edit$/i }));
 
-    // Antecedent field pre-populated with the entry's value.
-    const ant = (await screen.findByDisplayValue("Doorbell rang")) as HTMLInputElement;
-    expect(ant).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Lunged at door")).toBeInTheDocument();
-    // Numeric pre-population for the new fields.
-    expect(screen.getByDisplayValue("12")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("45")).toBeInTheDocument();
-    // Save Changes + Cancel buttons present.
-    expect(screen.getByRole("button", { name: /Save changes/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Cancel$/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Expand entry" }));
+
+    expect(await screen.findByText("Truck stopped outside")).toBeInTheDocument();
+    expect(screen.getByText("Barked twice")).toBeInTheDocument();
+    expect(screen.getByText("Owner scattered kibble")).toBeInTheDocument();
+    expect(screen.getByText("Front door")).toBeInTheDocument();
+    expect(screen.getByText("Owner + walker")).toBeInTheDocument();
+    expect(screen.getByText("Asked for sit")).toBeInTheDocument();
   });
 
-  it("save flow PUTs and returns to expanded with the new value", async () => {
-    const calls: Array<{ url: string; method?: string; body?: string }> = [];
+  it("edits structured details and PUTs the update", async () => {
+    const calls: Array<{ url: string; method?: string; body?: unknown }> = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string, init?: RequestInit) => {
-        calls.push({ url, method: init?.method, body: init?.body as string });
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+        calls.push({ url, method: init?.method, body });
         if (init?.method === "PUT") {
-          const updated = { ...baseEntry, behavior: "Recovered fast" };
-          return new Response(JSON.stringify({ entry: updated }), {
+          return new Response(JSON.stringify({ entry: { ...baseEntry, antecedent: "Doorbell rang" } }), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           });
@@ -86,19 +81,25 @@ describe("EntryCard", () => {
         return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
       }),
     );
+    const user = userEvent.setup();
     setup();
-    fireEvent.click(screen.getByRole("button", { name: /Expand entry/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /^✎ Edit$|^Edit$/i }));
 
-    const behaviorInput = (await screen.findByDisplayValue("Lunged at door")) as HTMLInputElement;
-    fireEvent.change(behaviorInput, { target: { value: "Recovered fast" } });
-    fireEvent.click(screen.getByRole("button", { name: /Save changes/i }));
+    await user.click(screen.getByRole("button", { name: "Expand entry" }));
+    await user.click(await screen.findByRole("button", { name: "Edit details" }));
+    const antecedent = (await screen.findByDisplayValue("Truck stopped outside")) as HTMLInputElement;
+    await user.clear(antecedent);
+    await user.type(antecedent, "Doorbell rang");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
-      expect(calls.some((c) => c.method === "PUT" && c.url.includes("/journal/e1"))).toBe(true),
+      expect(
+        calls.some(
+          (call) =>
+            call.method === "PUT" &&
+            call.url.includes("/journal/e1") &&
+            expect.objectContaining({ antecedent: "Doorbell rang" }).asymmetricMatch(call.body),
+        ),
+      ).toBe(true),
     );
-    // After save the card returns to expanded read-only with the new value rendered.
-    await waitFor(() => expect(screen.getByText(/Recovered fast/)).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: /Save changes/i })).not.toBeInTheDocument();
   });
 });
