@@ -402,3 +402,29 @@ lint 0, build OK. Shipped as a PR from worktree-training-progress.
 - Spec/plan: `specs/2026-05-22-training-progress-design.md`,
   `plans/2026-05-22-training-progress.md`
 - Commits: this branch (see `git log`).
+
+## 2026-05-23 — LLM-powered Behavior Brief (narrative layer) — SHIPPED
+Optional, opt-in, regenerable AI prose version of the Behavior Brief. The
+deterministic `composeBrief` summary stays the source of truth and universal
+fallback; a new provider-isolated `apps/api/src/llm/` wrapper (`AnthropicLike`
+seam + `LLMError{code}`, mirroring the Resend `send-email.ts` pattern) calls
+Claude Haiku (`polishBrief`) to rewrite that summary into warm prose — system
+prompt locked to "use only the facts, invent nothing, no medical advice."
+Stored on three new nullable `briefs` columns (`narrative`, `narrativeModel`,
+`narrativeGeneratedAt`; migration 0006, additive). Owner-scoped
+`POST /api/dogs/:id/brief/narrative` returns 503 `llm_not_configured` (no key)
+/ 502 `llm_failed` (provider error) — never blocks the structured brief. Web:
+"✨ Generate readable version" / "↻ Regenerate" + "Show structured" toggle on
+the brief page, with a visible privacy note before the first send. Every
+consumer (owner page article/PDF/copy, public share page article/PDF, email
+body) renders `narrative ?? summary`; the public share whitelist exposes only
+`narrative` (not model/timestamp). Generated once per brief version and cached
+(stable share links; cost control). New dep `@anthropic-ai/sdk`; new env
+`ANTHROPIC_API_KEY` (optional; unset → 503) + `BRIEF_LLM_MODEL`
+(default `claude-haiku-4-5`). Full TDD via subagent-driven development with
+per-task spec + code-quality review and a final whole-feature review (READY TO
+PR, no Critical/Important). Gate green: biome 190, tsc 0, API 137 / web 102 /
+shared 28, build OK.
+- Spec/plan: `specs/2026-05-22-llm-brief-design.md`,
+  `plans/2026-05-22-llm-brief.md`
+- Commits: this branch (see `git log`). Shipped as a PR from feat+llm-brief.
