@@ -124,6 +124,32 @@ export const trainingGoals = pgTable("training_goals", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const trainingSkills = pgTable(
+  "training_skills",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    goalId: uuid("goal_id")
+      .notNull()
+      .references(() => trainingGoals.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    confidence: integer("confidence").notNull().default(1),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("confidence_range", sql`${t.confidence} BETWEEN 1 AND 5`)],
+);
+
+export const practiceSessions = pgTable("practice_sessions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  skillId: uuid("skill_id")
+    .notNull()
+    .references(() => trainingSkills.id, { onDelete: "cascade" }),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  durationMinutes: integer("duration_minutes"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const journalEntries = pgTable(
   "journal_entries",
   {
@@ -220,8 +246,21 @@ export const behaviorConcernsRelations = relations(behaviorConcerns, ({ one }) =
   dog: one(dogs, { fields: [behaviorConcerns.dogId], references: [dogs.id] }),
 }));
 
-export const trainingGoalsRelations = relations(trainingGoals, ({ one }) => ({
+export const trainingGoalsRelations = relations(trainingGoals, ({ one, many }) => ({
   dog: one(dogs, { fields: [trainingGoals.dogId], references: [dogs.id] }),
+  trainingSkills: many(trainingSkills),
+}));
+
+export const trainingSkillsRelations = relations(trainingSkills, ({ one, many }) => ({
+  goal: one(trainingGoals, { fields: [trainingSkills.goalId], references: [trainingGoals.id] }),
+  practiceSessions: many(practiceSessions),
+}));
+
+export const practiceSessionsRelations = relations(practiceSessions, ({ one }) => ({
+  skill: one(trainingSkills, {
+    fields: [practiceSessions.skillId],
+    references: [trainingSkills.id],
+  }),
 }));
 
 export const journalEntriesRelations = relations(journalEntries, ({ one }) => ({
