@@ -362,11 +362,14 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       console.error("brief narrative failed", err);
       return c.json({ error: "llm_failed" } as const, 502);
     }
+    // narrativeModel records the model polishBrief used (its default, since this
+    // call passes no model override).
     const [updated] = await db
       .update(briefs)
       .set({ narrative, narrativeModel: env.BRIEF_LLM_MODEL, narrativeGeneratedAt: new Date() })
       .where(eq(briefs.id, brief.id))
       .returning();
+    if (!updated) return c.json({ error: "not_found" } as const, 404);
     return c.json({ brief: updated });
   })
   .post("/:id/brief", async (c) => {

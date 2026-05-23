@@ -9,7 +9,7 @@ import { polishBrief } from "../llm/polish-brief";
 import { app } from "../app";
 import { auth } from "../auth";
 import { db } from "../db";
-import { briefs, user } from "../db/schema";
+import { user } from "../db/schema";
 
 async function signedUpCookie(email: string) {
   await auth.api.signUpEmail({ body: { name: "N", email, password: "password-123" } });
@@ -59,6 +59,7 @@ describe("POST /api/dogs/:id/brief/narrative", () => {
       headers: { cookie },
     });
     expect(res.status).toBe(404);
+    expect(((await res.json()) as { error: string }).error).toBe("no_brief");
   });
 
   it("200 stores narrative + model + timestamp, and GET brief returns it", async () => {
@@ -98,6 +99,7 @@ describe("POST /api/dogs/:id/brief/narrative", () => {
       headers: { cookie },
     });
     expect(res.status).toBe(502);
+    expect(((await res.json()) as { error: string }).error).toBe("llm_failed");
   });
 
   it("503 when not configured", async () => {
@@ -112,5 +114,6 @@ describe("POST /api/dogs/:id/brief/narrative", () => {
       headers: { cookie },
     });
     expect(res.status).toBe(503);
+    expect(((await res.json()) as { error: string }).error).toBe("llm_not_configured");
   });
 });
