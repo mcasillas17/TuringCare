@@ -29,6 +29,13 @@
       "when": 1779507151771,
       "tag": "0003_training_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779512719316,
+      "tag": "0004_lowly_the_hood",
+      "breakpoints": true
     }
   ]
 }

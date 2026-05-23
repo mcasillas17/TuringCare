@@ -184,6 +184,17 @@ export const briefs = pgTable("briefs", {
   version: integer("version").notNull().default(1),
 });
 
+export const briefSends = pgTable("brief_sends", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  briefId: uuid("brief_id")
+    .notNull()
+    .references(() => briefs.id, { onDelete: "cascade" }),
+  recipient: text("recipient").notNull(),
+  message: text("message"),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  sentByUserId: text("sent_by_user_id").notNull(),
+});
+
 export const trainers = pgTable("trainers", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),

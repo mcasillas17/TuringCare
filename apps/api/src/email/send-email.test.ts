@@ -70,3 +70,50 @@ describe("sendEmail", () => {
     expect(info).toHaveBeenCalledWith("[email:dev]", { to: "u@example.com", subject: "Hi" });
   });
 });
+
+describe("sendEmail replyTo", () => {
+  it("passes replyTo as reply_to to the Resend client", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const stubClient: ResendLike = {
+      emails: {
+        send: async (args) => {
+          calls.push(args as Record<string, unknown>);
+          return { data: {}, error: null };
+        },
+      },
+    };
+    await sendEmail(
+      {
+        to: "x@y.co",
+        subject: "s",
+        html: "<p>h</p>",
+        text: "t",
+        replyTo: "owner@example.com",
+      },
+      { client: stubClient, apiKey: "k", from: "noreply@x.co" },
+    );
+    expect(calls).toHaveLength(1);
+    const [first] = calls;
+    if (!first) throw new Error("expected one call");
+    expect(first.reply_to).toBe("owner@example.com");
+  });
+
+  it("omits reply_to when replyTo is not supplied", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const stubClient: ResendLike = {
+      emails: {
+        send: async (args) => {
+          calls.push(args as Record<string, unknown>);
+          return { data: {}, error: null };
+        },
+      },
+    };
+    await sendEmail(
+      { to: "x@y.co", subject: "s", html: "<p>h</p>", text: "t" },
+      { client: stubClient, apiKey: "k", from: "noreply@x.co" },
+    );
+    const [first] = calls;
+    if (!first) throw new Error("expected one call");
+    expect(first.reply_to).toBeUndefined();
+  });
+});
