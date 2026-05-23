@@ -315,6 +315,9 @@ export const es = {
     title: "Resumen de conducta",
     pickDog: "Elige un perro",
     none: "Aún no hay resumen para este perro.",
+    emptyTitle: "Aún no hay Resumen",
+    emptyBodyWithEntries:
+      "Pulsa Generar arriba para componer un Resumen de conducta a partir del perfil del perro, sus preocupaciones, objetivos y entradas del diario.",
     generate: "Generar resumen",
     regenerate: "Regenerar",
     generating: "Generando…",

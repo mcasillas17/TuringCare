@@ -312,6 +312,9 @@ export const en = {
     title: "Behavior Brief",
     pickDog: "Choose a dog",
     none: "No Brief yet for this dog.",
+    emptyTitle: "No Brief yet",
+    emptyBodyWithEntries:
+      "Click Generate above to compose a Behavior Brief from this dog's profile, concerns, goals, and journal entries.",
     generate: "Generate Brief",
     regenerate: "Regenerate",
     generating: "Generating…",
