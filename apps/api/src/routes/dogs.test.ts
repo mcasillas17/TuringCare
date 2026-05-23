@@ -514,3 +514,127 @@ describe("dogs: journal PUT", () => {
     expect(r.status).toBe(404);
   });
 });
+
+describe("dogs: brief send", () => {
+  const users: TestUser[] = [];
+  afterEach(async () => {
+    for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
+  });
+
+  async function makeDog(u: TestUser) {
+    const r = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify(validDog),
+    });
+    return ((await r.json()) as { dog: { id: string } }).dog;
+  }
+  async function makeFinalizedBrief(u: TestUser, dogId: string) {
+    await app.request(`/api/dogs/${dogId}/brief`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+    const fin = await app.request(`/api/dogs/${dogId}/brief`, {
+      method: "PUT",
+      headers: u.authHeaders,
+    });
+    return ((await fin.json()) as { brief: { id: string; status: string } }).brief;
+  }
+
+  it("POST send: happy path on a finalized brief", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "sarah@example.com", message: "Hi Sarah" }),
+    });
+    expect(r.status).toBe(201);
+    const { send } = (await r.json()) as {
+      send: { recipient: string; message: string | null };
+    };
+    expect(send.recipient).toBe("sarah@example.com");
+    expect(send.message).toBe("Hi Sarah");
+  });
+
+  it("POST send: returns 409 when brief is draft", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+    // do NOT finalize
+    const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "sarah@example.com" }),
+    });
+    expect(r.status).toBe(409);
+    expect(await r.json()).toEqual({ error: "not_finalized" });
+  });
+
+  it("POST send: returns 404 when no brief exists", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "sarah@example.com" }),
+    });
+    expect(r.status).toBe(404);
+  });
+
+  it("POST send: returns 400 on invalid recipient", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "not-an-email" }),
+    });
+    expect(r.status).toBe(400);
+  });
+
+  it("POST send: returns 400 when message > 500 chars", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        recipient: "sarah@example.com",
+        message: "x".repeat(501),
+      }),
+    });
+    expect(r.status).toBe(400);
+  });
+
+  it("POST send: owner-isolation — user B → 404", async () => {
+    const a = await createTestUser();
+    const b = await createTestUser();
+    users.push(a, b);
+    const dog = await makeDog(a);
+    await makeFinalizedBrief(a, dog.id);
+    const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: b.authHeaders,
+      body: JSON.stringify({ recipient: "sarah@example.com" }),
+    });
+    expect(r.status).toBe(404);
+  });
+
+  // TODO: 502 when sendEmail throws — requires vi.doMock + dynamic re-import of
+  // the route module to swap the sendEmail implementation. The 502 branch is a
+  // single line of code (`return c.json({ error: "send_failed" }, 502)`); the
+  // plan permits skipping this integration test rather than fighting vitest's
+  // module-cache semantics. Revisit if/when we add a DI seam to the route.
+});

@@ -1,6 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import {
   behaviorConcernSchema,
+  briefSendSchema,
   dogProfileSchema,
   journalEntrySchema,
   trainingGoalSchema,
@@ -9,7 +10,17 @@ import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
-import { behaviorConcerns, briefs, dogs, journalEntries, trainingGoals } from "../db/schema";
+import {
+  behaviorConcerns,
+  briefSends,
+  briefs,
+  dogs,
+  journalEntries,
+  trainingGoals,
+  user,
+} from "../db/schema";
+import { renderBriefEmail } from "../email/brief-email";
+import { sendEmail } from "../email/send-email";
 import { composeBrief } from "../lib/brief";
 import { type Vars, requireUser } from "../middleware/require-user";
 
@@ -223,4 +234,60 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .where(eq(briefs.id, latest.id))
       .returning();
     return c.json({ brief });
+  })
+  .post("/:id/brief/send", zValidator("json", briefSendSchema), async (c) => {
+    const userId = c.get("userId");
+    const dog = await findOwnedDog(userId, c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+
+    const [brief] = await db
+      .select()
+      .from(briefs)
+      .where(eq(briefs.dogId, dog.id))
+      .orderBy(desc(briefs.version))
+      .limit(1);
+    if (!brief) return c.json({ error: "not_found" } as const, 404);
+    if (brief.status !== "finalized") {
+      return c.json({ error: "not_finalized" } as const, 409);
+    }
+
+    const [owner] = await db
+      .select({ email: user.email, name: user.name })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    if (!owner) return c.json({ error: "not_found" } as const, 404);
+
+    const body = c.req.valid("json");
+    const email = renderBriefEmail({
+      dogName: dog.name,
+      ownerName: owner.name ?? owner.email,
+      message: body.message ?? null,
+      summary: brief.summary,
+    });
+
+    try {
+      await sendEmail({
+        to: body.recipient,
+        replyTo: owner.email,
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
+      });
+    } catch (err) {
+      console.error("brief send failed", err);
+      return c.json({ error: "send_failed" } as const, 502);
+    }
+
+    const [send] = await db
+      .insert(briefSends)
+      .values({
+        briefId: brief.id,
+        recipient: body.recipient,
+        message: body.message ?? null,
+        sentByUserId: userId,
+      })
+      .returning();
+
+    return c.json({ send }, 201);
   });
