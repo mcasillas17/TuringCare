@@ -385,6 +385,7 @@ export const es = {
     email: "Correo",
     phone: "Teléfono",
     loadError: "No se pudieron cargar los adiestradores.",
+    sendBriefCta: "Enviar mi Resumen a este adiestrador",
   },
   profile: {
     title: "Perfil",

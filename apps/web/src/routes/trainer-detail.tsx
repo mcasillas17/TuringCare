@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useTrainer } from "@/lib/trainers";
 import { Link, useParams } from "react-router-dom";
@@ -46,6 +47,15 @@ export function TrainerDetail() {
           </div>
         )}
       </div>
+      {tr.email && (
+        <div className="pt-4">
+          <Button asChild className="bg-slate text-cream">
+            <Link to={`/my/brief?recipient=${encodeURIComponent(tr.email)}`}>
+              {t("trainersDir.sendBriefCta")} →
+            </Link>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

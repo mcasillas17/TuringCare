@@ -480,3 +480,15 @@ friction for testers to tell us what broke. One new i18n key
 (out-of-band). Gates green: tsc 0, lint 0, web tests all pass, build OK.
 - Commits: this branch (see `git log`). Shipped as a PR from
   worktree-feedback-channel.
+
+## 2026-05-23 — Trainer-detail → Brief cross-link — SHIPPED
+Tightens the trainer-to-Brief send loop. Trainer-detail page now shows a
+"Send my Brief to this trainer" button (only when the trainer has an email
+on file). Deep-links to `/my/brief?recipient=<email>`; SendPanel reads the
+new optional `initialRecipient` prop and pre-fills its recipient field.
+Owner flow: browse trainer → click button → SendPanel is ready, click
+Send. Strictly additive — no existing behavior changed. ~1 new i18n key
+with en/es parity. Gates green: tsc 0, lint 0, web tests all pass,
+build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-trainer-cross-link.

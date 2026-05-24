@@ -382,6 +382,7 @@ export const en = {
     email: "Email",
     phone: "Phone",
     loadError: "Couldn't load trainers.",
+    sendBriefCta: "Send my Brief to this trainer",
   },
   profile: {
     title: "Profile",
