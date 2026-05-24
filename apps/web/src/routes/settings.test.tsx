@@ -58,3 +58,11 @@ it("keeps the existing edit-profile link and sign-out button in the Account sect
   );
   expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
 });
+
+it("renders a Send feedback mailto link in the Account section", () => {
+  setup();
+  expect(screen.getByRole("link", { name: /send feedback/i })).toHaveAttribute(
+    "href",
+    "mailto:feedback@turingcare.dog?subject=TuringCare%20feedback",
+  );
+});
