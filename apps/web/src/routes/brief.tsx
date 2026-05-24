@@ -158,7 +158,12 @@ export function Brief() {
             )}
           </div>
           {isError && <p className="text-red-600">{t("brief.loadError")}</p>}
-          {!brief && !isError && <p className="text-slate-soft">{t("brief.none")}</p>}
+          {!brief && !isError && (
+            <section className="space-y-2 rounded border border-silver bg-white p-6 text-center">
+              <h2 className="text-lg font-semibold text-slate">{t("brief.emptyTitle")}</h2>
+              <p className="text-slate-soft">{t("brief.emptyBodyWithEntries")}</p>
+            </section>
+          )}
           {brief && (
             <article className="brief-print whitespace-pre-wrap rounded border border-silver bg-white p-4 text-sm text-slate">
               <div className="mb-2 font-semibold text-copper">

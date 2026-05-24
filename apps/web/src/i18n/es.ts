@@ -1,7 +1,13 @@
 import type { Messages } from "./types";
 
 export const es = {
-  language: { label: "Idioma", en: "EN", es: "ES" },
+  language: {
+    en: "EN",
+    es: "ES",
+    switchTo: "Cambiar a {lang}",
+    nameEn: "English",
+    nameEs: "Español",
+  },
   nav: {
     howItWorks: "Cómo funciona",
     brief: "Resumen de conducta",
@@ -96,6 +102,8 @@ export const es = {
     navHow: "Cómo funciona",
     navBrief: "Resumen de conducta",
     navFaq: "Preguntas",
+    privacy: "Privacidad",
+    terms: "Términos",
     builtFor: "Hecho para Turing",
   },
   auth: {
@@ -135,6 +143,10 @@ export const es = {
     resetInvalidLink: "Este enlace no es válido o ya expiró. Solicita uno nuevo.",
     resetFailed: "No se pudo restablecer la contraseña.",
   },
+  register: {
+    agreementPrefix: "Al registrarte aceptas nuestros",
+    agreementJoin: " y ",
+  },
   app: {
     title: "Tu panel",
     loading: "Cargando…",
@@ -144,6 +156,10 @@ export const es = {
   dogs: {
     listTitle: "Tus perros",
     empty: "Aún no hay perros. Agrega tu primer perro para empezar un perfil.",
+    emptyTitle: "Aún no hay perros",
+    emptyBody:
+      "Agrega a tu perro para empezar a registrar conducta, definir objetivos y generar Resúmenes.",
+    emptyCta: "Agrega tu primer perro →",
     add: "Agregar perro",
     back: "Volver a tus perros",
     edit: "Editar perfil",
@@ -226,12 +242,27 @@ export const es = {
     qBrief: "Generar resumen",
     qTrainer: "Buscar adiestrador",
     noBrief: "Ninguno aún",
+    welcomeTitle: "Bienvenido a TuringCare 👋",
+    welcomeBody:
+      "Vamos a registrar a tu perro. Agrega un perfil para empezar a registrar conducta y seguir el progreso del entrenamiento.",
+    startHereCta: "Agrega tu primer perro →",
+    nudgeNoEntriesTitle: "¿Listo para tu primera entrada?",
+    nudgeNoEntriesBody: "Captura una conducta la próxima vez que ocurra. Toma solo un momento.",
+    nudgeNoEntriesCta: "Abrir el diario →",
+    nudgeNoBriefTitle: "Genera tu primer Resumen",
+    nudgeNoBriefBody:
+      "Cuando tengas algunas entradas, el Resumen de conducta es útil para compartir con un adiestrador.",
+    nudgeNoBriefCta: "Generar un Resumen →",
   },
   journal: {
     title: "Diario de conducta",
     pickDog: "Elige un perro",
     noDogs: "Agrega un perro primero para empezar el diario.",
+    noDogsCta: "Agregar un perro →",
     empty: "Aún no hay entradas.",
+    emptyTitle: "Aún no hay entradas",
+    emptyBody:
+      "Usa el formulario de abajo para registrar tu primera observación. Captura el Antecedente → Conducta → Consecuencia y califica la intensidad.",
     add: "Agregar entrada",
     occurredAt: "Cuándo",
     antecedent: "Antecedente",
@@ -296,6 +327,9 @@ export const es = {
     title: "Resumen de conducta",
     pickDog: "Elige un perro",
     none: "Aún no hay resumen para este perro.",
+    emptyTitle: "Aún no hay Resumen",
+    emptyBodyWithEntries:
+      "Pulsa Generar arriba para componer un Resumen de conducta a partir del perfil del perro, sus preocupaciones, objetivos y entradas del diario.",
     generate: "Generar resumen",
     regenerate: "Regenerar",
     generating: "Generando…",
@@ -338,6 +372,7 @@ export const es = {
     title: "Adiestradores",
     subtitle: "Encuentra un adiestrador de refuerzo positivo.",
     empty: "Ningún adiestrador coincide aún.",
+    emptyFiltered: "Ningún adiestrador coincide con tus filtros.",
     filterState: "Estado",
     filterSpecialty: "Especialidad",
     filterMethodology: "Metodología",
@@ -390,6 +425,47 @@ export const es = {
     cancel: "Cancelar",
   },
   common: { loading: "Cargando…" },
+  notFound: {
+    title: "Página no encontrada",
+    body: "Esta página no existe o ha sido movida. Te llevamos de vuelta.",
+    home: "Volver al inicio",
+  },
+  privacy: {
+    title: "Aviso de privacidad",
+    intro:
+      "TuringCare está en fase beta. Este aviso explica qué datos recopilamos, por qué y cómo pedir que los eliminemos.",
+    h_account: "Información de la cuenta",
+    p_account:
+      "Guardamos tu correo y el nombre que elegiste para que puedas iniciar sesión y para que los adiestradores con los que contactes puedan responderte. No vendemos tus datos ni los compartimos con terceros más allá de lo necesario para prestar este servicio (proveedor de email, hosting).",
+    h_dogs: "Perros y entradas del diario",
+    p_dogs:
+      "La información que agregas sobre tus perros (nombre, raza, notas de conducta, sesiones de entrenamiento, etc.) es privada a tu cuenta. Solo sale de nuestros sistemas cuando eliges enviar o compartir un Resumen de conducta.",
+    h_emails: "Correos que enviamos",
+    p_emails:
+      "Enviamos correos transaccionales (verificación de inicio de sesión, restablecimiento de contraseña y Resúmenes que tú decides enviar a un adiestrador). Los adiestradores ven tu correo como Reply-To para responderte directamente. No enviamos correos de marketing.",
+    h_retention: "Conservación y eliminación de tus datos",
+    p_retention:
+      "Conservamos tus datos mientras tu cuenta esté activa. Puedes eliminar tu cuenta en cualquier momento desde Configuración — al hacerlo, se eliminan tus perros, entradas del diario, progreso de entrenamiento, resúmenes e historial de envíos. También puedes escribir a feedback@turingcare.dog para solicitar la eliminación.",
+    h_contact: "Preguntas",
+    p_contact:
+      "Escribe a feedback@turingcare.dog con cualquier pregunta de privacidad. Este aviso puede cambiar a medida que el producto evolucione; publicaremos cambios importantes aquí.",
+  },
+  terms: {
+    title: "Términos de uso (beta)",
+    intro: "TuringCare está en fase beta. Al usarlo, aceptas estos términos breves.",
+    h_beta: "Software beta",
+    p_beta:
+      "Las cosas pueden cambiar, romperse o desaparecer sin previo aviso. Podemos modificar o finalizar el servicio en cualquier momento. No dependas de TuringCare como única fuente de tus registros de entrenamiento — exporta lo que sea importante.",
+    h_use: "Uso aceptable",
+    p_use:
+      "Usa TuringCare para registrar la conducta y el entrenamiento de tus propios perros. No intentes acceder a datos de otras personas, enviar correos no solicitados ni usar el servicio de formas que dañen a perros o personas.",
+    h_liability: "Sin garantía ni responsabilidad",
+    p_liability:
+      "TuringCare y sus operadores prestan el servicio 'tal cual', sin garantías. No somos responsables de pérdidas causadas por el uso o la confianza en el servicio. Nada de lo aquí escrito constituye asesoramiento profesional de entrenamiento, médico ni veterinario.",
+    h_changes: "Cambios",
+    p_changes:
+      "Estos términos pueden cambiar a medida que el producto evolucione. La versión actual siempre vive en /terms. El uso continuado después de un cambio significa que aceptas los nuevos términos.",
+  },
   verifyBanner: {
     message: "Verifica tu correo — revisa tu bandeja de entrada",
     resend: "Reenviar",

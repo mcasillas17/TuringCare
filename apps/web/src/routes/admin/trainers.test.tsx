@@ -74,3 +74,8 @@ it("submitting the form calls the create endpoint", async () => {
   const call = createTrainer.mock.calls[0]?.[0] as { json: { name: string } };
   expect(call.json.name).toBe("New Trainer");
 });
+
+it("renders the language chip in the header", async () => {
+  setup();
+  expect(await screen.findByRole("button", { name: /switch to/i })).toBeInTheDocument();
+});

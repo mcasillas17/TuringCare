@@ -40,7 +40,7 @@ describe("Overview", () => {
       {
         dogCount: 1,
         journalEntryCount: 2,
-        latestBrief: null,
+        latestBrief: { status: "finalized" },
         recentActivity: [
           { dogName: "Biscuit", behavior: "Barked", occurredAt: "2026-05-19T10:00:00.000Z" },
         ],
@@ -56,5 +56,76 @@ describe("Overview", () => {
       expect(within(dogsSection).getByText("Biscuit")).toBeInTheDocument();
     }
     expect(screen.getByText(/Barked/)).toBeInTheDocument();
+  });
+
+  it("shows welcome panel when dogCount is 0", async () => {
+    stub({ dogCount: 0, journalEntryCount: 0, latestBrief: null, recentActivity: [] }, []);
+    setup();
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: /Welcome to TuringCare/i })).toBeInTheDocument(),
+    );
+    const cta = screen.getByRole("link", { name: /Add your first dog/i });
+    expect(cta).toHaveAttribute("href", "/my/dogs/new");
+    // Stat cards should NOT render in the welcome state.
+    expect(screen.queryByText(/Journal entries/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Latest Brief/i)).not.toBeInTheDocument();
+  });
+
+  it("shows no-entries nudge when dogs exist but entries==0", async () => {
+    stub({ dogCount: 1, journalEntryCount: 0, latestBrief: null, recentActivity: [] }, [
+      { id: "d1", name: "Biscuit" },
+    ]);
+    setup();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: /Ready to log your first entry/i }),
+      ).toBeInTheDocument(),
+    );
+    const link = screen.getByRole("link", { name: /Open the journal/i });
+    expect(link).toHaveAttribute("href", "/my/journal");
+    // Stat cards DO render in this state.
+    expect(screen.getByText(/Journal entries/i)).toBeInTheDocument();
+  });
+
+  it("shows no-brief nudge when entries exist but no finalized brief", async () => {
+    stub(
+      {
+        dogCount: 1,
+        journalEntryCount: 3,
+        latestBrief: { status: "draft" },
+        recentActivity: [
+          { dogName: "Biscuit", behavior: "Sat calmly", occurredAt: "2026-05-19T10:00:00.000Z" },
+        ],
+      },
+      [{ id: "d1", name: "Biscuit" }],
+    );
+    setup();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: /Generate your first Brief/i }),
+      ).toBeInTheDocument(),
+    );
+    const link = screen.getByRole("link", { name: /Generate a Brief/i });
+    expect(link).toHaveAttribute("href", "/my/brief");
+  });
+
+  it("shows no-brief nudge when entries exist and latestBrief is null", async () => {
+    stub(
+      {
+        dogCount: 1,
+        journalEntryCount: 3,
+        latestBrief: null,
+        recentActivity: [
+          { dogName: "Biscuit", behavior: "Sat calmly", occurredAt: "2026-05-19T10:00:00.000Z" },
+        ],
+      },
+      [{ id: "d1", name: "Biscuit" }],
+    );
+    setup();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: /Generate your first Brief/i }),
+      ).toBeInTheDocument(),
+    );
   });
 });
