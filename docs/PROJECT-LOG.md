@@ -447,3 +447,15 @@ build OK.
   `plans/2026-05-23-settings-completeness.md`
 - Commits: this branch (see `git log`). Shipped as a PR from
   worktree-settings-completeness.
+
+## 2026-05-23 — Feedback channel — SHIPPED
+"Send feedback" mailto link added in two places: landing footer
+(alongside Privacy + Terms) and Settings → Account section. Opens the
+user's email client with `feedback@turingcare.dog` pre-filled and a
+TuringCare subject line. No form, no widget, no backend — minimal
+friction for testers to tell us what broke. One new i18n key
+(`footer.feedback`) with en/es parity. Owner is setting up
+`feedback@turingcare.dog` forwarding to their inbox on the DNS side
+(out-of-band). Gates green: tsc 0, lint 0, web tests all pass, build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-feedback-channel.
