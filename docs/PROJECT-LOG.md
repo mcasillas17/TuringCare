@@ -402,3 +402,29 @@ lint 0, build OK. Shipped as a PR from worktree-training-progress.
 - Spec/plan: `specs/2026-05-22-training-progress-design.md`,
   `plans/2026-05-22-training-progress.md`
 - Commits: this branch (see `git log`).
+
+## 2026-05-23 — Language chip in the top-right corner — SHIPPED
+Unifies the EN/ES control into a single compact flag chip (current language's
+flag + code, tap to switch — flags kept) placed as the literal rightmost element
+of the top-right corner on every screen. `LanguageToggle` refactored from a
+two-button `role="group"` into one `<button>`; `aria-label`/`title` name the
+target language ("Switch to Español" / "Cambiar a English" — target endonym,
+deliberate, only affects the SR label/tooltip). Reordered so the chip is last in
+the app-shell header (after Sign out), the landing nav (after the CTAs), and the
+two admin headers — which previously had NO language control, closing the
+coverage gap. Auth pages keep their `absolute right-4 top-4` placement and
+inherit the chip. i18n: added `language.switchTo` + endonym keys
+(`nameEn`/`nameEs`) with en/es parity; removed the now-unused `language.label`
+(MessageKey auto-derives from en.ts, so types.ts unchanged). Tests: rewrote the
+component test (current-flag-only + click-switch + className passthrough),
+updated the landing Spanish-switch test, added DOM-order placement guards
+(app-shell, landing) and presence guards (both admin screens). Frontend-only —
+no API/shared/DB/deps changes. Gates green: web 104/104 (+4), tsc 0, lint 0,
+build OK. Two-stage subagent review per task + a final whole-feature review.
+Note: `settings.tsx` keeps its own in-body language control (pre-existing,
+separate `settings.language` key), so the settings screen now shows two chips —
+out of scope, flagged for possible cleanup.
+- Spec/plan: `specs/2026-05-23-language-toggle-placement-design.md`,
+  `plans/2026-05-23-language-toggle-placement.md`
+- Commits: this branch (see `git log`). Branch pushed as
+  worktree-language-toggle-corner; PR pending (no gh CLI in env).
