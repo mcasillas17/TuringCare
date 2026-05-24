@@ -21,3 +21,12 @@ it("renders Privacy and Terms links pointing to /privacy and /terms", () => {
   expect(privacy).toHaveAttribute("href", "/privacy");
   expect(terms).toHaveAttribute("href", "/terms");
 });
+
+it("renders a Send feedback mailto link with the TuringCare subject", () => {
+  setup();
+  const feedback = screen.getByRole("link", { name: /send feedback/i });
+  expect(feedback).toHaveAttribute(
+    "href",
+    "mailto:feedback@turingcare.dog?subject=TuringCare%20feedback",
+  );
+});

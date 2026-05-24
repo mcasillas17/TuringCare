@@ -469,6 +469,18 @@ biome 198, web 38 files / 132 tests, tsc 0, build OK.
   `plans/2026-05-23-language-toggle-popover.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-lang-toggle.
 
+## 2026-05-23 — Feedback channel — SHIPPED
+"Send feedback" mailto link added in two places: landing footer
+(alongside Privacy + Terms) and Settings → Account section. Opens the
+user's email client with `feedback@turingcare.dog` pre-filled and a
+TuringCare subject line. No form, no widget, no backend — minimal
+friction for testers to tell us what broke. One new i18n key
+(`footer.feedback`) with en/es parity. Owner is setting up
+`feedback@turingcare.dog` forwarding to their inbox on the DNS side
+(out-of-band). Gates green: tsc 0, lint 0, web tests all pass, build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-feedback-channel.
+
 ## 2026-05-23 — Trainer-detail → Brief cross-link — SHIPPED
 Tightens the trainer-to-Brief send loop. Trainer-detail page now shows a
 "Send my Brief to this trainer" button (only when the trainer has an email

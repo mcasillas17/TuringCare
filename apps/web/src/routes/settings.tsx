@@ -24,6 +24,12 @@ export function Settings() {
         <Link to="/my/profile" className="block underline">
           {t("settings.editProfile")}
         </Link>
+        <a
+          href="mailto:feedback@turingcare.dog?subject=TuringCare%20feedback"
+          className="block underline"
+        >
+          {t("footer.feedback")}
+        </a>
         <Button
           variant="outline"
           onClick={async () => {
