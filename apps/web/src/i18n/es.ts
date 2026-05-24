@@ -7,6 +7,7 @@ export const es = {
     switchTo: "Cambiar a {lang}",
     nameEn: "English",
     nameEs: "Español",
+    label: "Idioma",
   },
   nav: {
     howItWorks: "Cómo funciona",

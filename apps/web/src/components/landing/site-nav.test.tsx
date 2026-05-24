@@ -36,7 +36,7 @@ describe("SiteNav (logged in)", () => {
       </LocaleProvider>,
     );
     const openApp = screen.getByRole("link", { name: /open app/i });
-    const chip = screen.getByRole("button", { name: /switch to/i });
+    const chip = screen.getByRole("button", { name: "Language" });
     expect(openApp.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

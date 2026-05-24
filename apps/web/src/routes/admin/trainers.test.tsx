@@ -77,5 +77,5 @@ it("submitting the form calls the create endpoint", async () => {
 
 it("renders the language chip in the header", async () => {
   setup();
-  expect(await screen.findByRole("button", { name: /switch to/i })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Language" })).toBeInTheDocument();
 });

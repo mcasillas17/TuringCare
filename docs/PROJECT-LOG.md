@@ -448,6 +448,27 @@ build OK.
 - Commits: this branch (see `git log`). Shipped as a PR from
   worktree-settings-completeness.
 
+## 2026-05-23 — Language toggle: flag popover — SHIPPED
+Reworked `LanguageToggle` from the single click-flip pill (PR #22) into a compact
+flag-only trigger (`🇺🇸 ▾`) that opens a small Radix `Popover` listing the
+language(s) you're not in, which you click to switch — so the other language is
+shown explicitly. Opens on desktop mouse hover OR click/tap + keyboard
+everywhere; closes on select / Escape / outside-click (Radix) / pointer-leave
+(120ms grace). a11y-first: click + keyboard always work, hover (`pointerType
+=== "mouse"`) is a desktop-only enhancement, and a hover-open suppresses Radix's
+auto-focus so a mouseover never steals focus. Drop-in (same export + `className`
+on the trigger; the 5 call sites unchanged). New `language.label` i18n key
+(en "Language" / es "Idioma"); reuses `switchTo`/`nameEn`/`nameEs`. Radix Popover
+needed a `ResizeObserver` (+ element no-op) test polyfill under jsdom. Built on
+the already-installed `radix-ui` (no new dep, no `ui/` wrapper). TDD via
+subagent-driven development; the component had two independent opus code reviews
+(double-click-dismiss, test-bent pointer guard, timer cleanup, hover focus-steal
+all fixed). 5 call-site tests updated for the new trigger name/flow. Gate green:
+biome 198, web 38 files / 132 tests, tsc 0, build OK.
+- Spec/plan: `specs/2026-05-23-language-toggle-popover-design.md`,
+  `plans/2026-05-23-language-toggle-popover.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-lang-toggle.
+
 ## 2026-05-23 — Trainer-detail → Brief cross-link — SHIPPED
 Tightens the trainer-to-Brief send loop. Trainer-detail page now shows a
 "Send my Brief to this trainer" button (only when the trainer has an email
