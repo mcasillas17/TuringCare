@@ -10,11 +10,13 @@ popover to switch language, on hover (desktop) or click/tap (all devices).
 
 ## 1. Goal & scope
 
-Today `apps/web/src/components/LanguageToggle.tsx` renders **both** languages as
-side-by-side buttons (`🇺🇸 EN` / `🇲🇽 ES`), the active one highlighted. The new
-design is more compact: a single trigger showing only the **current** flag plus
-a caret; activating it reveals a small popover listing the language(s) you are
-**not** in, which you click to switch.
+Today (after PR #22) `apps/web/src/components/LanguageToggle.tsx` is a **single
+pill** showing the **current** flag + code (`🇺🇸 EN`) that **flips on click**,
+with a `"Switch to …"` aria-label. It switches silently and never *shows* the
+other language, and has no hover behavior. The new design keeps it compact but
+makes the choice explicit: a flag-only trigger (`🇺🇸 ▾`) that reveals a small
+popover listing the language(s) you are **not** in, opened on hover (desktop) or
+click/tap, which you click to switch.
 
 Drop-in replacement: same export `LanguageToggle`, same `{ className }` prop, no
 changes to the five call sites (landing `site-nav`, `AppShell`, `login`,
@@ -112,7 +114,7 @@ i18n system or the `language.*` keys' meaning, restyling the call sites.
 ## 5. Testing
 
 Rewrite `apps/web/src/components/LanguageToggle.test.tsx` (the current
-both-buttons-visible assertions no longer apply):
+single-pill click-flip assertions no longer apply):
 
 - **Trigger:** renders with an accessible name; shows the current flag glyph;
   the other language's option is **not** in the document before opening.
