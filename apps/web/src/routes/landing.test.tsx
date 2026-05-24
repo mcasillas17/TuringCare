@@ -39,9 +39,11 @@ it("switches the landing copy to Spanish via the toggle", async () => {
   expect(
     screen.getByRole("heading", { name: /train with positive reinforcement/i }),
   ).toBeInTheDocument();
-  const chip = screen.getAllByRole("button", { name: /switch to español/i })[0];
-  if (!chip) throw new Error("language chip not found");
-  await userEvent.click(chip);
+  const trigger = screen.getAllByRole("button", { name: "Language" })[0];
+  if (!trigger) throw new Error("language toggle not found");
+  trigger.focus();
+  await userEvent.keyboard("{Enter}");
+  await userEvent.click(await screen.findByRole("button", { name: /español/i }));
   expect(
     screen.getByRole("heading", { name: /ad[ií]éstralo con refuerzo positivo/i }),
   ).toBeInTheDocument();

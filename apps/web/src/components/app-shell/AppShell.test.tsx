@@ -57,7 +57,7 @@ describe("AppShell", () => {
     mockMe("user");
     setup();
     const signOut = screen.getByRole("button", { name: /sign out/i });
-    const chip = screen.getByRole("button", { name: /switch to/i });
+    const chip = screen.getByRole("button", { name: "Language" });
     // The chip must come AFTER the Sign out button in document order.
     expect(signOut.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

@@ -31,4 +31,24 @@ if (typeof window !== "undefined") {
   // Use direct assignment (not vi.stubGlobal) so that vi.unstubAllGlobals()
   // called in test afterEach hooks does not remove this stub between tests.
   (window as unknown as Record<string, unknown>).IntersectionObserver = IO;
+
+  // Radix Popover/Popper needs ResizeObserver under jsdom; direct assignment
+  // (not vi.stubGlobal) so vi.unstubAllGlobals() in test afterEach hooks keeps it.
+  class RO {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  (window as unknown as Record<string, unknown>).ResizeObserver = RO;
+
+  // jsdom lacks these element methods that Radix's dismissable layer / popper call.
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.releasePointerCapture) {
+    Element.prototype.releasePointerCapture = () => {};
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
 }
