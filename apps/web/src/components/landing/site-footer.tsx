@@ -29,6 +29,12 @@ export function SiteFooter() {
           <Link to="/terms" className="hover:text-gold">
             {t("footer.terms")}
           </Link>
+          <a
+            href="mailto:feedback@turingcare.dog?subject=TuringCare%20feedback"
+            className="hover:text-gold"
+          >
+            {t("footer.feedback")}
+          </a>
         </nav>
       </div>
       <p className="mx-auto mt-8 flex max-w-6xl items-center justify-center gap-2 border-t border-white/10 pt-6 text-center text-xs text-silver/70 md:justify-start md:text-left">

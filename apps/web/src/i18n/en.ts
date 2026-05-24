@@ -103,6 +103,7 @@ export const en = {
     navFaq: "FAQ",
     privacy: "Privacy",
     terms: "Terms",
+    feedback: "Send feedback",
     builtFor: "Built for Turing",
   },
   auth: {

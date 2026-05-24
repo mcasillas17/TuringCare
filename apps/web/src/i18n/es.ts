@@ -105,6 +105,7 @@ export const es = {
     navFaq: "Preguntas",
     privacy: "Privacidad",
     terms: "Términos",
+    feedback: "Enviar comentarios",
     builtFor: "Hecho para Turing",
   },
   auth: {
