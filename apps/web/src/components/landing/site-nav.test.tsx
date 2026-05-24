@@ -26,4 +26,17 @@ describe("SiteNav (logged in)", () => {
     expect(screen.queryByRole("link", { name: /log in/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /get started/i })).toBeNull();
   });
+
+  it("places the language chip after the primary action (literal corner)", () => {
+    render(
+      <LocaleProvider>
+        <MemoryRouter>
+          <SiteNav />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+    const openApp = screen.getByRole("link", { name: /open app/i });
+    const chip = screen.getByRole("button", { name: /switch to/i });
+    expect(openApp.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

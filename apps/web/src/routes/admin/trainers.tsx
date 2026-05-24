@@ -1,3 +1,4 @@
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -120,9 +121,13 @@ export function AdminTrainers() {
     <div className="mx-auto max-w-4xl space-y-6 p-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">TuringCare · Trainers</h1>
-        <Link to="/admin" className="text-sm underline">
-          ← Back to dashboard
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link to="/admin" className="text-sm underline">
+            ← Back to dashboard
+          </Link>
+          <span aria-hidden="true" className="h-5 w-px bg-silver/70" />
+          <LanguageToggle />
+        </div>
       </header>
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-lg border bg-card p-4">

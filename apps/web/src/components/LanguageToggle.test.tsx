@@ -14,26 +14,29 @@ function setup() {
   );
 }
 
-it("exposes EN and ES buttons by accessible name (flag is decorative)", () => {
-  setup();
-  expect(screen.getByRole("button", { name: "EN" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "ES" })).toBeInTheDocument();
-});
-
-it("renders the country flag glyphs in the DOM", () => {
+it("shows only the current language (flag + code) and labels the switch action", () => {
   const { container } = setup();
+  // jsdom navigator.language is en-US, so the default locale is English.
+  const chip = screen.getByRole("button", { name: /switch to español/i });
+  expect(chip).toHaveTextContent("EN");
   expect(container.textContent).toContain("🇺🇸");
-  expect(container.textContent).toContain("🇲🇽");
+  expect(container.textContent).not.toContain("🇲🇽");
 });
 
-it("reflects the active locale via aria-pressed and switches on click", async () => {
+it("switches locale on click and updates flag, code, and label", async () => {
   setup();
-  const en = screen.getByRole("button", { name: "EN" });
-  const es = screen.getByRole("button", { name: "ES" });
-  expect(en).toHaveAttribute("aria-pressed", "true");
-  expect(es).toHaveAttribute("aria-pressed", "false");
+  await userEvent.click(screen.getByRole("button", { name: /switch to español/i }));
+  const chip = screen.getByRole("button", { name: /cambiar a english/i });
+  expect(chip).toHaveTextContent("ES");
+  expect(chip.textContent).toContain("🇲🇽");
+});
 
-  await userEvent.click(es);
-  expect(screen.getByRole("button", { name: "ES" })).toHaveAttribute("aria-pressed", "true");
-  expect(screen.getByRole("button", { name: "EN" })).toHaveAttribute("aria-pressed", "false");
+it("passes className through to the button", () => {
+  render(
+    <LocaleProvider>
+      <LanguageToggle className="absolute right-4 top-4" />
+    </LocaleProvider>,
+  );
+  const chip = screen.getByRole("button", { name: /switch to/i });
+  expect(chip).toHaveClass("absolute", "right-4", "top-4");
 });

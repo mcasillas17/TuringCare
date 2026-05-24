@@ -403,6 +403,17 @@ lint 0, build OK. Shipped as a PR from worktree-training-progress.
   `plans/2026-05-22-training-progress.md`
 - Commits: this branch (see `git log`).
 
+## 2026-05-23 — MVP coverage: 404 + Privacy + Terms — SHIPPED
+Three small but MVP-blocking additions: friendly `/`-catchall NotFound page
+(any unknown URL no longer shows a blank screen); public `/privacy` page
+with a beta-honest privacy notice (what we collect, why, how to delete);
+public `/terms` page with brief beta terms (no warranty, acceptable use,
+changes). Landing footer + register form link to both. ~22 new i18n keys
+with en/es parity. Pure additive — no existing behavior changed. Gates
+green: tsc 0, lint 0, web tests all pass, build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-mvp-legal-pages.
+
 ## 2026-05-23 — Empty-state polish + first-run wayfinding — SHIPPED
 A first-time tester now lands on a welcoming `/my` Overview with a clear
 "Add your first dog" CTA instead of cold zeros. Adaptive greeting swaps in
