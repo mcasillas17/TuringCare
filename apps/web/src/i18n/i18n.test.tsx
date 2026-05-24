@@ -34,12 +34,16 @@ describe("i18n catalogs", () => {
       .map(([k]) => k)
       .filter(
         (k) =>
+          // Brand name and locale codes are identical by design. The delete-
+          // account confirm word is kept as "delete" in both locales as a
+          // deliberate friction — it's the literal the user must type.
           ![
             "footer.brand",
             "language.en",
             "language.es",
             "language.nameEn",
             "language.nameEs",
+            "settings.deleteConfirmWord",
           ].includes(k),
       );
     expect(untranslated).toEqual([]);

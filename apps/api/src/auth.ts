@@ -58,6 +58,11 @@ export const auth = betterAuth({
       // input:false → clients can't self-assign a role at sign-up.
       role: { type: "string", required: false, defaultValue: "user", input: false },
     },
+    // Enables POST /api/auth/delete-user. Wired up for the Settings page
+    // "Danger zone" double-confirm flow. No verification email round-trip
+    // (the client gates the call with an in-app "type delete to confirm");
+    // FK cascades on dogs/journal/briefs/etc. clean up the user's data.
+    deleteUser: { enabled: true },
   },
   databaseHooks: {
     user: {
