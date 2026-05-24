@@ -58,6 +58,17 @@ export function Register() {
             <Button type="submit" disabled={pending} className="w-full">
               {pending ? t("auth.registerPending") : t("auth.registerSubmit")}
             </Button>
+            <p className="text-xs text-slate-soft">
+              {t("register.agreementPrefix")}{" "}
+              <Link className="underline" to="/terms">
+                {t("footer.terms")}
+              </Link>
+              {t("register.agreementJoin")}
+              <Link className="underline" to="/privacy">
+                {t("footer.privacy")}
+              </Link>
+              .
+            </p>
             <p className="text-sm text-muted-foreground">
               {t("auth.haveAccount")}{" "}
               <Link className="underline" to="/login">

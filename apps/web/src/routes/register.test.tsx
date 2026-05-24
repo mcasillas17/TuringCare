@@ -39,3 +39,15 @@ it("on successful registration, does a full-load navigation to /my", async () =>
   expect(signUpEmailMock).toHaveBeenCalledOnce();
   expect(assignMock).toHaveBeenCalledWith("/my");
 });
+
+it("shows Terms and Privacy links in the agreement copy", () => {
+  render(
+    <LocaleProvider>
+      <MemoryRouter>
+        <Register />
+      </MemoryRouter>
+    </LocaleProvider>,
+  );
+  expect(screen.getByRole("link", { name: /terms/i })).toHaveAttribute("href", "/terms");
+  expect(screen.getByRole("link", { name: /privacy/i })).toHaveAttribute("href", "/privacy");
+});

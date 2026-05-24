@@ -100,6 +100,8 @@ export const en = {
     navHow: "How it works",
     navBrief: "Behavior Brief",
     navFaq: "FAQ",
+    privacy: "Privacy",
+    terms: "Terms",
     builtFor: "Built for Turing",
   },
   auth: {
@@ -138,6 +140,10 @@ export const en = {
     resetSuccess: "Password updated. Sign in with your new password.",
     resetInvalidLink: "This reset link is missing or invalid. Request a new one.",
     resetFailed: "Could not reset the password.",
+  },
+  register: {
+    agreementPrefix: "By signing up you agree to our",
+    agreementJoin: " and ",
   },
   app: {
     title: "Your dashboard",
@@ -372,6 +378,47 @@ export const en = {
     editProfile: "Edit profile",
   },
   common: { loading: "Loading…" },
+  notFound: {
+    title: "Page not found",
+    body: "This page doesn't exist or has moved. Let's get you back.",
+    home: "Back to home",
+  },
+  privacy: {
+    title: "Privacy notice",
+    intro:
+      "TuringCare is in early beta. This notice explains what data we collect, why, and how to ask us to delete it.",
+    h_account: "Account information",
+    p_account:
+      "We store your email address and chosen name so you can sign in and so trainers you contact can reply to you. We don't sell your data and we don't share it with third parties beyond what's needed to deliver this service (email provider, hosting).",
+    h_dogs: "Dogs and journal entries",
+    p_dogs:
+      "Information you add about your dogs (name, breed, behavioral notes, training sessions, etc.) is private to your account. It only leaves our systems when you choose to email or share a Behavior Brief.",
+    h_emails: "Emails we send",
+    p_emails:
+      "We send transactional emails (sign-in verification, password reset, and Briefs you choose to send to a trainer). Trainers see your email address as the Reply-To so they can reply directly to you. We don't send marketing emails.",
+    h_retention: "Keeping and deleting your data",
+    p_retention:
+      "We keep your data while your account is active. You can delete your account at any time from Settings — when you do, your dogs, journal entries, training progress, briefs, and send history are removed. You can also email feedback@turingcare.dog to request deletion.",
+    h_contact: "Questions",
+    p_contact:
+      "Email feedback@turingcare.dog with any privacy questions. This notice may change as the product evolves; we'll post material changes here.",
+  },
+  terms: {
+    title: "Terms of use (beta)",
+    intro: "TuringCare is in early beta. By using it, you agree to these short terms.",
+    h_beta: "Beta software",
+    p_beta:
+      "Things may change, break, or disappear without notice. We may modify or end the service at any time. Don't rely on TuringCare as your only source of training records — export anything important.",
+    h_use: "Acceptable use",
+    p_use:
+      "Use TuringCare to track your own dogs' behavior and training. Don't try to access other people's data, send unsolicited email, or use the service in ways that harm dogs or people.",
+    h_liability: "No warranty, no liability",
+    p_liability:
+      "TuringCare and its operators provide the service 'as is' with no warranties. We're not liable for losses caused by using or relying on the service. Nothing here is professional training, medical, or veterinary advice.",
+    h_changes: "Changes",
+    p_changes:
+      "These terms may change as the product evolves. The current version always lives at /terms. Continued use after a change means you accept the new terms.",
+  },
   verifyBanner: {
     message: "Please verify your email — check your inbox",
     resend: "Resend",
