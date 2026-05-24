@@ -10,7 +10,7 @@ import {
 } from "@/lib/brief";
 import { useDogs } from "@/lib/dogs";
 import { Suspense, lazy, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 // Lazy-load so the heavy @react-pdf/renderer bundle is code-split out of the
@@ -20,6 +20,8 @@ const BriefDownloadButton = lazy(() => import("@/components/brief-download-butto
 export function Brief() {
   const { t, locale } = useI18n();
   const { id: routeId } = useParams();
+  const [params] = useSearchParams();
+  const recipientParam = params.get("recipient") ?? undefined;
   const { data: dogs } = useDogs();
   const [picked, setPicked] = useState("");
   const dogId = routeId ?? picked ?? "";
@@ -173,7 +175,11 @@ export function Brief() {
               {brief.summary}
             </article>
           )}
-          <SendPanel dogId={dogId} briefStatus={brief?.status ?? null} />
+          <SendPanel
+            dogId={dogId}
+            briefStatus={brief?.status ?? null}
+            initialRecipient={recipientParam}
+          />
         </>
       )}
     </div>
