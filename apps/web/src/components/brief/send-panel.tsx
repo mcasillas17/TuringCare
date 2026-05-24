@@ -3,6 +3,7 @@ import { useI18n } from "@/i18n";
 import { useBriefSends, useSendBrief } from "@/lib/brief-send";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type BriefSendInput, briefSendSchema } from "@turingcare/shared";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -11,9 +12,11 @@ const inputCls = "w-full rounded border border-silver bg-white px-3 py-2 text-sm
 export function SendPanel({
   dogId,
   briefStatus,
+  initialRecipient,
 }: {
   dogId: string;
   briefStatus: "draft" | "finalized" | null;
+  initialRecipient?: string;
 }) {
   const { t, locale } = useI18n();
   const send = useSendBrief(dogId);
@@ -25,7 +28,15 @@ export function SendPanel({
     formState: { errors, isSubmitting },
   } = useForm<BriefSendInput>({
     resolver: zodResolver(briefSendSchema),
+    defaultValues: { recipient: initialRecipient ?? "" },
   });
+
+  // If the prop changes (e.g. owner navigates between trainer-detail pages
+  // without unmounting Brief), pick it up. Guarded so we never clobber a
+  // value the user is mid-typing.
+  useEffect(() => {
+    if (initialRecipient) reset({ recipient: initialRecipient });
+  }, [initialRecipient, reset]);
 
   if (briefStatus === null) return null;
 
