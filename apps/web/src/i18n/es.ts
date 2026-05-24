@@ -156,6 +156,10 @@ export const es = {
   dogs: {
     listTitle: "Tus perros",
     empty: "Aún no hay perros. Agrega tu primer perro para empezar un perfil.",
+    emptyTitle: "Aún no hay perros",
+    emptyBody:
+      "Agrega a tu perro para empezar a registrar conducta, definir objetivos y generar Resúmenes.",
+    emptyCta: "Agrega tu primer perro →",
     add: "Agregar perro",
     back: "Volver a tus perros",
     edit: "Editar perfil",
@@ -238,12 +242,27 @@ export const es = {
     qBrief: "Generar resumen",
     qTrainer: "Buscar adiestrador",
     noBrief: "Ninguno aún",
+    welcomeTitle: "Bienvenido a TuringCare 👋",
+    welcomeBody:
+      "Vamos a registrar a tu perro. Agrega un perfil para empezar a registrar conducta y seguir el progreso del entrenamiento.",
+    startHereCta: "Agrega tu primer perro →",
+    nudgeNoEntriesTitle: "¿Listo para tu primera entrada?",
+    nudgeNoEntriesBody: "Captura una conducta la próxima vez que ocurra. Toma solo un momento.",
+    nudgeNoEntriesCta: "Abrir el diario →",
+    nudgeNoBriefTitle: "Genera tu primer Resumen",
+    nudgeNoBriefBody:
+      "Cuando tengas algunas entradas, el Resumen de conducta es útil para compartir con un adiestrador.",
+    nudgeNoBriefCta: "Generar un Resumen →",
   },
   journal: {
     title: "Diario de conducta",
     pickDog: "Elige un perro",
     noDogs: "Agrega un perro primero para empezar el diario.",
+    noDogsCta: "Agregar un perro →",
     empty: "Aún no hay entradas.",
+    emptyTitle: "Aún no hay entradas",
+    emptyBody:
+      "Usa el formulario de abajo para registrar tu primera observación. Captura el Antecedente → Conducta → Consecuencia y califica la intensidad.",
     add: "Agregar entrada",
     occurredAt: "Cuándo",
     antecedent: "Antecedente",
@@ -308,6 +327,9 @@ export const es = {
     title: "Resumen de conducta",
     pickDog: "Elige un perro",
     none: "Aún no hay resumen para este perro.",
+    emptyTitle: "Aún no hay Resumen",
+    emptyBodyWithEntries:
+      "Pulsa Generar arriba para componer un Resumen de conducta a partir del perfil del perro, sus preocupaciones, objetivos y entradas del diario.",
     generate: "Generar resumen",
     regenerate: "Regenerar",
     generating: "Generando…",
@@ -350,6 +372,7 @@ export const es = {
     title: "Adiestradores",
     subtitle: "Encuentra un adiestrador de refuerzo positivo.",
     empty: "Ningún adiestrador coincide aún.",
+    emptyFiltered: "Ningún adiestrador coincide con tus filtros.",
     filterState: "Estado",
     filterSpecialty: "Especialidad",
     filterMethodology: "Metodología",

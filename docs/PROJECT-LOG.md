@@ -413,3 +413,16 @@ with en/es parity. Pure additive — no existing behavior changed. Gates
 green: tsc 0, lint 0, web tests all pass, build OK.
 - Commits: this branch (see `git log`). Shipped as a PR from
   worktree-mvp-legal-pages.
+
+## 2026-05-23 — Empty-state polish + first-run wayfinding — SHIPPED
+A first-time tester now lands on a welcoming `/my` Overview with a clear
+"Add your first dog" CTA instead of cold zeros. Adaptive greeting swaps in
+based on state: `new` → welcome + CTA; `noEntries` → "Log your first
+entry" nudge; `noBrief` → "Generate your first Brief" nudge; `ready` →
+today's layout unchanged. Stronger empty states across `/my/dogs`,
+`/my/journal`, `/my/brief`, `/my/trainers` (filtered-empty), each with the
+warm, encouraging voice the product wants. Steady-state users see no
+change. ~14 new i18n keys with en/es parity. Gates green: tsc 0, lint 0,
+web tests all pass, build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-empty-state-polish.
