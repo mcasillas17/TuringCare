@@ -94,7 +94,7 @@ export function Courses() {
             {courses.map((co) => (
               <tr key={co.id} className="border-b border-silver hover:bg-surface-sand">
                 <td className="py-2 font-medium text-slate">
-                  <Link to={`/my/courses/${co.id}`} className="hover:underline">
+                  <Link to={`/courses/${co.id}`} className="hover:underline">
                     {co.name}
                   </Link>
                 </td>

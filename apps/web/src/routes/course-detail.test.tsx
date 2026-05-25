@@ -46,9 +46,9 @@ function renderDetail(course: unknown) {
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
-        <MemoryRouter initialEntries={["/my/courses/c1"]}>
+        <MemoryRouter initialEntries={["/courses/c1"]}>
           <Routes>
-            <Route path="/my/courses/:id" element={<CourseDetail />} />
+            <Route path="/courses/:id" element={<CourseDetail />} />
           </Routes>
         </MemoryRouter>
       </LocaleProvider>
@@ -81,6 +81,6 @@ describe("CourseDetail", () => {
     renderDetail(fullCourse);
     await screen.findByText("Puppy Manners 1");
     expect(document.querySelector('a[href^="mailto:"]')).toBeNull();
-    expect(document.querySelector('a[href^="/my/trainers"]')).toBeNull();
+    expect(document.querySelector('a[href^="/trainers"]')).toBeNull();
   });
 });

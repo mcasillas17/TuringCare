@@ -53,7 +53,7 @@ export function Trainers() {
         {trainers?.map((tr) => (
           <li key={tr.id}>
             <Link
-              to={`/my/trainers/${tr.id}`}
+              to={`/trainers/${tr.id}`}
               className="block rounded border border-silver bg-white p-4 hover:bg-surface-sand"
             >
               <span className="font-semibold text-slate">{tr.name}</span>

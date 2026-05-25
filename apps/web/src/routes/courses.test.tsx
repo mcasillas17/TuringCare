@@ -45,9 +45,9 @@ function renderList() {
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
-        <MemoryRouter initialEntries={["/my/courses"]}>
+        <MemoryRouter initialEntries={["/courses"]}>
           <Routes>
-            <Route path="/my/courses" element={<Courses />} />
+            <Route path="/courses" element={<Courses />} />
           </Routes>
         </MemoryRouter>
       </LocaleProvider>
@@ -67,7 +67,7 @@ describe("Courses", () => {
     mockFetchOnce({ courses: [sampleCourse] });
     renderList();
     const link = await screen.findByRole("link", { name: "Puppy Manners 1" });
-    expect(link).toHaveAttribute("href", "/my/courses/c1");
+    expect(link).toHaveAttribute("href", "/courses/c1");
   });
 
   it("renders the filter controls", async () => {

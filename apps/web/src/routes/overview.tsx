@@ -138,7 +138,7 @@ export function Overview() {
             {t("overview.qBrief")}
           </Link>
           <Link
-            to="/my/trainers"
+            to="/trainers"
             className="block rounded border border-silver bg-white p-2 text-center"
           >
             {t("overview.qTrainer")}
