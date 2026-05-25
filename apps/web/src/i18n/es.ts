@@ -276,6 +276,8 @@ export const es = {
     quickNotePlaceholder: "¿Qué pasó?",
     optionalIntensity: "Intensidad opcional",
     noIntensity: "Sin intensidad",
+    addIntensity: "Agregar intensidad",
+    clearIntensity: "Quitar intensidad",
     saveMoment: "Guardar momento",
     saveCheckIn: "Guardar revisión",
     trendBetter: "Mejor",
