@@ -354,6 +354,20 @@ Gate: biome clean, tsc clean, web tests 71/71, build clean.
 - Spec: `specs/2026-05-22-email-verify-banner-design.md`
 - Commits: branch `feat/verify-email-banner`.
 
+## 2026-05-22 — Behavior Brief sharing (read-only link) — SHIPPED
+MVP #4. Owners share a dog's Behavior Brief via a revocable, read-only public
+link `/b/<token>` (no recipient login). `briefs.shareToken` (unique, nullable;
+migration 0005 after merging training-progress and email-a-brief) snapshots the
+shared brief version. Owner-scoped `POST/DELETE /api/dogs/:id/brief/share` mint
+(idempotent, crypto-random base64url) / revoke; existing `GET …/brief` now
+carries `shareToken`. Public `GET /api/share/brief/:token` returns a strict
+whitelist (dogName, summary, status, version, generatedAt) — no userId/dog
+id/token; revoked + unknown both 404. Web: Share control on the brief page
+(create/copy/stop) + public `SharedBrief` page reusing the PDF download (with
+generatedAt). en+es parity. Full TDD; gate green (API 126 / web 100 / shared 28).
+- Spec/plan: `specs/2026-05-22-brief-sharing-design.md`, `plans/2026-05-22-brief-sharing.md`
+- Commits: this branch (see `git log`). Shipped as a PR from feat+brief-sharing.
+
 ## 2026-05-22 — Email a Behavior Brief to a trainer — SHIPPED
 Closes the last broken link in the MVP test loop. Owner generates → marks
 finalized → sends to any email address with an optional personal note. New
@@ -388,3 +402,156 @@ lint 0, build OK. Shipped as a PR from worktree-training-progress.
 - Spec/plan: `specs/2026-05-22-training-progress-design.md`,
   `plans/2026-05-22-training-progress.md`
 - Commits: this branch (see `git log`).
+
+## 2026-05-23 — MVP coverage: 404 + Privacy + Terms — SHIPPED
+Three small but MVP-blocking additions: friendly `/`-catchall NotFound page
+(any unknown URL no longer shows a blank screen); public `/privacy` page
+with a beta-honest privacy notice (what we collect, why, how to delete);
+public `/terms` page with brief beta terms (no warranty, acceptable use,
+changes). Landing footer + register form link to both. ~22 new i18n keys
+with en/es parity. Pure additive — no existing behavior changed. Gates
+green: tsc 0, lint 0, web tests all pass, build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-mvp-legal-pages.
+
+## 2026-05-23 — Empty-state polish + first-run wayfinding — SHIPPED
+A first-time tester now lands on a welcoming `/my` Overview with a clear
+"Add your first dog" CTA instead of cold zeros. Adaptive greeting swaps in
+based on state: `new` → welcome + CTA; `noEntries` → "Log your first
+entry" nudge; `noBrief` → "Generate your first Brief" nudge; `ready` →
+today's layout unchanged. Stronger empty states across `/my/dogs`,
+`/my/journal`, `/my/brief`, `/my/trainers` (filtered-empty), each with the
+warm, encouraging voice the product wants. Steady-state users see no
+change. ~14 new i18n keys with en/es parity. Gates green: tsc 0, lint 0,
+web tests all pass, build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-empty-state-polish.
+
+## 2026-05-23 — Settings completeness: change-password + delete-account — SHIPPED
+The Settings page was a skeleton: language toggle, sign-out, link to
+profile. Now it's a real page. **Change password** form (current + new +
+confirm, zod-validated, calls Better Auth's `changePassword` client
+method; toast on success, helpful error on wrong-current). **Delete
+account** double-confirm flow (intro panel → expand → type "delete" to
+unlock the Confirm button → call Better Auth's `deleteUser` → sign out →
+navigate home). Sectioned layout: Language / Account / Change password /
+Danger zone. ~20 new i18n keys with en/es parity (one shared literal
+`"delete"` is allowlisted in the parity test). Server-side: a single-line
+config flip in `apps/api/src/auth.ts` (`user.deleteUser.enabled: true`)
+to satisfy Better Auth's opt-in requirement on `POST /delete-user`; no
+schema changes — the existing FK cascades from `user` → `dogs` (and
+through to journal/briefs/training/concerns/goals/brief_sends) handle
+all data cleanup. Gates green: tsc 0, lint 0, web tests 116/116 (+16),
+build OK.
+- Spec/plan: `specs/2026-05-23-settings-completeness-design.md`,
+  `plans/2026-05-23-settings-completeness.md`
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-settings-completeness.
+
+## 2026-05-23 — Language toggle: flag popover — SHIPPED
+Reworked `LanguageToggle` from the single click-flip pill (PR #22) into a compact
+flag-only trigger (`🇺🇸 ▾`) that opens a small Radix `Popover` listing the
+language(s) you're not in, which you click to switch — so the other language is
+shown explicitly. Opens on desktop mouse hover OR click/tap + keyboard
+everywhere; closes on select / Escape / outside-click (Radix) / pointer-leave
+(120ms grace). a11y-first: click + keyboard always work, hover (`pointerType
+=== "mouse"`) is a desktop-only enhancement, and a hover-open suppresses Radix's
+auto-focus so a mouseover never steals focus. Drop-in (same export + `className`
+on the trigger; the 5 call sites unchanged). New `language.label` i18n key
+(en "Language" / es "Idioma"); reuses `switchTo`/`nameEn`/`nameEs`. Radix Popover
+needed a `ResizeObserver` (+ element no-op) test polyfill under jsdom. Built on
+the already-installed `radix-ui` (no new dep, no `ui/` wrapper). TDD via
+subagent-driven development; the component had two independent opus code reviews
+(double-click-dismiss, test-bent pointer guard, timer cleanup, hover focus-steal
+all fixed). 5 call-site tests updated for the new trigger name/flow. Gate green:
+biome 198, web 38 files / 132 tests, tsc 0, build OK.
+- Spec/plan: `specs/2026-05-23-language-toggle-popover-design.md`,
+  `plans/2026-05-23-language-toggle-popover.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-lang-toggle.
+
+## 2026-05-23 — Feedback channel — SHIPPED
+"Send feedback" mailto link added in two places: landing footer
+(alongside Privacy + Terms) and Settings → Account section. Opens the
+user's email client with `feedback@turingcare.dog` pre-filled and a
+TuringCare subject line. No form, no widget, no backend — minimal
+friction for testers to tell us what broke. One new i18n key
+(`footer.feedback`) with en/es parity. Owner is setting up
+`feedback@turingcare.dog` forwarding to their inbox on the DNS side
+(out-of-band). Gates green: tsc 0, lint 0, web tests all pass, build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-feedback-channel.
+
+## 2026-05-23 — Trainer-detail → Brief cross-link — SHIPPED
+Tightens the trainer-to-Brief send loop. Trainer-detail page now shows a
+"Send my Brief to this trainer" button (only when the trainer has an email
+on file). Deep-links to `/my/brief?recipient=<email>`; SendPanel reads the
+new optional `initialRecipient` prop and pre-fills its recipient field.
+Owner flow: browse trainer → click button → SendPanel is ready, click
+Send. Strictly additive — no existing behavior changed. ~1 new i18n key
+with en/es parity. Gates green: tsc 0, lint 0, web tests all pass,
+build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-trainer-cross-link.
+
+## 2026-05-24 — Courses section (curated directory) — SHIPPED
+New first-class Courses section: a curated, filterable directory of training
+classes, separate from Trainers. Each course is self-contained (inline
+provider fields — organizationName/city/state — no FK to trainers, no org
+table) with a small overview and a single deep link to the provider's
+canonical course page; nothing dynamic (schedule/instructor/price/spots) is
+replicated. New `courses` table + migration; public `GET /api/courses`
+(filters: ageGroup/format/state/online) + `/:id`; admin CRUD at
+`/api/admin/courses`. Web: `/my/courses` browse (compact table, row → detail),
+`/my/courses/:id` detail (overview + skills + "View full details & register
+↗"), `/admin/courses` CRUD, new Courses nav item. ~26 i18n keys en/es.
+Idempotent seed script loads Seattle Humane's 19-course catalog
+(`scripts/seed-seattle-humane.ts`). No journal/plan adoption (deferred
+Level-2). `brief.tsx`/`trainer-detail.tsx` untouched. Gates green: tsc 0,
+lint 0, web + api + shared tests pass, build OK.
+- Spec/plan: `specs/2026-05-24-courses-section-design.md`,
+  `plans/2026-05-24-courses-section.md`
+- Commits: this branch. Shipped as a PR from worktree-courses-section.
+
+## 2026-05-24 — Public Trainers + Courses directory — SHIPPED
+Moved Trainers + Courses out of `/my/*` to public top-level routes
+(`/trainers`, `/courses`, + `/:id`) — browsable by anyone, no login. New
+`optionalUser` middleware (session if present, never 401). Trainer contact is
+scrape-protected: the public list NEVER returns email/phone (even to authed
+users), and detail reveals them ONLY to authenticated requests; anonymous
+visitors see the profile + a "Sign up to contact" CTA. Courses are fully
+public (no PII; link-out to the provider page). Pages render in a new
+`PublicLayout` (auth-aware SiteNav + footer); SiteNav gains Trainers/Courses
+links (section anchors → `/#…`). Sidebar + all internal links + route-move
+test fixtures repointed. Admin CRUD unchanged. Gates green: tsc 0, lint 0,
+web + api + shared tests pass, build OK.
+- Spec/plan: `specs/2026-05-24-public-directory-design.md`,
+  `plans/2026-05-24-public-directory.md`
+- Commits: this branch. Shipped as a PR from worktree-public-directory.
+
+## 2026-05-25 — Seattle independent trainers seed — SHIPPED
+Idempotent seed (`scripts/seed-seattle-trainers.ts`) for 4 independent
+Seattle-area positive-reinforcement trainers, each sourced from their own
+public business site + Seattle Humane instructor bio: Cathy Madson (Cathy
+Madson Dog Training — aggression/reactivity, CPDT-KA/CBCC-KA/Fear Free),
+Olivia Petersen (Sound Connection — separation anxiety/reactivity, CCS/SAPro),
+Suzi McCaslin (Laying Down the Paw — basic manners, CPDT-KA), Laura Garzon
+(Kinfolk Canine — puppy fundamentals/boarding). Website always populated;
+email/phone only where publicly confirmed (missing contact fields left empty
+per product call). Idempotent by trainer name; validates each row against
+`trainerInputSchema`. Run: `pnpm --filter @turingcare/api exec tsx
+scripts/seed-seattle-trainers.ts`. Org staff with no independent practice
+(Christi Montgomery, Michelle Reindal) deliberately excluded — the Trainers
+directory is for independent practitioners. Data tooling only; no schema/API
+change. Test validates the 4-row array.
+- Commits: this branch. Shipped as a PR from worktree-seed-trainers.
+
+## 2026-05-25 — Directory chrome fix (adaptive layout) — SHIPPED
+Bugfix: a logged-in user opening a public directory page (e.g. "Find a
+trainer" from /my) lost their app shell — sidebar + top bar vanished —
+because /trainers and /courses always rendered in PublicLayout. New
+`DirectoryLayout` picks chrome by session: signed in → AppShell (sidebar +
+top bar; AppShell's own Outlet renders the page), anonymous → PublicLayout
+(SiteNav + footer). Brief null render while the session resolves avoids
+flashing the wrong chrome; in-app navigations are cached so the signed-in
+path is flicker-free. Zero AppShell changes. 3 new tests. Gates green.
+- Commits: this branch. Shipped as a PR from worktree-directory-chrome.

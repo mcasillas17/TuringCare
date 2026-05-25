@@ -6,34 +6,53 @@ import { LanguageToggle } from "./LanguageToggle";
 
 afterEach(() => localStorage.clear());
 
-function setup() {
+function setup(className?: string) {
   return render(
     <LocaleProvider>
-      <LanguageToggle />
+      <LanguageToggle className={className} />
     </LocaleProvider>,
   );
 }
 
-it("exposes EN and ES buttons by accessible name (flag is decorative)", () => {
-  setup();
-  expect(screen.getByRole("button", { name: "EN" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "ES" })).toBeInTheDocument();
-});
+// jsdom navigator.language is en-US, so the default locale is English.
 
-it("renders the country flag glyphs in the DOM", () => {
+it("shows a flag-only trigger labelled 'Language' and hides the other language until opened", () => {
   const { container } = setup();
+  expect(screen.getByRole("button", { name: "Language" })).toBeInTheDocument();
   expect(container.textContent).toContain("🇺🇸");
-  expect(container.textContent).toContain("🇲🇽");
+  expect(screen.queryByRole("button", { name: /español/i })).not.toBeInTheDocument();
 });
 
-it("reflects the active locale via aria-pressed and switches on click", async () => {
+it("opens via keyboard and switches locale when the other language is picked", async () => {
   setup();
-  const en = screen.getByRole("button", { name: "EN" });
-  const es = screen.getByRole("button", { name: "ES" });
-  expect(en).toHaveAttribute("aria-pressed", "true");
-  expect(es).toHaveAttribute("aria-pressed", "false");
+  screen.getByRole("button", { name: "Language" }).focus();
+  await userEvent.keyboard("{Enter}");
+  await userEvent.click(await screen.findByRole("button", { name: /español/i }));
+  // After switching, the trigger's accessible name localizes to "Idioma".
+  expect(screen.getByRole("button", { name: "Idioma" }).textContent).toContain("🇲🇽");
+  expect(screen.queryByRole("button", { name: /español/i })).not.toBeInTheDocument();
+});
 
-  await userEvent.click(es);
-  expect(screen.getByRole("button", { name: "ES" })).toHaveAttribute("aria-pressed", "true");
-  expect(screen.getByRole("button", { name: "EN" })).toHaveAttribute("aria-pressed", "false");
+it("closes on Escape", async () => {
+  setup();
+  screen.getByRole("button", { name: "Language" }).focus();
+  await userEvent.keyboard("{Enter}");
+  expect(await screen.findByRole("button", { name: /español/i })).toBeInTheDocument();
+  await userEvent.keyboard("{Escape}");
+  expect(screen.queryByRole("button", { name: /español/i })).not.toBeInTheDocument();
+});
+
+it("opens on desktop mouse hover", async () => {
+  setup();
+  await userEvent.hover(screen.getByRole("button", { name: "Language" }));
+  expect(await screen.findByRole("button", { name: /español/i })).toBeInTheDocument();
+});
+
+it("passes className through to the trigger button", () => {
+  setup("absolute right-4 top-4");
+  expect(screen.getByRole("button", { name: "Language" })).toHaveClass(
+    "absolute",
+    "right-4",
+    "top-4",
+  );
 });

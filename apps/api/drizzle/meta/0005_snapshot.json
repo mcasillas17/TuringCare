@@ -1,5 +1,5 @@
 {
-  "id": "c4817933-3a86-4701-92ed-4f019e2a21b9",
+  "id": "f71ac023-e5cf-4718-8e93-80f5cad86b39",
   "prevId": "3ead7430-6829-4ab1-b664-67535d3aa3cc",
   "version": "7",
   "dialect": "postgresql",
@@ -280,6 +280,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 1
+        },
+        "share_token": {
+          "name": "share_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -299,7 +305,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "briefs_share_token_unique": {
+          "name": "briefs_share_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "share_token"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -562,56 +576,35 @@
           "primaryKey": false,
           "notNull": true
         },
-        "kind": {
-          "name": "kind",
-          "type": "journal_entry_kind",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'moment'"
-        },
         "occurred_at": {
           "name": "occurred_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "trend": {
-          "name": "trend",
-          "type": "journal_trend",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
         "antecedent": {
           "name": "antecedent",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "behavior": {
           "name": "behavior",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "consequence": {
           "name": "consequence",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "intensity": {
           "name": "intensity",
           "type": "integer",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "duration_seconds": {
           "name": "duration_seconds",
@@ -677,17 +670,9 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "journal_intensity_range": {
-          "name": "journal_intensity_range",
-          "value": "\"journal_entries\".\"intensity\" IS NULL OR \"journal_entries\".\"intensity\" BETWEEN 1 AND 5"
-        },
-        "journal_daily_checkin_trend": {
-          "name": "journal_daily_checkin_trend",
-          "value": "\"journal_entries\".\"kind\" <> 'daily_checkin' OR \"journal_entries\".\"trend\" IS NOT NULL"
-        },
-        "journal_moment_trend_null": {
-          "name": "journal_moment_trend_null",
-          "value": "\"journal_entries\".\"kind\" <> 'moment' OR \"journal_entries\".\"trend\" IS NULL"
+        "intensity_range": {
+          "name": "intensity_range",
+          "value": "\"journal_entries\".\"intensity\" BETWEEN 1 AND 5"
         }
       },
       "isRLSEnabled": false
@@ -1277,23 +1262,6 @@
         "rescue",
         "shelter",
         "other"
-      ]
-    },
-    "public.journal_entry_kind": {
-      "name": "journal_entry_kind",
-      "schema": "public",
-      "values": [
-        "moment",
-        "daily_checkin"
-      ]
-    },
-    "public.journal_trend": {
-      "name": "journal_trend",
-      "schema": "public",
-      "values": [
-        "better",
-        "same",
-        "harder"
       ]
     },
     "public.user_role": {

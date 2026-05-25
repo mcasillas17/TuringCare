@@ -1,4 +1,5 @@
 import { useI18n } from "@/i18n";
+import { Link } from "react-router-dom";
 
 export function SiteFooter() {
   const { t } = useI18n();
@@ -21,6 +22,18 @@ export function SiteFooter() {
           </a>
           <a href="#faq" className="hover:text-gold">
             {t("footer.navFaq")}
+          </a>
+          <Link to="/privacy" className="hover:text-gold">
+            {t("footer.privacy")}
+          </Link>
+          <Link to="/terms" className="hover:text-gold">
+            {t("footer.terms")}
+          </Link>
+          <a
+            href="mailto:feedback@turingcare.dog?subject=TuringCare%20feedback"
+            className="hover:text-gold"
+          >
+            {t("footer.feedback")}
           </a>
         </nav>
       </div>

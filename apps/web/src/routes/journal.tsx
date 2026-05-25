@@ -149,7 +149,12 @@ export function Journal() {
       )}
 
       {isError && <p className="text-red-600">{t("journal.loadError")}</p>}
-      {entries?.length === 0 && <p className="text-slate-soft">{t("journal.empty")}</p>}
+      {entries?.length === 0 && (
+        <section className="space-y-2 rounded border border-silver bg-white p-6 text-center">
+          <h2 className="text-lg font-semibold text-slate">{t("journal.emptyTitle")}</h2>
+          <p className="text-slate-soft">{t("journal.emptyBody")}</p>
+        </section>
+      )}
       <ul className="space-y-2">
         {entries?.map((entry) => {
           const normalized = normalizeEntry(entry);

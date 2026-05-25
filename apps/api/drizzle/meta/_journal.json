@@ -40,8 +40,22 @@
     {
       "idx": 5,
       "version": "7",
-      "when": 1779518657644,
-      "tag": "0005_journal_quick_capture",
+      "when": 1779513369154,
+      "tag": "0005_melted_terror",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779686958606,
+      "tag": "0006_real_tigra",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779747590239,
+      "tag": "0007_parched_tattoo",
       "breakpoints": true
     }
   ]

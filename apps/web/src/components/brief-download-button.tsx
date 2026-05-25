@@ -14,11 +14,18 @@ export function BriefDownloadButton({
   brief,
   dog,
 }: {
-  brief: BriefForPdf;
+  // Structural subset of what `buildBriefPdfModel` actually reads. `generatedAt`
+  // is optional so the public shared-brief page can pass a minimal brief that
+  // omits it; the model tolerates a missing/empty value.
+  brief: Omit<BriefForPdf, "generatedAt"> & { generatedAt?: string };
   dog: DogForPdf | undefined;
 }) {
   const { t, locale } = useI18n();
-  const model = buildBriefPdfModel({ brief, dog, locale });
+  const model = buildBriefPdfModel({
+    brief: { ...brief, generatedAt: brief.generatedAt ?? "" },
+    dog,
+    locale,
+  });
   return (
     <PDFDownloadLink
       document={<BriefPdfDocument model={model} />}

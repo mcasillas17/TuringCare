@@ -43,12 +43,17 @@ export function Trainers() {
         </button>
       </div>
       {isError && <p className="text-red-600">{t("trainersDir.loadError")}</p>}
-      {trainers?.length === 0 && <p className="text-slate-soft">{t("trainersDir.empty")}</p>}
+      {trainers?.length === 0 &&
+        (state || specialty ? (
+          <p className="text-slate">{t("trainersDir.emptyFiltered")}</p>
+        ) : (
+          <p className="text-slate-soft">{t("trainersDir.empty")}</p>
+        ))}
       <ul className="space-y-2">
         {trainers?.map((tr) => (
           <li key={tr.id}>
             <Link
-              to={`/my/trainers/${tr.id}`}
+              to={`/trainers/${tr.id}`}
               className="block rounded border border-silver bg-white p-4 hover:bg-surface-sand"
             >
               <span className="font-semibold text-slate">{tr.name}</span>

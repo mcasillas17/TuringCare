@@ -1,9 +1,12 @@
+import { DirectoryLayout } from "@/components/DirectoryLayout";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/i18n";
 import { PageViewTracker } from "@/lib/track";
 import { RequireAdmin } from "@/routes/admin/require-admin";
 import { Brief } from "@/routes/brief";
+import { CourseDetail } from "@/routes/course-detail";
+import { Courses } from "@/routes/courses";
 import { DogDetail } from "@/routes/dog-detail";
 import { DogForm } from "@/routes/dog-form";
 import { DogsList } from "@/routes/dogs-list";
@@ -11,13 +14,17 @@ import { ForgotPassword } from "@/routes/forgot-password";
 import { Journal } from "@/routes/journal";
 import { Landing } from "@/routes/landing";
 import { Login } from "@/routes/login";
+import { NotFound } from "@/routes/not-found";
 import { Overview } from "@/routes/overview";
+import { Privacy } from "@/routes/privacy";
 import { Profile } from "@/routes/profile";
 import { RedirectIfAuthed } from "@/routes/redirect-if-authed";
 import { Register } from "@/routes/register";
 import { RequireAuth } from "@/routes/require-auth";
 import { ResetPassword } from "@/routes/reset-password";
 import { Settings } from "@/routes/settings";
+import { SharedBrief } from "@/routes/shared-brief";
+import { Terms } from "@/routes/terms";
 import { TrainerDetail } from "@/routes/trainer-detail";
 import { Trainers } from "@/routes/trainers";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -32,6 +39,10 @@ const AdminDashboard = lazy(() =>
 
 const AdminTrainers = lazy(() =>
   import("@/routes/admin/trainers").then((m) => ({ default: m.AdminTrainers })),
+);
+
+const AdminCourses = lazy(() =>
+  import("@/routes/admin/courses").then((m) => ({ default: m.AdminCourses })),
 );
 
 const queryClient = new QueryClient();
@@ -62,6 +73,15 @@ createRoot(document.getElementById("root") as HTMLElement).render(
             />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/b/:token" element={<SharedBrief />} />
+            <Route element={<DirectoryLayout />}>
+              <Route path="/trainers" element={<Trainers />} />
+              <Route path="/trainers/:id" element={<TrainerDetail />} />
+              <Route path="/courses" element={<Courses />} />
+              <Route path="/courses/:id" element={<CourseDetail />} />
+            </Route>
             <Route
               element={
                 <RequireAuth>
@@ -77,8 +97,6 @@ createRoot(document.getElementById("root") as HTMLElement).render(
               <Route path="/my/dogs/:id/brief" element={<Brief />} />
               <Route path="/my/journal" element={<Journal />} />
               <Route path="/my/brief" element={<Brief />} />
-              <Route path="/my/trainers" element={<Trainers />} />
-              <Route path="/my/trainers/:id" element={<TrainerDetail />} />
               <Route path="/my/profile" element={<Profile />} />
               <Route path="/my/settings" element={<Settings />} />
             </Route>
@@ -102,6 +120,17 @@ createRoot(document.getElementById("root") as HTMLElement).render(
                 </RequireAdmin>
               }
             />
+            <Route
+              path="/admin/courses"
+              element={
+                <RequireAdmin>
+                  <Suspense fallback={<p className="p-8">Loading…</p>}>
+                    <AdminCourses />
+                  </Suspense>
+                </RequireAdmin>
+              }
+            />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
         <Toaster />

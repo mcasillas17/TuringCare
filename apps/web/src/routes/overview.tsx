@@ -3,6 +3,19 @@ import { useDogs } from "@/lib/dogs";
 import { useOverview } from "@/lib/overview";
 import { Link } from "react-router-dom";
 
+type FirstRunStage = "new" | "noEntries" | "noBrief" | "ready";
+
+function deriveStage(
+  dogCount: number,
+  entryCount: number,
+  briefStatus: string | null | undefined,
+): FirstRunStage {
+  if (dogCount === 0) return "new";
+  if (entryCount === 0) return "noEntries";
+  if (briefStatus !== "finalized") return "noBrief";
+  return "ready";
+}
+
 export function Overview() {
   const { t } = useI18n();
   const { data: o, isLoading, isError } = useOverview();
@@ -10,6 +23,22 @@ export function Overview() {
 
   if (isLoading) return <p>{t("common.loading")}</p>;
   if (isError || !o) return <p className="text-red-600">{t("dogs.loadError")}</p>;
+
+  const stage = deriveStage(o.dogCount, o.journalEntryCount, o.latestBrief?.status ?? null);
+
+  if (stage === "new") {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <section className="space-y-4 rounded border border-silver bg-white p-6 text-center">
+          <h1 className="text-2xl font-bold text-slate">{t("overview.welcomeTitle")}</h1>
+          <p className="text-slate-soft">{t("overview.welcomeBody")}</p>
+          <Link to="/my/dogs/new" className="inline-block rounded bg-slate px-4 py-2 text-cream">
+            {t("overview.startHereCta")}
+          </Link>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -30,6 +59,18 @@ export function Overview() {
           </div>
         </div>
       </div>
+      {stage === "noBrief" && (
+        <section className="space-y-2 rounded border border-silver bg-white p-4">
+          <h2 className="font-semibold text-slate">{t("overview.nudgeNoBriefTitle")}</h2>
+          <p className="text-slate-soft text-sm">{t("overview.nudgeNoBriefBody")}</p>
+          <Link
+            to="/my/brief"
+            className="inline-block rounded bg-slate px-3 py-1 text-sm text-cream"
+          >
+            {t("overview.nudgeNoBriefCta")}
+          </Link>
+        </section>
+      )}
       <div className="grid gap-6 md:grid-cols-3">
         <div className="md:col-span-2 space-y-4">
           <section>
@@ -54,7 +95,18 @@ export function Overview() {
           </section>
           <section>
             <h2 className="mb-2 font-semibold text-slate">{t("overview.recent")}</h2>
-            {o.recentActivity.length === 0 ? (
+            {stage === "noEntries" ? (
+              <div className="space-y-2 rounded border border-silver bg-white p-4">
+                <h3 className="font-semibold text-slate">{t("overview.nudgeNoEntriesTitle")}</h3>
+                <p className="text-slate-soft text-sm">{t("overview.nudgeNoEntriesBody")}</p>
+                <Link
+                  to="/my/journal"
+                  className="inline-block rounded bg-slate px-3 py-1 text-sm text-cream"
+                >
+                  {t("overview.nudgeNoEntriesCta")}
+                </Link>
+              </div>
+            ) : o.recentActivity.length === 0 ? (
               <p className="text-slate-soft">{t("overview.noActivity")}</p>
             ) : (
               <ul className="rounded border border-silver bg-white p-3 text-sm">
@@ -86,7 +138,7 @@ export function Overview() {
             {t("overview.qBrief")}
           </Link>
           <Link
-            to="/my/trainers"
+            to="/trainers"
             className="block rounded border border-silver bg-white p-2 text-center"
           >
             {t("overview.qTrainer")}
