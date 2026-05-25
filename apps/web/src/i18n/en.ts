@@ -11,6 +11,7 @@ export const en = {
     howItWorks: "How it works",
     brief: "Behavior Brief",
     trainers: "Trainers",
+    courses: "Courses",
     faq: "FAQ",
     login: "Log in",
     getStarted: "Get started",
@@ -384,6 +385,8 @@ export const en = {
     phone: "Phone",
     loadError: "Couldn't load trainers.",
     sendBriefCta: "Send my Brief to this trainer",
+    signUpToContact: "Sign up to contact this trainer.",
+    signUpToContactCta: "Sign up",
   },
   courses: {
     title: "Courses",
