@@ -555,3 +555,27 @@ top bar; AppShell's own Outlet renders the page), anonymous → PublicLayout
 flashing the wrong chrome; in-app navigations are cached so the signed-in
 path is flicker-free. Zero AppShell changes. 3 new tests. Gates green.
 - Commits: this branch. Shipped as a PR from worktree-directory-chrome.
+
+## 2026-05-25 — Journal quick-capture redesign — SHIPPED (revived)
+Makes logging fast: primary "Log a moment" (dog + plain `note` + optional
+intensity, <30s), secondary "Daily check-in" (better/same/harder + note), with
+ABC + the structured fields demoted to optional post-save enrichment instead of
+prerequisites. Schema migration relaxes ABC/intensity to optional, adds `kind`
+(moment|daily_checkin), required `note`, and `trend` enums, with data-safe
+backfill of `note` from existing ABC + CHECK constraints (intensity-nullable
+range, daily_checkin requires trend, moment forbids trend). New dedicated
+`/api/journal` route module; new web composers (quick-moment, daily-check-in,
+post-save-follow-ups, structured-details-editor) + entry-card rewrite +
+dog-specific entry points from `/my/dogs/:id`. This branch was built in an
+earlier session and orphaned during the MVP/courses/trainers work; revived by
+merging current `origin/main` (through #34) — renumbered its migration 0005 →
+0007 (preserving the hand-crafted data backfill; drizzle-generated the snapshot),
+unioned the journal i18n keys, and took the quick-capture journal.tsx over the
+superseded #25 empty-state tweaks. Gates green: tsc 0, lint 0, api 154 / web
+157 / shared 35, build OK, migration applies cleanly.
+- Spec/plan: `specs/2026-05-22-journal-quick-capture-design.md`,
+  `plans/2026-05-23-journal-quick-capture.md`
+- Follow-ups: composer components lack dedicated unit tests (flow covered by
+  journal route tests); a few superseded #25 i18n keys (emptyTitle/emptyBody/
+  noDogsCta/add) are now unused.
+- Commits: this branch. Shipped as a PR from feature/journal-quick-capture-implementation.

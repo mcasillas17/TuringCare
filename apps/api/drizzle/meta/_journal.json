@@ -50,6 +50,13 @@
       "when": 1779686958606,
       "tag": "0006_real_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779747590239,
+      "tag": "0007_parched_tattoo",
+      "breakpoints": true
     }
   ]
 }

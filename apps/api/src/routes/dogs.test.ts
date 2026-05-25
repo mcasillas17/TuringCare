@@ -13,6 +13,15 @@ const validDog = {
   spayedNeutered: true,
 };
 
+function expectValidationIssue(body: unknown, path: string) {
+  const result = body as {
+    success?: boolean;
+    error?: { issues?: Array<{ path?: Array<string | number> }> };
+  };
+  expect(result.success).toBe(false);
+  expect(result.error?.issues?.some((issue) => issue.path?.includes(path))).toBe(true);
+}
+
 describe("dogs: list & create", () => {
   const users: TestUser[] = [];
   afterEach(async () => {
@@ -251,14 +260,12 @@ describe("dogs: journal", () => {
     return ((await r.json()) as { dog: { id: string } }).dog;
   }
   const entry = {
-    occurredAt: "2026-05-19T10:00",
-    antecedent: "Doorbell",
-    behavior: "Barked 8s",
-    consequence: "Scatter fed",
+    kind: "moment",
+    note: "Barked at the doorbell",
     intensity: 3,
   };
 
-  it("adds, lists, deletes a journal entry", async () => {
+  it("adds, lists, updates, and deletes a note-first moment", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
@@ -268,7 +275,38 @@ describe("dogs: journal", () => {
       body: JSON.stringify(entry),
     });
     expect(add.status).toBe(201);
-    const { entry: created } = (await add.json()) as { entry: { id: string } };
+    const { entry: created } = (await add.json()) as {
+      entry: {
+        id: string;
+        note: string;
+        kind: string;
+        occurredAt: string;
+        antecedent: string | null;
+        behavior: string | null;
+        consequence: string | null;
+        intensity: number | null;
+      };
+    };
+    expect(created).toMatchObject({
+      note: "Barked at the doorbell",
+      kind: "moment",
+      antecedent: null,
+      behavior: null,
+      consequence: null,
+      intensity: 3,
+    });
+    expect(new Date(created.occurredAt).toString()).not.toBe("Invalid Date");
+
+    const update = await app.request(`/api/dogs/${dog.id}/journal/${created.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ antecedent: "Doorbell rang" }),
+    });
+    expect(update.status).toBe(200);
+    expect(((await update.json()) as { entry: { antecedent: string } }).entry.antecedent).toBe(
+      "Doorbell rang",
+    );
+
     const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
     expect(((await list.json()) as { entries: unknown[] }).entries).toHaveLength(1);
     const del = await app.request(`/api/dogs/${dog.id}/journal/${created.id}`, {
@@ -289,6 +327,45 @@ describe("dogs: journal", () => {
       body: JSON.stringify({ ...entry, intensity: 9 }),
     });
     expect(r.status).toBe(400);
+  });
+  it("rejects invalid occurredAt on POST without inserting", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const r = await app.request(`/api/dogs/${dog.id}/journal`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ ...entry, occurredAt: "not-a-date" }),
+    });
+    expect(r.status).toBe(400);
+    expectValidationIssue(await r.json(), "occurredAt");
+
+    const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
+    expect(((await list.json()) as { entries: unknown[] }).entries).toEqual([]);
+  });
+  it("creates a daily check-in with trend and no intensity", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const add = await app.request(`/api/dogs/${dog.id}/journal`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        kind: "daily_checkin",
+        trend: "better",
+        note: "Settled faster after lunch.",
+      }),
+    });
+    expect(add.status).toBe(201);
+    const body = (await add.json()) as {
+      entry: { kind: string; trend: string; note: string; intensity: number | null };
+    };
+    expect(body.entry).toMatchObject({
+      kind: "daily_checkin",
+      trend: "better",
+      note: "Settled faster after lunch.",
+      intensity: null,
+    });
   });
   it("owner isolation: other user 404 on list/add", async () => {
     const a = await createTestUser();
@@ -793,13 +870,36 @@ describe("dogs: journal PUT", () => {
       method: "POST",
       headers: u.authHeaders,
       body: JSON.stringify({
-        occurredAt: "2026-05-19T10:00",
+        kind: "moment",
+        note: "Barked at the doorbell",
+        occurredAt: "2026-05-19T10:00:00.000Z",
         antecedent: "Doorbell",
         behavior: "Barked 8s",
         consequence: "Scatter fed",
         intensity: 3,
+        location: "Front hall",
+        notes: "Loud but short",
+        durationSeconds: 8,
+        recoverySeconds: 20,
+        peoplePresent: "Owner",
+        ownerResponse: "Scatter fed",
       }),
     });
+    expect(r.status).toBe(201);
+    return ((await r.json()) as { entry: { id: string } }).entry;
+  }
+  async function makeDailyCheckinEntry(u: TestUser, dogId: string) {
+    const r = await app.request(`/api/dogs/${dogId}/journal`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        kind: "daily_checkin",
+        note: "Easier morning overall",
+        trend: "same",
+        occurredAt: "2026-05-19T11:00:00.000Z",
+      }),
+    });
+    expect(r.status).toBe(201);
     return ((await r.json()) as { entry: { id: string } }).entry;
   }
 
@@ -857,6 +957,125 @@ describe("dogs: journal PUT", () => {
       }),
     });
     expect(r.status).toBe(400);
+  });
+
+  it("PUT rejects converting a moment to daily_checkin without a trend", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const e = await makeEntry(u, dog.id);
+    const r = await app.request(`/api/dogs/${dog.id}/journal/${e.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ kind: "daily_checkin" }),
+    });
+    expect(r.status).toBe(400);
+    expectValidationIssue(await r.json(), "trend");
+
+    const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
+    const { entries } = (await list.json()) as {
+      entries: Array<{ id: string; kind: string; trend: string | null }>;
+    };
+    expect(entries.find((entry) => entry.id === e.id)).toMatchObject({
+      kind: "moment",
+      trend: null,
+    });
+  });
+
+  it("PUT converting a moment to daily_checkin with a trend clears moment-only fields", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const e = await makeEntry(u, dog.id);
+    const r = await app.request(`/api/dogs/${dog.id}/journal/${e.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        kind: "daily_checkin",
+        trend: "better",
+        antecedent: "New antecedent",
+        behavior: "New behavior",
+        consequence: "New consequence",
+        intensity: 5,
+        location: "Kitchen",
+        notes: "Should be cleared",
+        durationSeconds: 3,
+        recoverySeconds: 7,
+        peoplePresent: "Owner and trainer",
+        ownerResponse: "Marked and rewarded",
+      }),
+    });
+    expect(r.status).toBe(200);
+    const { entry: updated } = (await r.json()) as {
+      entry: {
+        kind: string;
+        trend: string | null;
+        antecedent: string | null;
+        behavior: string | null;
+        consequence: string | null;
+        intensity: number | null;
+        location: string | null;
+        notes: string | null;
+        durationSeconds: number | null;
+        recoverySeconds: number | null;
+        peoplePresent: string | null;
+        ownerResponse: string | null;
+      };
+    };
+    expect(updated).toMatchObject({
+      kind: "daily_checkin",
+      trend: "better",
+      antecedent: null,
+      behavior: null,
+      consequence: null,
+      intensity: null,
+      location: null,
+      notes: null,
+      durationSeconds: null,
+      recoverySeconds: null,
+      peoplePresent: null,
+      ownerResponse: null,
+    });
+  });
+
+  it("PUT converting a daily_checkin to moment clears trend", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const e = await makeDailyCheckinEntry(u, dog.id);
+    const r = await app.request(`/api/dogs/${dog.id}/journal/${e.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ kind: "moment", antecedent: "Doorbell" }),
+    });
+    expect(r.status).toBe(200);
+    const { entry: updated } = (await r.json()) as {
+      entry: { kind: string; trend: string | null; antecedent: string | null };
+    };
+    expect(updated).toMatchObject({ kind: "moment", trend: null, antecedent: "Doorbell" });
+  });
+
+  it("PUT rejects invalid occurredAt without updating", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const e = await makeEntry(u, dog.id);
+    const r = await app.request(`/api/dogs/${dog.id}/journal/${e.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ occurredAt: "not-a-date", note: "Should not persist" }),
+    });
+    expect(r.status).toBe(400);
+    expectValidationIssue(await r.json(), "occurredAt");
+
+    const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
+    const { entries } = (await list.json()) as {
+      entries: Array<{ id: string; note: string; occurredAt: string }>;
+    };
+    expect(entries.find((entry) => entry.id === e.id)).toMatchObject({
+      note: "Barked at the doorbell",
+      occurredAt: "2026-05-19T10:00:00.000Z",
+    });
   });
 
   it("PUT owner-isolation: other user → 404", async () => {

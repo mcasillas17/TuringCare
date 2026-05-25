@@ -42,7 +42,11 @@ describe("Overview", () => {
         journalEntryCount: 2,
         latestBrief: { status: "finalized" },
         recentActivity: [
-          { dogName: "Biscuit", behavior: "Barked", occurredAt: "2026-05-19T10:00:00.000Z" },
+          {
+            dogName: "Biscuit",
+            behavior: "Barked at delivery truck",
+            occurredAt: "2026-05-19T10:00:00.000Z",
+          },
         ],
       },
       [{ id: "d1", name: "Biscuit" }],
@@ -55,7 +59,7 @@ describe("Overview", () => {
     if (dogsSection) {
       expect(within(dogsSection).getByText("Biscuit")).toBeInTheDocument();
     }
-    expect(screen.getByText(/Barked/)).toBeInTheDocument();
+    expect(screen.getByText(/Barked at delivery truck/)).toBeInTheDocument();
   });
 
   it("shows welcome panel when dogCount is 0", async () => {
