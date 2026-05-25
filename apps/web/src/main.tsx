@@ -40,6 +40,10 @@ const AdminTrainers = lazy(() =>
   import("@/routes/admin/trainers").then((m) => ({ default: m.AdminTrainers })),
 );
 
+const AdminCourses = lazy(() =>
+  import("@/routes/admin/courses").then((m) => ({ default: m.AdminCourses })),
+);
+
 const queryClient = new QueryClient();
 
 createRoot(document.getElementById("root") as HTMLElement).render(
@@ -109,6 +113,16 @@ createRoot(document.getElementById("root") as HTMLElement).render(
                 <RequireAdmin>
                   <Suspense fallback={<p className="p-8">Loading…</p>}>
                     <AdminTrainers />
+                  </Suspense>
+                </RequireAdmin>
+              }
+            />
+            <Route
+              path="/admin/courses"
+              element={
+                <RequireAdmin>
+                  <Suspense fallback={<p className="p-8">Loading…</p>}>
+                    <AdminCourses />
                   </Suspense>
                 </RequireAdmin>
               }

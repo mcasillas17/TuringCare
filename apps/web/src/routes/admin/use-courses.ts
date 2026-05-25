@@ -3,6 +3,8 @@ import type { Course } from "@/lib/courses";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CourseInput } from "@turingcare/shared";
 
+export type { Course };
+
 const COURSES_KEY = ["admin", "courses"] as const;
 
 export function useAdminCourses() {
