@@ -544,3 +544,14 @@ scripts/seed-seattle-trainers.ts`. Org staff with no independent practice
 directory is for independent practitioners. Data tooling only; no schema/API
 change. Test validates the 4-row array.
 - Commits: this branch. Shipped as a PR from worktree-seed-trainers.
+
+## 2026-05-25 — Directory chrome fix (adaptive layout) — SHIPPED
+Bugfix: a logged-in user opening a public directory page (e.g. "Find a
+trainer" from /my) lost their app shell — sidebar + top bar vanished —
+because /trainers and /courses always rendered in PublicLayout. New
+`DirectoryLayout` picks chrome by session: signed in → AppShell (sidebar +
+top bar; AppShell's own Outlet renders the page), anonymous → PublicLayout
+(SiteNav + footer). Brief null render while the session resolves avoids
+flashing the wrong chrome; in-app navigations are cached so the signed-in
+path is flicker-free. Zero AppShell changes. 3 new tests. Gates green.
+- Commits: this branch. Shipped as a PR from worktree-directory-chrome.

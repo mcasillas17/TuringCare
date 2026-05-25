@@ -1,4 +1,4 @@
-import { PublicLayout } from "@/components/PublicLayout";
+import { DirectoryLayout } from "@/components/DirectoryLayout";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/i18n";
@@ -76,38 +76,12 @@ createRoot(document.getElementById("root") as HTMLElement).render(
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/b/:token" element={<SharedBrief />} />
-            <Route
-              path="/trainers"
-              element={
-                <PublicLayout>
-                  <Trainers />
-                </PublicLayout>
-              }
-            />
-            <Route
-              path="/trainers/:id"
-              element={
-                <PublicLayout>
-                  <TrainerDetail />
-                </PublicLayout>
-              }
-            />
-            <Route
-              path="/courses"
-              element={
-                <PublicLayout>
-                  <Courses />
-                </PublicLayout>
-              }
-            />
-            <Route
-              path="/courses/:id"
-              element={
-                <PublicLayout>
-                  <CourseDetail />
-                </PublicLayout>
-              }
-            />
+            <Route element={<DirectoryLayout />}>
+              <Route path="/trainers" element={<Trainers />} />
+              <Route path="/trainers/:id" element={<TrainerDetail />} />
+              <Route path="/courses" element={<Courses />} />
+              <Route path="/courses/:id" element={<CourseDetail />} />
+            </Route>
             <Route
               element={
                 <RequireAuth>
