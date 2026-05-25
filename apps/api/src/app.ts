@@ -8,6 +8,7 @@ import { env } from "./env";
 import { globalRateLimit } from "./middleware/rate-limit";
 import { adminApp } from "./routes/admin";
 import { adminTrainersApp } from "./routes/admin-trainers";
+import { coursesApp } from "./routes/courses";
 import { dogsApp } from "./routes/dogs";
 import { overviewApp } from "./routes/overview";
 import { profileApp } from "./routes/profile";
@@ -55,6 +56,7 @@ const app = new Hono()
     return c.json({ ok: true } as const, 202);
   })
   .route("/api/overview", overviewApp)
+  .route("/api/courses", coursesApp)
   .route("/api/trainers", trainersApp)
   .route("/api/profile", profileApp)
   .route("/api/admin", adminApp)
