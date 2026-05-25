@@ -19,7 +19,7 @@ export function QuickMomentComposer({ dogs, selectedDogId, onDogChange, onSaved 
   const { t } = useI18n();
   const add = useAddEntry(selectedDogId);
   const [note, setNote] = useState("");
-  const [intensity, setIntensity] = useState("");
+  const [intensity, setIntensity] = useState<number | null>(null);
 
   const save = async () => {
     const trimmed = note.trim();
@@ -36,10 +36,10 @@ export function QuickMomentComposer({ dogs, selectedDogId, onDogChange, onSaved 
       const entry = await add.mutateAsync({
         kind: "moment",
         note: trimmed,
-        intensity: intensity ? Number(intensity) : undefined,
+        intensity: intensity ?? undefined,
       });
       setNote("");
-      setIntensity("");
+      setIntensity(null);
       toast.success(t("journal.saved"));
       onSaved(entry);
     } catch {
@@ -85,22 +85,50 @@ export function QuickMomentComposer({ dogs, selectedDogId, onDogChange, onSaved 
           onChange={(event) => setNote(event.target.value)}
         />
       </label>
-      <label className="block" htmlFor="quick-moment-intensity">
+      <div className="space-y-1">
         <span className="text-sm font-medium text-slate">{t("journal.optionalIntensity")}</span>
-        <select
-          id="quick-moment-intensity"
-          className={input}
-          value={intensity}
-          onChange={(event) => setIntensity(event.target.value)}
-        >
-          <option value="">{t("journal.noIntensity")}</option>
-          {[1, 2, 3, 4, 5].map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </label>
+        {intensity === null ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full justify-center"
+            onClick={() => setIntensity(3)}
+          >
+            + {t("journal.addIntensity")}
+          </Button>
+        ) : (
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <input
+                id="quick-moment-intensity"
+                type="range"
+                min={1}
+                max={5}
+                step={1}
+                value={intensity}
+                aria-label={t("journal.optionalIntensity")}
+                aria-valuetext={String(intensity)}
+                onChange={(event) => setIntensity(Number(event.target.value))}
+                className="flex-1 accent-slate"
+              />
+              <span className="w-5 text-center text-sm font-semibold text-slate">{intensity}</span>
+              <button
+                type="button"
+                onClick={() => setIntensity(null)}
+                aria-label={t("journal.clearIntensity")}
+                className="px-1 text-slate-soft hover:text-slate"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex justify-between px-1 text-xs text-slate-soft" aria-hidden="true">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <span key={n}>{n}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
       <Button type="submit" disabled={add.isPending} className="bg-slate text-cream">
         {add.isPending ? t("journal.saving") : t("journal.saveMoment")}
       </Button>
