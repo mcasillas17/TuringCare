@@ -575,7 +575,13 @@ superseded #25 empty-state tweaks. Gates green: tsc 0, lint 0, api 154 / web
 157 / shared 35, build OK, migration applies cleanly.
 - Spec/plan: `specs/2026-05-22-journal-quick-capture-design.md`,
   `plans/2026-05-23-journal-quick-capture.md`
-- Follow-ups: composer components lack dedicated unit tests (flow covered by
-  journal route tests); a few superseded #25 i18n keys (emptyTitle/emptyBody/
-  noDogsCta/add) are now unused.
+- Refinement: quick-moment intensity is now an opt-in snapping 1–5 slider
+  instead of a `<select>`. Default state is "none" (a "+ Add intensity" button);
+  clicking reveals a `range` input (min 1 / max 5 / step 1, default 3) with a
+  value readout, 1–5 tick labels, and a ✕ to clear back to none — keeping
+  intensity genuinely optional while making the 1–5 scale tappable. Added
+  `quick-moment-composer.test.tsx` (default-hidden, reveal-on-click, clear) and
+  i18n keys `addIntensity`/`clearIntensity`. Gates: tsc 0, lint 0, web 160.
+- Follow-ups: a few superseded #25 i18n keys (emptyTitle/emptyBody/noDogsCta/add)
+  are now unused.
 - Commits: this branch. Shipped as a PR from feature/journal-quick-capture-implementation.

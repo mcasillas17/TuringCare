@@ -273,6 +273,8 @@ export const en = {
     quickNotePlaceholder: "What happened?",
     optionalIntensity: "Optional intensity",
     noIntensity: "No intensity",
+    addIntensity: "Add intensity",
+    clearIntensity: "Clear intensity",
     saveMoment: "Save moment",
     saveCheckIn: "Save check-in",
     trendBetter: "Better",
