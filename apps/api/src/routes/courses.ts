@@ -24,7 +24,10 @@ export const coursesApp = new Hono<{ Variables: Vars }>()
     return c.json({ courses: rows });
   })
   .get("/:id", async (c) => {
-    const [course] = await db.select().from(courses).where(eq(courses.id, c.req.param("id")));
+    const [course] = await db
+      .select()
+      .from(courses)
+      .where(eq(courses.id, c.req.param("id")));
     if (!course) return c.json({ error: "not_found" } as const, 404);
     return c.json({ course });
   });
