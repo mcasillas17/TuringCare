@@ -199,15 +199,33 @@ Admin hooks (`apps/web/src/routes/admin/use-courses.ts`, NEW): `useAdminCreateCo
 
 ### Browse page (`apps/web/src/routes/courses.tsx`, NEW) at `/my/courses`
 
-Mirror `trainers.tsx`:
 - Title + subtitle.
 - Filter row: ageGroup `<select>` (puppy/adolescent/adult/any), format `<select>`,
   state `<input>`, online `<input type=checkbox>`, Clear button.
 - `isError` → load error. Empty (no filter) → `courses.empty`. Empty (filtered) →
   `courses.emptyFiltered`.
-- Card per course (Link to `/my/courses/:id`): course name, format + ageRange,
-  durationWeeks/sessionMinutes line, `🌐 Online` chip if online, "Offered by
-  {trainer.name} · {city}, {state}".
+- **A compact table** (not cards) — minimal columns, one row per course, the row
+  navigates to `/my/courses/:id` on click. Columns:
+
+  | Course | Age | Format | Offered by |
+  |---|---|---|---|
+  | Puppy Manners 1 | Puppy | Group | Seattle Humane · Bellevue, WA |
+
+  - **Course** cell contains a real `<Link to="/my/courses/:id">{name}</Link>` —
+    this is the keyboard-accessible / screen-reader affordance.
+  - The whole `<tr>` is also clickable (cursor-pointer + hover) navigating to the
+    same detail route, as a convenience for mouse/touch. Implement the row-click
+    without tripping biome's a11y rules (the Link in the Course cell satisfies
+    keyboard access; if a clickable `<tr>` fights biome, fall back to making only
+    the Course-cell Link navigable — full-row click is a nice-to-have, not a
+    requirement).
+  - **Age** = the `ageGroup` label (Puppy / Adolescent / Adult / Any).
+  - **Format** = the `format` label (Group / Workshop / Seminar / Private / Drop-in).
+  - **Offered by** = `{trainer.name} · {city}, {state}`.
+  - Keep it minimal — no description, skills, duration, or price in the table;
+    those live on the detail page. On narrow screens the table should remain
+    readable (the mobile-QA pass will tune this; for now, a horizontally-scrollable
+    or stacked-on-mobile table is acceptable).
 
 ### Detail page (`apps/web/src/routes/course-detail.tsx`, NEW) at `/my/courses/:id`
 
@@ -273,8 +291,9 @@ admin page labels (or reuse `courses.*` where sensible). Full en + es.
 
 ## Tests (web)
 
-- `courses.test.tsx` (browse): renders cards from stubbed fetch; filters render;
-  empty + filtered-empty states.
+- `courses.test.tsx` (browse): renders a table row per course from stubbed
+  fetch (assert course name + trainer name appear in a row); filters render;
+  empty + filtered-empty states; the Course cell links to `/my/courses/:id`.
 - `course-detail.test.tsx`: renders course + skills; "Email about this course"
   present when trainer.email exists, hidden when null; Register button gated on
   registrationUrl; View-trainer link points to `/my/trainers/:trainerId`.
@@ -282,6 +301,37 @@ admin page labels (or reuse `courses.*` where sensible). Full en + es.
   mutation fires (mock `@/lib/api`).
 - `trainer-detail.test.tsx`: extend — "Courses offered" section shows when the
   trainer has courses, hidden when none.
+
+## Seed data (`apps/api/scripts/seed-seattle-humane.ts`, NEW)
+
+A committed, **idempotent** seed script that loads the one real-world source we
+have today: Seattle Humane + its 19-course catalog. This is the only sane way to
+load 19 courses (hand-entry through `/admin/courses` is 19 forms) and it makes
+`/my/courses` feel real the moment a tester opens it.
+
+Behavior:
+- **Idempotent.** Upsert the trainer by a stable key (e.g. match on
+  `name = "Seattle Humane Dog Training Center"`; if it exists, reuse its id,
+  else insert). Then for each of the 19 courses, skip if a course with that
+  `(trainerId, name)` already exists, else insert. Safe to run repeatedly and on
+  a fresh DB.
+- **Run:** `set -a && . ./.env && set +a && pnpm --filter @turingcare/api exec tsx scripts/seed-seattle-humane.ts`.
+- **Source of truth for the data:** the 19-course mapping (name, format,
+  ageGroup, ageRange, durationWeeks, sessionMinutes, prerequisites,
+  skillsTaught[], isOnline, registrationUrl) — encoded as a typed array in the
+  script. All `registrationUrl`s point to the respective SuperSaaS / Seattle
+  Humane course page. `isOnline: true` only for Dog Training Basics (has a
+  virtual option); the rest false.
+- **Clearly marked as demo/seed data** in a file header comment, with the source
+  URL and the date sourced (2026-05-24). Public info; fine to commit. Delete-able
+  later once a real trainer-onboarding flow exists.
+- Uses the same `db` client + `trainers`/`courses` tables as the app (not raw
+  SQL). Validate each course row against `courseInputSchema` before insert so the
+  seed can't drift from the schema.
+- A tiny test (`apps/api/scripts/seed-seattle-humane.test.ts` or a unit on an
+  extracted `seattleHumaneCourses` constant) asserting all 19 rows pass
+  `courseInputSchema.safeParse`. (Don't hit the DB in the test — just validate
+  the data array.)
 
 ## Out of scope (deliberate)
 
