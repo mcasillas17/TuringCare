@@ -213,6 +213,27 @@ export const trainers = pgTable("trainers", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const courses = pgTable("courses", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationName: text("organization_name").notNull(),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  format: text("format").notNull(),
+  ageGroup: text("age_group").notNull(),
+  ageRange: text("age_range"),
+  durationWeeks: integer("duration_weeks"),
+  sessionMinutes: integer("session_minutes"),
+  prerequisites: text("prerequisites"),
+  skillsTaught: text("skills_taught").array().notNull().default(sql`'{}'`),
+  isOnline: boolean("is_online").notNull().default(false),
+  coursePageUrl: text("course_page_url"),
+  position: integer("position").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /* ---------- Rate limiting ---------- */
 
 export const rateLimit = pgTable("rate_limit", {
