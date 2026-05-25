@@ -511,3 +511,19 @@ lint 0, web + api + shared tests pass, build OK.
 - Spec/plan: `specs/2026-05-24-courses-section-design.md`,
   `plans/2026-05-24-courses-section.md`
 - Commits: this branch. Shipped as a PR from worktree-courses-section.
+
+## 2026-05-24 — Public Trainers + Courses directory — SHIPPED
+Moved Trainers + Courses out of `/my/*` to public top-level routes
+(`/trainers`, `/courses`, + `/:id`) — browsable by anyone, no login. New
+`optionalUser` middleware (session if present, never 401). Trainer contact is
+scrape-protected: the public list NEVER returns email/phone (even to authed
+users), and detail reveals them ONLY to authenticated requests; anonymous
+visitors see the profile + a "Sign up to contact" CTA. Courses are fully
+public (no PII; link-out to the provider page). Pages render in a new
+`PublicLayout` (auth-aware SiteNav + footer); SiteNav gains Trainers/Courses
+links (section anchors → `/#…`). Sidebar + all internal links + route-move
+test fixtures repointed. Admin CRUD unchanged. Gates green: tsc 0, lint 0,
+web + api + shared tests pass, build OK.
+- Spec/plan: `specs/2026-05-24-public-directory-design.md`,
+  `plans/2026-05-24-public-directory.md`
+- Commits: this branch. Shipped as a PR from worktree-public-directory.

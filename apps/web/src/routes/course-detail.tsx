@@ -37,7 +37,7 @@ export function CourseDetail() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <Link to="/my/courses" className="text-sm text-slate-soft hover:underline">
+      <Link to="/courses" className="text-sm text-slate-soft hover:underline">
         ← {t("courses.back")}
       </Link>
       <h1 className="text-2xl font-bold text-slate">{co.name}</h1>

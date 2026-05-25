@@ -2,10 +2,10 @@ import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { courses } from "../db/schema";
-import { type Vars, requireUser } from "../middleware/require-user";
+import { type OptionalVars, optionalUser } from "../middleware/optional-user";
 
-export const coursesApp = new Hono<{ Variables: Vars }>()
-  .use("*", requireUser)
+export const coursesApp = new Hono<{ Variables: OptionalVars }>()
+  .use("*", optionalUser)
   .get("/", async (c) => {
     const ageGroup = c.req.query("ageGroup");
     const format = c.req.query("format");

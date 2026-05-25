@@ -19,10 +19,13 @@ export function SiteNav() {
   }, []);
 
   const LINKS = [
-    { href: "#how", label: t("nav.howItWorks") },
-    { href: "#brief", label: t("nav.brief") },
-    { href: "#trainers", label: t("nav.trainers") },
-    { href: "#faq", label: t("nav.faq") },
+    { href: "/#how", label: t("nav.howItWorks") },
+    { href: "/#brief", label: t("nav.brief") },
+    { href: "/#faq", label: t("nav.faq") },
+  ];
+  const ROUTE_LINKS = [
+    { to: "/trainers", label: t("nav.trainers") },
+    { to: "/courses", label: t("nav.courses") },
   ];
 
   return (
@@ -48,6 +51,15 @@ export function SiteNav() {
             >
               {l.label}
             </a>
+          ))}
+          {ROUTE_LINKS.map((l) => (
+            <Link
+              key={l.to}
+              to={l.to}
+              className="text-sm font-medium text-slate-soft underline-offset-4 transition-colors hover:text-slate hover:underline hover:decoration-copper"
+            >
+              {l.label}
+            </Link>
           ))}
         </div>
         <div className="flex items-center gap-2">

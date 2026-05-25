@@ -13,8 +13,29 @@ describe("courses", () => {
     for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
   });
 
-  it("requires auth", async () => {
-    expect((await app.request("/api/courses")).status).toBe(401);
+  it("is public — anonymous access succeeds", async () => {
+    const [co] = await db
+      .insert(courses)
+      .values({
+        organizationName: "Anon Provider",
+        city: "Reno",
+        state: "NV",
+        name: "Anon Visible Class",
+        format: "group",
+        ageGroup: "adult",
+        isOnline: false,
+      })
+      .returning();
+    if (!co) throw new Error("insert failed");
+    made.push(co.id);
+
+    const list = await app.request("/api/courses");
+    expect(list.status).toBe(200);
+    const one = await app.request(`/api/courses/${co.id}`);
+    expect(one.status).toBe(200);
+    expect(((await one.json()) as { course: { name: string } }).course.name).toBe(
+      "Anon Visible Class",
+    );
   });
 
   it("lists, filters, fetches one", async () => {

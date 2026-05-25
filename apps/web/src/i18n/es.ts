@@ -13,6 +13,7 @@ export const es = {
     howItWorks: "Cómo funciona",
     brief: "Resumen de conducta",
     trainers: "Adiestradores",
+    courses: "Cursos",
     faq: "Preguntas",
     login: "Iniciar sesión",
     getStarted: "Empezar",
@@ -387,6 +388,8 @@ export const es = {
     phone: "Teléfono",
     loadError: "No se pudieron cargar los adiestradores.",
     sendBriefCta: "Enviar mi Resumen a este adiestrador",
+    signUpToContact: "Regístrate para contactar a este adiestrador.",
+    signUpToContactCta: "Regístrate",
   },
   courses: {
     title: "Cursos",
