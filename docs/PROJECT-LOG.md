@@ -527,3 +527,20 @@ web + api + shared tests pass, build OK.
 - Spec/plan: `specs/2026-05-24-public-directory-design.md`,
   `plans/2026-05-24-public-directory.md`
 - Commits: this branch. Shipped as a PR from worktree-public-directory.
+
+## 2026-05-25 — Seattle independent trainers seed — SHIPPED
+Idempotent seed (`scripts/seed-seattle-trainers.ts`) for 4 independent
+Seattle-area positive-reinforcement trainers, each sourced from their own
+public business site + Seattle Humane instructor bio: Cathy Madson (Cathy
+Madson Dog Training — aggression/reactivity, CPDT-KA/CBCC-KA/Fear Free),
+Olivia Petersen (Sound Connection — separation anxiety/reactivity, CCS/SAPro),
+Suzi McCaslin (Laying Down the Paw — basic manners, CPDT-KA), Laura Garzon
+(Kinfolk Canine — puppy fundamentals/boarding). Website always populated;
+email/phone only where publicly confirmed (missing contact fields left empty
+per product call). Idempotent by trainer name; validates each row against
+`trainerInputSchema`. Run: `pnpm --filter @turingcare/api exec tsx
+scripts/seed-seattle-trainers.ts`. Org staff with no independent practice
+(Christi Montgomery, Michelle Reindal) deliberately excluded — the Trainers
+directory is for independent practitioners. Data tooling only; no schema/API
+change. Test validates the 4-row array.
+- Commits: this branch. Shipped as a PR from worktree-seed-trainers.
