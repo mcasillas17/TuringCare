@@ -492,3 +492,22 @@ with en/es parity. Gates green: tsc 0, lint 0, web tests all pass,
 build OK.
 - Commits: this branch (see `git log`). Shipped as a PR from
   worktree-trainer-cross-link.
+
+## 2026-05-24 — Courses section (curated directory) — SHIPPED
+New first-class Courses section: a curated, filterable directory of training
+classes, separate from Trainers. Each course is self-contained (inline
+provider fields — organizationName/city/state — no FK to trainers, no org
+table) with a small overview and a single deep link to the provider's
+canonical course page; nothing dynamic (schedule/instructor/price/spots) is
+replicated. New `courses` table + migration; public `GET /api/courses`
+(filters: ageGroup/format/state/online) + `/:id`; admin CRUD at
+`/api/admin/courses`. Web: `/my/courses` browse (compact table, row → detail),
+`/my/courses/:id` detail (overview + skills + "View full details & register
+↗"), `/admin/courses` CRUD, new Courses nav item. ~26 i18n keys en/es.
+Idempotent seed script loads Seattle Humane's 19-course catalog
+(`scripts/seed-seattle-humane.ts`). No journal/plan adoption (deferred
+Level-2). `brief.tsx`/`trainer-detail.tsx` untouched. Gates green: tsc 0,
+lint 0, web + api + shared tests pass, build OK.
+- Spec/plan: `specs/2026-05-24-courses-section-design.md`,
+  `plans/2026-05-24-courses-section.md`
+- Commits: this branch. Shipped as a PR from worktree-courses-section.

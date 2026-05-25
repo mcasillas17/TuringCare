@@ -43,6 +43,13 @@
       "when": 1779513369154,
       "tag": "0005_melted_terror",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779686958606,
+      "tag": "0006_real_tigra",
+      "breakpoints": true
     }
   ]
 }

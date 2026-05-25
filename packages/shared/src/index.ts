@@ -1,5 +1,6 @@
 export * from "./auth";
 export * from "./brief";
+export * from "./course";
 export * from "./dog";
 export * from "./journal";
 export * from "./progress";

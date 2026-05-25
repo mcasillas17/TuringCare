@@ -4,6 +4,8 @@ import { LocaleProvider } from "@/i18n";
 import { PageViewTracker } from "@/lib/track";
 import { RequireAdmin } from "@/routes/admin/require-admin";
 import { Brief } from "@/routes/brief";
+import { CourseDetail } from "@/routes/course-detail";
+import { Courses } from "@/routes/courses";
 import { DogDetail } from "@/routes/dog-detail";
 import { DogForm } from "@/routes/dog-form";
 import { DogsList } from "@/routes/dogs-list";
@@ -36,6 +38,10 @@ const AdminDashboard = lazy(() =>
 
 const AdminTrainers = lazy(() =>
   import("@/routes/admin/trainers").then((m) => ({ default: m.AdminTrainers })),
+);
+
+const AdminCourses = lazy(() =>
+  import("@/routes/admin/courses").then((m) => ({ default: m.AdminCourses })),
 );
 
 const queryClient = new QueryClient();
@@ -86,6 +92,8 @@ createRoot(document.getElementById("root") as HTMLElement).render(
               <Route path="/my/brief" element={<Brief />} />
               <Route path="/my/trainers" element={<Trainers />} />
               <Route path="/my/trainers/:id" element={<TrainerDetail />} />
+              <Route path="/my/courses" element={<Courses />} />
+              <Route path="/my/courses/:id" element={<CourseDetail />} />
               <Route path="/my/profile" element={<Profile />} />
               <Route path="/my/settings" element={<Settings />} />
             </Route>
@@ -105,6 +113,16 @@ createRoot(document.getElementById("root") as HTMLElement).render(
                 <RequireAdmin>
                   <Suspense fallback={<p className="p-8">Loading…</p>}>
                     <AdminTrainers />
+                  </Suspense>
+                </RequireAdmin>
+              }
+            />
+            <Route
+              path="/admin/courses"
+              element={
+                <RequireAdmin>
+                  <Suspense fallback={<p className="p-8">Loading…</p>}>
+                    <AdminCourses />
                   </Suspense>
                 </RequireAdmin>
               }

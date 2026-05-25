@@ -23,6 +23,9 @@ export function AdminDashboard() {
           <Link to="/admin/trainers" className="text-sm underline">
             Manage trainers
           </Link>
+          <Link to="/admin/courses" className="text-sm underline">
+            Manage courses
+          </Link>
           <label htmlFor="range-select" className="sr-only">
             Date range
           </label>
