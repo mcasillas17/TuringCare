@@ -4,6 +4,7 @@ import { LocaleProvider } from "@/i18n";
 import { PageViewTracker } from "@/lib/track";
 import { RequireAdmin } from "@/routes/admin/require-admin";
 import { Brief } from "@/routes/brief";
+import { CourseDetail } from "@/routes/course-detail";
 import { Courses } from "@/routes/courses";
 import { DogDetail } from "@/routes/dog-detail";
 import { DogForm } from "@/routes/dog-form";
@@ -88,6 +89,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
               <Route path="/my/trainers" element={<Trainers />} />
               <Route path="/my/trainers/:id" element={<TrainerDetail />} />
               <Route path="/my/courses" element={<Courses />} />
+              <Route path="/my/courses/:id" element={<CourseDetail />} />
               <Route path="/my/profile" element={<Profile />} />
               <Route path="/my/settings" element={<Settings />} />
             </Route>
