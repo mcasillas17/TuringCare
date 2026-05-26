@@ -1,4 +1,7 @@
+import type { BriefWindow } from "@turingcare/shared";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import { api } from "./api";
 
 const b = api.api.dogs[":id"].brief;
@@ -17,8 +20,8 @@ export function useBrief(dogId: string) {
 export function useGenerateBrief(dogId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
-      const res = await b.$post({ param: { id: dogId } });
+    mutationFn: async (window: BriefWindow) => {
+      const res = await b.$post({ param: { id: dogId }, json: { window } });
       if (!res.ok) throw new Error("gen_failed");
       return (await res.json()).brief;
     },
