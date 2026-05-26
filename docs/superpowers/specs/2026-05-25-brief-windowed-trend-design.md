@@ -130,3 +130,15 @@ brief panel was not located during design).
   tally is naturally check-ins-only without extra guarding.
 - **Timezone**: cutoff is `now - N×24h` in UTC against the stored `occurredAt`
   timestamp. Acceptable for a human-readable brief; no per-user TZ handling.
+
+## Implementation note (transport: query param, not body)
+
+During implementation the window is carried as an **optional query param**
+(`POST /api/dogs/:id/brief?window=30d`) validated with
+`zValidator("query", briefGenerateSchema)`, not a JSON body. Reason: hono's typed
+`hc` RPC client only infers a request-input type when the route declares a
+validator, and a JSON-body validator would force every no-body `POST /:id/brief`
+caller (e.g. the brief-send flow's generation step) to start sending a body. The
+window is optional with a default, so a query param fits: no-body generation
+keeps working (defaults to `30d`) and the web client gets a typed `query` input.
+`POST /:id/brief/send` keeps its mandatory JSON body unchanged.

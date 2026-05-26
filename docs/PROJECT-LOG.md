@@ -579,3 +579,24 @@ superseded #25 empty-state tweaks. Gates green: tsc 0, lint 0, api 154 / web
   journal route tests); a few superseded #25 i18n keys (emptyTitle/emptyBody/
   noDogsCta/add) are now unused.
 - Commits: this branch. Shipped as a PR from feature/journal-quick-capture-implementation.
+
+## 2026-05-25 — Windowed, trend-aware behavior brief — SHIPPED
+Makes the brief recency-aware now that quick-capture fills the journal fast.
+`composeBrief` gains a time window — the Journal line reads
+`N entries in the last 30 days` (or `(all time)`) and the intensity average is
+computed over that window — plus a check-in trend tally line
+(`Check-ins: 5 better, 2 same, 1 harder.`) from daily check-ins' `trend`, and the
+recent-entry list cap goes 5 → 10. `POST /api/dogs/:id/brief` takes an optional
+`?window=7d|30d|90d|all` (default `30d`) validated with `zValidator("query", …)`
+and date-filters the journal query (`gte(occurredAt, cutoff)`); the web brief page
+gets a segmented `7d/30d/90d/All` control. Still a deterministic text template (no
+LLM). No schema/migration; email-a-brief send flow untouched (reuses the stored
+summary, so it inherits the chosen window). Built via subagent-driven development
+(implementer + spec + quality review per task). Gates green: tsc 0, lint 0,
+shared 38 / web 158 / api 157, web build OK.
+- Transport note: window is a query param, not a JSON body — the typed hono RPC
+  client needs a route validator, and a json-body validator would break every
+  no-body `POST /:id/brief` caller. See the spec's implementation note.
+- Spec/plan: `docs/superpowers/specs/2026-05-25-brief-windowed-trend-design.md`,
+  `docs/superpowers/plans/2026-05-25-brief-windowed-trend.md`
+- Commits: this branch. Shipped as a PR from feature/brief-windowed-trend.
