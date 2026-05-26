@@ -6,12 +6,15 @@ type BriefInput = {
   goals: { goal: string }[];
   entries: {
     note: string;
+    kind: "moment" | "daily_checkin";
+    trend?: "better" | "same" | "harder" | null;
     behavior?: string | null;
     antecedent?: string | null;
     consequence?: string | null;
     intensity?: number | null;
     occurredAt: string;
   }[];
+  windowDays: number | null;
   progress?: ProgressGoal[];
 };
 
@@ -46,7 +49,7 @@ function sessionSummary(skill: ProgressGoal["skills"][number]) {
 }
 
 export function composeBrief(i: BriefInput): string {
-  const { dog, concerns, goals, entries, progress = [] } = i;
+  const { dog, concerns, goals, entries, progress = [], windowDays } = i;
   const lines: string[] = [];
   lines.push(`Behavior Brief — ${dog.name}`);
   lines.push(`${dog.name} is a ${dog.size} ${dog.sex}${dog.breed ? ` ${dog.breed}` : ""}.`);
@@ -68,10 +71,19 @@ export function composeBrief(i: BriefInput): string {
   const avg = intensities.length
     ? `average intensity ${(intensities.reduce((sum, value) => sum + value, 0) / intensities.length).toFixed(1)}`
     : "average intensity not recorded";
+  const windowPhrase = windowDays === null ? "(all time)" : `in the last ${windowDays} days`;
   lines.push(
-    `Journal: ${entries.length} journal ${entries.length === 1 ? "entry" : "entries"}, ${avg}.`,
+    `Journal: ${entries.length} ${entries.length === 1 ? "entry" : "entries"} ${windowPhrase}, ${avg}.`,
   );
-  for (const e of sorted.slice(0, 5)) {
+  const checkins = entries.filter((entry) => entry.kind === "daily_checkin");
+  if (checkins.length > 0) {
+    const tally = { better: 0, same: 0, harder: 0 };
+    for (const entry of checkins) {
+      if (entry.trend) tally[entry.trend] += 1;
+    }
+    lines.push(`Check-ins: ${tally.better} better, ${tally.same} same, ${tally.harder} harder.`);
+  }
+  for (const e of sorted.slice(0, 10)) {
     const details = [
       e.antecedent ? `A: ${e.antecedent}` : null,
       e.behavior ? `B: ${e.behavior}` : null,
