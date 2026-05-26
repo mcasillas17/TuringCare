@@ -9,6 +9,7 @@ import {
   useShareBrief,
 } from "@/lib/brief";
 import { useDogs } from "@/lib/dogs";
+import { type BriefWindow, briefWindows } from "@turingcare/shared";
 import { Suspense, lazy, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ export function Brief() {
   const { data: dogs } = useDogs();
   const [picked, setPicked] = useState("");
   const dogId = routeId ?? picked ?? "";
+  const [windowChoice, setWindowChoice] = useState<BriefWindow>("30d");
   const { data: brief, isError } = useBrief(dogId);
   const dog = dogs?.find((d) => d.id === dogId);
   const gen = useGenerateBrief(dogId);
@@ -32,6 +34,13 @@ export function Brief() {
   const share = useShareBrief(dogId);
   const revoke = useRevokeShare(dogId);
   const shareUrl = brief?.shareToken ? `${window.location.origin}/b/${brief.shareToken}` : null;
+
+  const windowLabels: Record<BriefWindow, string> = {
+    "7d": t("brief.window7d"),
+    "30d": t("brief.window30d"),
+    "90d": t("brief.window90d"),
+    all: t("brief.windowAll"),
+  };
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -55,12 +64,27 @@ export function Brief() {
       )}
       {dogId && (
         <>
+          <fieldset className="m-0 min-w-0 space-y-1 border-0 p-0">
+            <legend className="p-0 text-sm font-medium text-slate">{t("brief.windowLabel")}</legend>
+            <div className="flex flex-wrap items-center gap-2">
+              {briefWindows.map((w) => (
+                <Button
+                  key={w}
+                  type="button"
+                  variant={windowChoice === w ? "default" : "outline"}
+                  onClick={() => setWindowChoice(w)}
+                >
+                  {windowLabels[w]}
+                </Button>
+              ))}
+            </div>
+          </fieldset>
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={gen.isPending}
               onClick={async () => {
                 try {
-                  await gen.mutateAsync();
+                  await gen.mutateAsync(windowChoice);
                   toast.success(t("brief.title"));
                 } catch {
                   toast.error(t("brief.genFailed"));

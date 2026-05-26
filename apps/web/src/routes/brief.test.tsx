@@ -2,7 +2,7 @@ import { LocaleProvider } from "@/i18n";
 import * as briefLib from "@/lib/brief";
 import { type BriefForPdf, type DogForPdf, buildBriefPdfModel } from "@/lib/brief-pdf-model";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Brief } from "./brief";
@@ -29,6 +29,7 @@ vi.mock("@/lib/brief", async (importOriginal) => {
   return {
     ...actual,
     useBrief: vi.fn(actual.useBrief),
+    useGenerateBrief: vi.fn(actual.useGenerateBrief),
     useShareBrief: vi.fn(actual.useShareBrief),
     useRevokeShare: vi.fn(actual.useRevokeShare),
   };
@@ -41,6 +42,7 @@ let realBrief: typeof briefLib;
 beforeEach(async () => {
   realBrief = await vi.importActual<typeof briefLib>("@/lib/brief");
   vi.mocked(briefLib.useBrief).mockImplementation(realBrief.useBrief);
+  vi.mocked(briefLib.useGenerateBrief).mockImplementation(realBrief.useGenerateBrief);
   vi.mocked(briefLib.useShareBrief).mockImplementation(realBrief.useShareBrief);
   vi.mocked(briefLib.useRevokeShare).mockImplementation(realBrief.useRevokeShare);
 });
@@ -191,5 +193,18 @@ describe("Brief", () => {
     const input = await screen.findByDisplayValue(/\/b\/tok123/);
     expect(input).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /stop sharing/i })).toBeInTheDocument();
+  });
+
+  it("passes the selected time window to the generate mutation", async () => {
+    stubFetch();
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    vi.mocked(briefLib.useGenerateBrief).mockReturnValue({
+      mutateAsync,
+      isPending: false,
+    } as unknown as ReturnType<typeof briefLib.useGenerateBrief>);
+    renderBrief();
+    fireEvent.click(await screen.findByRole("button", { name: /^7 days$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Regenerate|Generate Brief/i }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith("7d"));
   });
 });
