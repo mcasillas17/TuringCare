@@ -394,12 +394,11 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     await db.update(briefs).set({ shareToken: null }).where(eq(briefs.id, brief.id));
     return c.json({ ok: true } as const);
   })
-  .post("/:id/brief", zValidator("json", briefGenerateSchema), async (c) => {
+  .post("/:id/brief", zValidator("query", briefGenerateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const { window } = c.req.valid("json");
-    const windowDays =
-      window === "all" ? null : Number(window.replace("d", ""));
+    const { window } = c.req.valid("query");
+    const windowDays = window === "all" ? null : Number(window.replace("d", ""));
     const cutoff = windowDays === null ? null : new Date(Date.now() - windowDays * 86_400_000);
     const journalWhere = cutoff
       ? and(eq(journalEntries.dogId, dog.id), gte(journalEntries.occurredAt, cutoff))

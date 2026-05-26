@@ -21,7 +21,7 @@ export function useGenerateBrief(dogId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (window: BriefWindow) => {
-      const res = await b.$post({ param: { id: dogId }, json: { window } });
+      const res = await b.$post({ param: { id: dogId }, query: { window } });
       if (!res.ok) throw new Error("gen_failed");
       return (await res.json()).brief;
     },

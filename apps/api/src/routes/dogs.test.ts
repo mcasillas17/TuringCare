@@ -814,7 +814,6 @@ describe("dogs: brief", () => {
     const gen = await app.request(`/api/dogs/${dog.id}/brief`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({}),
     });
     expect(gen.status).toBe(201);
     const { brief } = (await gen.json()) as {
@@ -828,7 +827,6 @@ describe("dogs: brief", () => {
     const gen2 = await app.request(`/api/dogs/${dog.id}/brief`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({}),
     });
     expect(((await gen2.json()) as { brief: { version: number } }).brief.version).toBe(2);
     const fin = await app.request(`/api/dogs/${dog.id}/brief`, {
@@ -845,13 +843,8 @@ describe("dogs: brief", () => {
     users.push(a, b);
     const dog = await makeDog(a);
     expect(
-      (
-        await app.request(`/api/dogs/${dog.id}/brief`, {
-          method: "POST",
-          headers: b.authHeaders,
-          body: JSON.stringify({}),
-        })
-      ).status,
+      (await app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: b.authHeaders }))
+        .status,
     ).toBe(404);
     expect(
       (await app.request(`/api/dogs/${dog.id}/brief`, { headers: b.authHeaders })).status,
@@ -886,10 +879,9 @@ describe("dogs: brief", () => {
       }),
     });
 
-    const res = await app.request(`/api/dogs/${dog.id}/brief`, {
+    const res = await app.request(`/api/dogs/${dog.id}/brief?window=7d`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ window: "7d" }),
     });
     expect(res.status).toBe(201);
     const { brief } = (await res.json()) as { brief: { summary: string } };
