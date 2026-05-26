@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
 import {
   behaviorConcernSchema,
+  briefGenerateSchema,
   briefSendSchema,
   dogProfileSchema,
   journalEntryCreateSchema,
@@ -11,7 +12,7 @@ import {
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
-import { and, desc, eq, max } from "drizzle-orm";
+import { and, desc, eq, gte, max } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
@@ -396,10 +397,18 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   .post("/:id/brief", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const parsed = briefGenerateSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ error: "invalid_window" } as const, 400);
+    const windowDays =
+      parsed.data.window === "all" ? null : Number(parsed.data.window.replace("d", ""));
+    const cutoff = windowDays === null ? null : new Date(Date.now() - windowDays * 86_400_000);
+    const journalWhere = cutoff
+      ? and(eq(journalEntries.dogId, dog.id), gte(journalEntries.occurredAt, cutoff))
+      : eq(journalEntries.dogId, dog.id);
     const [concerns, goals, entries, progress, [last]] = await Promise.all([
       db.select().from(behaviorConcerns).where(eq(behaviorConcerns.dogId, dog.id)),
       db.select().from(trainingGoals).where(eq(trainingGoals.dogId, dog.id)),
-      db.select().from(journalEntries).where(eq(journalEntries.dogId, dog.id)),
+      db.select().from(journalEntries).where(journalWhere),
       loadProgress(dog.id),
       db
         .select()
@@ -414,12 +423,15 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       goals: goals.map((x) => ({ goal: x.goal })),
       entries: entries.map((e) => ({
         note: e.note,
+        kind: e.kind,
+        trend: e.trend,
         behavior: e.behavior,
         antecedent: e.antecedent,
         consequence: e.consequence,
         intensity: e.intensity,
         occurredAt: e.occurredAt.toISOString(),
       })),
+      windowDays,
       progress: progress.goals,
     });
     const [brief] = await db

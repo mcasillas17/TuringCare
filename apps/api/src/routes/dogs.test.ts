@@ -814,6 +814,7 @@ describe("dogs: brief", () => {
     const gen = await app.request(`/api/dogs/${dog.id}/brief`, {
       method: "POST",
       headers: u.authHeaders,
+      body: JSON.stringify({}),
     });
     expect(gen.status).toBe(201);
     const { brief } = (await gen.json()) as {
@@ -827,6 +828,7 @@ describe("dogs: brief", () => {
     const gen2 = await app.request(`/api/dogs/${dog.id}/brief`, {
       method: "POST",
       headers: u.authHeaders,
+      body: JSON.stringify({}),
     });
     expect(((await gen2.json()) as { brief: { version: number } }).brief.version).toBe(2);
     const fin = await app.request(`/api/dogs/${dog.id}/brief`, {
@@ -843,12 +845,58 @@ describe("dogs: brief", () => {
     users.push(a, b);
     const dog = await makeDog(a);
     expect(
-      (await app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: b.authHeaders }))
-        .status,
+      (
+        await app.request(`/api/dogs/${dog.id}/brief`, {
+          method: "POST",
+          headers: b.authHeaders,
+          body: JSON.stringify({}),
+        })
+      ).status,
     ).toBe(404);
     expect(
       (await app.request(`/api/dogs/${dog.id}/brief`, { headers: b.authHeaders })).status,
     ).toBe(404);
+  });
+
+  it("scopes the brief to the selected window and tallies check-in trends", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const recent = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    const old = new Date(Date.now() - 100 * 86_400_000).toISOString();
+
+    await app.request(`/api/dogs/${dog.id}/journal`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ kind: "moment", note: "recent walk", occurredAt: recent }),
+    });
+    await app.request(`/api/dogs/${dog.id}/journal`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ kind: "moment", note: "ancient incident", occurredAt: old }),
+    });
+    await app.request(`/api/dogs/${dog.id}/journal`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        kind: "daily_checkin",
+        note: "good day",
+        trend: "better",
+        occurredAt: recent,
+      }),
+    });
+
+    const res = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ window: "7d" }),
+    });
+    expect(res.status).toBe(201);
+    const { brief } = (await res.json()) as { brief: { summary: string } };
+    expect(brief.summary).toContain("2 entries in the last 7 days");
+    expect(brief.summary).toContain("recent walk");
+    expect(brief.summary).not.toContain("ancient incident");
+    expect(brief.summary).toContain("Check-ins: 1 better, 0 same, 0 harder.");
   });
 });
 
