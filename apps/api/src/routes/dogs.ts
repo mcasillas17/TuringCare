@@ -14,6 +14,7 @@ import {
 } from "@turingcare/shared";
 import { and, desc, eq, gte, max } from "drizzle-orm";
 import { Hono } from "hono";
+import { trainingCatalog } from "../data/training-catalog";
 import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
 import { findOwnedSkill } from "../db/owned-skill";
@@ -129,6 +130,39 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .returning();
     if (!skill) throw new Error("failed to create default skill");
     return c.json({ goal, skill }, 201);
+  })
+  .post("/:id/goals/from-template", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const parsed = (await c.req.json().catch(() => ({}))) as { templateKey?: unknown };
+    if (typeof parsed.templateKey !== "string") {
+      return c.json({ error: "invalid_template" } as const, 400);
+    }
+    const template = trainingCatalog.find((t) => t.key === parsed.templateKey);
+    if (!template) return c.json({ error: "invalid_template" } as const, 400);
+
+    const { goal, skills } = await db.transaction(async (tx) => {
+      const [createdGoal] = await tx
+        .insert(trainingGoals)
+        .values({ dogId: dog.id, goal: template.name, catalogGoalKey: template.key })
+        .returning();
+      if (!createdGoal) throw new Error("failed to create template goal");
+      const createdSkills = await tx
+        .insert(trainingSkills)
+        .values(
+          template.skills.map((skill, index) => ({
+            goalId: createdGoal.id,
+            name: skill.name,
+            confidence: 1,
+            position: index,
+            catalogSkillKey: skill.key,
+          })),
+        )
+        .returning();
+      return { goal: createdGoal, skills: createdSkills };
+    });
+
+    return c.json({ goal, skills }, 201);
   })
   .delete("/:id/goals/:goalId", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
