@@ -26,6 +26,7 @@ export function useSendBrief(dogId: string) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["brief-sends", dogId] });
+      qc.invalidateQueries({ queryKey: ["onboarding"] });
     },
   });
 }

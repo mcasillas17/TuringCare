@@ -34,7 +34,10 @@ export function useCreateDog() {
       if (!res.ok) throw new Error("save_failed");
       return (await res.json()).dog;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dogs"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dogs"] });
+      qc.invalidateQueries({ queryKey: ["onboarding"] });
+    },
   });
 }
 
@@ -99,7 +102,10 @@ export function useAddGoal(id: string) {
       if (!res.ok) throw new Error("save_failed");
       return (await res.json()).goal;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dogs", id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dogs", id] });
+      qc.invalidateQueries({ queryKey: ["onboarding"] });
+    },
   });
 }
 

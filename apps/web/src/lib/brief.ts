@@ -42,6 +42,7 @@ export function useFinalizeBrief(dogId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["brief", dogId] });
       qc.invalidateQueries({ queryKey: ["overview"] });
+      qc.invalidateQueries({ queryKey: ["onboarding"] });
     },
   });
 }

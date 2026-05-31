@@ -17,6 +17,16 @@ export const en = {
     getStarted: "Get started",
     openApp: "Open app",
   },
+  onboarding: {
+    title: "Get started",
+    addDog: "Add your first dog",
+    logMoments: "Log 3 moments",
+    setGoal: "Set a training goal",
+    finalizeBrief: "Finalize a brief",
+    shareWithTrainer: "Share with a trainer",
+    allSetUp: "You're all set up. 🎉",
+    dismiss: "Dismiss",
+  },
   hero: {
     eyebrow: "Positive reinforcement · Science-based",
     headline: "Understand your dog.",
@@ -243,10 +253,6 @@ export const en = {
     qBrief: "Generate Brief",
     qTrainer: "Find a trainer",
     noBrief: "None yet",
-    welcomeTitle: "Welcome to TuringCare 👋",
-    welcomeBody:
-      "Let's get your dog set up. Add a profile to start logging behavior and tracking training progress.",
-    startHereCta: "Add your first dog →",
     nudgeNoEntriesTitle: "Ready to log your first entry?",
     nudgeNoEntriesBody: "Capture a behavior the next time it happens. It only takes a moment.",
     nudgeNoEntriesCta: "Open the journal →",

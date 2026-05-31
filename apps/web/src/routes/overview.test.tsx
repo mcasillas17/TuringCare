@@ -62,11 +62,11 @@ describe("Overview", () => {
     expect(screen.getByText(/Barked at delivery truck/)).toBeInTheDocument();
   });
 
-  it("shows welcome panel when dogCount is 0", async () => {
+  it("shows onboarding checklist when dogCount is 0", async () => {
     stub({ dogCount: 0, journalEntryCount: 0, latestBrief: null, recentActivity: [] }, []);
     setup();
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: /Welcome to TuringCare/i })).toBeInTheDocument(),
+      expect(screen.getByRole("heading", { name: /Get started/i })).toBeInTheDocument(),
     );
     const cta = screen.getByRole("link", { name: /Add your first dog/i });
     expect(cta).toHaveAttribute("href", "/my/dogs/new");

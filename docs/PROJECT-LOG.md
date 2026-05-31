@@ -606,3 +606,29 @@ shared 38 / web 158 / api 157, web build OK.
 - Spec/plan: `docs/superpowers/specs/2026-05-25-brief-windowed-trend-design.md`,
   `docs/superpowers/plans/2026-05-25-brief-windowed-trend.md`
 - Commits: this branch. Shipped as a PR from feature/brief-windowed-trend.
+
+## 2026-05-30 — Onboarding checklist on /my overview — SHIPPED
+Replaces the single "Welcome to TuringCare" card with a 5-item progress
+checklist: ✓ add your first dog / log 3 moments / set a training goal /
+finalize a brief / share with a trainer. Each item is computed live from
+existing tables (no new schema, no migration) by a new owner-scoped
+`GET /api/onboarding` returning `{hasDog, momentsCount, hasGoal,
+hasFinalizedBrief, hasSentBrief, mostRecentDogId}`. Rows are clickable and
+deep-link to the right route (per-dog where it makes sense, using
+mostRecentDogId; safe fallbacks when null). Once all 5 are done, the
+checklist collapses to a one-line celebration banner the user can dismiss
+(persisted per-device in localStorage). The five progress-flipping mutations
+(useCreateDog, useAddGoal, useCreateEntry, useFinalizeBrief, useSendBrief)
+each invalidate the `["onboarding"]` query so the checklist updates the
+moment the user returns to /my. Built via subagent-driven-development
+(implementer + spec + quality review per task). Gates green: tsc 0, lint 0,
+shared 38 / web 167 / api 163, web build OK.
+- Open follow-ups (minor, non-blocking): the `stage==="new"` branch now has
+  no page-level `<h1>` (the checklist's heading is `<h2>`) — heading
+  hierarchy quirk for screen-reader users; the existing `overview.test.tsx`
+  fetch stub returns `{}` for `/api/onboarding` (the checklist test mocks
+  the hook directly, so coverage is fine, but the route-level stub could
+  be tightened).
+- Spec/plan: `docs/superpowers/specs/2026-05-27-onboarding-checklist-design.md`,
+  `docs/superpowers/plans/2026-05-27-onboarding-checklist.md`
+- Commits: this branch. Shipped as a PR from feature/onboarding-checklist.
