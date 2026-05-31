@@ -123,6 +123,7 @@ export const trainingGoals = pgTable("training_goals", {
     .notNull()
     .references(() => dogs.id, { onDelete: "cascade" }),
   goal: text("goal").notNull(),
+  catalogGoalKey: text("catalog_goal_key"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -136,6 +137,7 @@ export const trainingSkills = pgTable(
     name: text("name").notNull(),
     confidence: integer("confidence").notNull().default(1),
     position: integer("position").notNull().default(0),
+    catalogSkillKey: text("catalog_skill_key"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check("confidence_range", sql`${t.confidence} BETWEEN 1 AND 5`)],

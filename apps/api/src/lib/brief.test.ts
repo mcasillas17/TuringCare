@@ -49,6 +49,7 @@ describe("composeBrief", () => {
         {
           id: "g1",
           goal: "Calm greetings",
+          catalogGoalKey: null,
           avgConfidence: 3,
           skills: [
             {
@@ -56,6 +57,7 @@ describe("composeBrief", () => {
               name: "Door-knock threshold",
               confidence: 3,
               position: 0,
+              catalogSkillKey: null,
               sessionCount: 2,
               firstSessionAt: "2026-05-01T10:00:00.000Z",
               lastSessionAt: "2026-05-22T10:00:00.000Z",
@@ -67,6 +69,7 @@ describe("composeBrief", () => {
               name: "Greeting strangers",
               confidence: 2,
               position: 1,
+              catalogSkillKey: null,
               sessionCount: 0,
               firstSessionAt: null,
               lastSessionAt: null,
@@ -75,7 +78,7 @@ describe("composeBrief", () => {
             },
           ],
         },
-        { id: "g2", goal: "Empty goal", avgConfidence: null, skills: [] },
+        { id: "g2", goal: "Empty goal", catalogGoalKey: null, avgConfidence: null, skills: [] },
       ],
     });
     expect(out).toContain("Training progress:");
