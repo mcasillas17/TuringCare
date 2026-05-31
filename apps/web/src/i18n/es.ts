@@ -19,6 +19,16 @@ export const es = {
     getStarted: "Empezar",
     openApp: "Abrir app",
   },
+  onboarding: {
+    title: "Comencemos",
+    addDog: "Agrega a tu primer perro",
+    logMoments: "Registra 3 momentos",
+    setGoal: "Define un objetivo de entrenamiento",
+    finalizeBrief: "Finaliza un resumen",
+    shareWithTrainer: "Compártelo con un entrenador",
+    allSetUp: "¡Todo listo! 🎉",
+    dismiss: "Descartar",
+  },
   hero: {
     eyebrow: "Refuerzo positivo · Con base científica",
     headline: "Entiende a tu perro.",

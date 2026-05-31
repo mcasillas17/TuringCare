@@ -17,6 +17,16 @@ export const en = {
     getStarted: "Get started",
     openApp: "Open app",
   },
+  onboarding: {
+    title: "Get started",
+    addDog: "Add your first dog",
+    logMoments: "Log 3 moments",
+    setGoal: "Set a training goal",
+    finalizeBrief: "Finalize a brief",
+    shareWithTrainer: "Share with a trainer",
+    allSetUp: "You're all set up. 🎉",
+    dismiss: "Dismiss",
+  },
   hero: {
     eyebrow: "Positive reinforcement · Science-based",
     headline: "Understand your dog.",
