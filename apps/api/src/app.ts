@@ -17,6 +17,7 @@ import { overviewApp } from "./routes/overview";
 import { profileApp } from "./routes/profile";
 import { shareApp } from "./routes/share";
 import { trainersApp } from "./routes/trainers";
+import { trainingApp } from "./routes/training";
 import { eventIngestSchema } from "./telemetry/events";
 import { recordEvent } from "./telemetry/record-event";
 
@@ -62,6 +63,7 @@ const app = new Hono()
   })
   .route("/api/overview", overviewApp)
   .route("/api/courses", coursesApp)
+  .route("/api/training", trainingApp)
   .route("/api/trainers", trainersApp)
   .route("/api/profile", profileApp)
   .route("/api/admin", adminApp)
