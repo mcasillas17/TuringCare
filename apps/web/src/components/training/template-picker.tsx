@@ -72,7 +72,7 @@ export function TemplatePicker({ dogId }: Props) {
         <Button type="button" variant="outline" onClick={() => setPhase({ kind: "closed" })}>
           {t("training.templatesButton")}
         </Button>
-        <ul className="mt-1 w-72 space-y-1 rounded border border-silver bg-white p-2 text-sm shadow">
+        <ul className="absolute left-0 top-full z-10 mt-1 w-72 space-y-1 rounded border border-silver bg-white p-2 text-sm shadow">
           <li className="px-1 py-1 text-xs font-medium text-slate-soft">
             {t("training.templatesPicking")}
           </li>
