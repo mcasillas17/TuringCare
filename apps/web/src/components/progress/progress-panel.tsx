@@ -12,6 +12,7 @@ import {
   useProgress,
   useUpdateSkill,
 } from "@/lib/progress";
+import { findCatalogSkill, useTrainingCatalog } from "@/lib/training-catalog";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type TrainingSkillInput, trainingSkillSchema } from "@turingcare/shared";
 import { useState } from "react";
@@ -137,18 +138,30 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   const deleteSkill = useDeleteSkill(dogId);
   const displaySkill = (updateSkill.data as ProgressSkill | undefined) ?? skill;
   const lastSession = formatDate(displaySkill.lastSessionAt);
+  const { data: catalog } = useTrainingCatalog();
+  const catalogSkill = findCatalogSkill(catalog, displaySkill.catalogSkillKey);
+  const currentLevel =
+    catalogSkill?.levels.find((l) => l.level === displaySkill.confidence) ?? null;
 
   return (
     <li className="space-y-3 rounded border border-silver p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="font-medium text-slate">{displaySkill.name}</div>
+          {catalogSkill && (
+            <div className="text-xs text-slate-soft">{catalogSkill.description}</div>
+          )}
           <div className="text-sm text-slate-soft">
             {sessionCountLabel(displaySkill, t)}
             {lastSession ? ` · ${t("progress.lastSession")}: ${lastSession}` : ""}
           </div>
           {displaySkill.lastNote && (
             <p className="text-sm text-slate-soft">{displaySkill.lastNote}</p>
+          )}
+          {currentLevel && (
+            <p className="mt-1 text-xs italic text-copper">
+              {t("training.levelPrefix")} {currentLevel.level} — {currentLevel.description}
+            </p>
           )}
         </div>
         <ConfidenceChip

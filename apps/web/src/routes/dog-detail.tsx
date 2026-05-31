@@ -1,4 +1,5 @@
 import { ProgressPanel } from "@/components/progress/progress-panel";
+import { TemplatePicker } from "@/components/training/template-picker";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import {
@@ -168,7 +169,7 @@ export function DogDetail() {
             </li>
           ))}
         </ul>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-start gap-2">
           <input
             className={inputCls}
             placeholder={t("dogs.goalPlaceholder")}
@@ -184,6 +185,7 @@ export function DogDetail() {
           >
             {t("dogs.addGoal")}
           </Button>
+          <TemplatePicker dogId={id} />
         </div>
       </section>
 

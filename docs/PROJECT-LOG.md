@@ -632,3 +632,37 @@ shared 38 / web 167 / api 163, web build OK.
 - Spec/plan: `docs/superpowers/specs/2026-05-27-onboarding-checklist-design.md`,
   `docs/superpowers/plans/2026-05-27-onboarding-checklist.md`
 - Commits: this branch. Shipped as a PR from feature/onboarding-checklist.
+
+## 2026-05-31 — Training goal templates (curated curriculum) — SHIPPED
+Curated training-curriculum templates a user can apply to a dog in one click.
+Five starter templates — basic-manners, puppy-fundamentals, reactivity-work,
+separation-comfort, recall-reliability — covering 21 skills with 105 progressive
+level definitions (L1 → L5 per skill) all in humane positive-reinforcement
+language. From the dog detail page the user clicks a new `Templates ▼` button
+next to "Add Goal", picks a template, previews the goal + skills it'll create,
+and Apply atomically creates the goal + N skills (`confidence: 1`,
+`catalogGoalKey` / `catalogSkillKey` persisted). The progress panel then renders
+each catalog-applied skill's description + current-level milestone (e.g.,
+"Level 3 — Responds in mild distractions") below the confidence selector;
+user-created skills render unchanged. Catalog lives as a static `const` in
+`apps/api/src/data/training-catalog.ts` — no DB content, no editorial pipeline.
+Two new owner-scoped API endpoints: `GET /api/training/templates` and atomic
+`POST /api/dogs/:id/goals/from-template`. Single migration (0008) adds two
+nullable text columns; no backfill. The apply mutation invalidates
+`["onboarding"]` so the onboarding checklist's "Set a training goal" row ticks
+immediately. Built via subagent-driven development (7 implementation tasks,
+implementer + spec + quality review per task). Gates green: tsc 0, lint 0
+(241 files), shared 38 / web 172 / api 173, web build OK.
+- Catalog scope: English-only for MVP; the picker chrome (en + es) is localised.
+  Catalog can be localised later without further schema/UX work.
+- Transport note: `useApplyTemplate` uses raw `fetch` instead of the typed hc
+  client because the from-template route uses manual body parsing (no zValidator,
+  to preserve the 404-before-400 ownership ordering). Inline comment explains
+  the constraint.
+- Open follow-ups (minor, non-blocking): the dropdown lacks outside-click +
+  Escape dismissal; API error details are squashed into a generic toast; the
+  same template can be applied twice (intentional per spec, but a unique
+  constraint on `(dog_id, catalog_goal_key)` would close the gap).
+- Spec/plan: `docs/superpowers/specs/2026-05-30-training-goal-templates-design.md`,
+  `docs/superpowers/plans/2026-05-30-training-goal-templates.md`
+- Commits: this branch. Shipped as a PR from feature/training-goal-templates.

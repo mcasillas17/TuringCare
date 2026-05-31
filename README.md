@@ -57,11 +57,35 @@ packages/shared  Shared Zod schemas / types
 docker-compose.yml  Local Postgres
 ```
 
+## What's built
+
+Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highlights:
+
+- **Owner-scoped dog profiles** with concerns, training goals, training skills,
+  and per-skill practice sessions.
+- **Behavior journal** — quick-capture moments (note + optional 1-5 intensity
+  slider) and daily check-ins (note + better/same/harder trend). Structured ABC
+  fields stay as optional enrichment.
+- **Behavior Brief** — deterministic text + PDF (`@react-pdf/renderer`), windowed
+  by 7/30/90 days or all-time, includes a daily-check-in trend tally. Email a
+  finalized brief to any recipient; create a public share link.
+- **Public trainer + course directories** with scrape protection (list strips
+  contact info; detail requires auth). Seeded with real Seattle-area trainers
+  and Seattle Humane courses.
+- **Onboarding checklist** on `/my` — 5-step path (add dog → log 3 moments →
+  set a goal → finalize a brief → share with a trainer), live-computed.
+- **Curated training curriculum** — opt-in templates that pre-populate a goal
+  with skills, each with 5 progressive milestone definitions surfaced in the
+  progress panel.
+- **i18n** — typed en/es catalogs with compile-time parity.
+- **Telemetry + admin dashboard** with rate-limited event ingestion.
+
 ## What's next
 
-- Dog profile CRUD (schema already in place)
-- ABC behavior journal (antecedent / behavior / consequence)
-- Behavior Brief generation (`@react-pdf/renderer`, installed, unused so far)
-- Force-free trainer directory & search
-- Security hardening (rate limiting, password reset, email verification, 2FA) —
-  see [`docs/SECURITY-BACKLOG.md`](docs/SECURITY-BACKLOG.md)
+- Dog profile photos (storage + upload + thumbnail on cards/brief).
+- Weekly skill focus + calendar tracking (commits N skills/week, shows training
+  effort distribution against actual sessions).
+- Production smoke + mobile QA on `turingcare.dog` before the first round of
+  real-user testing.
+- Security backlog (password reset is shipped; email verification, 2FA, etc.) —
+  see [`docs/SECURITY-BACKLOG.md`](docs/SECURITY-BACKLOG.md).

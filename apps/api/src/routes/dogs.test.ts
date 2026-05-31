@@ -1333,3 +1333,79 @@ describe("dogs: brief send", () => {
     expect(sends).toEqual([]);
   });
 });
+
+describe("dogs: POST /:id/goals/from-template", () => {
+  const users: TestUser[] = [];
+  afterEach(async () => {
+    for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
+  });
+
+  async function makeDog(u: TestUser) {
+    const r = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify(validDog),
+    });
+    return ((await r.json()) as { dog: { id: string } }).dog;
+  }
+
+  it("creates a goal + all template skills atomically", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const r = await app.request(`/api/dogs/${dog.id}/goals/from-template`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ templateKey: "basic-manners" }),
+    });
+    expect(r.status).toBe(201);
+    const body = (await r.json()) as {
+      goal: { id: string; goal: string; catalogGoalKey: string | null };
+      skills: {
+        id: string;
+        name: string;
+        catalogSkillKey: string | null;
+        position: number;
+        confidence: number;
+      }[];
+    };
+    expect(body.goal.goal).toBe("Basic Manners");
+    expect(body.goal.catalogGoalKey).toBe("basic-manners");
+    expect(body.skills).toHaveLength(5);
+    expect(body.skills[0]?.name).toBe("Sit");
+    expect(body.skills[0]?.catalogSkillKey).toBe("basic-manners.sit");
+    expect(body.skills[0]?.confidence).toBe(1);
+    expect(body.skills[0]?.position).toBe(0);
+    expect(body.skills.map((s) => s.position)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("returns 400 for an unknown templateKey, and does not create anything", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const r = await app.request(`/api/dogs/${dog.id}/goals/from-template`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ templateKey: "does-not-exist" }),
+    });
+    expect(r.status).toBe(400);
+    expect((await r.json()) as { error: string }).toEqual({ error: "invalid_template" });
+    // Verify no goal was created.
+    const dogR = await app.request(`/api/dogs/${dog.id}`, { headers: u.authHeaders });
+    const dogBody = (await dogR.json()) as { goals: { id: string }[] };
+    expect(dogBody.goals).toHaveLength(0);
+  });
+
+  it("owner isolation: another user's dog returns 404", async () => {
+    const a = await createTestUser();
+    const b = await createTestUser();
+    users.push(a, b);
+    const dog = await makeDog(a);
+    const r = await app.request(`/api/dogs/${dog.id}/goals/from-template`, {
+      method: "POST",
+      headers: b.authHeaders,
+      body: JSON.stringify({ templateKey: "basic-manners" }),
+    });
+    expect(r.status).toBe(404);
+  });
+});
