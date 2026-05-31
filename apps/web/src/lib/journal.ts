@@ -66,6 +66,7 @@ export function useAddEntry(dogId: string) {
       qc.invalidateQueries({ queryKey: ["journal"] });
       qc.invalidateQueries({ queryKey: ["dog-journal", dogId] });
       qc.invalidateQueries({ queryKey: ["overview"] });
+      qc.invalidateQueries({ queryKey: ["onboarding"] });
     },
   });
 }
