@@ -1,3 +1,4 @@
+import { OnboardingChecklist } from "@/components/onboarding/checklist";
 import { useI18n } from "@/i18n";
 import { useDogs } from "@/lib/dogs";
 import { useOverview } from "@/lib/overview";
@@ -29,19 +30,16 @@ export function Overview() {
   if (stage === "new") {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
-        <section className="space-y-4 rounded border border-silver bg-white p-6 text-center">
-          <h1 className="text-2xl font-bold text-slate">{t("overview.welcomeTitle")}</h1>
-          <p className="text-slate-soft">{t("overview.welcomeBody")}</p>
-          <Link to="/my/dogs/new" className="inline-block rounded bg-slate px-4 py-2 text-cream">
-            {t("overview.startHereCta")}
-          </Link>
-        </section>
+        <OnboardingChecklist />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      <div className="mx-auto max-w-2xl">
+        <OnboardingChecklist />
+      </div>
       <h1 className="text-2xl font-bold text-slate">{t("overview.greeting")} 👋</h1>
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded border border-silver bg-white p-4">

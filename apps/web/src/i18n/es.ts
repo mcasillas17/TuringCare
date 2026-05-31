@@ -256,10 +256,6 @@ export const es = {
     qBrief: "Generar resumen",
     qTrainer: "Buscar adiestrador",
     noBrief: "Ninguno aún",
-    welcomeTitle: "Bienvenido a TuringCare 👋",
-    welcomeBody:
-      "Vamos a registrar a tu perro. Agrega un perfil para empezar a registrar conducta y seguir el progreso del entrenamiento.",
-    startHereCta: "Agrega tu primer perro →",
     nudgeNoEntriesTitle: "¿Listo para tu primera entrada?",
     nudgeNoEntriesBody: "Captura una conducta la próxima vez que ocurra. Toma solo un momento.",
     nudgeNoEntriesCta: "Abrir el diario →",
