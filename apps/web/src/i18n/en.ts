@@ -27,6 +27,16 @@ export const en = {
     allSetUp: "You're all set up. 🎉",
     dismiss: "Dismiss",
   },
+  training: {
+    templatesButton: "Templates",
+    templatesPicking: "Pick a template",
+    applyButton: "Apply",
+    cancelButton: "Cancel",
+    willAdd: "Will add these skills:",
+    applied: "Template applied",
+    applyFailed: "Couldn't apply template",
+    levelPrefix: "Level",
+  },
   hero: {
     eyebrow: "Positive reinforcement · Science-based",
     headline: "Understand your dog.",

@@ -29,6 +29,16 @@ export const es = {
     allSetUp: "¡Todo listo! 🎉",
     dismiss: "Descartar",
   },
+  training: {
+    templatesButton: "Plantillas",
+    templatesPicking: "Elige una plantilla",
+    applyButton: "Aplicar",
+    cancelButton: "Cancelar",
+    willAdd: "Se agregarán estas habilidades:",
+    applied: "Plantilla aplicada",
+    applyFailed: "No se pudo aplicar la plantilla",
+    levelPrefix: "Nivel",
+  },
   hero: {
     eyebrow: "Refuerzo positivo · Con base científica",
     headline: "Entiende a tu perro.",
