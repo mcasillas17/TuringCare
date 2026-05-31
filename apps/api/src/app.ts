@@ -12,6 +12,7 @@ import { adminTrainersApp } from "./routes/admin-trainers";
 import { coursesApp } from "./routes/courses";
 import { dogsApp } from "./routes/dogs";
 import { journalApp } from "./routes/journal";
+import { onboardingApp } from "./routes/onboarding";
 import { overviewApp } from "./routes/overview";
 import { profileApp } from "./routes/profile";
 import { shareApp } from "./routes/share";
@@ -46,6 +47,7 @@ const app = new Hono()
   .route("/api/dogs", dogsApp)
   .route("/api/journal", journalApp)
   .route("/api/share", shareApp)
+  .route("/api/onboarding", onboardingApp)
   .post("/api/events", zValidator("json", eventIngestSchema), async (c) => {
     const { name, props } = c.req.valid("json");
     // Identity is resolved server-side from the auth cookie — never trusted
