@@ -175,6 +175,11 @@ export const en = {
     signedOut: "Signed out",
   },
   dogs: {
+    listTitle: "Your dogs",
+    emptyTitle: "No dogs yet",
+    emptyBody: "Add your dog to start logging behavior, setting goals, and generating Briefs.",
+    emptyCta: "Add your first dog →",
+    add: "Add dog",
     edit: "Edit profile",
     delete: "Delete dog",
     deleteCancel: "Cancel",
