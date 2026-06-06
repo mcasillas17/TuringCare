@@ -175,17 +175,8 @@ export const en = {
     signedOut: "Signed out",
   },
   dogs: {
-    listTitle: "Your dogs",
-    empty: "No dogs yet. Add your first dog to start a profile.",
-    emptyTitle: "No dogs yet",
-    emptyBody: "Add your dog to start logging behavior, setting goals, and generating Briefs.",
-    emptyCta: "Add your first dog →",
-    add: "Add dog",
-    back: "Back to dogs",
     edit: "Edit profile",
     delete: "Delete dog",
-    deleteConfirm:
-      "Delete this dog? This permanently removes the profile and its concerns and goals.",
     deleteCancel: "Cancel",
     deleteYes: "Yes, delete",
     createTitle: "Add a dog",

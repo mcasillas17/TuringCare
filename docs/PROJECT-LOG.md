@@ -666,3 +666,40 @@ implementer + spec + quality review per task). Gates green: tsc 0, lint 0
 - Spec/plan: `docs/superpowers/specs/2026-05-30-training-goal-templates-design.md`,
   `docs/superpowers/plans/2026-05-30-training-goal-templates.md`
 - Commits: this branch. Shipped as a PR from feature/training-goal-templates.
+
+## 2026-05-31 — Dog-hub redesign (hub + spokes) — SHIPPED
+Restructured the bloated single-page dog detail view into a hub-and-spoke IA.
+The old `/my/dogs/:id` crammed profile, concerns, every goal, and every skill
+(with inline log/edit/session forms — 50+ interactive elements for a dog with a
+few goals) onto one screen. Now `/my/dogs/:id` is a thin **Overview** hub and the
+density is split across three focused spokes, all under a shared `<DogLayout>`
+(sticky banner with the dog's name + Edit/Delete, plus a 4-tab strip: Overview /
+Journal / Training / Brief):
+- **Overview** (`dog-hub.tsx`): three `SpokeCard`s with at-a-glance metrics
+  (journal entry count + last activity, goals/skills/avg-confidence, brief
+  status/version), the concerns add/list block, a top-3 RecentActivity list, and
+  a single "Log a moment" CTA → `…/journal?compose=moment`.
+- **Journal** spoke (`dog-journal.tsx`): mounts a new shared `<JournalView>`
+  extracted from `/my/journal` (scoped to the dog; reads `?compose=`).
+- **Training** spoke (`dog-training.tsx`): goal-add row + `TemplatePicker` +
+  `ProgressPanel`, where each `SkillCard` is now **collapsed by default** and
+  expands on a chevron (name + description + session count + level milestone +
+  confidence stay visible; log/edit/session-list/forms hide until expanded).
+- **Brief** spoke: the existing `Brief` route, now layout-wrapped.
+`/my/dogs` redirects to `/my`; `edit` renders inside the layout (keeps banner +
+tabs context). Deleted `dog-detail.tsx` and the unreachable `dogs-list.tsx`, and
+removed 8 orphaned `dogs.*` i18n keys (listTitle/empty/emptyTitle/emptyBody/
+emptyCta/add/back/deleteConfirm). No DB, API, or Hono changes — purely a web IA
++ component refactor. Built via subagent-driven development (8 tasks; Task 1
+carried implementer + spec + quality review, which caught a real bug: skill
+`mode` lingered after collapse, so re-expanding reopened a stale form — fixed by
+resetting mode on collapse).
+- Gates: web tsc 0, api tsc 0, lint 0 (248 files), shared 38 / web 180, web
+  build OK. The api vitest suite could not run locally — Postgres at
+  localhost:5432 was refusing connections (ECONNREFUSED); this is the documented
+  shared-test-DB environment drift and is unrelated to this frontend-only change
+  (the diff touches zero `apps/api`/migration/schema files). CI runs the api
+  suite against its own database.
+- Spec/plan: `docs/superpowers/specs/2026-05-31-dog-hub-redesign-design.md`,
+  `docs/superpowers/plans/2026-05-31-dog-hub-redesign.md`
+- Commits: this branch. Shipped as a PR from feature/dog-hub-redesign.
