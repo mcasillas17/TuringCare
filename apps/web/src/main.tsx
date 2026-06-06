@@ -1,5 +1,6 @@
 import { DirectoryLayout } from "@/components/DirectoryLayout";
 import { AppShell } from "@/components/app-shell/AppShell";
+import { DogLayout } from "@/components/dog-layout";
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/i18n";
 import { PageViewTracker } from "@/lib/track";
@@ -7,9 +8,10 @@ import { RequireAdmin } from "@/routes/admin/require-admin";
 import { Brief } from "@/routes/brief";
 import { CourseDetail } from "@/routes/course-detail";
 import { Courses } from "@/routes/courses";
-import { DogDetail } from "@/routes/dog-detail";
 import { DogForm } from "@/routes/dog-form";
-import { DogsList } from "@/routes/dogs-list";
+import { DogHub } from "@/routes/dog-hub";
+import { DogJournal } from "@/routes/dog-journal";
+import { DogTraining } from "@/routes/dog-training";
 import { ForgotPassword } from "@/routes/forgot-password";
 import { Journal } from "@/routes/journal";
 import { Landing } from "@/routes/landing";
@@ -30,7 +32,7 @@ import { Trainers } from "@/routes/trainers";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./index.css";
 
 const AdminDashboard = lazy(() =>
@@ -90,11 +92,15 @@ createRoot(document.getElementById("root") as HTMLElement).render(
               }
             >
               <Route path="/my" element={<Overview />} />
-              <Route path="/my/dogs" element={<DogsList />} />
+              <Route path="/my/dogs" element={<Navigate to="/my" replace />} />
               <Route path="/my/dogs/new" element={<DogForm mode="create" />} />
-              <Route path="/my/dogs/:id" element={<DogDetail />} />
-              <Route path="/my/dogs/:id/edit" element={<DogForm mode="edit" />} />
-              <Route path="/my/dogs/:id/brief" element={<Brief />} />
+              <Route path="/my/dogs/:id" element={<DogLayout />}>
+                <Route index element={<DogHub />} />
+                <Route path="journal" element={<DogJournal />} />
+                <Route path="training" element={<DogTraining />} />
+                <Route path="brief" element={<Brief />} />
+                <Route path="edit" element={<DogForm mode="edit" />} />
+              </Route>
               <Route path="/my/journal" element={<Journal />} />
               <Route path="/my/brief" element={<Brief />} />
               <Route path="/my/profile" element={<Profile />} />
