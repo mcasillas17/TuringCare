@@ -61,8 +61,11 @@ docker-compose.yml  Local Postgres
 
 Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highlights:
 
-- **Owner-scoped dog profiles** with concerns, training goals, training skills,
-  and per-skill practice sessions.
+- **Owner-scoped dog profiles** organized as a hub-and-spoke experience: a thin
+  Overview hub (`/my/dogs/:id`) with at-a-glance metrics + concerns, and focused
+  Journal / Training / Brief spokes under a shared layout (sticky banner + tabs).
+  Training covers goals, skills (collapsed per-skill detail), and per-skill
+  practice sessions.
 - **Behavior journal** — quick-capture moments (note + optional 1-5 intensity
   slider) and daily check-ins (note + better/same/harder trend). Structured ABC
   fields stay as optional enrichment.
