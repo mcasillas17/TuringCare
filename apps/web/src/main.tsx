@@ -12,6 +12,7 @@ import { DogForm } from "@/routes/dog-form";
 import { DogHub } from "@/routes/dog-hub";
 import { DogJournal } from "@/routes/dog-journal";
 import { DogTraining } from "@/routes/dog-training";
+import { DogsList } from "@/routes/dogs-list";
 import { ForgotPassword } from "@/routes/forgot-password";
 import { Journal } from "@/routes/journal";
 import { Landing } from "@/routes/landing";
@@ -32,7 +33,7 @@ import { Trainers } from "@/routes/trainers";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "./index.css";
 
 const AdminDashboard = lazy(() =>
@@ -92,7 +93,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
               }
             >
               <Route path="/my" element={<Overview />} />
-              <Route path="/my/dogs" element={<Navigate to="/my" replace />} />
+              <Route path="/my/dogs" element={<DogsList />} />
               <Route path="/my/dogs/new" element={<DogForm mode="create" />} />
               <Route path="/my/dogs/:id" element={<DogLayout />}>
                 <Route index element={<DogHub />} />

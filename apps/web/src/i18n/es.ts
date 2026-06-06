@@ -177,6 +177,12 @@ export const es = {
     signedOut: "Sesión cerrada",
   },
   dogs: {
+    listTitle: "Tus perros",
+    emptyTitle: "Aún no hay perros",
+    emptyBody:
+      "Agrega a tu perro para empezar a registrar conducta, definir objetivos y generar Resúmenes.",
+    emptyCta: "Agrega tu primer perro →",
+    add: "Agregar perro",
     edit: "Editar perfil",
     delete: "Eliminar perro",
     deleteCancel: "Cancelar",
