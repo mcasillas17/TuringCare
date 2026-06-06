@@ -1,6 +1,6 @@
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Overview } from "./overview";
@@ -35,7 +35,7 @@ function setup() {
 }
 
 describe("Overview", () => {
-  it("renders stats, dogs, and recent activity", async () => {
+  it("renders stats and recent activity (the dog list lives on /my/dogs)", async () => {
     stub(
       {
         dogCount: 1,
@@ -52,14 +52,9 @@ describe("Overview", () => {
       [{ id: "d1", name: "Biscuit" }],
     );
     setup();
-    await waitFor(() => expect(screen.getAllByText("Biscuit").length).toBeGreaterThanOrEqual(1));
-    const dogsHeading = screen.getByRole("heading", { name: "Your dogs" });
-    const dogsSection = dogsHeading.closest("section");
-    expect(dogsSection).not.toBeNull();
-    if (dogsSection) {
-      expect(within(dogsSection).getByText("Biscuit")).toBeInTheDocument();
-    }
-    expect(screen.getByText(/Barked at delivery truck/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Barked at delivery truck/)).toBeInTheDocument());
+    // The dashboard no longer duplicates a dog list; that's the dedicated Dogs page.
+    expect(screen.queryByRole("heading", { name: "Your dogs" })).not.toBeInTheDocument();
   });
 
   it("shows onboarding checklist when dogCount is 0", async () => {

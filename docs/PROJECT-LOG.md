@@ -696,10 +696,14 @@ carried implementer + spec + quality review, which caught a real bug: skill
 `mode` lingered after collapse, so re-expanding reopened a stale form — fixed by
 resetting mode on collapse).
 
-**Follow-up (post-review):** the initial pass deleted the dogs-list page and
-redirected `/my/dogs` → `/my`, which broke the sidebar "Dogs" nav (it bounced to
-the dashboard). Reverted that part — the dedicated dogs list is back and "Dogs"
-works again.
+**Follow-up (post-merge, shipped as a separate fix PR off `main`):** the initial
+pass deleted the dogs-list page and redirected `/my/dogs` → `/my`, which broke
+the sidebar "Dogs" nav (it bounced to the dashboard). Restored the dedicated
+dogs list so "Dogs" works again. That surfaced a second issue — the dashboard
+(`/my`) also rendered a "Your dogs" widget, so dogs were listed in two places.
+Resolved by making `/my/dogs` the single home for the dog list and removing the
+dashboard's duplicate widget (the dashboard keeps its "Dogs" stat count and the
+"Add dog" quick-action; `overview.yourDogs` i18n key removed).
 - Gates: web tsc 0, api tsc 0, lint 0 (248 files), shared 38 / web 180, web
   build OK. The api vitest suite could not run locally — Postgres at
   localhost:5432 was refusing connections (ECONNREFUSED); this is the documented

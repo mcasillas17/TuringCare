@@ -250,7 +250,6 @@ export const en = {
     statDogs: "Dogs",
     statEntries: "Journal entries",
     statBrief: "Latest Brief",
-    yourDogs: "Your dogs",
     recent: "Recent activity",
     noActivity: "No activity yet.",
     quick: "Quick actions",

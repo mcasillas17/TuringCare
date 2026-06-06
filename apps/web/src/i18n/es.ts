@@ -253,7 +253,6 @@ export const es = {
     statDogs: "Perros",
     statEntries: "Entradas del diario",
     statBrief: "Último resumen",
-    yourDogs: "Tus perros",
     recent: "Actividad reciente",
     noActivity: "Aún no hay actividad.",
     quick: "Acciones rápidas",
