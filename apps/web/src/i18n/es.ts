@@ -370,6 +370,8 @@ export const es = {
     saveSkill: "Guardar cambios",
     loadError: "No se pudo cargar el progreso",
     avgConfidence: "prom",
+    expandSkill: "Mostrar {name}",
+    collapseSkill: "Ocultar {name}",
   },
   brief: {
     title: "Resumen de conducta",

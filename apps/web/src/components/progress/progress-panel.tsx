@@ -133,6 +133,7 @@ function AddSkillForm({ dogId, goalId }: { dogId: string; goalId: string }) {
 
 function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
   const [mode, setMode] = useState<"view" | "editing" | "logging">("view");
   const updateSkill = useUpdateSkill(dogId);
   const deleteSkill = useDeleteSkill(dogId);
@@ -146,23 +147,40 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   return (
     <li className="space-y-3 rounded border border-silver p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="font-medium text-slate">{displaySkill.name}</div>
-          {catalogSkill && (
-            <div className="text-xs text-slate-soft">{catalogSkill.description}</div>
-          )}
-          <div className="text-sm text-slate-soft">
-            {sessionCountLabel(displaySkill, t)}
-            {lastSession ? ` · ${t("progress.lastSession")}: ${lastSession}` : ""}
+        <div className="flex flex-1 items-start gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              setExpanded((v) => {
+                if (v) setMode("view");
+                return !v;
+              })
+            }
+            aria-expanded={expanded}
+            aria-label={
+              expanded
+                ? t("progress.collapseSkill", { name: displaySkill.name })
+                : t("progress.expandSkill", { name: displaySkill.name })
+            }
+            className="mt-0.5 text-slate-soft hover:text-slate"
+          >
+            {expanded ? "▼" : "▶"}
+          </button>
+          <div className="flex-1">
+            <div className="font-medium text-slate">{displaySkill.name}</div>
+            {catalogSkill && (
+              <div className="text-xs text-slate-soft">{catalogSkill.description}</div>
+            )}
+            <div className="text-sm text-slate-soft">
+              {sessionCountLabel(displaySkill, t)}
+              {lastSession ? ` · ${t("progress.lastSession")}: ${lastSession}` : ""}
+            </div>
+            {currentLevel && (
+              <p className="mt-1 text-xs italic text-copper">
+                {t("training.levelPrefix")} {currentLevel.level} — {currentLevel.description}
+              </p>
+            )}
           </div>
-          {displaySkill.lastNote && (
-            <p className="text-sm text-slate-soft">{displaySkill.lastNote}</p>
-          )}
-          {currentLevel && (
-            <p className="mt-1 text-xs italic text-copper">
-              {t("training.levelPrefix")} {currentLevel.level} — {currentLevel.description}
-            </p>
-          )}
         </div>
         <ConfidenceChip
           dogId={dogId}
@@ -171,39 +189,50 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
         />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" onClick={() => setMode("logging")}>
-          {t("progress.logSession")}
-        </Button>
-        <Button type="button" variant="outline" onClick={() => setMode("editing")}>
-          {t("progress.edit")}
-        </Button>
-        <Button type="button" variant="outline" onClick={() => deleteSkill.mutate(displaySkill.id)}>
-          {t("progress.removeSkill")}
-        </Button>
-      </div>
+      {expanded && (
+        <>
+          {displaySkill.lastNote && (
+            <p className="text-sm text-slate-soft">{displaySkill.lastNote}</p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => setMode("logging")}>
+              {t("progress.logSession")}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setMode("editing")}>
+              {t("progress.edit")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => deleteSkill.mutate(displaySkill.id)}
+            >
+              {t("progress.removeSkill")}
+            </Button>
+          </div>
 
-      {mode === "editing" && (
-        <EditSkillForm
-          dogId={dogId}
-          skill={displaySkill}
-          submitting={updateSkill.isPending}
-          onCancel={() => setMode("view")}
-          onSave={async (body) => {
-            await updateSkill.mutateAsync({ skillId: displaySkill.id, body });
-            setMode("view");
-          }}
-        />
+          {mode === "editing" && (
+            <EditSkillForm
+              dogId={dogId}
+              skill={displaySkill}
+              submitting={updateSkill.isPending}
+              onCancel={() => setMode("view")}
+              onSave={async (body) => {
+                await updateSkill.mutateAsync({ skillId: displaySkill.id, body });
+                setMode("view");
+              }}
+            />
+          )}
+          {mode === "logging" && (
+            <SessionForm
+              dogId={dogId}
+              skillId={displaySkill.id}
+              onCancel={() => setMode("view")}
+              onSaved={() => setMode("view")}
+            />
+          )}
+          <SessionList dogId={dogId} skillId={displaySkill.id} sessions={displaySkill.sessions} />
+        </>
       )}
-      {mode === "logging" && (
-        <SessionForm
-          dogId={dogId}
-          skillId={displaySkill.id}
-          onCancel={() => setMode("view")}
-          onSaved={() => setMode("view")}
-        />
-      )}
-      <SessionList dogId={dogId} skillId={displaySkill.id} sessions={displaySkill.sessions} />
     </li>
   );
 }

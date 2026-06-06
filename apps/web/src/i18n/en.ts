@@ -367,6 +367,8 @@ export const en = {
     saveSkill: "Save changes",
     loadError: "Couldn't load training progress",
     avgConfidence: "avg",
+    expandSkill: "Expand {name}",
+    collapseSkill: "Collapse {name}",
   },
   brief: {
     title: "Behavior Brief",
