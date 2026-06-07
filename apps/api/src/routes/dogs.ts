@@ -5,6 +5,8 @@ import {
   briefGenerateSchema,
   briefSendSchema,
   dogProfileSchema,
+  focusAddSchema,
+  focusWeekQuerySchema,
   journalEntryCreateSchema,
   journalEntryUpdateSchema,
   practiceSessionSchema,
@@ -12,7 +14,7 @@ import {
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
-import { and, desc, eq, gte, max } from "drizzle-orm";
+import { and, desc, eq, gte, lt, max } from "drizzle-orm";
 import { Hono } from "hono";
 import { trainingCatalog } from "../data/training-catalog";
 import { db } from "../db";
@@ -28,11 +30,13 @@ import {
   trainingGoals,
   trainingSkills,
   user,
+  weeklyFocus,
 } from "../db/schema";
 import { renderBriefEmail } from "../email/brief-email";
 import { sendEmail } from "../email/send-email";
 import { env } from "../env";
 import { composeBrief } from "../lib/brief";
+import { loadFocusWeek } from "../lib/focus";
 import { loadProgress } from "../lib/progress";
 import { type Vars, requireUser } from "../middleware/require-user";
 
@@ -275,6 +279,46 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         ),
       )
       .returning({ id: practiceSessions.id });
+    if (!deleted) return c.json({ error: "not_found" } as const, 404);
+    return c.json({ ok: true } as const);
+  })
+  .get("/:id/focus", zValidator("query", focusWeekQuerySchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const { weekStart, weekEnd } = c.req.valid("query");
+    const data = await loadFocusWeek(dog.id, weekStart, weekEnd);
+    return c.json(data);
+  })
+  .post("/:id/focus", zValidator("json", focusAddSchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const { skillId } = c.req.valid("json");
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId);
+    if (!skill) return c.json({ error: "not_found" } as const, 404);
+    const existing = await db
+      .select({ id: weeklyFocus.id })
+      .from(weeklyFocus)
+      .where(and(eq(weeklyFocus.dogId, dog.id), eq(weeklyFocus.skillId, skillId)))
+      .limit(1);
+    if (existing[0]) return c.json({ error: "already_focused" } as const, 409);
+    const [{ value: maxPos } = { value: null }] = await db
+      .select({ value: max(weeklyFocus.position) })
+      .from(weeklyFocus)
+      .where(eq(weeklyFocus.dogId, dog.id));
+    const [row] = await db
+      .insert(weeklyFocus)
+      .values({ dogId: dog.id, skillId, position: (maxPos ?? -1) + 1 })
+      .returning();
+    if (!row) throw new Error("failed to add focus skill");
+    return c.json({ focus: row }, 201);
+  })
+  .delete("/:id/focus/:skillId", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const [deleted] = await db
+      .delete(weeklyFocus)
+      .where(and(eq(weeklyFocus.dogId, dog.id), eq(weeklyFocus.skillId, c.req.param("skillId"))))
+      .returning({ id: weeklyFocus.id });
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
