@@ -686,14 +686,24 @@ Journal / Training / Brief):
   expands on a chevron (name + description + session count + level milestone +
   confidence stay visible; log/edit/session-list/forms hide until expanded).
 - **Brief** spoke: the existing `Brief` route, now layout-wrapped.
-`/my/dogs` redirects to `/my`; `edit` renders inside the layout (keeps banner +
-tabs context). Deleted `dog-detail.tsx` and the unreachable `dogs-list.tsx`, and
-removed 8 orphaned `dogs.*` i18n keys (listTitle/empty/emptyTitle/emptyBody/
-emptyCta/add/back/deleteConfirm). No DB, API, or Hono changes — purely a web IA
-+ component refactor. Built via subagent-driven development (8 tasks; Task 1
+`edit` renders inside the layout (keeps banner + tabs context). `/my/dogs` keeps
+its dedicated **all-my-dogs list** (`dogs-list.tsx`), reachable from the sidebar
+"Dogs" nav — the redesign only declutters the per-dog *detail* page, not the
+list. Deleted `dog-detail.tsx`; removed 3 genuinely-orphaned `dogs.*` i18n keys
+(empty/back/deleteConfirm). No DB, API, or Hono changes — purely a web IA +
+component refactor. Built via subagent-driven development (8 tasks; Task 1
 carried implementer + spec + quality review, which caught a real bug: skill
 `mode` lingered after collapse, so re-expanding reopened a stale form — fixed by
 resetting mode on collapse).
+
+**Follow-up (post-merge, shipped as a separate fix PR off `main`):** the initial
+pass deleted the dogs-list page and redirected `/my/dogs` → `/my`, which broke
+the sidebar "Dogs" nav (it bounced to the dashboard). Restored the dedicated
+dogs list so "Dogs" works again. That surfaced a second issue — the dashboard
+(`/my`) also rendered a "Your dogs" widget, so dogs were listed in two places.
+Resolved by making `/my/dogs` the single home for the dog list and removing the
+dashboard's duplicate widget (the dashboard keeps its "Dogs" stat count and the
+"Add dog" quick-action; `overview.yourDogs` i18n key removed).
 - Gates: web tsc 0, api tsc 0, lint 0 (248 files), shared 38 / web 180, web
   build OK. The api vitest suite could not run locally — Postgres at
   localhost:5432 was refusing connections (ECONNREFUSED); this is the documented

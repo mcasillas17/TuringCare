@@ -1,6 +1,5 @@
 import { OnboardingChecklist } from "@/components/onboarding/checklist";
 import { useI18n } from "@/i18n";
-import { useDogs } from "@/lib/dogs";
 import { useOverview } from "@/lib/overview";
 import { Link } from "react-router-dom";
 
@@ -20,7 +19,6 @@ function deriveStage(
 export function Overview() {
   const { t } = useI18n();
   const { data: o, isLoading, isError } = useOverview();
-  const { data: dogs } = useDogs();
 
   if (isLoading) return <p>{t("common.loading")}</p>;
   if (isError || !o) return <p className="text-red-600">{t("dogs.loadError")}</p>;
@@ -71,26 +69,6 @@ export function Overview() {
       )}
       <div className="grid gap-6 md:grid-cols-3">
         <div className="md:col-span-2 space-y-4">
-          <section>
-            <h2 className="mb-2 font-semibold text-slate">{t("overview.yourDogs")}</h2>
-            <div className="flex flex-wrap gap-3">
-              {dogs?.map((d) => (
-                <Link
-                  key={d.id}
-                  to={`/my/dogs/${d.id}`}
-                  className="rounded border border-silver bg-white p-3 hover:bg-surface-sand"
-                >
-                  🐕 <span className="font-semibold text-slate">{d.name}</span>
-                </Link>
-              ))}
-              <Link
-                to="/my/dogs/new"
-                className="rounded border border-dashed border-copper p-3 text-copper"
-              >
-                + {t("overview.qAddDog")}
-              </Link>
-            </div>
-          </section>
           <section>
             <h2 className="mb-2 font-semibold text-slate">{t("overview.recent")}</h2>
             {stage === "noEntries" ? (
