@@ -12,6 +12,7 @@ import { DogForm } from "@/routes/dog-form";
 import { DogHub } from "@/routes/dog-hub";
 import { DogJournal } from "@/routes/dog-journal";
 import { DogTraining } from "@/routes/dog-training";
+import { DogWeek } from "@/routes/dog-week";
 import { DogsList } from "@/routes/dogs-list";
 import { ForgotPassword } from "@/routes/forgot-password";
 import { Journal } from "@/routes/journal";
@@ -100,6 +101,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
                 <Route path="journal" element={<DogJournal />} />
                 <Route path="training" element={<DogTraining />} />
                 <Route path="brief" element={<Brief />} />
+                <Route path="week" element={<DogWeek />} />
                 <Route path="edit" element={<DogForm mode="edit" />} />
               </Route>
               <Route path="/my/journal" element={<Journal />} />

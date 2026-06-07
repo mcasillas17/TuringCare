@@ -2,6 +2,7 @@ export * from "./auth";
 export * from "./brief";
 export * from "./course";
 export * from "./dog";
+export * from "./focus";
 export * from "./journal";
 export * from "./progress";
 export * from "./profile";

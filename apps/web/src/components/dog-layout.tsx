@@ -43,6 +43,7 @@ export function DogLayout() {
     { to: `/my/dogs/${dog.id}/journal`, label: t("dogHub.tabJournal"), end: false },
     { to: `/my/dogs/${dog.id}/training`, label: t("dogHub.tabTraining"), end: false },
     { to: `/my/dogs/${dog.id}/brief`, label: t("dogHub.tabBrief"), end: false },
+    { to: `/my/dogs/${dog.id}/week`, label: t("dogHub.tabWeek"), end: false },
   ];
 
   return (

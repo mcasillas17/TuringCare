@@ -713,3 +713,40 @@ dashboard's duplicate widget (the dashboard keeps its "Dogs" stat count and the
 - Spec/plan: `docs/superpowers/specs/2026-05-31-dog-hub-redesign-design.md`,
   `docs/superpowers/plans/2026-05-31-dog-hub-redesign.md`
 - Commits: this branch. Shipped as a PR from feature/dog-hub-redesign.
+
+## 2026-06-07 — Weekly skill focus ("This Week" tab) — SHIPPED
+A per-dog **This Week** tab (5th tab in the dog layout) for committing to which
+skills to train each week and seeing whether the reps landed. The owner keeps a
+single evolving **focus list** per dog; the tab renders a Mon–Sun **grid** of
+focus skills × days where a filled cell means a practice session was logged that
+day. **Tap an empty cell to log** a quick session for that skill on that day
+(today → now, a past day → noon local); tap a filled cell for a popover of that
+day's sessions with remove + "log another". Future cells are disabled. Page ◀ to
+prior weeks (forward capped at the current week); history is free because the
+grid re-buckets the dog's existing dated `practice_sessions` for whichever week
+is in view. Presence-only — no targets/streaks; the header reads "Trained X of N
+focus skills · Y sessions".
+
+New `weekly_focus` table (migration 0009): one row per focused skill per dog,
+unique `(dog_id, skill_id)`, cascade on dog/skill delete. New owner-scoped API:
+`GET /api/dogs/:id/focus?weekStart&weekEnd` (focus skills + their in-window
+sessions), `POST …/focus { skillId }` (404 cross-dog, 409 duplicate),
+`DELETE …/focus/:skillId`. Tap-to-log reuses the existing session endpoints — no
+new logging route. All week math is done client-side in local time
+(`lib/week.ts`, pure + unit-tested): the client sends local-midnight week bounds
+as instants and buckets sessions by local day, so a session lands in exactly one
+column regardless of timezone.
+
+Built via subagent-driven development (8 tasks; implementer + spec + quality
+review; a final whole-feature review confirmed ownership scoping is tight and
+the timezone window/bucketing are internally consistent — the one "tz bug" the
+reviewer raised was a false positive). Gates: web tsc 0, api tsc 0, lint 0 (261
+files), shared 42 / web 190 passing, web build OK. The api vitest suite could not
+run locally — Postgres was down (ECONNREFUSED, same documented shared-test-DB
+drift; even unrelated suites fail identically) — so the new `focus.test.ts` (6
+cases: add/GET, 409 dup, 404 cross-dog, week-window filtering, delete + re-delete
+404, skill-delete cascade) runs in CI. No change to existing session/journal
+flows.
+- Spec/plan: `docs/superpowers/specs/2026-06-07-weekly-skill-focus-design.md`,
+  `docs/superpowers/plans/2026-06-07-weekly-skill-focus.md`
+- Commits: this branch. Shipped as a PR from feature/weekly-skill-focus.

@@ -80,14 +80,16 @@ Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highligh
 - **Curated training curriculum** — opt-in templates that pre-populate a goal
   with skills, each with 5 progressive milestone definitions surfaced in the
   progress panel.
+- **Weekly skill focus** — a per-dog **This Week** tab: pick the skills to work
+  on this week and see a Mon–Sun grid of which days you practiced each one, with
+  tap-to-log. Page back through prior weeks; the grid is computed from your dated
+  practice sessions.
 - **i18n** — typed en/es catalogs with compile-time parity.
 - **Telemetry + admin dashboard** with rate-limited event ingestion.
 
 ## What's next
 
 - Dog profile photos (storage + upload + thumbnail on cards/brief).
-- Weekly skill focus + calendar tracking (commits N skills/week, shows training
-  effort distribution against actual sessions).
 - Production smoke + mobile QA on `turingcare.dog` before the first round of
   real-user testing.
 - Security backlog (password reset is shipped; email verification, 2FA, etc.) —

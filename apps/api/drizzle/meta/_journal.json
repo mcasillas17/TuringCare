@@ -64,6 +64,13 @@
       "when": 1780210529144,
       "tag": "0008_mature_peter_quill",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780866813971,
+      "tag": "0009_flippant_steel_serpent",
+      "breakpoints": true
     }
   ]
 }
