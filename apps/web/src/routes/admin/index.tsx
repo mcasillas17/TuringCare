@@ -1,3 +1,4 @@
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ActiveUsage } from "./panels/active-usage";
@@ -22,6 +23,9 @@ export function AdminDashboard() {
           <Link to="/admin/trainers" className="text-sm underline">
             Manage trainers
           </Link>
+          <Link to="/admin/courses" className="text-sm underline">
+            Manage courses
+          </Link>
           <label htmlFor="range-select" className="sr-only">
             Date range
           </label>
@@ -37,6 +41,8 @@ export function AdminDashboard() {
               </option>
             ))}
           </select>
+          <span aria-hidden="true" className="h-5 w-px bg-silver/70" />
+          <LanguageToggle />
         </div>
       </header>
 

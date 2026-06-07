@@ -7,12 +7,17 @@ import { resolveAdminRole } from "./auth/admin-bootstrap";
 import { env } from "./env";
 import { globalRateLimit } from "./middleware/rate-limit";
 import { adminApp } from "./routes/admin";
+import { adminCoursesApp } from "./routes/admin-courses";
 import { adminTrainersApp } from "./routes/admin-trainers";
+import { coursesApp } from "./routes/courses";
 import { dogsApp } from "./routes/dogs";
+import { journalApp } from "./routes/journal";
+import { onboardingApp } from "./routes/onboarding";
 import { overviewApp } from "./routes/overview";
 import { profileApp } from "./routes/profile";
 import { shareApp } from "./routes/share";
 import { trainersApp } from "./routes/trainers";
+import { trainingApp } from "./routes/training";
 import { eventIngestSchema } from "./telemetry/events";
 import { recordEvent } from "./telemetry/record-event";
 
@@ -41,7 +46,9 @@ const app = new Hono()
     c.json({ ok: true } as const),
   )
   .route("/api/dogs", dogsApp)
+  .route("/api/journal", journalApp)
   .route("/api/share", shareApp)
+  .route("/api/onboarding", onboardingApp)
   .post("/api/events", zValidator("json", eventIngestSchema), async (c) => {
     const { name, props } = c.req.valid("json");
     // Identity is resolved server-side from the auth cookie — never trusted
@@ -55,9 +62,12 @@ const app = new Hono()
     return c.json({ ok: true } as const, 202);
   })
   .route("/api/overview", overviewApp)
+  .route("/api/courses", coursesApp)
+  .route("/api/training", trainingApp)
   .route("/api/trainers", trainersApp)
   .route("/api/profile", profileApp)
   .route("/api/admin", adminApp)
+  .route("/api/admin/courses", adminCoursesApp)
   .route("/api/admin/trainers", adminTrainersApp)
   .on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 

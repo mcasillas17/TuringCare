@@ -26,4 +26,29 @@ describe("SiteNav (logged in)", () => {
     expect(screen.queryByRole("link", { name: /log in/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /get started/i })).toBeNull();
   });
+
+  it("renders Trainers and Courses directory links", () => {
+    render(
+      <LocaleProvider>
+        <MemoryRouter>
+          <SiteNav />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+    expect(screen.getByRole("link", { name: /trainers/i })).toHaveAttribute("href", "/trainers");
+    expect(screen.getByRole("link", { name: /courses/i })).toHaveAttribute("href", "/courses");
+  });
+
+  it("places the language chip after the primary action (literal corner)", () => {
+    render(
+      <LocaleProvider>
+        <MemoryRouter>
+          <SiteNav />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+    const openApp = screen.getByRole("link", { name: /open app/i });
+    const chip = screen.getByRole("button", { name: "Language" });
+    expect(openApp.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

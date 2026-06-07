@@ -6,12 +6,12 @@ import { SendPanel } from "./send-panel";
 
 afterEach(() => vi.unstubAllGlobals());
 
-function setup(briefStatus: "draft" | "finalized" | null) {
+function setup(briefStatus: "draft" | "finalized" | null, initialRecipient?: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
-        <SendPanel dogId="d1" briefStatus={briefStatus} />
+        <SendPanel dogId="d1" briefStatus={briefStatus} initialRecipient={initialRecipient} />
       </LocaleProvider>
     </QueryClientProvider>,
   );
@@ -110,5 +110,12 @@ describe("SendPanel", () => {
     stubFetch(async () => new Response(JSON.stringify({ sends: [] }), { status: 200 }));
     setup("finalized");
     expect(await screen.findByText(/No sends yet/i)).toBeInTheDocument();
+  });
+
+  it("pre-fills recipient from initialRecipient prop", async () => {
+    stubFetch(async () => new Response(JSON.stringify({ sends: [] }), { status: 200 }));
+    setup("finalized", "sarah@example.com");
+    const input = (await screen.findByLabelText(/Recipient email/i)) as HTMLInputElement;
+    expect(input.value).toBe("sarah@example.com");
   });
 });

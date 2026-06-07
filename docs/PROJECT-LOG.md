@@ -411,7 +411,7 @@ seam + `LLMError{code}`, mirroring the Resend `send-email.ts` pattern) calls
 Claude Haiku (`polishBrief`) to rewrite that summary into warm prose — system
 prompt locked to "use only the facts, invent nothing, no medical advice."
 Stored on three new nullable `briefs` columns (`narrative`, `narrativeModel`,
-`narrativeGeneratedAt`; migration 0006, additive). Owner-scoped
+`narrativeGeneratedAt`; migration 0010, additive). Owner-scoped
 `POST /api/dogs/:id/brief/narrative` returns 503 `llm_not_configured` (no key)
 / 502 `llm_failed` (provider error) — never blocks the structured brief. Web:
 "✨ Generate readable version" / "↻ Regenerate" + "Show structured" toggle on
@@ -428,3 +428,352 @@ shared 28, build OK.
 - Spec/plan: `specs/2026-05-22-llm-brief-design.md`,
   `plans/2026-05-22-llm-brief.md`
 - Commits: this branch (see `git log`). Shipped as a PR from feat+llm-brief.
+
+## 2026-05-23 — MVP coverage: 404 + Privacy + Terms — SHIPPED
+Three small but MVP-blocking additions: friendly `/`-catchall NotFound page
+(any unknown URL no longer shows a blank screen); public `/privacy` page
+with a beta-honest privacy notice (what we collect, why, how to delete);
+public `/terms` page with brief beta terms (no warranty, acceptable use,
+changes). Landing footer + register form link to both. ~22 new i18n keys
+with en/es parity. Pure additive — no existing behavior changed. Gates
+green: tsc 0, lint 0, web tests all pass, build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-mvp-legal-pages.
+
+## 2026-05-23 — Empty-state polish + first-run wayfinding — SHIPPED
+A first-time tester now lands on a welcoming `/my` Overview with a clear
+"Add your first dog" CTA instead of cold zeros. Adaptive greeting swaps in
+based on state: `new` → welcome + CTA; `noEntries` → "Log your first
+entry" nudge; `noBrief` → "Generate your first Brief" nudge; `ready` →
+today's layout unchanged. Stronger empty states across `/my/dogs`,
+`/my/journal`, `/my/brief`, `/my/trainers` (filtered-empty), each with the
+warm, encouraging voice the product wants. Steady-state users see no
+change. ~14 new i18n keys with en/es parity. Gates green: tsc 0, lint 0,
+web tests all pass, build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-empty-state-polish.
+
+## 2026-05-23 — Settings completeness: change-password + delete-account — SHIPPED
+The Settings page was a skeleton: language toggle, sign-out, link to
+profile. Now it's a real page. **Change password** form (current + new +
+confirm, zod-validated, calls Better Auth's `changePassword` client
+method; toast on success, helpful error on wrong-current). **Delete
+account** double-confirm flow (intro panel → expand → type "delete" to
+unlock the Confirm button → call Better Auth's `deleteUser` → sign out →
+navigate home). Sectioned layout: Language / Account / Change password /
+Danger zone. ~20 new i18n keys with en/es parity (one shared literal
+`"delete"` is allowlisted in the parity test). Server-side: a single-line
+config flip in `apps/api/src/auth.ts` (`user.deleteUser.enabled: true`)
+to satisfy Better Auth's opt-in requirement on `POST /delete-user`; no
+schema changes — the existing FK cascades from `user` → `dogs` (and
+through to journal/briefs/training/concerns/goals/brief_sends) handle
+all data cleanup. Gates green: tsc 0, lint 0, web tests 116/116 (+16),
+build OK.
+- Spec/plan: `specs/2026-05-23-settings-completeness-design.md`,
+  `plans/2026-05-23-settings-completeness.md`
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-settings-completeness.
+
+## 2026-05-23 — Language toggle: flag popover — SHIPPED
+Reworked `LanguageToggle` from the single click-flip pill (PR #22) into a compact
+flag-only trigger (`🇺🇸 ▾`) that opens a small Radix `Popover` listing the
+language(s) you're not in, which you click to switch — so the other language is
+shown explicitly. Opens on desktop mouse hover OR click/tap + keyboard
+everywhere; closes on select / Escape / outside-click (Radix) / pointer-leave
+(120ms grace). a11y-first: click + keyboard always work, hover (`pointerType
+=== "mouse"`) is a desktop-only enhancement, and a hover-open suppresses Radix's
+auto-focus so a mouseover never steals focus. Drop-in (same export + `className`
+on the trigger; the 5 call sites unchanged). New `language.label` i18n key
+(en "Language" / es "Idioma"); reuses `switchTo`/`nameEn`/`nameEs`. Radix Popover
+needed a `ResizeObserver` (+ element no-op) test polyfill under jsdom. Built on
+the already-installed `radix-ui` (no new dep, no `ui/` wrapper). TDD via
+subagent-driven development; the component had two independent opus code reviews
+(double-click-dismiss, test-bent pointer guard, timer cleanup, hover focus-steal
+all fixed). 5 call-site tests updated for the new trigger name/flow. Gate green:
+biome 198, web 38 files / 132 tests, tsc 0, build OK.
+- Spec/plan: `specs/2026-05-23-language-toggle-popover-design.md`,
+  `plans/2026-05-23-language-toggle-popover.md`
+- Commits: this branch (see `git log`). Shipped as a PR from worktree-lang-toggle.
+
+## 2026-05-23 — Feedback channel — SHIPPED
+"Send feedback" mailto link added in two places: landing footer
+(alongside Privacy + Terms) and Settings → Account section. Opens the
+user's email client with `feedback@turingcare.dog` pre-filled and a
+TuringCare subject line. No form, no widget, no backend — minimal
+friction for testers to tell us what broke. One new i18n key
+(`footer.feedback`) with en/es parity. Owner is setting up
+`feedback@turingcare.dog` forwarding to their inbox on the DNS side
+(out-of-band). Gates green: tsc 0, lint 0, web tests all pass, build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-feedback-channel.
+
+## 2026-05-23 — Trainer-detail → Brief cross-link — SHIPPED
+Tightens the trainer-to-Brief send loop. Trainer-detail page now shows a
+"Send my Brief to this trainer" button (only when the trainer has an email
+on file). Deep-links to `/my/brief?recipient=<email>`; SendPanel reads the
+new optional `initialRecipient` prop and pre-fills its recipient field.
+Owner flow: browse trainer → click button → SendPanel is ready, click
+Send. Strictly additive — no existing behavior changed. ~1 new i18n key
+with en/es parity. Gates green: tsc 0, lint 0, web tests all pass,
+build OK.
+- Commits: this branch (see `git log`). Shipped as a PR from
+  worktree-trainer-cross-link.
+
+## 2026-05-24 — Courses section (curated directory) — SHIPPED
+New first-class Courses section: a curated, filterable directory of training
+classes, separate from Trainers. Each course is self-contained (inline
+provider fields — organizationName/city/state — no FK to trainers, no org
+table) with a small overview and a single deep link to the provider's
+canonical course page; nothing dynamic (schedule/instructor/price/spots) is
+replicated. New `courses` table + migration; public `GET /api/courses`
+(filters: ageGroup/format/state/online) + `/:id`; admin CRUD at
+`/api/admin/courses`. Web: `/my/courses` browse (compact table, row → detail),
+`/my/courses/:id` detail (overview + skills + "View full details & register
+↗"), `/admin/courses` CRUD, new Courses nav item. ~26 i18n keys en/es.
+Idempotent seed script loads Seattle Humane's 19-course catalog
+(`scripts/seed-seattle-humane.ts`). No journal/plan adoption (deferred
+Level-2). `brief.tsx`/`trainer-detail.tsx` untouched. Gates green: tsc 0,
+lint 0, web + api + shared tests pass, build OK.
+- Spec/plan: `specs/2026-05-24-courses-section-design.md`,
+  `plans/2026-05-24-courses-section.md`
+- Commits: this branch. Shipped as a PR from worktree-courses-section.
+
+## 2026-05-24 — Public Trainers + Courses directory — SHIPPED
+Moved Trainers + Courses out of `/my/*` to public top-level routes
+(`/trainers`, `/courses`, + `/:id`) — browsable by anyone, no login. New
+`optionalUser` middleware (session if present, never 401). Trainer contact is
+scrape-protected: the public list NEVER returns email/phone (even to authed
+users), and detail reveals them ONLY to authenticated requests; anonymous
+visitors see the profile + a "Sign up to contact" CTA. Courses are fully
+public (no PII; link-out to the provider page). Pages render in a new
+`PublicLayout` (auth-aware SiteNav + footer); SiteNav gains Trainers/Courses
+links (section anchors → `/#…`). Sidebar + all internal links + route-move
+test fixtures repointed. Admin CRUD unchanged. Gates green: tsc 0, lint 0,
+web + api + shared tests pass, build OK.
+- Spec/plan: `specs/2026-05-24-public-directory-design.md`,
+  `plans/2026-05-24-public-directory.md`
+- Commits: this branch. Shipped as a PR from worktree-public-directory.
+
+## 2026-05-25 — Seattle independent trainers seed — SHIPPED
+Idempotent seed (`scripts/seed-seattle-trainers.ts`) for 4 independent
+Seattle-area positive-reinforcement trainers, each sourced from their own
+public business site + Seattle Humane instructor bio: Cathy Madson (Cathy
+Madson Dog Training — aggression/reactivity, CPDT-KA/CBCC-KA/Fear Free),
+Olivia Petersen (Sound Connection — separation anxiety/reactivity, CCS/SAPro),
+Suzi McCaslin (Laying Down the Paw — basic manners, CPDT-KA), Laura Garzon
+(Kinfolk Canine — puppy fundamentals/boarding). Website always populated;
+email/phone only where publicly confirmed (missing contact fields left empty
+per product call). Idempotent by trainer name; validates each row against
+`trainerInputSchema`. Run: `pnpm --filter @turingcare/api exec tsx
+scripts/seed-seattle-trainers.ts`. Org staff with no independent practice
+(Christi Montgomery, Michelle Reindal) deliberately excluded — the Trainers
+directory is for independent practitioners. Data tooling only; no schema/API
+change. Test validates the 4-row array.
+- Commits: this branch. Shipped as a PR from worktree-seed-trainers.
+
+## 2026-05-25 — Directory chrome fix (adaptive layout) — SHIPPED
+Bugfix: a logged-in user opening a public directory page (e.g. "Find a
+trainer" from /my) lost their app shell — sidebar + top bar vanished —
+because /trainers and /courses always rendered in PublicLayout. New
+`DirectoryLayout` picks chrome by session: signed in → AppShell (sidebar +
+top bar; AppShell's own Outlet renders the page), anonymous → PublicLayout
+(SiteNav + footer). Brief null render while the session resolves avoids
+flashing the wrong chrome; in-app navigations are cached so the signed-in
+path is flicker-free. Zero AppShell changes. 3 new tests. Gates green.
+- Commits: this branch. Shipped as a PR from worktree-directory-chrome.
+
+## 2026-05-25 — Journal quick-capture redesign — SHIPPED (revived)
+Makes logging fast: primary "Log a moment" (dog + plain `note` + optional
+intensity, <30s), secondary "Daily check-in" (better/same/harder + note), with
+ABC + the structured fields demoted to optional post-save enrichment instead of
+prerequisites. Schema migration relaxes ABC/intensity to optional, adds `kind`
+(moment|daily_checkin), required `note`, and `trend` enums, with data-safe
+backfill of `note` from existing ABC + CHECK constraints (intensity-nullable
+range, daily_checkin requires trend, moment forbids trend). New dedicated
+`/api/journal` route module; new web composers (quick-moment, daily-check-in,
+post-save-follow-ups, structured-details-editor) + entry-card rewrite +
+dog-specific entry points from `/my/dogs/:id`. This branch was built in an
+earlier session and orphaned during the MVP/courses/trainers work; revived by
+merging current `origin/main` (through #34) — renumbered its migration 0005 →
+0007 (preserving the hand-crafted data backfill; drizzle-generated the snapshot),
+unioned the journal i18n keys, and took the quick-capture journal.tsx over the
+superseded #25 empty-state tweaks. Gates green: tsc 0, lint 0, api 154 / web
+157 / shared 35, build OK, migration applies cleanly.
+- Spec/plan: `specs/2026-05-22-journal-quick-capture-design.md`,
+  `plans/2026-05-23-journal-quick-capture.md`
+- Refinement: quick-moment intensity is now an opt-in snapping 1–5 slider
+  instead of a `<select>`. Default state is "none" (a "+ Add intensity" button);
+  clicking reveals a `range` input (min 1 / max 5 / step 1, default 3) with a
+  value readout, 1–5 tick labels, and a ✕ to clear back to none — keeping
+  intensity genuinely optional while making the 1–5 scale tappable. Added
+  `quick-moment-composer.test.tsx` (default-hidden, reveal-on-click, clear) and
+  i18n keys `addIntensity`/`clearIntensity`. Gates: tsc 0, lint 0, web 160.
+- Follow-ups: a few superseded #25 i18n keys (emptyTitle/emptyBody/noDogsCta/add)
+  are now unused.
+- Commits: this branch. Shipped as a PR from feature/journal-quick-capture-implementation.
+
+## 2026-05-25 — Windowed, trend-aware behavior brief — SHIPPED
+Makes the brief recency-aware now that quick-capture fills the journal fast.
+`composeBrief` gains a time window — the Journal line reads
+`N entries in the last 30 days` (or `(all time)`) and the intensity average is
+computed over that window — plus a check-in trend tally line
+(`Check-ins: 5 better, 2 same, 1 harder.`) from daily check-ins' `trend`, and the
+recent-entry list cap goes 5 → 10. `POST /api/dogs/:id/brief` takes an optional
+`?window=7d|30d|90d|all` (default `30d`) validated with `zValidator("query", …)`
+and date-filters the journal query (`gte(occurredAt, cutoff)`); the web brief page
+gets a segmented `7d/30d/90d/All` control. Still a deterministic text template (no
+LLM). No schema/migration; email-a-brief send flow untouched (reuses the stored
+summary, so it inherits the chosen window). Built via subagent-driven development
+(implementer + spec + quality review per task). Gates green: tsc 0, lint 0,
+shared 38 / web 158 / api 157, web build OK.
+- Transport note: window is a query param, not a JSON body — the typed hono RPC
+  client needs a route validator, and a json-body validator would break every
+  no-body `POST /:id/brief` caller. See the spec's implementation note.
+- Spec/plan: `docs/superpowers/specs/2026-05-25-brief-windowed-trend-design.md`,
+  `docs/superpowers/plans/2026-05-25-brief-windowed-trend.md`
+- Commits: this branch. Shipped as a PR from feature/brief-windowed-trend.
+
+## 2026-05-30 — Onboarding checklist on /my overview — SHIPPED
+Replaces the single "Welcome to TuringCare" card with a 5-item progress
+checklist: ✓ add your first dog / log 3 moments / set a training goal /
+finalize a brief / share with a trainer. Each item is computed live from
+existing tables (no new schema, no migration) by a new owner-scoped
+`GET /api/onboarding` returning `{hasDog, momentsCount, hasGoal,
+hasFinalizedBrief, hasSentBrief, mostRecentDogId}`. Rows are clickable and
+deep-link to the right route (per-dog where it makes sense, using
+mostRecentDogId; safe fallbacks when null). Once all 5 are done, the
+checklist collapses to a one-line celebration banner the user can dismiss
+(persisted per-device in localStorage). The five progress-flipping mutations
+(useCreateDog, useAddGoal, useCreateEntry, useFinalizeBrief, useSendBrief)
+each invalidate the `["onboarding"]` query so the checklist updates the
+moment the user returns to /my. Built via subagent-driven-development
+(implementer + spec + quality review per task). Gates green: tsc 0, lint 0,
+shared 38 / web 167 / api 163, web build OK.
+- Open follow-ups (minor, non-blocking): the `stage==="new"` branch now has
+  no page-level `<h1>` (the checklist's heading is `<h2>`) — heading
+  hierarchy quirk for screen-reader users; the existing `overview.test.tsx`
+  fetch stub returns `{}` for `/api/onboarding` (the checklist test mocks
+  the hook directly, so coverage is fine, but the route-level stub could
+  be tightened).
+- Spec/plan: `docs/superpowers/specs/2026-05-27-onboarding-checklist-design.md`,
+  `docs/superpowers/plans/2026-05-27-onboarding-checklist.md`
+- Commits: this branch. Shipped as a PR from feature/onboarding-checklist.
+
+## 2026-05-31 — Training goal templates (curated curriculum) — SHIPPED
+Curated training-curriculum templates a user can apply to a dog in one click.
+Five starter templates — basic-manners, puppy-fundamentals, reactivity-work,
+separation-comfort, recall-reliability — covering 21 skills with 105 progressive
+level definitions (L1 → L5 per skill) all in humane positive-reinforcement
+language. From the dog detail page the user clicks a new `Templates ▼` button
+next to "Add Goal", picks a template, previews the goal + skills it'll create,
+and Apply atomically creates the goal + N skills (`confidence: 1`,
+`catalogGoalKey` / `catalogSkillKey` persisted). The progress panel then renders
+each catalog-applied skill's description + current-level milestone (e.g.,
+"Level 3 — Responds in mild distractions") below the confidence selector;
+user-created skills render unchanged. Catalog lives as a static `const` in
+`apps/api/src/data/training-catalog.ts` — no DB content, no editorial pipeline.
+Two new owner-scoped API endpoints: `GET /api/training/templates` and atomic
+`POST /api/dogs/:id/goals/from-template`. Single migration (0008) adds two
+nullable text columns; no backfill. The apply mutation invalidates
+`["onboarding"]` so the onboarding checklist's "Set a training goal" row ticks
+immediately. Built via subagent-driven development (7 implementation tasks,
+implementer + spec + quality review per task). Gates green: tsc 0, lint 0
+(241 files), shared 38 / web 172 / api 173, web build OK.
+- Catalog scope: English-only for MVP; the picker chrome (en + es) is localised.
+  Catalog can be localised later without further schema/UX work.
+- Transport note: `useApplyTemplate` uses raw `fetch` instead of the typed hc
+  client because the from-template route uses manual body parsing (no zValidator,
+  to preserve the 404-before-400 ownership ordering). Inline comment explains
+  the constraint.
+- Open follow-ups (minor, non-blocking): the dropdown lacks outside-click +
+  Escape dismissal; API error details are squashed into a generic toast; the
+  same template can be applied twice (intentional per spec, but a unique
+  constraint on `(dog_id, catalog_goal_key)` would close the gap).
+- Spec/plan: `docs/superpowers/specs/2026-05-30-training-goal-templates-design.md`,
+  `docs/superpowers/plans/2026-05-30-training-goal-templates.md`
+- Commits: this branch. Shipped as a PR from feature/training-goal-templates.
+
+## 2026-05-31 — Dog-hub redesign (hub + spokes) — SHIPPED
+Restructured the bloated single-page dog detail view into a hub-and-spoke IA.
+The old `/my/dogs/:id` crammed profile, concerns, every goal, and every skill
+(with inline log/edit/session forms — 50+ interactive elements for a dog with a
+few goals) onto one screen. Now `/my/dogs/:id` is a thin **Overview** hub and the
+density is split across three focused spokes, all under a shared `<DogLayout>`
+(sticky banner with the dog's name + Edit/Delete, plus a 4-tab strip: Overview /
+Journal / Training / Brief):
+- **Overview** (`dog-hub.tsx`): three `SpokeCard`s with at-a-glance metrics
+  (journal entry count + last activity, goals/skills/avg-confidence, brief
+  status/version), the concerns add/list block, a top-3 RecentActivity list, and
+  a single "Log a moment" CTA → `…/journal?compose=moment`.
+- **Journal** spoke (`dog-journal.tsx`): mounts a new shared `<JournalView>`
+  extracted from `/my/journal` (scoped to the dog; reads `?compose=`).
+- **Training** spoke (`dog-training.tsx`): goal-add row + `TemplatePicker` +
+  `ProgressPanel`, where each `SkillCard` is now **collapsed by default** and
+  expands on a chevron (name + description + session count + level milestone +
+  confidence stay visible; log/edit/session-list/forms hide until expanded).
+- **Brief** spoke: the existing `Brief` route, now layout-wrapped.
+`edit` renders inside the layout (keeps banner + tabs context). `/my/dogs` keeps
+its dedicated **all-my-dogs list** (`dogs-list.tsx`), reachable from the sidebar
+"Dogs" nav — the redesign only declutters the per-dog *detail* page, not the
+list. Deleted `dog-detail.tsx`; removed 3 genuinely-orphaned `dogs.*` i18n keys
+(empty/back/deleteConfirm). No DB, API, or Hono changes — purely a web IA +
+component refactor. Built via subagent-driven development (8 tasks; Task 1
+carried implementer + spec + quality review, which caught a real bug: skill
+`mode` lingered after collapse, so re-expanding reopened a stale form — fixed by
+resetting mode on collapse).
+
+**Follow-up (post-merge, shipped as a separate fix PR off `main`):** the initial
+pass deleted the dogs-list page and redirected `/my/dogs` → `/my`, which broke
+the sidebar "Dogs" nav (it bounced to the dashboard). Restored the dedicated
+dogs list so "Dogs" works again. That surfaced a second issue — the dashboard
+(`/my`) also rendered a "Your dogs" widget, so dogs were listed in two places.
+Resolved by making `/my/dogs` the single home for the dog list and removing the
+dashboard's duplicate widget (the dashboard keeps its "Dogs" stat count and the
+"Add dog" quick-action; `overview.yourDogs` i18n key removed).
+- Gates: web tsc 0, api tsc 0, lint 0 (248 files), shared 38 / web 180, web
+  build OK. The api vitest suite could not run locally — Postgres at
+  localhost:5432 was refusing connections (ECONNREFUSED); this is the documented
+  shared-test-DB environment drift and is unrelated to this frontend-only change
+  (the diff touches zero `apps/api`/migration/schema files). CI runs the api
+  suite against its own database.
+- Spec/plan: `docs/superpowers/specs/2026-05-31-dog-hub-redesign-design.md`,
+  `docs/superpowers/plans/2026-05-31-dog-hub-redesign.md`
+- Commits: this branch. Shipped as a PR from feature/dog-hub-redesign.
+
+## 2026-06-07 — Weekly skill focus ("This Week" tab) — SHIPPED
+A per-dog **This Week** tab (5th tab in the dog layout) for committing to which
+skills to train each week and seeing whether the reps landed. The owner keeps a
+single evolving **focus list** per dog; the tab renders a Mon–Sun **grid** of
+focus skills × days where a filled cell means a practice session was logged that
+day. **Tap an empty cell to log** a quick session for that skill on that day
+(today → now, a past day → noon local); tap a filled cell for a popover of that
+day's sessions with remove + "log another". Future cells are disabled. Page ◀ to
+prior weeks (forward capped at the current week); history is free because the
+grid re-buckets the dog's existing dated `practice_sessions` for whichever week
+is in view. Presence-only — no targets/streaks; the header reads "Trained X of N
+focus skills · Y sessions".
+
+New `weekly_focus` table (migration 0009): one row per focused skill per dog,
+unique `(dog_id, skill_id)`, cascade on dog/skill delete. New owner-scoped API:
+`GET /api/dogs/:id/focus?weekStart&weekEnd` (focus skills + their in-window
+sessions), `POST …/focus { skillId }` (404 cross-dog, 409 duplicate),
+`DELETE …/focus/:skillId`. Tap-to-log reuses the existing session endpoints — no
+new logging route. All week math is done client-side in local time
+(`lib/week.ts`, pure + unit-tested): the client sends local-midnight week bounds
+as instants and buckets sessions by local day, so a session lands in exactly one
+column regardless of timezone.
+
+Built via subagent-driven development (8 tasks; implementer + spec + quality
+review; a final whole-feature review confirmed ownership scoping is tight and
+the timezone window/bucketing are internally consistent — the one "tz bug" the
+reviewer raised was a false positive). Gates: web tsc 0, api tsc 0, lint 0 (261
+files), shared 42 / web 190 passing, web build OK. The api vitest suite could not
+run locally — Postgres was down (ECONNREFUSED, same documented shared-test-DB
+drift; even unrelated suites fail identically) — so the new `focus.test.ts` (6
+cases: add/GET, 409 dup, 404 cross-dog, week-window filtering, delete + re-delete
+404, skill-delete cascade) runs in CI. No change to existing session/journal
+flows.
+- Spec/plan: `docs/superpowers/specs/2026-06-07-weekly-skill-focus-design.md`,
+  `docs/superpowers/plans/2026-06-07-weekly-skill-focus.md`
+- Commits: this branch. Shipped as a PR from feature/weekly-skill-focus.
+

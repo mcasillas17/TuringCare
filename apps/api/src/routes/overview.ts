@@ -43,7 +43,7 @@ export const overviewApp = new Hono<{ Variables: Vars }>()
         : null,
       recentActivity: entries.slice(0, 5).map((e) => ({
         dogName: nameById.get(e.dogId) ?? "",
-        behavior: e.behavior,
+        behavior: e.note,
         occurredAt: e.occurredAt.toISOString(),
       })),
     });

@@ -1,0 +1,20 @@
+CREATE TABLE "courses" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"organization_name" text NOT NULL,
+	"city" text NOT NULL,
+	"state" text NOT NULL,
+	"name" text NOT NULL,
+	"description" text,
+	"format" text NOT NULL,
+	"age_group" text NOT NULL,
+	"age_range" text,
+	"duration_weeks" integer,
+	"session_minutes" integer,
+	"prerequisites" text,
+	"skills_taught" text[] DEFAULT '{}' NOT NULL,
+	"is_online" boolean DEFAULT false NOT NULL,
+	"course_page_url" text,
+	"position" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);

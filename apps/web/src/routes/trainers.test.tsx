@@ -27,9 +27,9 @@ function renderList() {
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
-        <MemoryRouter initialEntries={["/my/trainers"]}>
+        <MemoryRouter initialEntries={["/trainers"]}>
           <Routes>
-            <Route path="/my/trainers" element={<Trainers />} />
+            <Route path="/trainers" element={<Trainers />} />
           </Routes>
         </MemoryRouter>
       </LocaleProvider>

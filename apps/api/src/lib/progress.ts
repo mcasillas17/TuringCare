@@ -15,6 +15,7 @@ export type ProgressSkill = {
   name: string;
   confidence: number;
   position: number;
+  catalogSkillKey: string | null;
   sessionCount: number;
   firstSessionAt: string | null;
   lastSessionAt: string | null;
@@ -25,6 +26,7 @@ export type ProgressSkill = {
 export type ProgressGoal = {
   id: string;
   goal: string;
+  catalogGoalKey: string | null;
   avgConfidence: number | null;
   skills: ProgressSkill[];
 };
@@ -86,6 +88,7 @@ export async function loadProgress(dogId: string): Promise<ProgressOverview> {
       name: skill.name,
       confidence: skill.confidence,
       position: skill.position,
+      catalogSkillKey: skill.catalogSkillKey,
       sessionCount: skillSessions.length,
       firstSessionAt: firstSession?.occurredAt ?? null,
       lastSessionAt: lastSession?.occurredAt ?? null,
@@ -109,6 +112,7 @@ export async function loadProgress(dogId: string): Promise<ProgressOverview> {
       return {
         id: goal.id,
         goal: goal.goal,
+        catalogGoalKey: goal.catalogGoalKey,
         avgConfidence,
         skills: goalSkills,
       };

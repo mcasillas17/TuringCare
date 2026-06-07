@@ -2,16 +2,21 @@ import { randomBytes } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
 import {
   behaviorConcernSchema,
+  briefGenerateSchema,
   briefSendSchema,
   dogProfileSchema,
-  journalEntrySchema,
+  focusAddSchema,
+  focusWeekQuerySchema,
+  journalEntryCreateSchema,
+  journalEntryUpdateSchema,
   practiceSessionSchema,
   skillConfidenceSchema,
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
-import { and, desc, eq, max } from "drizzle-orm";
+import { and, desc, eq, gte, lt, max } from "drizzle-orm";
 import { Hono } from "hono";
+import { trainingCatalog } from "../data/training-catalog";
 import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
 import { findOwnedSkill } from "../db/owned-skill";
@@ -25,15 +30,25 @@ import {
   trainingGoals,
   trainingSkills,
   user,
+  weeklyFocus,
 } from "../db/schema";
 import { renderBriefEmail } from "../email/brief-email";
 import { sendEmail } from "../email/send-email";
 import { env } from "../env";
 import { composeBrief } from "../lib/brief";
+import { loadFocusWeek } from "../lib/focus";
 import { loadProgress } from "../lib/progress";
 import { LLMError } from "../llm/anthropic";
 import { polishBrief } from "../llm/polish-brief";
 import { type Vars, requireUser } from "../middleware/require-user";
+
+const invalidJournalField = (path: "occurredAt" | "trend", message: string) =>
+  ({
+    success: false,
+    error: {
+      issues: [{ code: "custom", path: [path], message }],
+    },
+  }) as const;
 
 export const dogsApp = new Hono<{ Variables: Vars }>()
   .use("*", requireUser)
@@ -121,6 +136,39 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .returning();
     if (!skill) throw new Error("failed to create default skill");
     return c.json({ goal, skill }, 201);
+  })
+  .post("/:id/goals/from-template", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const parsed = (await c.req.json().catch(() => ({}))) as { templateKey?: unknown };
+    if (typeof parsed.templateKey !== "string") {
+      return c.json({ error: "invalid_template" } as const, 400);
+    }
+    const template = trainingCatalog.find((t) => t.key === parsed.templateKey);
+    if (!template) return c.json({ error: "invalid_template" } as const, 400);
+
+    const { goal, skills } = await db.transaction(async (tx) => {
+      const [createdGoal] = await tx
+        .insert(trainingGoals)
+        .values({ dogId: dog.id, goal: template.name, catalogGoalKey: template.key })
+        .returning();
+      if (!createdGoal) throw new Error("failed to create template goal");
+      const createdSkills = await tx
+        .insert(trainingSkills)
+        .values(
+          template.skills.map((skill, index) => ({
+            goalId: createdGoal.id,
+            name: skill.name,
+            confidence: 1,
+            position: index,
+            catalogSkillKey: skill.key,
+          })),
+        )
+        .returning();
+      return { goal: createdGoal, skills: createdSkills };
+    });
+
+    return c.json({ goal, skills }, 201);
   })
   .delete("/:id/goals/:goalId", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
@@ -236,6 +284,46 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
+  .get("/:id/focus", zValidator("query", focusWeekQuerySchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const { weekStart, weekEnd } = c.req.valid("query");
+    const data = await loadFocusWeek(dog.id, weekStart, weekEnd);
+    return c.json(data);
+  })
+  .post("/:id/focus", zValidator("json", focusAddSchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const { skillId } = c.req.valid("json");
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId);
+    if (!skill) return c.json({ error: "not_found" } as const, 404);
+    const existing = await db
+      .select({ id: weeklyFocus.id })
+      .from(weeklyFocus)
+      .where(and(eq(weeklyFocus.dogId, dog.id), eq(weeklyFocus.skillId, skillId)))
+      .limit(1);
+    if (existing[0]) return c.json({ error: "already_focused" } as const, 409);
+    const [{ value: maxPos } = { value: null }] = await db
+      .select({ value: max(weeklyFocus.position) })
+      .from(weeklyFocus)
+      .where(eq(weeklyFocus.dogId, dog.id));
+    const [row] = await db
+      .insert(weeklyFocus)
+      .values({ dogId: dog.id, skillId, position: (maxPos ?? -1) + 1 })
+      .returning();
+    if (!row) throw new Error("failed to add focus skill");
+    return c.json({ focus: row }, 201);
+  })
+  .delete("/:id/focus/:skillId", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const [deleted] = await db
+      .delete(weeklyFocus)
+      .where(and(eq(weeklyFocus.dogId, dog.id), eq(weeklyFocus.skillId, c.req.param("skillId"))))
+      .returning({ id: weeklyFocus.id });
+    if (!deleted) return c.json({ error: "not_found" } as const, 404);
+    return c.json({ ok: true } as const);
+  })
   .get("/:id/journal", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
@@ -246,48 +334,92 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .orderBy(desc(journalEntries.occurredAt));
     return c.json({ entries });
   })
-  .post("/:id/journal", zValidator("json", journalEntrySchema), async (c) => {
+  .post("/:id/journal", zValidator("json", journalEntryCreateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const b = c.req.valid("json");
+    const occurredAt = b.occurredAt ? new Date(b.occurredAt) : new Date();
+    if (Number.isNaN(occurredAt.getTime())) {
+      return c.json(invalidJournalField("occurredAt", "Invalid date"), 400);
+    }
     const [entry] = await db
       .insert(journalEntries)
       .values({
         dogId: dog.id,
-        occurredAt: new Date(b.occurredAt),
-        antecedent: b.antecedent,
-        behavior: b.behavior,
-        consequence: b.consequence,
-        intensity: b.intensity,
-        location: b.location ?? null,
-        notes: b.notes ?? null,
-        durationSeconds: b.durationSeconds ?? null,
-        recoverySeconds: b.recoverySeconds ?? null,
-        peoplePresent: b.peoplePresent ?? null,
-        ownerResponse: b.ownerResponse ?? null,
+        kind: b.kind,
+        occurredAt,
+        note: b.note,
+        trend: b.kind === "daily_checkin" ? b.trend : null,
+        antecedent: b.kind === "moment" ? (b.antecedent ?? null) : null,
+        behavior: b.kind === "moment" ? (b.behavior ?? null) : null,
+        consequence: b.kind === "moment" ? (b.consequence ?? null) : null,
+        intensity: b.kind === "moment" ? (b.intensity ?? null) : null,
+        location: b.kind === "moment" ? (b.location ?? null) : null,
+        notes: b.kind === "moment" ? (b.notes ?? null) : null,
+        durationSeconds: b.kind === "moment" ? (b.durationSeconds ?? null) : null,
+        recoverySeconds: b.kind === "moment" ? (b.recoverySeconds ?? null) : null,
+        peoplePresent: b.kind === "moment" ? (b.peoplePresent ?? null) : null,
+        ownerResponse: b.kind === "moment" ? (b.ownerResponse ?? null) : null,
       })
       .returning();
     return c.json({ entry }, 201);
   })
-  .put("/:id/journal/:entryId", zValidator("json", journalEntrySchema), async (c) => {
+  .put("/:id/journal/:entryId", zValidator("json", journalEntryUpdateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const b = c.req.valid("json");
+    const [existing] = await db
+      .select()
+      .from(journalEntries)
+      .where(and(eq(journalEntries.id, c.req.param("entryId")), eq(journalEntries.dogId, dog.id)))
+      .limit(1);
+    if (!existing) return c.json({ error: "not_found" } as const, 404);
+
+    const changes: Partial<typeof journalEntries.$inferInsert> = {};
+    const nextKind = b.kind ?? existing.kind;
+    if (b.kind !== undefined) changes.kind = b.kind;
+    if (b.occurredAt !== undefined) {
+      const occurredAt = new Date(b.occurredAt);
+      if (Number.isNaN(occurredAt.getTime())) {
+        return c.json(invalidJournalField("occurredAt", "Invalid date"), 400);
+      }
+      changes.occurredAt = occurredAt;
+    }
+    if (b.note !== undefined) changes.note = b.note;
+
+    if (nextKind === "daily_checkin") {
+      const nextTrend = b.trend === undefined ? existing.trend : b.trend;
+      if (!nextTrend) {
+        return c.json(invalidJournalField("trend", "Trend is required for daily check-ins"), 400);
+      }
+      changes.trend = nextTrend;
+      changes.antecedent = null;
+      changes.behavior = null;
+      changes.consequence = null;
+      changes.intensity = null;
+      changes.location = null;
+      changes.notes = null;
+      changes.durationSeconds = null;
+      changes.recoverySeconds = null;
+      changes.peoplePresent = null;
+      changes.ownerResponse = null;
+    } else {
+      changes.trend = null;
+      if (b.antecedent !== undefined) changes.antecedent = b.antecedent ?? null;
+      if (b.behavior !== undefined) changes.behavior = b.behavior ?? null;
+      if (b.consequence !== undefined) changes.consequence = b.consequence ?? null;
+      if (b.intensity !== undefined) changes.intensity = b.intensity ?? null;
+      if (b.location !== undefined) changes.location = b.location ?? null;
+      if (b.notes !== undefined) changes.notes = b.notes ?? null;
+      if (b.durationSeconds !== undefined) changes.durationSeconds = b.durationSeconds ?? null;
+      if (b.recoverySeconds !== undefined) changes.recoverySeconds = b.recoverySeconds ?? null;
+      if (b.peoplePresent !== undefined) changes.peoplePresent = b.peoplePresent ?? null;
+      if (b.ownerResponse !== undefined) changes.ownerResponse = b.ownerResponse ?? null;
+    }
+
     const [entry] = await db
       .update(journalEntries)
-      .set({
-        occurredAt: new Date(b.occurredAt),
-        antecedent: b.antecedent,
-        behavior: b.behavior,
-        consequence: b.consequence,
-        intensity: b.intensity,
-        location: b.location ?? null,
-        notes: b.notes ?? null,
-        durationSeconds: b.durationSeconds ?? null,
-        recoverySeconds: b.recoverySeconds ?? null,
-        peoplePresent: b.peoplePresent ?? null,
-        ownerResponse: b.ownerResponse ?? null,
-      })
+      .set(changes)
       .where(and(eq(journalEntries.id, c.req.param("entryId")), eq(journalEntries.dogId, dog.id)))
       .returning();
     if (!entry) return c.json({ error: "not_found" } as const, 404);
@@ -372,13 +504,19 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!updated) return c.json({ error: "not_found" } as const, 404);
     return c.json({ brief: updated });
   })
-  .post("/:id/brief", async (c) => {
+  .post("/:id/brief", zValidator("query", briefGenerateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const { window } = c.req.valid("query");
+    const windowDays = window === "all" ? null : Number(window.replace("d", ""));
+    const cutoff = windowDays === null ? null : new Date(Date.now() - windowDays * 86_400_000);
+    const journalWhere = cutoff
+      ? and(eq(journalEntries.dogId, dog.id), gte(journalEntries.occurredAt, cutoff))
+      : eq(journalEntries.dogId, dog.id);
     const [concerns, goals, entries, progress, [last]] = await Promise.all([
       db.select().from(behaviorConcerns).where(eq(behaviorConcerns.dogId, dog.id)),
       db.select().from(trainingGoals).where(eq(trainingGoals.dogId, dog.id)),
-      db.select().from(journalEntries).where(eq(journalEntries.dogId, dog.id)),
+      db.select().from(journalEntries).where(journalWhere),
       loadProgress(dog.id),
       db
         .select()
@@ -392,10 +530,16 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       concerns: concerns.map((x) => ({ concern: x.concern, severity: x.severity })),
       goals: goals.map((x) => ({ goal: x.goal })),
       entries: entries.map((e) => ({
+        note: e.note,
+        kind: e.kind,
+        trend: e.trend,
         behavior: e.behavior,
+        antecedent: e.antecedent,
+        consequence: e.consequence,
         intensity: e.intensity,
         occurredAt: e.occurredAt.toISOString(),
       })),
+      windowDays,
       progress: progress.goals,
     });
     const [brief] = await db

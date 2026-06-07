@@ -12,6 +12,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -82,6 +83,8 @@ export const dogSourceEnum = pgEnum("dog_source", ["breeder", "rescue", "shelter
 export const vaccineStageEnum = pgEnum("vaccine_stage", ["in_progress", "complete", "unknown"]);
 export const concernSeverityEnum = pgEnum("concern_severity", ["mild", "moderate", "severe"]);
 export const briefStatusEnum = pgEnum("brief_status", ["draft", "finalized"]);
+export const journalEntryKindEnum = pgEnum("journal_entry_kind", ["moment", "daily_checkin"]);
+export const journalTrendEnum = pgEnum("journal_trend", ["better", "same", "harder"]);
 
 /* ---------- Domain tables ---------- */
 
@@ -121,6 +124,7 @@ export const trainingGoals = pgTable("training_goals", {
     .notNull()
     .references(() => dogs.id, { onDelete: "cascade" }),
   goal: text("goal").notNull(),
+  catalogGoalKey: text("catalog_goal_key"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -134,6 +138,7 @@ export const trainingSkills = pgTable(
     name: text("name").notNull(),
     confidence: integer("confidence").notNull().default(1),
     position: integer("position").notNull().default(0),
+    catalogSkillKey: text("catalog_skill_key"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check("confidence_range", sql`${t.confidence} BETWEEN 1 AND 5`)],
@@ -150,6 +155,22 @@ export const practiceSessions = pgTable("practice_sessions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const weeklyFocus = pgTable(
+  "weekly_focus",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    dogId: uuid("dog_id")
+      .notNull()
+      .references(() => dogs.id, { onDelete: "cascade" }),
+    skillId: uuid("skill_id")
+      .notNull()
+      .references(() => trainingSkills.id, { onDelete: "cascade" }),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("weekly_focus_dog_skill").on(t.dogId, t.skillId)],
+);
+
 export const journalEntries = pgTable(
   "journal_entries",
   {
@@ -157,11 +178,14 @@ export const journalEntries = pgTable(
     dogId: uuid("dog_id")
       .notNull()
       .references(() => dogs.id, { onDelete: "cascade" }),
+    kind: journalEntryKindEnum("kind").notNull().default("moment"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-    antecedent: text("antecedent").notNull(),
-    behavior: text("behavior").notNull(),
-    consequence: text("consequence").notNull(),
-    intensity: integer("intensity").notNull(),
+    note: text("note").notNull(),
+    trend: journalTrendEnum("trend"),
+    antecedent: text("antecedent"),
+    behavior: text("behavior"),
+    consequence: text("consequence"),
+    intensity: integer("intensity"),
     durationSeconds: integer("duration_seconds"),
     recoverySeconds: integer("recovery_seconds"),
     location: text("location"),
@@ -170,7 +194,14 @@ export const journalEntries = pgTable(
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check("intensity_range", sql`${t.intensity} BETWEEN 1 AND 5`)],
+  (t) => [
+    check("journal_intensity_range", sql`${t.intensity} IS NULL OR ${t.intensity} BETWEEN 1 AND 5`),
+    check(
+      "journal_daily_checkin_trend",
+      sql`${t.kind} <> 'daily_checkin' OR ${t.trend} IS NOT NULL`,
+    ),
+    check("journal_moment_trend_null", sql`${t.kind} <> 'moment' OR ${t.trend} IS NULL`),
+  ],
 );
 
 export const briefs = pgTable("briefs", {
@@ -212,6 +243,27 @@ export const trainers = pgTable("trainers", {
   email: text("email"),
   phone: text("phone"),
   notesInternal: text("notes_internal"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const courses = pgTable("courses", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationName: text("organization_name").notNull(),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  format: text("format").notNull(),
+  ageGroup: text("age_group").notNull(),
+  ageRange: text("age_range"),
+  durationWeeks: integer("duration_weeks"),
+  sessionMinutes: integer("session_minutes"),
+  prerequisites: text("prerequisites"),
+  skillsTaught: text("skills_taught").array().notNull().default(sql`'{}'`),
+  isOnline: boolean("is_online").notNull().default(false),
+  coursePageUrl: text("course_page_url"),
+  position: integer("position").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

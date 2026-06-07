@@ -4,7 +4,17 @@ type BriefInput = {
   dog: { name: string; breed?: string | null; size: string; sex: string };
   concerns: { concern: string; severity: string }[];
   goals: { goal: string }[];
-  entries: { behavior: string; intensity: number; occurredAt: string }[];
+  entries: {
+    note: string;
+    kind: "moment" | "daily_checkin";
+    trend?: "better" | "same" | "harder" | null;
+    behavior?: string | null;
+    antecedent?: string | null;
+    consequence?: string | null;
+    intensity?: number | null;
+    occurredAt: string;
+  }[];
+  windowDays: number | null;
   progress?: ProgressGoal[];
 };
 
@@ -39,7 +49,7 @@ function sessionSummary(skill: ProgressGoal["skills"][number]) {
 }
 
 export function composeBrief(i: BriefInput): string {
-  const { dog, concerns, goals, entries, progress = [] } = i;
+  const { dog, concerns, goals, entries, progress = [], windowDays } = i;
   const lines: string[] = [];
   lines.push(`Behavior Brief — ${dog.name}`);
   lines.push(`${dog.name} is a ${dog.size} ${dog.sex}${dog.breed ? ` ${dog.breed}` : ""}.`);
@@ -55,14 +65,34 @@ export function composeBrief(i: BriefInput): string {
   lines.push(goals.length ? goals.map((g) => `- ${g.goal}`).join("\n") : "- none recorded");
   lines.push("");
   const sorted = [...entries].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
-  const avg = entries.length
-    ? (entries.reduce((s, e) => s + e.intensity, 0) / entries.length).toFixed(1)
-    : "0.0";
+  const intensities = entries
+    .map((entry) => entry.intensity)
+    .filter((value): value is number => typeof value === "number");
+  const avg = intensities.length
+    ? `average intensity ${(intensities.reduce((sum, value) => sum + value, 0) / intensities.length).toFixed(1)}`
+    : "average intensity not recorded";
+  const windowPhrase = windowDays === null ? "(all time)" : `in the last ${windowDays} days`;
   lines.push(
-    `Journal: ${entries.length} journal ${entries.length === 1 ? "entry" : "entries"}, average intensity ${avg}.`,
+    `Journal: ${entries.length} ${entries.length === 1 ? "entry" : "entries"} ${windowPhrase}, ${avg}.`,
   );
-  for (const e of sorted.slice(0, 5)) {
-    lines.push(`- ${e.occurredAt.slice(0, 10)}: ${e.behavior} (intensity ${e.intensity})`);
+  const checkins = entries.filter((entry) => entry.kind === "daily_checkin");
+  if (checkins.length > 0) {
+    const tally = { better: 0, same: 0, harder: 0 };
+    for (const entry of checkins) {
+      if (entry.trend) tally[entry.trend] += 1;
+    }
+    lines.push(`Check-ins: ${tally.better} better, ${tally.same} same, ${tally.harder} harder.`);
+  }
+  for (const e of sorted.slice(0, 10)) {
+    const details = [
+      e.antecedent ? `A: ${e.antecedent}` : null,
+      e.behavior ? `B: ${e.behavior}` : null,
+      e.consequence ? `C: ${e.consequence}` : null,
+    ].filter(Boolean);
+    const intensity = typeof e.intensity === "number" ? ` (intensity ${e.intensity})` : "";
+    lines.push(
+      `- ${e.occurredAt.slice(0, 10)}: ${e.note}${intensity}${details.length ? ` — ${details.join(" ")}` : ""}`,
+    );
   }
   const progressGoals = progress.filter((goal) => goal.skills.length > 0);
   if (progressGoals.length > 0) {

@@ -19,6 +19,7 @@ export type ProgressSkill = {
   name: string;
   confidence: number;
   position: number;
+  catalogSkillKey: string | null;
   sessionCount: number;
   firstSessionAt: string | null;
   lastSessionAt: string | null;
@@ -29,6 +30,7 @@ export type ProgressSkill = {
 export type ProgressGoal = {
   id: string;
   goal: string;
+  catalogGoalKey: string | null;
   avgConfidence: number | null;
   skills: ProgressSkill[];
 };

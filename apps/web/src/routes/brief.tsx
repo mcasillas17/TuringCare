@@ -10,8 +10,9 @@ import {
   useShareBrief,
 } from "@/lib/brief";
 import { useDogs } from "@/lib/dogs";
+import { type BriefWindow, briefWindows } from "@turingcare/shared";
 import { Suspense, lazy, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 // Lazy-load so the heavy @react-pdf/renderer bundle is code-split out of the
@@ -21,9 +22,12 @@ const BriefDownloadButton = lazy(() => import("@/components/brief-download-butto
 export function Brief() {
   const { t, locale } = useI18n();
   const { id: routeId } = useParams();
+  const [params] = useSearchParams();
+  const recipientParam = params.get("recipient") ?? undefined;
   const { data: dogs } = useDogs();
   const [picked, setPicked] = useState("");
   const dogId = routeId ?? picked ?? "";
+  const [windowChoice, setWindowChoice] = useState<BriefWindow>("30d");
   const { data: brief, isError } = useBrief(dogId);
   const dog = dogs?.find((d) => d.id === dogId);
   const gen = useGenerateBrief(dogId);
@@ -34,6 +38,13 @@ export function Brief() {
   const [showStructured, setShowStructured] = useState(false);
   const briefBody = brief?.narrative && !showStructured ? brief.narrative : brief?.summary;
   const shareUrl = brief?.shareToken ? `${window.location.origin}/b/${brief.shareToken}` : null;
+
+  const windowLabels: Record<BriefWindow, string> = {
+    "7d": t("brief.window7d"),
+    "30d": t("brief.window30d"),
+    "90d": t("brief.window90d"),
+    all: t("brief.windowAll"),
+  };
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -60,12 +71,27 @@ export function Brief() {
       )}
       {dogId && (
         <>
+          <fieldset className="m-0 min-w-0 space-y-1 border-0 p-0">
+            <legend className="p-0 text-sm font-medium text-slate">{t("brief.windowLabel")}</legend>
+            <div className="flex flex-wrap items-center gap-2">
+              {briefWindows.map((w) => (
+                <Button
+                  key={w}
+                  type="button"
+                  variant={windowChoice === w ? "default" : "outline"}
+                  onClick={() => setWindowChoice(w)}
+                >
+                  {windowLabels[w]}
+                </Button>
+              ))}
+            </div>
+          </fieldset>
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={gen.isPending}
               onClick={async () => {
                 try {
-                  await gen.mutateAsync();
+                  await gen.mutateAsync(windowChoice);
                   toast.success(t("brief.title"));
                 } catch {
                   toast.error(t("brief.genFailed"));
@@ -202,7 +228,12 @@ export function Brief() {
             )}
           </div>
           {isError && <p className="text-red-600">{t("brief.loadError")}</p>}
-          {!brief && !isError && <p className="text-slate-soft">{t("brief.none")}</p>}
+          {!brief && !isError && (
+            <section className="space-y-2 rounded border border-silver bg-white p-6 text-center">
+              <h2 className="text-lg font-semibold text-slate">{t("brief.emptyTitle")}</h2>
+              <p className="text-slate-soft">{t("brief.emptyBodyWithEntries")}</p>
+            </section>
+          )}
           {brief && (
             <article className="brief-print whitespace-pre-wrap rounded border border-silver bg-white p-4 text-sm text-slate">
               <div className="mb-2 font-semibold text-copper">
@@ -215,7 +246,11 @@ export function Brief() {
               {briefBody}
             </article>
           )}
-          <SendPanel dogId={dogId} briefStatus={brief?.status ?? null} />
+          <SendPanel
+            dogId={dogId}
+            briefStatus={brief?.status ?? null}
+            initialRecipient={recipientParam}
+          />
         </>
       )}
     </div>

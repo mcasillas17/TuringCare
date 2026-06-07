@@ -47,8 +47,36 @@
     {
       "idx": 6,
       "version": "7",
+      "when": 1779686958606,
+      "tag": "0006_real_tigra",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779747590239,
+      "tag": "0007_parched_tattoo",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780210529144,
+      "tag": "0008_mature_peter_quill",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780866813971,
+      "tag": "0009_flippant_steel_serpent",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
       "when": 1779520252459,
-      "tag": "0006_clumsy_rictor",
+      "tag": "0010_clumsy_rictor",
       "breakpoints": true
     }
   ]

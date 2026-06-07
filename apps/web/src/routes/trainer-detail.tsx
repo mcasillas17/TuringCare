@@ -1,16 +1,19 @@
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useSession } from "@/lib/auth-client";
 import { useTrainer } from "@/lib/trainers";
 import { Link, useParams } from "react-router-dom";
 
 export function TrainerDetail() {
   const { t } = useI18n();
   const { id = "" } = useParams();
+  const { data: session } = useSession();
   const { data: tr, isLoading, isError } = useTrainer(id);
   if (isLoading) return <p>{t("common.loading")}</p>;
   if (isError || !tr) return <p className="text-red-600">{t("trainersDir.loadError")}</p>;
   return (
     <div className="mx-auto max-w-2xl space-y-3">
-      <Link to="/my/trainers" className="text-sm text-slate-soft hover:underline">
+      <Link to="/trainers" className="text-sm text-slate-soft hover:underline">
         ← {t("trainersDir.back")}
       </Link>
       <h1 className="text-2xl font-bold text-slate">{tr.name}</h1>
@@ -46,6 +49,23 @@ export function TrainerDetail() {
           </div>
         )}
       </div>
+      {tr.email && (
+        <div className="pt-4">
+          <Button asChild className="bg-slate text-cream">
+            <Link to={`/my/brief?recipient=${encodeURIComponent(tr.email)}`}>
+              {t("trainersDir.sendBriefCta")} →
+            </Link>
+          </Button>
+        </div>
+      )}
+      {!session && (
+        <div className="rounded border border-silver bg-white p-4">
+          <p className="text-sm text-slate-soft">{t("trainersDir.signUpToContact")}</p>
+          <Button asChild className="mt-2 bg-slate text-cream">
+            <Link to="/register">{t("trainersDir.signUpToContactCta")}</Link>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
