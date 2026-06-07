@@ -37,11 +37,10 @@ export function createRateLimiter(opts: RateLimitOptions) {
 }
 
 function clientIp(headers: Headers): string {
-  return (
-    headers.get("fly-client-ip") ??
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown"
-  );
+  // fly-client-ip is set by Fly's edge proxy and cannot be spoofed by clients.
+  // x-forwarded-for is client-controlled (leftmost value is attacker-supplied),
+  // so we do NOT fall back to it here to prevent rate-limit bypass.
+  return headers.get("fly-client-ip") ?? "unknown";
 }
 
 /** Lenient global net. Skips /health (liveness) and /api/auth/* (Better Auth's own limiter). */

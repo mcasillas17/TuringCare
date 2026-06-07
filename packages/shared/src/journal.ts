@@ -3,8 +3,8 @@ import { z } from "zod";
 export const journalEntryKindValues = ["moment", "daily_checkin"] as const;
 export const journalTrendValues = ["better", "same", "harder"] as const;
 
-const noteSchema = z.string().trim().min(1, "Quick note is required");
-const optionalText = z.string().trim().nullable().optional();
+const noteSchema = z.string().trim().min(1, "Quick note is required").max(1000);
+const optionalText = z.string().trim().max(1000).nullable().optional();
 const optionalNonNegativeInteger = z.number().int().nonnegative().nullable().optional();
 const optionalIntensity = z.number().int().min(1).max(5).nullable().optional();
 
