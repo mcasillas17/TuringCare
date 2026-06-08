@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { loginSchema, registerSchema } from "@turingcare/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { secureHeaders } from "hono/secure-headers";
 import { auth } from "./auth";
 import { resolveAdminRole } from "./auth/admin-bootstrap";
 import { env } from "./env";
@@ -22,6 +23,15 @@ import { eventIngestSchema } from "./telemetry/events";
 import { recordEvent } from "./telemetry/record-event";
 
 const app = new Hono()
+  .use(
+    "*",
+    secureHeaders({
+      xContentTypeOptions: "nosniff",
+      xFrameOptions: "DENY",
+      referrerPolicy: "strict-origin-when-cross-origin",
+      // No Content-Security-Policy here: this is a JSON API, not an HTML app.
+    }),
+  )
   .use(
     "*",
     cors({

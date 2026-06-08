@@ -7,6 +7,7 @@ import {
   dogProfileSchema,
   focusAddSchema,
   focusWeekQuerySchema,
+  goalFromTemplateSchema,
   journalEntryCreateSchema,
   journalEntryUpdateSchema,
   practiceSessionSchema,
@@ -14,7 +15,7 @@ import {
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
-import { and, desc, eq, gte, lt, max } from "drizzle-orm";
+import { and, count, desc, eq, gte, lt, max } from "drizzle-orm";
 import { Hono } from "hono";
 import { trainingCatalog } from "../data/training-catalog";
 import { db } from "../db";
@@ -135,14 +136,11 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!skill) throw new Error("failed to create default skill");
     return c.json({ goal, skill }, 201);
   })
-  .post("/:id/goals/from-template", async (c) => {
+  .post("/:id/goals/from-template", zValidator("json", goalFromTemplateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const parsed = (await c.req.json().catch(() => ({}))) as { templateKey?: unknown };
-    if (typeof parsed.templateKey !== "string") {
-      return c.json({ error: "invalid_template" } as const, 400);
-    }
-    const template = trainingCatalog.find((t) => t.key === parsed.templateKey);
+    const { templateKey } = c.req.valid("json");
+    const template = trainingCatalog.find((t) => t.key === templateKey);
     if (!template) return c.json({ error: "invalid_template" } as const, 400);
 
     const { goal, skills } = await db.transaction(async (tx) => {
@@ -537,6 +535,17 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     const userId = c.get("userId");
     const dog = await findOwnedDog(userId, c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
+
+    // Per-user send-rate guard: max 10 brief emails per 24 hours to limit
+    // abuse of the app's verified sender domain.
+    const windowStart = new Date(Date.now() - 86_400_000);
+    const [sendCount] = await db
+      .select({ value: count() })
+      .from(briefSends)
+      .where(and(eq(briefSends.sentByUserId, userId), gte(briefSends.sentAt, windowStart)));
+    if ((sendCount?.value ?? 0) >= 10) {
+      return c.json({ error: "send_rate_limited" } as const, 429);
+    }
 
     const [brief] = await db
       .select()

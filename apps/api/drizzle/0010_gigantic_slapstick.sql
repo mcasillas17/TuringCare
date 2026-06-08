@@ -1,0 +1,2 @@
+ALTER TABLE "brief_sends" ALTER COLUMN "sent_by_user_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "brief_sends" ADD CONSTRAINT "brief_sends_sent_by_user_id_user_id_fk" FOREIGN KEY ("sent_by_user_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;

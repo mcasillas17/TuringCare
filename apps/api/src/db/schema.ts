@@ -224,7 +224,7 @@ export const briefSends = pgTable("brief_sends", {
   recipient: text("recipient").notNull(),
   message: text("message"),
   sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
-  sentByUserId: text("sent_by_user_id").notNull(),
+  sentByUserId: text("sent_by_user_id").references(() => user.id, { onDelete: "set null" }),
 });
 
 export const trainers = pgTable("trainers", {

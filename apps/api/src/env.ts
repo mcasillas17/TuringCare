@@ -6,7 +6,7 @@ const schema = z.object({
   // Public origin of the frontend. Drives CORS allow-list and Better Auth
   // trusted origins. Local: http://localhost:3000. Prod: https://turingcare.dog
   FRONTEND_URL: z.string().url().default("http://localhost:3000"),
-  BETTER_AUTH_SECRET: z.string().min(16),
+  BETTER_AUTH_SECRET: z.string().min(32),
   // Public base URL of the auth server (the API itself).
   // Local: http://localhost:3001. Prod: https://api.turingcare.dog
   BETTER_AUTH_URL: z.string().url().default("http://localhost:3001"),
