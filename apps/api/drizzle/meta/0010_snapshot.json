@@ -1,6 +1,6 @@
 {
-  "id": "0d33d7d9-a338-45fb-b2f6-e6408cabd9cb",
-  "prevId": "62191f23-29d0-449d-b200-700268f1ca42",
+  "id": "33ef226f-6372-4bcd-9b62-67f7c429705e",
+  "prevId": "0d33d7d9-a338-45fb-b2f6-e6408cabd9cb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -211,7 +211,7 @@
           "name": "sent_by_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         }
       },
       "indexes": {},
@@ -227,6 +227,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "brief_sends_sent_by_user_id_user_id_fk": {
+          "name": "brief_sends_sent_by_user_id_user_id_fk",
+          "tableFrom": "brief_sends",
+          "tableTo": "user",
+          "columnsFrom": [
+            "sent_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

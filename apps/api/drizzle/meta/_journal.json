@@ -68,13 +68,15 @@
     {
       "idx": 9,
       "version": "7",
-<<<<<<< HEAD
-      "when": 1780869590166,
-      "tag": "0009_gigantic_slapstick",
-=======
       "when": 1780866813971,
       "tag": "0009_flippant_steel_serpent",
->>>>>>> origin/main
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780869590166,
+      "tag": "0010_gigantic_slapstick",
       "breakpoints": true
     }
   ]

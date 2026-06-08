@@ -5,12 +5,9 @@ import {
   briefGenerateSchema,
   briefSendSchema,
   dogProfileSchema,
-<<<<<<< HEAD
-  goalFromTemplateSchema,
-=======
   focusAddSchema,
   focusWeekQuerySchema,
->>>>>>> origin/main
+  goalFromTemplateSchema,
   journalEntryCreateSchema,
   journalEntryUpdateSchema,
   practiceSessionSchema,
@@ -18,11 +15,7 @@ import {
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
-<<<<<<< HEAD
-import { and, count, desc, eq, gte, max } from "drizzle-orm";
-=======
-import { and, desc, eq, gte, lt, max } from "drizzle-orm";
->>>>>>> origin/main
+import { and, count, desc, eq, gte, lt, max } from "drizzle-orm";
 import { Hono } from "hono";
 import { trainingCatalog } from "../data/training-catalog";
 import { db } from "../db";
