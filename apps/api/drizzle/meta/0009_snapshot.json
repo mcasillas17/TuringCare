@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "id": "33ef226f-6372-4bcd-9b62-67f7c429705e",
+=======
+  "id": "0d33d7d9-a338-45fb-b2f6-e6408cabd9cb",
+>>>>>>> origin/main
   "prevId": "62191f23-29d0-449d-b200-700268f1ca42",
   "version": "7",
   "dialect": "postgresql",
@@ -211,7 +215,11 @@
           "name": "sent_by_user_id",
           "type": "text",
           "primaryKey": false,
+<<<<<<< HEAD
           "notNull": false
+=======
+          "notNull": true
+>>>>>>> origin/main
         }
       },
       "indexes": {},
@@ -228,6 +236,7 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+<<<<<<< HEAD
         },
         "brief_sends_sent_by_user_id_user_id_fk": {
           "name": "brief_sends_sent_by_user_id_user_id_fk",
@@ -241,6 +250,8 @@
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
+=======
+>>>>>>> origin/main
         }
       },
       "compositePrimaryKeys": {},
@@ -1397,6 +1408,91 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+<<<<<<< HEAD
+=======
+    },
+    "public.weekly_focus": {
+      "name": "weekly_focus",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "dog_id": {
+          "name": "dog_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "skill_id": {
+          "name": "skill_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "weekly_focus_dog_id_dogs_id_fk": {
+          "name": "weekly_focus_dog_id_dogs_id_fk",
+          "tableFrom": "weekly_focus",
+          "tableTo": "dogs",
+          "columnsFrom": [
+            "dog_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "weekly_focus_skill_id_training_skills_id_fk": {
+          "name": "weekly_focus_skill_id_training_skills_id_fk",
+          "tableFrom": "weekly_focus",
+          "tableTo": "training_skills",
+          "columnsFrom": [
+            "skill_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "weekly_focus_dog_skill": {
+          "name": "weekly_focus_dog_skill",
+          "nullsNotDistinct": false,
+          "columns": [
+            "dog_id",
+            "skill_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+>>>>>>> origin/main
     }
   },
   "enums": {

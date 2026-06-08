@@ -666,3 +666,87 @@ implementer + spec + quality review per task). Gates green: tsc 0, lint 0
 - Spec/plan: `docs/superpowers/specs/2026-05-30-training-goal-templates-design.md`,
   `docs/superpowers/plans/2026-05-30-training-goal-templates.md`
 - Commits: this branch. Shipped as a PR from feature/training-goal-templates.
+
+## 2026-05-31 — Dog-hub redesign (hub + spokes) — SHIPPED
+Restructured the bloated single-page dog detail view into a hub-and-spoke IA.
+The old `/my/dogs/:id` crammed profile, concerns, every goal, and every skill
+(with inline log/edit/session forms — 50+ interactive elements for a dog with a
+few goals) onto one screen. Now `/my/dogs/:id` is a thin **Overview** hub and the
+density is split across three focused spokes, all under a shared `<DogLayout>`
+(sticky banner with the dog's name + Edit/Delete, plus a 4-tab strip: Overview /
+Journal / Training / Brief):
+- **Overview** (`dog-hub.tsx`): three `SpokeCard`s with at-a-glance metrics
+  (journal entry count + last activity, goals/skills/avg-confidence, brief
+  status/version), the concerns add/list block, a top-3 RecentActivity list, and
+  a single "Log a moment" CTA → `…/journal?compose=moment`.
+- **Journal** spoke (`dog-journal.tsx`): mounts a new shared `<JournalView>`
+  extracted from `/my/journal` (scoped to the dog; reads `?compose=`).
+- **Training** spoke (`dog-training.tsx`): goal-add row + `TemplatePicker` +
+  `ProgressPanel`, where each `SkillCard` is now **collapsed by default** and
+  expands on a chevron (name + description + session count + level milestone +
+  confidence stay visible; log/edit/session-list/forms hide until expanded).
+- **Brief** spoke: the existing `Brief` route, now layout-wrapped.
+`edit` renders inside the layout (keeps banner + tabs context). `/my/dogs` keeps
+its dedicated **all-my-dogs list** (`dogs-list.tsx`), reachable from the sidebar
+"Dogs" nav — the redesign only declutters the per-dog *detail* page, not the
+list. Deleted `dog-detail.tsx`; removed 3 genuinely-orphaned `dogs.*` i18n keys
+(empty/back/deleteConfirm). No DB, API, or Hono changes — purely a web IA +
+component refactor. Built via subagent-driven development (8 tasks; Task 1
+carried implementer + spec + quality review, which caught a real bug: skill
+`mode` lingered after collapse, so re-expanding reopened a stale form — fixed by
+resetting mode on collapse).
+
+**Follow-up (post-merge, shipped as a separate fix PR off `main`):** the initial
+pass deleted the dogs-list page and redirected `/my/dogs` → `/my`, which broke
+the sidebar "Dogs" nav (it bounced to the dashboard). Restored the dedicated
+dogs list so "Dogs" works again. That surfaced a second issue — the dashboard
+(`/my`) also rendered a "Your dogs" widget, so dogs were listed in two places.
+Resolved by making `/my/dogs` the single home for the dog list and removing the
+dashboard's duplicate widget (the dashboard keeps its "Dogs" stat count and the
+"Add dog" quick-action; `overview.yourDogs` i18n key removed).
+- Gates: web tsc 0, api tsc 0, lint 0 (248 files), shared 38 / web 180, web
+  build OK. The api vitest suite could not run locally — Postgres at
+  localhost:5432 was refusing connections (ECONNREFUSED); this is the documented
+  shared-test-DB environment drift and is unrelated to this frontend-only change
+  (the diff touches zero `apps/api`/migration/schema files). CI runs the api
+  suite against its own database.
+- Spec/plan: `docs/superpowers/specs/2026-05-31-dog-hub-redesign-design.md`,
+  `docs/superpowers/plans/2026-05-31-dog-hub-redesign.md`
+- Commits: this branch. Shipped as a PR from feature/dog-hub-redesign.
+
+## 2026-06-07 — Weekly skill focus ("This Week" tab) — SHIPPED
+A per-dog **This Week** tab (5th tab in the dog layout) for committing to which
+skills to train each week and seeing whether the reps landed. The owner keeps a
+single evolving **focus list** per dog; the tab renders a Mon–Sun **grid** of
+focus skills × days where a filled cell means a practice session was logged that
+day. **Tap an empty cell to log** a quick session for that skill on that day
+(today → now, a past day → noon local); tap a filled cell for a popover of that
+day's sessions with remove + "log another". Future cells are disabled. Page ◀ to
+prior weeks (forward capped at the current week); history is free because the
+grid re-buckets the dog's existing dated `practice_sessions` for whichever week
+is in view. Presence-only — no targets/streaks; the header reads "Trained X of N
+focus skills · Y sessions".
+
+New `weekly_focus` table (migration 0009): one row per focused skill per dog,
+unique `(dog_id, skill_id)`, cascade on dog/skill delete. New owner-scoped API:
+`GET /api/dogs/:id/focus?weekStart&weekEnd` (focus skills + their in-window
+sessions), `POST …/focus { skillId }` (404 cross-dog, 409 duplicate),
+`DELETE …/focus/:skillId`. Tap-to-log reuses the existing session endpoints — no
+new logging route. All week math is done client-side in local time
+(`lib/week.ts`, pure + unit-tested): the client sends local-midnight week bounds
+as instants and buckets sessions by local day, so a session lands in exactly one
+column regardless of timezone.
+
+Built via subagent-driven development (8 tasks; implementer + spec + quality
+review; a final whole-feature review confirmed ownership scoping is tight and
+the timezone window/bucketing are internally consistent — the one "tz bug" the
+reviewer raised was a false positive). Gates: web tsc 0, api tsc 0, lint 0 (261
+files), shared 42 / web 190 passing, web build OK. The api vitest suite could not
+run locally — Postgres was down (ECONNREFUSED, same documented shared-test-DB
+drift; even unrelated suites fail identically) — so the new `focus.test.ts` (6
+cases: add/GET, 409 dup, 404 cross-dog, week-window filtering, delete + re-delete
+404, skill-delete cascade) runs in CI. No change to existing session/journal
+flows.
+- Spec/plan: `docs/superpowers/specs/2026-06-07-weekly-skill-focus-design.md`,
+  `docs/superpowers/plans/2026-06-07-weekly-skill-focus.md`
+- Commits: this branch. Shipped as a PR from feature/weekly-skill-focus.
