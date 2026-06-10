@@ -48,6 +48,30 @@ brainstorm → spec → plan → build flow.
 - Periodic secret rotation policy (BETTER_AUTH_SECRET, DATABASE_URL).
 - Consider session inactivity/absolute expiry tuning.
 
+## Shipped — Postgres exposure / Row Level Security (2026-06-09)
+- ✅ **RLS enabled on all 17 public tables** (migration `0011_enable_rls`).
+  Supabase's PostgREST "Data API" exposes the `public` schema and grants
+  `anon`/`authenticated` access by default — meaning the public anon key could
+  read sensitive tables (`account` password hashes, `session` tokens, `user`
+  emails, all owner data) over REST. A Supabase lint flagged `public.account`.
+  Two layers shipped:
+  1. **Data API disabled** in the Supabase dashboard (the app uses a direct
+     `pg` connection via Better Auth + Drizzle, never PostgREST — so the Data
+     API was pure attack surface). This is the primary mitigation.
+  2. **RLS `ENABLE`d (no policies, no `FORCE`)** on every app table as
+     defense-in-depth. The API connects as the table-owner role, which bypasses
+     non-FORCE RLS, so the app is unaffected (verified: full api suite 179/179
+     green post-migration); any non-owner role (e.g. PostgREST `anon`) is denied
+     all rows even with table grants (verified directly: owner sees a row, a
+     `GRANT SELECT` non-owner sees 0). A guarded `REVOKE … FROM anon,
+     authenticated` also strips PostgREST grants where those roles exist
+     (skipped on local/CI Postgres, which lack them).
+  - NOT used: Supabase's suggested `auth.uid()` policies — those assume Supabase
+    Auth; this app uses Better Auth, so `auth.uid()` is always null here. Access
+    control lives in the Hono API layer (owner-scoped queries), not RLS.
+  - Follow-up (optional): a non-owner least-privilege app role + explicit
+    policies if we ever want RLS to be the primary enforcement layer.
+
 ## Shipped (was P1 — brute-force / abuse protection)
 - ✅ **Rate limiting** — Better Auth DB-backed limiter on `/api/auth/*`
   (sign-in/sign-up 5/60s, forget-password 3/60s) + in-memory global net,
