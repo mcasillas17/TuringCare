@@ -750,3 +750,29 @@ flows.
 - Spec/plan: `docs/superpowers/specs/2026-06-07-weekly-skill-focus-design.md`,
   `docs/superpowers/plans/2026-06-07-weekly-skill-focus.md`
 - Commits: this branch. Shipped as a PR from feature/weekly-skill-focus.
+
+## 2026-06-09 — Postgres RLS hardening (Supabase Data API exposure) — SHIPPED
+A Supabase lint flagged `public.account` as exposed via the PostgREST Data API
+without Row Level Security. Root cause: Supabase auto-exposes the `public` schema
+and grants `anon`/`authenticated` by default, so the **public anon key** could
+read sensitive tables (`account` password hashes, `session` tokens, `user`
+emails, all owner data) over REST — even though this app never uses PostgREST
+(it talks to Postgres only via a direct `pg` connection through Better Auth +
+Drizzle). Fixed in two layers: (1) the Supabase **Data API was disabled** in the
+dashboard (primary mitigation — the API was pure attack surface here); (2)
+migration **`0011_enable_rls`** `ENABLE`s RLS on all 17 app tables as
+defense-in-depth, with a guarded `REVOKE … FROM anon, authenticated`.
+
+No policies and no `FORCE` — deliberately: the API connects as the table-owner
+role, which bypasses non-FORCE RLS, so the app is unaffected, while any other
+role (e.g. PostgREST `anon`) is denied every row even with table grants. We did
+**not** apply Supabase's suggested `auth.uid()` policies — those assume Supabase
+Auth, but this app uses Better Auth (`auth.uid()` is always null here); access
+control lives in the Hono API layer (owner-scoped queries). Verified locally on
+Docker Postgres: migration applies cleanly (17/17 tables `relrowsecurity`), the
+full api suite stays green (179/179), and an adversarial check confirmed a
+`GRANT SELECT` non-owner role sees 0 rows under RLS while the owner sees the row.
+The `REVOKE` loop is portable — it skips when `anon`/`authenticated` roles are
+absent (local/CI). Migration deploys via CI `db:migrate` as the owner role.
+- Backlog note: `docs/SECURITY-BACKLOG.md` (Shipped — Row Level Security).
+- Commits: this branch. Shipped as a PR from security/enable-rls.
