@@ -810,3 +810,28 @@ native-`<dialog>` a11y upgrade — deferred because jsdom can't run `showModal()
 - Spec/plan: `docs/superpowers/specs/2026-06-20-journal-brief-redesign-design.md`,
   `docs/superpowers/plans/2026-06-20-journal-brief-redesign.md`
 - Commits: branch `worktree-journal-brief-redesign`. Shipping as a PR.
+
+## 2026-06-20 — Turing companion mascot (phase 1) — SHIPPED
+Added **Turing**, the animated companion mascot, from Claude Design's handoff
+(`Turing the companion animation.zip`). Ported the "corner widget" natively into the
+React app — no iframe, no `support.js`, no new deps. New `TuringCompanion` component
+(`apps/web/src/components/turing-companion.tsx`): the inline SVG artwork is copied
+verbatim from the owner-approved handoff (blue-merle Mini American Shepherd,
+heterochromia eyes, teal hex tag), and the original ~60-line vanilla logic is
+reimplemented as React state — ambient breathe/blink/tail-sway, cursor eye-follow,
+hover head-tilt + ear rotation, and a tap-for-a-training-tip speech bubble (random tip,
+3.6s). Rendered as an accessible `<button>` (aria-label); the tip bubble is an
+`<output>` (implicit `role="status"`). Honors `prefers-reduced-motion` (disables ambient
+loops + eye-follow), reusing the repo's existing `matchMedia` pattern. Keyframes
+(`tg-breathe`/`tg-breathe-slow`/`tg-sway`/`tg-wag`/`tg-bubble`) added to `index.css`
+next to the `tc-drift` convention. Mounted once in `AppShell`, so Turing appears across
+the **authenticated app (`/my/*`) only** — not on public/auth pages — at `z-30`, below
+the sonner Toaster and the mobile nav drawer overlay. Full TDD (6 new web tests). Gates
+green: web tsc 0, lint 0 (Biome), web 196 passing, web build OK.
+- **Scope/variant decisions (confirmed with owner):** authenticated-app-only placement;
+  the simpler corner widget for phase 1.
+- **Deferred to phase 2:** the 8-pose `state`-driven variant (`celebrate`/`sleep`/`wag`/…)
+  wired to journal / training / week-completion events (e.g. `celebrate` on a finished
+  week); i18n of the 6 English tips (currently hardcoded).
+- Spec: `docs/superpowers/specs/2026-06-20-turing-companion-mascot-design.md`
+- Commits: this branch. Shipped as a PR from `worktree-feat+turing-companion-mascot`.

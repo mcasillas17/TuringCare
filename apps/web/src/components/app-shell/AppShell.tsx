@@ -1,5 +1,6 @@
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { TuringCompanion } from "@/components/turing-companion";
 import { Button } from "@/components/ui/button";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { useI18n } from "@/i18n";
@@ -138,6 +139,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <TuringCompanion />
     </div>
   );
 }
