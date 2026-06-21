@@ -776,3 +776,37 @@ The `REVOKE` loop is portable — it skips when `anon`/`authenticated` roles are
 absent (local/CI). Migration deploys via CI `db:migrate` as the owner role.
 - Backlog note: `docs/SECURITY-BACKLOG.md` (Shipped — Row Level Security).
 - Commits: this branch. Shipped as a PR from security/enable-rls.
+
+## 2026-06-20 — Journal & Brief redesign (phone-first capture) — IN REVIEW
+The Behavior Journal and Behavior Brief looked unfinished and were clunky to use
+(raw machine timestamps, every entry a tall white box with a lone "Remove", no
+day grouping, hidden ABC fields, a two-step intensity slider, a post-save nag
+dialog, and a 5–6 step brief flow whose "Finalize" gate silently disabled email).
+Redesigned both around phone-first, fast capture with a single tile/sheet visual
+language. **Frontend-only — no API/DB/schema changes** (the create schema already
+accepted `occurredAt` + ABC fields; the brief already returns `generatedAt`).
+
+Journal: two big tiles (Log moment / Daily check-in) open focused capture
+`Sheet`s — one-tap intensity dots, backdate-before-save time chip, inline
+"Add detail" (ABC) and "Add place", no post-save dialog. The list became a clean
+day-grouped timeline (humanized "Today · 4:46 AM", intensity/trend badges, status
+dot); tap a row to edit/remove. Brief: a single living-document review screen
+(branded card, status pill "Draft · v{n}" / "Final · v{n}", period chips that
+regenerate, humanized generated date) plus a "Share this brief" `Sheet` with three
+explained big tiles (✉️ email / 🔗 private link / ⬇️ PDF). The old hidden Finalize
+gate became an explicit finalize-on-share. Removed `post-save-follow-ups.tsx` and
+its 5 i18n keys; folded the send-panel into the share sheet.
+
+New units: `lib/when.ts` (humanized date/time + day grouping, unit-tested) and a
+`components/ui/sheet.tsx` modal primitive (Esc/backdrop close, scroll-lock, labelled
+dialog). Built via subagent-driven development (10 tasks; implementer + spec +
+quality review each). Gates: web tsc 0, biome 0 (160 files), **199/199 web tests**,
+web build OK. react-doctor (changed-scope) 74→77 after fixing the Sheet keydown
+re-subscribe and a dead `new Date()` fallback; remaining warnings are SPA
+false-positives (no SSR hydration), a readable-flat-state preference, and the
+native-`<dialog>` a11y upgrade — deferred because jsdom can't run `showModal()`
+(would break the test suite). Manual mobile/visual QA on a device still pending
+(controller has no browser).
+- Spec/plan: `docs/superpowers/specs/2026-06-20-journal-brief-redesign-design.md`,
+  `docs/superpowers/plans/2026-06-20-journal-brief-redesign.md`
+- Commits: branch `worktree-journal-brief-redesign`. Shipping as a PR.
