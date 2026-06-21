@@ -63,6 +63,7 @@ describe("composeBrief", () => {
               lastSessionAt: "2026-05-22T10:00:00.000Z",
               lastNote: "held sit through a very long note that should stay readable",
               sessions: [],
+              milestones: [],
             },
             {
               id: "s2",
@@ -75,6 +76,7 @@ describe("composeBrief", () => {
               lastSessionAt: null,
               lastNote: null,
               sessions: [],
+              milestones: [],
             },
           ],
         },

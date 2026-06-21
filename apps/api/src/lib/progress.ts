@@ -1,6 +1,6 @@
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
-import { practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
+import { practiceSessions, skillMilestones, trainingGoals, trainingSkills } from "../db/schema";
 
 export type ProgressSession = {
   id: string;
@@ -9,6 +9,8 @@ export type ProgressSession = {
   notes: string | null;
   createdAt: string;
 };
+
+export type ProgressMilestone = { level: number; reachedAt: string };
 
 export type ProgressSkill = {
   id: string;
@@ -21,6 +23,7 @@ export type ProgressSkill = {
   lastSessionAt: string | null;
   lastNote: string | null;
   sessions: ProgressSession[];
+  milestones: ProgressMilestone[];
 };
 
 export type ProgressGoal = {
@@ -77,6 +80,21 @@ export async function loadProgress(dogId: string): Promise<ProgressOverview> {
     sessionsBySkill.set(session.skillId, existing);
   }
 
+  const milestoneRows =
+    skillIds.length === 0
+      ? []
+      : await db
+          .select()
+          .from(skillMilestones)
+          .where(inArray(skillMilestones.skillId, skillIds))
+          .orderBy(asc(skillMilestones.level));
+  const milestonesBySkill = new Map<string, ProgressMilestone[]>();
+  for (const row of milestoneRows) {
+    const existing = milestonesBySkill.get(row.skillId) ?? [];
+    existing.push({ level: row.level, reachedAt: row.reachedAt.toISOString() });
+    milestonesBySkill.set(row.skillId, existing);
+  }
+
   const skillsByGoal = new Map<string, ProgressSkill[]>();
   for (const skill of skills) {
     const skillSessions = sessionsBySkill.get(skill.id) ?? [];
@@ -94,6 +112,7 @@ export async function loadProgress(dogId: string): Promise<ProgressOverview> {
       lastSessionAt: lastSession?.occurredAt ?? null,
       lastNote: lastSession?.notes ?? null,
       sessions: skillSessions.slice(0, 5),
+      milestones: milestonesBySkill.get(skill.id) ?? [],
     });
     skillsByGoal.set(skill.goalId, existing);
   }
