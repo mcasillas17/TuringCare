@@ -209,6 +209,46 @@
     transform: translateY(0) scale(1);
   }
 }
+@keyframes tg-wag-fast {
+  0%,
+  100% {
+    transform: rotate(-24deg);
+  }
+  50% {
+    transform: rotate(28deg);
+  }
+}
+@keyframes tg-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  28% {
+    transform: translateY(-20px);
+  }
+  50% {
+    transform: translateY(0);
+  }
+  64% {
+    transform: translateY(-10px);
+  }
+  80% {
+    transform: translateY(0);
+  }
+}
+@keyframes tg-zzz {
+  0% {
+    opacity: 0;
+    transform: translateY(2px) scale(0.6);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(1.15);
+  }
+}
 .turing-companion {
   position: fixed;
   right: 14px;

@@ -20,6 +20,8 @@ export type TuringHeadProps = {
   lidRy: number;
   /** Whether the open (barking) mouth is shown instead of the closed mouth. */
   mouthOpen: boolean;
+  /** Whether Turing is sleeping — shows smile lines and floating zzz. */
+  sleeping: boolean;
 };
 
 export function TuringHead({
@@ -29,6 +31,7 @@ export function TuringHead({
   pupilStyle,
   lidRy,
   mouthOpen,
+  sleeping,
 }: TuringHeadProps) {
   return (
     <g
@@ -159,6 +162,14 @@ export function TuringHead({
         <circle cx="100" cy="110" r="2.2" fill="#ffffff" opacity="0.85" />
       </g>
       <ellipse cx="96" cy="104" rx="21" ry={lidRy} fill="#232830" style={LID_STYLE} />
+      <path
+        d="M85 104 Q96 112 107 104"
+        fill="none"
+        stroke="#0e1216"
+        strokeWidth="3"
+        strokeLinecap="round"
+        style={{ display: sleeping ? "block" : "none" }}
+      />
 
       <circle cx="144" cy="104" r="18" fill="#a8763c" stroke="#1c1916" strokeWidth="4" />
       <g style={pupilStyle}>
@@ -167,6 +178,14 @@ export function TuringHead({
         <circle cx="148" cy="110" r="2.2" fill="#ffffff" opacity="0.85" />
       </g>
       <ellipse cx="144" cy="104" rx="21" ry={lidRy} fill="#9aa7b2" style={LID_STYLE} />
+      <path
+        d="M133 104 Q144 112 155 104"
+        fill="none"
+        stroke="#4a4036"
+        strokeWidth="3"
+        strokeLinecap="round"
+        style={{ display: sleeping ? "block" : "none" }}
+      />
 
       <path
         d="M104 121 C108 114 132 114 136 121 C140 133 130 143 120 145 C110 143 100 133 104 121 Z"
@@ -219,6 +238,34 @@ export function TuringHead({
           strokeLinecap="round"
         />
       </g>
+      {sleeping && (
+        <g fontFamily="'Hanken Grotesk', monospace" fontWeight="700" fill="#7f8d99">
+          <text
+            x="176"
+            y="46"
+            fontSize="13"
+            style={{ animation: "tg-zzz 2.4s ease-in-out infinite" }}
+          >
+            z
+          </text>
+          <text
+            x="189"
+            y="31"
+            fontSize="17"
+            style={{ animation: "tg-zzz 2.4s ease-in-out infinite .8s" }}
+          >
+            z
+          </text>
+          <text
+            x="204"
+            y="14"
+            fontSize="21"
+            style={{ animation: "tg-zzz 2.4s ease-in-out infinite 1.6s" }}
+          >
+            z
+          </text>
+        </g>
+      )}
     </g>
   );
 }
