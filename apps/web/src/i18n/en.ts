@@ -339,11 +339,6 @@ export const en = {
     saveFailed: "Save failed",
     noteRequired: "Write a quick note before saving.",
     dogRequired: "Choose a dog before saving.",
-    postSaveTitle: "Want to add a little context?",
-    postSaveAntecedent: "What happened right before?",
-    postSaveAnswer: "Answer",
-    postSaveSkip: "Skip",
-    postSaveDone: "Done",
   },
   progress: {
     title: "Training progress",
