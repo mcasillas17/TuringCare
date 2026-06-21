@@ -9,9 +9,7 @@ const base = {
 
 describe("TuringArt poses", () => {
   it("celebrate wraps the figure in a hop animation", () => {
-    const { container } = render(
-      <TuringArt {...base} pose="celebrate" reduceMotion={false} />,
-    );
+    const { container } = render(<TuringArt {...base} pose="celebrate" reduceMotion={false} />);
     const hop = Array.from(container.querySelectorAll("g")).some((g) =>
       (g.getAttribute("style") ?? "").includes("tg-hop"),
     );
@@ -19,7 +17,9 @@ describe("TuringArt poses", () => {
   });
 
   it("sleep shows the floating zzz text", () => {
-    const { container } = render(<TuringArt {...base} pose="sleep" eyesClosed reduceMotion={false} />);
+    const { container } = render(
+      <TuringArt {...base} pose="sleep" eyesClosed reduceMotion={false} />,
+    );
     const texts = Array.from(container.querySelectorAll("text")).map((t) => t.textContent);
     expect(texts.filter((t) => t === "z").length).toBeGreaterThanOrEqual(3);
   });
