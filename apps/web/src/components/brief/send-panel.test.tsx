@@ -27,12 +27,13 @@ describe("SendPanel", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders form + hint when briefStatus is draft", async () => {
+  it("renders the form with an enabled Send button regardless of brief status", async () => {
+    // The finalize gate now lives in the share sheet (finalize-on-share), so
+    // the panel always shows the Send button when mounted with a non-null status.
     stubFetch(async () => new Response(JSON.stringify({ sends: [] }), { status: 200 }));
     setup("draft");
     expect(await screen.findByLabelText(/Recipient email/i)).toBeInTheDocument();
-    expect(screen.getByText(/Mark the brief finalized/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Send$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Send$/i })).toBeInTheDocument();
   });
 
   it("renders Send button when briefStatus is finalized", async () => {

@@ -2,104 +2,90 @@ import { StructuredDetailsEditor } from "@/components/journal/structured-details
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { type JournalEntry, useDeleteEntry, useUpdateEntry } from "@/lib/journal";
+import { humanTime } from "@/lib/when";
 import { useState } from "react";
 import { toast } from "sonner";
 
-const fmt = (value: string | number | null | undefined) =>
-  value == null || value === "" ? "—" : String(value);
-
-function hasValue(value: string | number | null | undefined) {
-  return value != null && value !== "";
-}
+const trendDot: Record<string, string> = {
+  better: "bg-green-400",
+  same: "bg-silver",
+  harder: "bg-red-400",
+};
 
 export function EntryCard({ entry, dogId }: { entry: JournalEntry; dogId: string }) {
-  const { t } = useI18n();
-  const [mode, setMode] = useState<"collapsed" | "expanded" | "editing">("collapsed");
+  const { t, locale } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const del = useDeleteEntry(dogId);
   const upd = useUpdateEntry(dogId);
+  const e = upd.data ?? entry;
 
-  const displayEntry = upd.data ?? entry;
-  const occurredText = String(displayEntry.occurredAt).slice(0, 16).replace("T", " ");
-  const toggleLabel = mode === "collapsed" ? t("journal.expand") : t("journal.collapse");
-  const kindLabel =
-    displayEntry.kind === "daily_checkin" ? t("journal.kindDailyCheckIn") : t("journal.kindMoment");
+  const isCheckIn = e.kind === "daily_checkin";
+  const dotClass = isCheckIn && e.trend ? trendDot[e.trend] : "bg-silver";
   const trendLabel = {
     better: t("journal.trendBetter"),
     same: t("journal.trendSame"),
     harder: t("journal.trendHarder"),
   };
-  const metadata = [
-    displayEntry.dog?.name,
-    occurredText,
-    kindLabel,
-    displayEntry.intensity ? `${t("journal.intensity")}: ${displayEntry.intensity}` : null,
-    displayEntry.trend ? trendLabel[displayEntry.trend] : null,
-  ].filter(Boolean);
-
-  const detailRows = [
-    [t("journal.antecedent"), displayEntry.antecedent],
-    [t("journal.behavior"), displayEntry.behavior],
-    [t("journal.consequence"), displayEntry.consequence],
-    [t("journal.location"), displayEntry.location],
-    [t("journal.duration"), displayEntry.durationSeconds],
-    [t("journal.recovery"), displayEntry.recoverySeconds],
-    [t("journal.peoplePresent"), displayEntry.peoplePresent],
-    [t("journal.ownerResponse"), displayEntry.ownerResponse],
-    [t("journal.notes"), displayEntry.notes],
-  ].filter(([, value]) => hasValue(value as string | number | null | undefined));
+  const meta = [
+    e.dog?.name,
+    humanTime(e.occurredAt, locale),
+    isCheckIn ? t("journal.kindDailyCheckIn") : t("journal.kindMoment"),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <li className="rounded border border-silver bg-white text-sm">
-      <div className="flex w-full items-start justify-between gap-2 p-3">
-        <button
-          type="button"
-          aria-label={toggleLabel}
-          className="flex-1 cursor-pointer text-left"
-          onClick={() => setMode(mode === "collapsed" ? "expanded" : "collapsed")}
-        >
-          <p className="font-medium text-slate">{displayEntry.note}</p>
-          <span className="text-slate-soft block">{metadata.join(" · ")}</span>
-        </button>
-        <Button
-          type="button"
-          variant="outline"
-          className="shrink-0"
-          onClick={() => del.mutate(displayEntry.id)}
-        >
-          {t("journal.remove")}
-        </Button>
-      </div>
+    <li className="rounded-xl border border-silver bg-white text-sm">
+      <button
+        type="button"
+        aria-label={t("journal.openEntry")}
+        className="flex w-full items-start gap-3 p-3 text-left"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span
+          className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${dotClass}`}
+          aria-hidden="true"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-slate">{e.note}</span>
+            {isCheckIn && e.trend && (
+              <span className="rounded-full bg-slate/5 px-2 py-0.5 text-xs font-semibold text-slate-soft">
+                {trendLabel[e.trend]}
+              </span>
+            )}
+            {e.intensity != null && (
+              <span className="rounded-full bg-copper/15 px-2 py-0.5 text-xs font-semibold text-copper">
+                {t("journal.intensity")}: {e.intensity}
+              </span>
+            )}
+          </span>
+          <span className="mt-0.5 block text-xs text-slate-soft">{meta}</span>
+        </span>
+      </button>
 
-      {mode === "expanded" && (
-        <div className="space-y-3 border-t border-silver p-3">
-          {detailRows.length > 0 ? (
-            <dl className="grid gap-2 text-slate-soft sm:grid-cols-[max-content_1fr]">
-              {detailRows.map(([label, value]) => (
-                <div key={String(label)} className="contents">
-                  <dt className="font-medium text-slate">{label}</dt>
-                  <dd>{fmt(value as string | number | null | undefined)}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p className="text-slate-soft">{t("journal.detailsEmpty")}</p>
-          )}
-          <Button type="button" variant="outline" onClick={() => setMode("editing")}>
+      {open && !editing && (
+        <div className="flex gap-2 border-t border-silver p-3">
+          <Button type="button" variant="outline" onClick={() => setEditing(true)}>
             {t("journal.editDetails")}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => del.mutate(e.id)}>
+            {t("journal.remove")}
           </Button>
         </div>
       )}
 
-      {mode === "editing" && (
+      {open && editing && (
         <StructuredDetailsEditor
-          entry={displayEntry}
+          entry={e}
           submitting={upd.isPending}
-          onCancel={() => setMode("expanded")}
+          onCancel={() => setEditing(false)}
           onSave={async (body) => {
             try {
-              await upd.mutateAsync({ entryId: displayEntry.id, body });
+              await upd.mutateAsync({ entryId: e.id, body });
               toast.success(t("journal.savedEdit"));
-              setMode("expanded");
+              setEditing(false);
             } catch {
               toast.error(t("journal.saveFailed"));
             }

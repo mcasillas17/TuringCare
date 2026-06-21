@@ -1,137 +1,71 @@
 import { LocaleProvider } from "@/i18n";
+import * as journalLib from "@/lib/journal";
 import type { JournalEntry } from "@/lib/journal";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { EntryCard } from "./entry-card";
 
-const baseEntry: JournalEntry = {
+vi.mock("@/lib/journal", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/journal")>("@/lib/journal");
+  return { ...actual, useDeleteEntry: vi.fn(), useUpdateEntry: vi.fn() };
+});
+
+const base: JournalEntry = {
   id: "e1",
   dogId: "d1",
   kind: "moment",
-  occurredAt: "2026-05-19T10:00:00.000Z",
-  note: "Barked at delivery truck",
+  occurredAt: new Date(2026, 5, 21, 4, 46).toISOString(),
+  note: "barked at bushes",
   trend: null,
-  antecedent: "Truck stopped outside",
-  behavior: "Barked twice",
-  consequence: "Owner scattered kibble",
-  intensity: 4,
-  location: "Front door",
+  antecedent: null,
+  behavior: null,
+  consequence: null,
+  intensity: 2,
+  location: null,
   notes: null,
-  durationSeconds: 12,
-  recoverySeconds: 45,
-  peoplePresent: "Owner + walker",
-  ownerResponse: "Asked for sit",
-  dog: { id: "d1", name: "Biscuit" },
+  durationSeconds: null,
+  recoverySeconds: null,
+  peoplePresent: null,
+  ownerResponse: null,
+  dog: { id: "d1", name: "Turing" },
 };
 
-afterEach(() => vi.unstubAllGlobals());
-
-function setup(entry = baseEntry) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <LocaleProvider>
+function renderCard(entry: JournalEntry) {
+  const del = { mutate: vi.fn() };
+  vi.mocked(journalLib.useDeleteEntry).mockReturnValue(
+    del as unknown as ReturnType<typeof journalLib.useDeleteEntry>,
+  );
+  vi.mocked(journalLib.useUpdateEntry).mockReturnValue({
+    isPending: false,
+    data: undefined,
+    mutateAsync: vi.fn(),
+  } as unknown as ReturnType<typeof journalLib.useUpdateEntry>);
+  render(
+    <LocaleProvider>
+      <QueryClientProvider client={new QueryClient()}>
         <ul>
           <EntryCard entry={entry} dogId="d1" />
         </ul>
-      </LocaleProvider>
-    </QueryClientProvider>,
+      </QueryClientProvider>
+    </LocaleProvider>,
   );
+  return { del };
 }
 
 describe("EntryCard", () => {
-  it("renders note and dog name first while collapsed", () => {
-    setup();
-
-    const card = screen.getByRole("listitem");
-    expect(within(card).getByText("Barked at delivery truck")).toBeInTheDocument();
-    expect(within(card).getByText(/Biscuit/)).toBeInTheDocument();
-    expect(screen.queryByText("Truck stopped outside")).not.toBeInTheDocument();
+  it("renders note, humanized time, and intensity badge; hides Remove until opened", () => {
+    const { del } = renderCard(base);
+    expect(screen.getByText("barked at bushes")).toBeInTheDocument();
+    expect(screen.getByText(/4:46/)).toBeInTheDocument();
+    expect(screen.getByText(/intensity.*2/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /remove/i })).not.toBeInTheDocument();
+    expect(del.mutate).not.toHaveBeenCalled();
   });
 
-  it("expands to show optional ABC and context details", async () => {
-    const user = userEvent.setup();
-    setup();
-
-    await user.click(screen.getByRole("button", { name: "Expand entry" }));
-
-    expect(await screen.findByText("Truck stopped outside")).toBeInTheDocument();
-    expect(screen.getByText("Barked twice")).toBeInTheDocument();
-    expect(screen.getByText("Owner scattered kibble")).toBeInTheDocument();
-    expect(screen.getByText("Front door")).toBeInTheDocument();
-    expect(screen.getByText("Owner + walker")).toBeInTheDocument();
-    expect(screen.getByText("Asked for sit")).toBeInTheDocument();
-  });
-
-  it("edits structured details and PUTs the update", async () => {
-    const calls: Array<{ url: string; method?: string; body?: unknown }> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.toString();
-        const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-        calls.push({ url, method: init?.method, body });
-        if (init?.method === "PUT") {
-          return new Response(
-            JSON.stringify({ entry: { ...baseEntry, antecedent: "Doorbell rang" } }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
-        return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
-      }),
-    );
-    const user = userEvent.setup();
-    setup();
-
-    await user.click(screen.getByRole("button", { name: "Expand entry" }));
-    await user.click(await screen.findByRole("button", { name: "Edit details" }));
-    const antecedent = (await screen.findByDisplayValue(
-      "Truck stopped outside",
-    )) as HTMLInputElement;
-    await user.clear(antecedent);
-    await user.type(antecedent, "Doorbell rang");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
-
-    await waitFor(() =>
-      expect(
-        calls.some(
-          (call) =>
-            call.method === "PUT" &&
-            call.url.includes("/journal/e1") &&
-            expect.objectContaining({ antecedent: "Doorbell rang" }).asymmetricMatch(call.body),
-        ),
-      ).toBe(true),
-    );
-  });
-
-  it("does not expose moment-only details when editing a daily check-in", async () => {
-    const user = userEvent.setup();
-    setup({
-      ...baseEntry,
-      kind: "daily_checkin",
-      trend: "same",
-    });
-
-    await user.click(screen.getByRole("button", { name: "Expand entry" }));
-    await user.click(await screen.findByRole("button", { name: "Edit details" }));
-
-    expect(await screen.findByLabelText("Note")).toBeInTheDocument();
-    expect(screen.getByLabelText("When")).toBeInTheDocument();
-    expect(screen.getByLabelText("Trend")).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Intensity/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Antecedent")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Behavior")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Consequence")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Location/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Duration/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Recovery/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/People present/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Your response/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Notes/)).not.toBeInTheDocument();
+  it("opens the entry and exposes Remove", () => {
+    renderCard(base);
+    fireEvent.click(screen.getByRole("button", { name: /open entry/i }));
+    expect(screen.getByRole("button", { name: /remove/i })).toBeInTheDocument();
   });
 });

@@ -1,22 +1,12 @@
-import { SendPanel } from "@/components/brief/send-panel";
+import { BriefShareSheet } from "@/components/brief/share-sheet";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import {
-  useBrief,
-  useFinalizeBrief,
-  useGenerateBrief,
-  useRevokeShare,
-  useShareBrief,
-} from "@/lib/brief";
+import { useBrief, useGenerateBrief } from "@/lib/brief";
 import { useDogs } from "@/lib/dogs";
 import { type BriefWindow, briefWindows } from "@turingcare/shared";
-import { Suspense, lazy, useState } from "react";
+import { useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-
-// Lazy-load so the heavy @react-pdf/renderer bundle is code-split out of the
-// main app chunk and only fetched when a brief is shown.
-const BriefDownloadButton = lazy(() => import("@/components/brief-download-button"));
 
 export function Brief() {
   const { t, locale } = useI18n();
@@ -30,10 +20,7 @@ export function Brief() {
   const { data: brief, isError } = useBrief(dogId);
   const dog = dogs?.find((d) => d.id === dogId);
   const gen = useGenerateBrief(dogId);
-  const fin = useFinalizeBrief(dogId);
-  const share = useShareBrief(dogId);
-  const revoke = useRevokeShare(dogId);
-  const shareUrl = brief?.shareToken ? `${window.location.origin}/b/${brief.shareToken}` : null;
+  const [shareOpen, setShareOpen] = useState(false);
 
   const windowLabels: Record<BriefWindow, string> = {
     "7d": t("brief.window7d"),
@@ -42,9 +29,37 @@ export function Brief() {
     all: t("brief.windowAll"),
   };
 
+  const generatedOn = brief
+    ? (() => {
+        const d = new Date(brief.generatedAt);
+        if (Number.isNaN(d.getTime())) return "";
+        return new Intl.DateTimeFormat(locale, {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }).format(d);
+      })()
+    : "";
+
+  const statusLabel = brief
+    ? brief.status === "finalized"
+      ? t("brief.finalVersion", { version: brief.version })
+      : t("brief.draftVersion", { version: brief.version })
+    : "";
+
+  const regenerate = async (w: BriefWindow) => {
+    setWindowChoice(w);
+    try {
+      await gen.mutateAsync(w);
+    } catch {
+      toast.error(t("brief.genFailed"));
+    }
+  };
+
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-2xl font-bold text-slate">{t("brief.title")}</h1>
+
       {!routeId && (
         <label className="block">
           <span className="text-sm font-medium text-slate">{t("brief.pickDog")}</span>
@@ -62,6 +77,7 @@ export function Brief() {
           </select>
         </label>
       )}
+
       {dogId && (
         <>
           <fieldset className="m-0 min-w-0 space-y-1 border-0 p-0">
@@ -72,138 +88,87 @@ export function Brief() {
                   key={w}
                   type="button"
                   variant={windowChoice === w ? "default" : "outline"}
-                  onClick={() => setWindowChoice(w)}
+                  disabled={gen.isPending}
+                  onClick={() => regenerate(w)}
                 >
                   {windowLabels[w]}
                 </Button>
               ))}
             </div>
           </fieldset>
-          <div className="flex flex-wrap gap-2">
+
+          {!brief && (
             <Button
               disabled={gen.isPending}
-              onClick={async () => {
-                try {
-                  await gen.mutateAsync(windowChoice);
-                  toast.success(t("brief.title"));
-                } catch {
-                  toast.error(t("brief.genFailed"));
-                }
-              }}
+              onClick={() => regenerate(windowChoice)}
               className="bg-slate text-cream"
             >
-              {gen.isPending
-                ? t("brief.generating")
-                : brief
-                  ? t("brief.regenerate")
-                  : t("brief.generate")}
+              {gen.isPending ? t("brief.generating") : t("brief.generate")}
             </Button>
-            {brief && brief.status !== "finalized" && (
-              <Button variant="outline" onClick={() => fin.mutate()}>
-                {t("brief.finalize")}
-              </Button>
-            )}
-            {brief && (
-              <>
-                <Button variant="outline" onClick={() => window.print()}>
-                  {t("brief.print")}
-                </Button>
-                <Suspense
-                  fallback={
-                    <Button variant="outline" disabled>
-                      {t("brief.preparingPdf")}
-                    </Button>
-                  }
-                >
-                  <BriefDownloadButton brief={brief} dog={dog} />
-                </Suspense>
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(brief.summary);
-                      toast.success(t("brief.copied"));
-                    } catch {
-                      toast.error(t("brief.genFailed"));
-                    }
-                  }}
-                >
-                  {t("brief.copy")}
-                </Button>
-                {shareUrl ? (
-                  <>
-                    <input
-                      readOnly
-                      aria-label={t("brief.share")}
-                      value={shareUrl}
-                      className="w-64 rounded border border-silver bg-white px-2 py-1 text-sm"
-                    />
-                    <Button
-                      variant="outline"
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(shareUrl);
-                          toast.success(t("brief.linkCopied"));
-                        } catch {
-                          toast.error(t("brief.shareFailed"));
-                        }
-                      }}
-                    >
-                      {t("brief.copyLink")}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={revoke.isPending}
-                      onClick={async () => {
-                        try {
-                          await revoke.mutateAsync();
-                        } catch {
-                          toast.error(t("brief.shareFailed"));
-                        }
-                      }}
-                    >
-                      {t("brief.stopSharing")}
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="outline"
-                    disabled={share.isPending}
-                    onClick={async () => {
-                      try {
-                        await share.mutateAsync();
-                      } catch {
-                        toast.error(t("brief.shareFailed"));
-                      }
-                    }}
-                  >
-                    {t("brief.createShareLink")}
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
+          )}
+
           {isError && <p className="text-red-600">{t("brief.loadError")}</p>}
+
           {!brief && !isError && (
-            <section className="space-y-2 rounded border border-silver bg-white p-6 text-center">
+            <section className="space-y-2 rounded-xl border border-silver bg-white p-6 text-center">
               <h2 className="text-lg font-semibold text-slate">{t("brief.emptyTitle")}</h2>
               <p className="text-slate-soft">{t("brief.emptyBodyWithEntries")}</p>
             </section>
           )}
+
           {brief && (
-            <article className="brief-print whitespace-pre-wrap rounded border border-silver bg-white p-4 text-sm text-slate">
-              <div className="mb-2 font-semibold text-copper">
-                {t("brief.version")} {brief.version} ·{" "}
-                {brief.status === "finalized" ? t("brief.finalized") : t("brief.draft")}
+            <>
+              <article className="brief-print overflow-hidden rounded-xl border border-silver bg-white text-sm text-slate">
+                <header className="flex items-center justify-between border-b-2 border-copper px-5 py-3">
+                  <span className="text-lg font-bold text-slate">
+                    Turing<span className="text-copper">Care</span>
+                  </span>
+                  <span className="text-xs uppercase tracking-wide text-slate-soft">
+                    {t("brief.title")}
+                  </span>
+                </header>
+                <div className="space-y-3 p-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-slate">{dog?.name}</h2>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${brief.status === "finalized" ? "bg-green-100 text-green-800" : "bg-slate/5 text-slate-soft"}`}
+                    >
+                      {statusLabel}
+                    </span>
+                  </div>
+                  <p className="whitespace-pre-wrap leading-relaxed text-slate">{brief.summary}</p>
+                  {generatedOn && (
+                    <p className="border-t border-silver pt-3 text-xs text-slate-soft">
+                      {t("brief.generatedOn", { date: generatedOn })}
+                    </p>
+                  )}
+                </div>
+              </article>
+
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setShareOpen(true)} className="bg-slate text-cream">
+                  {t("brief.shareThisBrief")} ▸
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={gen.isPending}
+                  onClick={() => regenerate(windowChoice)}
+                >
+                  {t("brief.regenerate")}
+                </Button>
               </div>
-              {brief.summary}
-            </article>
+
+              <BriefShareSheet
+                open={shareOpen}
+                onClose={() => setShareOpen(false)}
+                dogId={dogId}
+                dogName={dog?.name ?? ""}
+                dog={dog}
+                brief={brief}
+                initialRecipient={recipientParam}
+              />
+            </>
           )}
-          <SendPanel
-            dogId={dogId}
-            briefStatus={brief?.status ?? null}
-            initialRecipient={recipientParam}
-          />
         </>
       )}
     </div>
