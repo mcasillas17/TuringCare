@@ -3,7 +3,7 @@ import { es } from "@/i18n/es";
 import { LocaleProvider } from "@/i18n/index";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TuringCompanion } from "./turing-companion";
 import { TURING_TIP_BUCKETS, TURING_TIP_KEYS } from "./turing-tips";
 import * as turingCtx from "./turing/turing-context";
@@ -27,9 +27,23 @@ function renderAt(path = "/my", locale?: "es") {
   );
 }
 
+beforeEach(() => {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: query.includes("reduce"),
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+});
+
 afterEach(() => {
   vi.useRealTimers();
   localStorage.clear();
+  vi.restoreAllMocks();
 });
 
 describe("TuringCompanion", () => {
@@ -125,6 +139,5 @@ describe("TuringCompanion", () => {
       </LocaleProvider>,
     );
     expect(screen.getByRole("status").textContent).toBe(en.turing.celebrateBrief);
-    vi.restoreAllMocks();
   });
 });
