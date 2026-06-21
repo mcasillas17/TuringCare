@@ -35,7 +35,7 @@ type Mode = "idle" | "tilt" | "bark";
 
 export function TuringCompanion() {
   const { t } = useI18n();
-  const { eventPose, asleep } = useTuring();
+  const { eventPose, eventMessage, asleep } = useTuring();
   const { pathname } = useLocation();
   const rootRef = useRef<HTMLButtonElement>(null);
   const bubbleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -114,6 +114,8 @@ export function TuringCompanion() {
     setMode((m) => (m === "bark" ? m : "idle"));
   }, []);
 
+  const bubbleKey = eventMessage ?? tipKey;
+
   const sleeping = asleep && mode === "idle" && !eventPose;
   const eyesClosed = blink || sleeping;
   const pose: TuringPose =
@@ -137,9 +139,9 @@ export function TuringCompanion() {
       onMouseLeave={onLeave}
       onClick={onClick}
     >
-      {tipKey && (
+      {bubbleKey && (
         <output className="turing-bubble">
-          {t(tipKey)}
+          {t(bubbleKey)}
           <span className="turing-bubble-tip" />
         </output>
       )}

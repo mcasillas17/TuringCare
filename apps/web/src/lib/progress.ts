@@ -109,7 +109,9 @@ export function useSetSkillLevel(dogId: string) {
     },
     onSuccess: (_data, variables) => {
       // Mascot celebrates when a skill reaches the top level.
-      celebrate(variables.level >= CONFIDENCE_MAX);
+      const mastered = variables.level >= CONFIDENCE_MAX;
+      if (mastered) celebrate(true, "turing.celebrateMastery");
+      else celebrate(false);
       invalidateProgress(qc, dogId);
       qc.invalidateQueries({ queryKey: ["overview"] });
     },

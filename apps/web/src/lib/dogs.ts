@@ -37,7 +37,7 @@ export function useCreateDog() {
       return (await res.json()).dog;
     },
     onSuccess: () => {
-      celebrate(true);
+      celebrate(true, "turing.celebrateDog");
       qc.invalidateQueries({ queryKey: ["dogs"] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
     },

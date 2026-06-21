@@ -654,6 +654,11 @@ export const en = {
     weekTip2: "A few minutes a day adds up fast.",
     briefTip1: "Share the brief so your trainer sees the pattern.",
     briefTip2: "Finalize before you send — it locks the version.",
+    celebrateDog: "New pup! 🐾",
+    celebrateMastery: "Mastered it! 🎉",
+    celebrateOnboarding: "You're all set! 🎉",
+    celebrateWeek: "Week done! 🏅",
+    celebrateBrief: "Brief ready! 📋",
   },
 } as const;
 

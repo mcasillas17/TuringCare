@@ -135,7 +135,7 @@ describe("OnboardingChecklist — Turing hop", () => {
       </QueryClientProvider>,
     );
     expect(celebrate).toHaveBeenCalledTimes(1);
-    expect(celebrate).toHaveBeenCalledWith(true);
+    expect(celebrate).toHaveBeenCalledWith(true, "turing.celebrateOnboarding");
   });
 
   it("does not hop when already complete on mount", () => {
