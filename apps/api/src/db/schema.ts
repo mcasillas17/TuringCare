@@ -155,6 +155,23 @@ export const practiceSessions = pgTable("practice_sessions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const skillMilestones = pgTable(
+  "skill_milestones",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    skillId: uuid("skill_id")
+      .notNull()
+      .references(() => trainingSkills.id, { onDelete: "cascade" }),
+    level: integer("level").notNull(),
+    reachedAt: timestamp("reached_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("skill_milestone_skill_level").on(t.skillId, t.level),
+    check("milestone_level_range", sql`${t.level} BETWEEN 2 AND 5`),
+  ],
+);
+
 export const weeklyFocus = pgTable(
   "weekly_focus",
   {
@@ -318,11 +335,19 @@ export const trainingGoalsRelations = relations(trainingGoals, ({ one, many }) =
 export const trainingSkillsRelations = relations(trainingSkills, ({ one, many }) => ({
   goal: one(trainingGoals, { fields: [trainingSkills.goalId], references: [trainingGoals.id] }),
   practiceSessions: many(practiceSessions),
+  skillMilestones: many(skillMilestones),
 }));
 
 export const practiceSessionsRelations = relations(practiceSessions, ({ one }) => ({
   skill: one(trainingSkills, {
     fields: [practiceSessions.skillId],
+    references: [trainingSkills.id],
+  }),
+}));
+
+export const skillMilestonesRelations = relations(skillMilestones, ({ one }) => ({
+  skill: one(trainingSkills, {
+    fields: [skillMilestones.skillId],
     references: [trainingSkills.id],
   }),
 }));
