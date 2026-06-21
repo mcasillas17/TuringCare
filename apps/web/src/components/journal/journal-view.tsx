@@ -104,7 +104,7 @@ export function JournalView({ scopedDogId, composeMode }: JournalViewProps) {
 
   return (
     <div className="space-y-5">
-      {!scopedDogId && (
+      {!scopedDogId && dogList.length > 1 && (
         <label className="block" htmlFor="journal-filter-dog">
           <span className="text-sm font-medium text-slate">{t("journal.pickDog")}</span>
           <select
