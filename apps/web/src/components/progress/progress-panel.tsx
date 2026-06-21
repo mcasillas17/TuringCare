@@ -1,8 +1,9 @@
-import { ConfidenceChip } from "@/components/progress/confidence-chip";
+import { MilestoneStepper } from "@/components/progress/milestone-stepper";
 import { SessionForm } from "@/components/progress/session-form";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import {
+  LEVEL_KEYS,
   type ProgressGoal,
   type ProgressSession,
   type ProgressSkill,
@@ -137,12 +138,13 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   const [mode, setMode] = useState<"view" | "editing" | "logging">("view");
   const updateSkill = useUpdateSkill(dogId);
   const deleteSkill = useDeleteSkill(dogId);
-  const displaySkill = (updateSkill.data as ProgressSkill | undefined) ?? skill;
+  // Always use the prop (a full ProgressSkill from the progress query). The skill
+  // PUT mutation returns a bare DB row without milestones/sessions, so reading it
+  // here would crash the stepper/session list after a name edit.
+  const displaySkill = skill;
   const lastSession = formatDate(displaySkill.lastSessionAt);
   const { data: catalog } = useTrainingCatalog();
   const catalogSkill = findCatalogSkill(catalog, displaySkill.catalogSkillKey);
-  const currentLevel =
-    catalogSkill?.levels.find((l) => l.level === displaySkill.confidence) ?? null;
 
   return (
     <li className="space-y-3 rounded border border-silver p-3">
@@ -175,22 +177,19 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
               {sessionCountLabel(displaySkill, t)}
               {lastSession ? ` · ${t("progress.lastSession")}: ${lastSession}` : ""}
             </div>
-            {currentLevel && (
-              <p className="mt-1 text-xs italic text-copper">
-                {t("training.levelPrefix")} {currentLevel.level} — {currentLevel.description}
-              </p>
-            )}
+            <span className="mt-1 inline-block rounded-full bg-cream px-2 py-0.5 text-xs font-semibold text-slate-soft">
+              {t("progress.levelBadge", {
+                n: displaySkill.confidence,
+                label: t(LEVEL_KEYS[displaySkill.confidence - 1] ?? "progress.level1"),
+              })}
+            </span>
           </div>
         </div>
-        <ConfidenceChip
-          dogId={dogId}
-          skillId={displaySkill.id}
-          confidence={displaySkill.confidence}
-        />
       </div>
 
       {expanded && (
         <>
+          <MilestoneStepper dogId={dogId} skill={displaySkill} />
           {displaySkill.lastNote && (
             <p className="text-sm text-slate-soft">{displaySkill.lastNote}</p>
           )}
@@ -292,16 +291,6 @@ function SkillFields({
       <label className="block">
         <span className="text-sm">{t("progress.skillName")}</span>
         <input className={input} placeholder={t("progress.skillNamePh")} {...register("name")} />
-      </label>
-      <label className="block">
-        <span className="text-sm">{t("progress.confidence")}</span>
-        <select className={input} {...register("confidence", { valueAsNumber: true })}>
-          <option value={1}>{t("progress.level1")}</option>
-          <option value={2}>{t("progress.level2")}</option>
-          <option value={3}>{t("progress.level3")}</option>
-          <option value={4}>{t("progress.level4")}</option>
-          <option value={5}>{t("progress.level5")}</option>
-        </select>
       </label>
     </>
   );

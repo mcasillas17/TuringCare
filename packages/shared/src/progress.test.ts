@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { practiceSessionSchema, skillConfidenceSchema, trainingSkillSchema } from "./progress";
+import { practiceSessionSchema, skillLevelSchema, trainingSkillSchema } from "./progress";
 
 describe("trainingSkillSchema", () => {
   it("accepts a valid skill with confidence", () => {
@@ -19,12 +19,16 @@ describe("trainingSkillSchema", () => {
   });
 });
 
-describe("skillConfidenceSchema", () => {
-  it("accepts only integer confidence values from 1 to 5", () => {
-    expect(skillConfidenceSchema.safeParse({ confidence: 1 }).success).toBe(true);
-    expect(skillConfidenceSchema.safeParse({ confidence: 5 }).success).toBe(true);
-    expect(skillConfidenceSchema.safeParse({ confidence: 2.5 }).success).toBe(false);
-    expect(skillConfidenceSchema.safeParse({ confidence: 0 }).success).toBe(false);
+describe("skillLevelSchema", () => {
+  it("accepts levels 1..5", () => {
+    for (const level of [1, 2, 3, 4, 5]) {
+      expect(skillLevelSchema.parse({ level }).level).toBe(level);
+    }
+  });
+  it("rejects out-of-range and non-integers", () => {
+    expect(skillLevelSchema.safeParse({ level: 0 }).success).toBe(false);
+    expect(skillLevelSchema.safeParse({ level: 6 }).success).toBe(false);
+    expect(skillLevelSchema.safeParse({ level: 2.5 }).success).toBe(false);
   });
 });
 

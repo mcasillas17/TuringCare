@@ -546,12 +546,12 @@ describe("dogs: progress skills", () => {
     expect(skill.position).toBe(1);
   });
 
-  it("PUT /skills/:skillId updates name and confidence", async () => {
+  it("PUT /skills/:skillId updates the name only; confidence is owned by the level route", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
     const goal = await makeGoal(dog.id);
-    const skill = await makeSkill(goal.id);
+    const skill = await makeSkill(goal.id); // created at confidence 1
 
     const res = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}`, {
       method: "PUT",
@@ -562,26 +562,8 @@ describe("dogs: progress skills", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { skill: { name: string; confidence: number } };
     expect(body.skill.name).toBe("Greet on mat");
-    expect(body.skill.confidence).toBe(4);
-  });
-
-  it("PATCH /skills/:skillId/confidence updates only confidence", async () => {
-    const u = await createTestUser();
-    users.push(u);
-    const dog = await makeDog(u);
-    const goal = await makeGoal(dog.id);
-    const skill = await makeSkill(goal.id, "Door-knock threshold");
-
-    const res = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/confidence`, {
-      method: "PATCH",
-      headers: u.authHeaders,
-      body: JSON.stringify({ confidence: 5 }),
-    });
-
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { skill: { name: string; confidence: number } };
-    expect(body.skill.name).toBe("Door-knock threshold");
-    expect(body.skill.confidence).toBe(5);
+    // confidence in the body is ignored — level changes go through PUT .../level
+    expect(body.skill.confidence).toBe(1);
   });
 
   it("DELETE /skills/:skillId removes the skill from progress", async () => {
@@ -635,19 +617,19 @@ describe("dogs: progress skills", () => {
     expect(res.status).toBe(404);
   });
 
-  it("allows PATCH in CORS preflight for confidence updates", async () => {
+  it("allows PUT in CORS preflight for the skill level route", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
     const goal = await makeGoal(dog.id);
     const skill = await makeSkill(goal.id);
 
-    const options = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/confidence`, {
+    const options = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/level`, {
       method: "OPTIONS",
-      headers: { Origin: "http://localhost:3000", "Access-Control-Request-Method": "PATCH" },
+      headers: { Origin: "http://localhost:3000", "Access-Control-Request-Method": "PUT" },
     });
 
-    expect(options.headers.get("access-control-allow-methods")).toContain("PATCH");
+    expect(options.headers.get("access-control-allow-methods")).toContain("PUT");
   });
 });
 

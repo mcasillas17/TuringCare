@@ -1,12 +1,17 @@
 import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  PracticeSessionInput,
-  SkillConfidenceInput,
-  TrainingSkillInput,
-} from "@turingcare/shared";
+import type { PracticeSessionInput, TrainingSkillInput } from "@turingcare/shared";
 import { CONFIDENCE_MAX } from "@turingcare/shared";
 import { api } from "./api";
+
+/** i18n keys for the generic confidence labels, indexed by level-1 (used as fallback milestone labels). */
+export const LEVEL_KEYS = [
+  "progress.level1",
+  "progress.level2",
+  "progress.level3",
+  "progress.level4",
+  "progress.level5",
+] as const;
 
 export type ProgressSession = {
   id: string;
@@ -15,6 +20,8 @@ export type ProgressSession = {
   notes: string | null;
   createdAt: string;
 };
+
+export type ProgressMilestone = { level: number; reachedAt: string };
 
 export type ProgressSkill = {
   id: string;
@@ -27,6 +34,7 @@ export type ProgressSkill = {
   lastSessionAt: string | null;
   lastNote: string | null;
   sessions: ProgressSession[];
+  milestones: ProgressMilestone[];
 };
 
 export type ProgressGoal = {
@@ -87,21 +95,23 @@ export function useUpdateSkill(dogId: string) {
   });
 }
 
-export function useUpdateSkillConfidence(dogId: string) {
+export function useSetSkillLevel(dogId: string) {
   const qc = useQueryClient();
   const { celebrate } = useTuring();
   return useMutation({
-    mutationFn: async (args: { skillId: string; body: SkillConfidenceInput }) => {
-      const res = await dogSkills[":skillId"].confidence.$patch({
+    mutationFn: async (args: { skillId: string; level: number }) => {
+      const res = await dogSkills[":skillId"].level.$put({
         param: { id: dogId, skillId: args.skillId },
-        json: args.body,
+        json: { level: args.level },
       });
-      if (!res.ok) throw new Error("update_failed");
+      if (!res.ok) throw new Error("set_level_failed");
       return (await res.json()).skill;
     },
     onSuccess: (_data, variables) => {
-      celebrate(variables.body.confidence >= CONFIDENCE_MAX);
+      // Mascot celebrates when a skill reaches the top level.
+      celebrate(variables.level >= CONFIDENCE_MAX);
       invalidateProgress(qc, dogId);
+      qc.invalidateQueries({ queryKey: ["overview"] });
     },
   });
 }

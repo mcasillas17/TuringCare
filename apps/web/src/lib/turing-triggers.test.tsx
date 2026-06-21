@@ -36,8 +36,8 @@ vi.mock("@/lib/api", () => ({
           },
           skills: {
             ":skillId": {
-              confidence: {
-                $patch: vi
+              level: {
+                $put: vi
                   .fn()
                   .mockResolvedValue({ ok: true, json: async () => ({ skill: { id: "sk1" } }) }),
               },
@@ -52,7 +52,7 @@ vi.mock("@/lib/api", () => ({
 import { useSendBrief } from "./brief-send";
 import { useAddGoal, useCreateDog } from "./dogs";
 import { useAddEntry } from "./journal";
-import { useUpdateSkillConfidence } from "./progress";
+import { useSetSkillLevel } from "./progress";
 
 function makeWrapper() {
   const qc = new QueryClient({
@@ -98,15 +98,15 @@ describe("turing celebrate triggers", () => {
     await waitFor(() => expect(celebrate).toHaveBeenCalledWith(false));
   });
 
-  it("reaching max confidence hops; a lower bump wags", async () => {
-    const { result } = renderHook(() => useUpdateSkillConfidence("d1"), { wrapper: makeWrapper() });
+  it("reaching the top level hops; a lower level wags", async () => {
+    const { result } = renderHook(() => useSetSkillLevel("d1"), { wrapper: makeWrapper() });
     await act(async () => {
-      await result.current.mutateAsync({ skillId: "s1", body: { confidence: 5 } });
+      await result.current.mutateAsync({ skillId: "s1", level: 5 });
     });
     await waitFor(() => expect(celebrate).toHaveBeenCalledWith(true));
     celebrate.mockClear();
     await act(async () => {
-      await result.current.mutateAsync({ skillId: "s1", body: { confidence: 3 } });
+      await result.current.mutateAsync({ skillId: "s1", level: 3 });
     });
     await waitFor(() => expect(celebrate).toHaveBeenCalledWith(false));
   });

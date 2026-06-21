@@ -11,7 +11,7 @@ import {
   journalEntryCreateSchema,
   journalEntryUpdateSchema,
   practiceSessionSchema,
-  skillConfidenceSchema,
+  skillLevelSchema,
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
@@ -39,6 +39,7 @@ import { env } from "../env";
 import { composeBrief } from "../lib/brief";
 import { loadFocusWeek } from "../lib/focus";
 import { loadProgress } from "../lib/progress";
+import { setSkillLevel } from "../lib/skill-level";
 import { type Vars, requireUser } from "../middleware/require-user";
 
 const invalidJournalField = (path: "occurredAt" | "trend", message: string) =>
@@ -208,31 +209,24 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
     if (!skill) return c.json({ error: "not_found" } as const, 404);
+    // Only the name is editable here; the skill's level (confidence) is owned solely
+    // by PUT .../level so milestone history can't be bypassed.
     const [updated] = await db
       .update(trainingSkills)
-      .set(c.req.valid("json"))
+      .set({ name: c.req.valid("json").name })
       .where(eq(trainingSkills.id, skill.id))
       .returning();
     if (!updated) throw new Error("failed to update skill");
     return c.json({ skill: updated });
   })
-  .patch(
-    "/:id/skills/:skillId/confidence",
-    zValidator("json", skillConfidenceSchema),
-    async (c) => {
-      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
-      if (!dog) return c.json({ error: "not_found" } as const, 404);
-      const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
-      if (!skill) return c.json({ error: "not_found" } as const, 404);
-      const [updated] = await db
-        .update(trainingSkills)
-        .set(c.req.valid("json"))
-        .where(eq(trainingSkills.id, skill.id))
-        .returning();
-      if (!updated) throw new Error("failed to update skill confidence");
-      return c.json({ skill: updated });
-    },
-  )
+  .put("/:id/skills/:skillId/level", zValidator("json", skillLevelSchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+    if (!skill) return c.json({ error: "not_found" } as const, 404);
+    const updated = await setSkillLevel(skill.id, c.req.valid("json").level);
+    return c.json({ skill: updated });
+  })
   .delete("/:id/skills/:skillId", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);

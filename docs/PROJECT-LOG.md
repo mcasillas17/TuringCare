@@ -913,3 +913,36 @@ Gates: web **244/244** tests, tsc 0, **root** `biome check .` clean, build OK.
 - Spec/plan: `docs/superpowers/specs/2026-06-21-turing-connect-events-design.md`,
   `docs/superpowers/plans/2026-06-21-turing-connect-events.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-connect-events`.
+
+## 2026-06-21 — Skill milestones (checkable training levels) — IN REVIEW
+First of three sequenced training-tracking sub-projects (milestones → progress-
+over-time → dashboard). Turned each skill's 5 levels into **checkable milestones**:
+the manual 1–5 confidence chip is gone; you advance by tapping a level in a new
+**milestone stepper** in the Training panel, and we record the **date** each level
+is reached. `trainingSkills.confidence` is reinterpreted as the "current level"
+(set via a new `PUT /dogs/:id/skills/:skillId/level` route → `setSkillLevel`, which
+also inserts dated rows in the new `skill_milestones` table), so everything that
+already reads `confidence` — goal avg-confidence rollup, the This Week grid, the
+Brief — keeps working untouched. "Reached" is derived (`level <= confidence`) so no
+backfill; the dated history is the seed for the next sub-project (progress-over-time).
+Template skills show their catalog milestone descriptions; free-form skills use the
+generic labels. Skill edit is now name-only (level is owned solely by the level
+route). Brief now reads "Sit — Level 3: Sometimes (reached Jun 3)".
+
+Built via subagent-driven development (10 tasks: shared schema → migration → API
+lib+route → web hook/i18n/stepper/panel → brief → cleanup; implementer + spec +
+quality review each). A final whole-feature review caught two real cross-cutting
+bugs (both fixed): the panel rendered `updateSkill.data` (a bare DB row without
+`milestones`/`sessions`) after a name edit, crashing the stepper — now always uses
+the full progress prop; and the skill-edit route wrote `confidence` from the request
+body, which could silently reset the level — it now edits the name only.
+Gates: shared/api/web tsc 0, **228 web + 184 api tests** green, i18n parity green,
+biome 0 (262 files), web build OK, react-doctor unchanged (no new errors). New
+migration `0012_absent_hercules` (table only). Manual device QA on the Training tab
+still pending.
+**Merge note (rebased onto `main` after #51):** the mascot's "celebrate at mastery"
+moved off the removed `useUpdateSkillConfidence` onto the new `useSetSkillLevel` —
+reaching level 5 via the stepper now triggers the hop (`celebrate(level >= CONFIDENCE_MAX)`).
+- Spec/plan: `docs/superpowers/specs/2026-06-21-skill-milestones-design.md`,
+  `docs/superpowers/plans/2026-06-21-skill-milestones.md`
+- Commits: branch `feat/skill-milestones`. Shipping as a PR.

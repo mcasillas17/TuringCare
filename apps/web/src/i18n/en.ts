@@ -375,6 +375,12 @@ export const en = {
     avgConfidence: "avg",
     expandSkill: "Expand {name}",
     collapseSkill: "Collapse {name}",
+    milestonesTitle: "Milestones · level {n} of 5",
+    reachedOn: "reached {date}",
+    markReached: "Tap to mark reached",
+    levelStart: "start",
+    currentTag: "current",
+    levelBadge: "Level {n} — {label}",
   },
   dogHub: {
     backToDashboard: "All dogs",
