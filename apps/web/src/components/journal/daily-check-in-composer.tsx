@@ -103,7 +103,7 @@ export function DailyCheckInComposer({
       </fieldset>
 
       <label className="block" htmlFor="daily-check-in-note">
-        <span className="text-sm font-medium text-slate">{t("journal.howWasToday")}</span>
+        <span className="text-sm font-medium text-slate">{t("journal.note")}</span>
         <textarea
           id="daily-check-in-note"
           // biome-ignore lint/a11y/noAutofocus: intentional focus when opened in a sheet

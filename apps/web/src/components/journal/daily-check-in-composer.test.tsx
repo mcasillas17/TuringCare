@@ -32,7 +32,7 @@ describe("DailyCheckInComposer", () => {
   it("saves a check-in with the chosen trend", async () => {
     const { mutateAsync } = setup();
     fireEvent.click(screen.getByRole("button", { name: /better/i }));
-    fireEvent.change(screen.getByLabelText(/how did today go/i), {
+    fireEvent.change(screen.getByPlaceholderText(/a line about today/i), {
       target: { value: "calmer walk" },
     });
     fireEvent.click(screen.getByRole("button", { name: /save check-in/i }));
