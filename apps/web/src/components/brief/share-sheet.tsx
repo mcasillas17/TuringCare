@@ -77,6 +77,10 @@ export function BriefShareSheet({
 
   const tile =
     "flex w-full items-center gap-3 rounded-xl border border-silver bg-white p-4 text-left";
+  // Separate primary class — never combine bg-white + bg-slate (Tailwind resolves
+  // conflicting bg-* by stylesheet order, which made the dark tile render white).
+  const tilePrimary =
+    "flex w-full items-center gap-3 rounded-xl border border-slate bg-slate p-4 text-left text-cream";
 
   const close = () => {
     setPanel("menu");
@@ -105,11 +109,7 @@ export function BriefShareSheet({
           <p className="rounded-lg border border-copper/40 bg-copper/10 p-3 text-sm text-slate">
             {t("brief.finalizeShareNote", { version: brief.version })}
           </p>
-          <button
-            type="button"
-            className={`${tile} bg-slate text-cream`}
-            onClick={() => void openEmail()}
-          >
+          <button type="button" className={tilePrimary} onClick={() => void openEmail()}>
             <span className="text-xl">✉️</span>
             <span>
               <span className="block font-semibold">{t("brief.shareEmailTitle")}</span>
