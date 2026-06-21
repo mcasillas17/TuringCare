@@ -43,7 +43,11 @@ export function BriefShareSheet({
   const share = useShareBrief(dogId);
   const revoke = useRevokeShare(dogId);
   const [panel, setPanel] = useState<Panel>("menu");
-  const shareUrl = brief.shareToken ? `${window.location.origin}/b/${brief.shareToken}` : null;
+  // The brief prop only gains a shareToken after an async refetch; hold the
+  // token returned by the share mutation so the link shows immediately.
+  const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const token = brief.shareToken ?? createdToken;
+  const shareUrl = token ? `${window.location.origin}/b/${token}` : null;
 
   const ensureFinalized = async () => {
     if (brief.status !== "finalized") await fin.mutateAsync();
@@ -61,7 +65,10 @@ export function BriefShareSheet({
   const openLink = async () => {
     try {
       await ensureFinalized();
-      if (!shareUrl) await share.mutateAsync();
+      if (!shareUrl) {
+        const res = await share.mutateAsync();
+        setCreatedToken(res.token);
+      }
       setPanel("link");
     } catch {
       toast.error(t("brief.shareFailed"));
@@ -171,6 +178,7 @@ export function BriefShareSheet({
                   onClick={async () => {
                     try {
                       await revoke.mutateAsync();
+                      setCreatedToken(null);
                       setPanel("menu");
                     } catch {
                       toast.error(t("brief.shareFailed"));

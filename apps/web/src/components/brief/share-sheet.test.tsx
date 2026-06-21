@@ -25,14 +25,23 @@ const brief = {
   shareToken: null,
 } as const;
 
-function setup(over: Partial<typeof brief> = {}) {
+type BriefOverride = Partial<{
+  status: "draft" | "finalized";
+  version: number;
+  summary: string;
+  generatedAt: string;
+  shareToken: string | null;
+}>;
+
+function setup(over: BriefOverride = {}) {
   const finalize = vi.fn().mockResolvedValue({});
   vi.mocked(briefLib.useFinalizeBrief).mockReturnValue({
     mutateAsync: finalize,
     isPending: false,
   } as unknown as ReturnType<typeof briefLib.useFinalizeBrief>);
+  const createShare = vi.fn().mockResolvedValue({ token: "tok123", url: "/b/tok123" });
   vi.mocked(briefLib.useShareBrief).mockReturnValue({
-    mutateAsync: vi.fn(),
+    mutateAsync: createShare,
     isPending: false,
   } as unknown as ReturnType<typeof briefLib.useShareBrief>);
   vi.mocked(briefLib.useRevokeShare).mockReturnValue({
@@ -60,7 +69,7 @@ function setup(over: Partial<typeof brief> = {}) {
       </QueryClientProvider>
     </LocaleProvider>,
   );
-  return { finalize };
+  return { finalize, createShare };
 }
 
 describe("BriefShareSheet", () => {
@@ -74,5 +83,13 @@ describe("BriefShareSheet", () => {
     const { finalize } = setup({ status: "draft" });
     fireEvent.click(screen.getByRole("button", { name: /send to your trainer/i }));
     await waitFor(() => expect(finalize).toHaveBeenCalled());
+  });
+
+  it("creates a link and shows the URL immediately from the mutation result", async () => {
+    const { createShare } = setup({ status: "finalized", shareToken: null });
+    fireEvent.click(screen.getByRole("button", { name: /copy a private link/i }));
+    await waitFor(() => expect(createShare).toHaveBeenCalled());
+    // URL is shown from the returned token, not waiting for a brief refetch.
+    expect(await screen.findByDisplayValue(/\/b\/tok123$/)).toBeInTheDocument();
   });
 });
