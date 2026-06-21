@@ -1,3 +1,4 @@
+import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BehaviorConcernInput, DogProfile, TrainingGoalInput } from "@turingcare/shared";
 import { api } from "./api";
@@ -28,6 +29,7 @@ export function useDog(id: string) {
 
 export function useCreateDog() {
   const qc = useQueryClient();
+  const { celebrate } = useTuring();
   return useMutation({
     mutationFn: async (body: DogProfile) => {
       const res = await dogs.$post({ json: body });
@@ -35,6 +37,7 @@ export function useCreateDog() {
       return (await res.json()).dog;
     },
     onSuccess: () => {
+      celebrate(true);
       qc.invalidateQueries({ queryKey: ["dogs"] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
     },
@@ -96,6 +99,7 @@ export function useRemoveConcern(id: string) {
 
 export function useAddGoal(id: string) {
   const qc = useQueryClient();
+  const { celebrate } = useTuring();
   return useMutation({
     mutationFn: async (body: TrainingGoalInput) => {
       const res = await dogs[":id"].goals.$post({ param: { id }, json: body });
@@ -103,6 +107,7 @@ export function useAddGoal(id: string) {
       return (await res.json()).goal;
     },
     onSuccess: () => {
+      celebrate(false);
       qc.invalidateQueries({ queryKey: ["dogs", id] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
     },

@@ -15,6 +15,7 @@ vi.mock("@/lib/api", () => ({
   api: {
     api: {
       dogs: {
+        $post: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ dog: { id: "d2" } }) }),
         ":id": {
           journal: {
             $post: vi
@@ -28,6 +29,20 @@ vi.mock("@/lib/api", () => ({
                 .mockResolvedValue({ ok: true, json: async () => ({ send: { id: "s1" } }) }),
             },
           },
+          goals: {
+            $post: vi
+              .fn()
+              .mockResolvedValue({ ok: true, json: async () => ({ goal: { id: "g1" } }) }),
+          },
+          skills: {
+            ":skillId": {
+              confidence: {
+                $patch: vi
+                  .fn()
+                  .mockResolvedValue({ ok: true, json: async () => ({ skill: { id: "sk1" } }) }),
+              },
+            },
+          },
         },
       },
     },
@@ -35,7 +50,9 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { useSendBrief } from "./brief-send";
+import { useAddGoal, useCreateDog } from "./dogs";
 import { useAddEntry } from "./journal";
+import { useUpdateSkillConfidence } from "./progress";
 
 function makeWrapper() {
   const qc = new QueryClient({
@@ -63,6 +80,35 @@ describe("turing celebrate triggers", () => {
       await result.current.mutateAsync({ recipientEmail: "vet@example.com" } as never);
     });
     await waitFor(() => expect(celebrate).toHaveBeenCalledWith(true));
+  });
+
+  it("add dog fires a big hop", async () => {
+    const { result } = renderHook(() => useCreateDog(), { wrapper: makeWrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({ name: "Rex" } as never);
+    });
+    await waitFor(() => expect(celebrate).toHaveBeenCalledWith(true));
+  });
+
+  it("add goal fires a small wag", async () => {
+    const { result } = renderHook(() => useAddGoal("d1"), { wrapper: makeWrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({ title: "Loose-leash walking" } as never);
+    });
+    await waitFor(() => expect(celebrate).toHaveBeenCalledWith(false));
+  });
+
+  it("reaching max confidence hops; a lower bump wags", async () => {
+    const { result } = renderHook(() => useUpdateSkillConfidence("d1"), { wrapper: makeWrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({ skillId: "s1", body: { confidence: 5 } });
+    });
+    await waitFor(() => expect(celebrate).toHaveBeenCalledWith(true));
+    celebrate.mockClear();
+    await act(async () => {
+      await result.current.mutateAsync({ skillId: "s1", body: { confidence: 3 } });
+    });
+    await waitFor(() => expect(celebrate).toHaveBeenCalledWith(false));
   });
 
   it("journal error does NOT call celebrate", async () => {

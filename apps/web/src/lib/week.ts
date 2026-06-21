@@ -35,3 +35,12 @@ export function dayKey(date: Date): string {
 export function sameWeek(a: Date, b: Date): boolean {
   return mondayOf(a).getTime() === mondayOf(b).getTime();
 }
+
+/** True only on an incomplete→complete transition for the current week. */
+export function shouldCelebrateWeek(o: {
+  prev: boolean | undefined;
+  complete: boolean;
+  isCurrentWeek: boolean;
+}): boolean {
+  return o.isCurrentWeek && o.prev === false && o.complete;
+}
