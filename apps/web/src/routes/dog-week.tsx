@@ -5,19 +5,19 @@ import { WeekGrid } from "@/components/week/week-grid";
 import { WeekNav } from "@/components/week/week-nav";
 import { useI18n } from "@/i18n";
 import { useDeleteSession, useLogSession } from "@/lib/progress";
-import { addDays, dayKey, mondayOf, sameWeek, weekBounds, weekDays } from "@/lib/week";
+import {
+  addDays,
+  dayKey,
+  mondayOf,
+  sameWeek,
+  shouldCelebrateWeek,
+  weekBounds,
+  weekDays,
+} from "@/lib/week";
 import { focusKey, useFocusWeek } from "@/lib/weekly-focus";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-
-export function shouldCelebrateWeek(o: {
-  prev: boolean | undefined;
-  complete: boolean;
-  isCurrentWeek: boolean;
-}): boolean {
-  return o.isCurrentWeek && o.prev === false && o.complete;
-}
 
 export function DogWeek() {
   const { t, locale } = useI18n();
