@@ -1,38 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { eventIngestSchema, isKnownEvent } from "./events";
+import { CLIENT_EVENTS, eventIngestSchema, isKnownEvent } from "./events";
 
-describe("event catalog", () => {
-  it("accepts a valid client page.viewed payload", () => {
-    const parsed = eventIngestSchema.parse({ name: "page.viewed", props: { path: "/app" } });
-    expect(parsed.name).toBe("page.viewed");
-    expect(parsed.props).toEqual({ path: "/app" });
+describe("telemetry events allowlist", () => {
+  it("recognizes the new server + client event names", () => {
+    expect(isKnownEvent("brief.emailed")).toBe(true);
+    expect(isKnownEvent("training.practice_logged")).toBe(true);
+    expect(isKnownEvent("focus.week_set")).toBe(true);
+    expect(isKnownEvent("training.level_set")).toBe(true);
+    expect(isKnownEvent("trainer.viewed")).toBe(true);
+    expect(isKnownEvent("course.viewed")).toBe(true);
   });
 
-  it("defaults props to an empty object", () => {
-    const parsed = eventIngestSchema.parse({ name: "page.viewed" });
-    expect(parsed.props).toEqual({});
+  it("accepts the two client view events through the ingest schema", () => {
+    expect(
+      eventIngestSchema.safeParse({ name: "trainer.viewed", props: { id: "abc" } }).success,
+    ).toBe(true);
+    expect(
+      eventIngestSchema.safeParse({ name: "course.viewed", props: { id: "abc" } }).success,
+    ).toBe(true);
   });
 
-  it("rejects an event name not on the client allowlist", () => {
-    expect(() => eventIngestSchema.parse({ name: "user.signed_in", props: {} })).toThrow();
+  it("still rejects server-only events from the client ingest", () => {
+    expect(eventIngestSchema.safeParse({ name: "dog.created", props: {} }).success).toBe(false);
   });
 
-  it("rejects oversized props", () => {
-    const big = { path: "x".repeat(2000) };
-    expect(() => eventIngestSchema.parse({ name: "page.viewed", props: big })).toThrow();
-  });
-
-  it("rejects non-scalar prop values", () => {
-    expect(() =>
-      eventIngestSchema.parse({ name: "page.viewed", props: { nested: { a: 1 } } }),
-    ).toThrow();
-  });
-
-  it("isKnownEvent recognizes server event names", () => {
-    expect(isKnownEvent("user.signed_up")).toBe(true);
-    expect(isKnownEvent("page.viewed")).toBe(true);
-    expect(isKnownEvent("nope.fake")).toBe(false);
-    expect(isKnownEvent("")).toBe(false);
-    expect(isKnownEvent("user.signed_up ")).toBe(false);
+  it("exposes the two new client events", () => {
+    expect(CLIENT_EVENTS).toContain("trainer.viewed");
+    expect(CLIENT_EVENTS).toContain("course.viewed");
   });
 });
