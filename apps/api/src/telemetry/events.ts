@@ -8,6 +8,15 @@ export const KNOWN_EVENTS = [
   "dog.created",
   "journal.entry_created",
   "brief.generated",
+  "brief.finalized",
+  "brief.shared",
+  "brief.emailed",
+  "training.goal_added",
+  "training.practice_logged",
+  "focus.week_set",
+  "training.level_set",
+  "trainer.viewed",
+  "course.viewed",
 ] as const;
 
 export type EventName = (typeof KNOWN_EVENTS)[number];
@@ -18,7 +27,7 @@ export function isKnownEvent(name: string): name is EventName {
 }
 
 /** Names a browser client is allowed to submit via POST /api/events. */
-export const CLIENT_EVENTS = ["page.viewed"] as const;
+export const CLIENT_EVENTS = ["page.viewed", "trainer.viewed", "course.viewed"] as const;
 
 const scalar = z.union([z.string(), z.number(), z.boolean()]);
 

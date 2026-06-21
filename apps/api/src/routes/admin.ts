@@ -44,6 +44,7 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       firstDog,
       firstJournal,
       firstBrief,
+      topPages,
     ] = await Promise.all([
       db
         .execute<{ totalUsers: number }>(sql`select count(*)::int as "totalUsers" from "user"`)
@@ -102,6 +103,14 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       funnelRow("dog.created"),
       funnelRow("journal.entry_created"),
       funnelRow("brief.generated"),
+      db
+        .execute<{ path: string; count: number }>(
+          sql`select coalesce(props->>'path', '(unknown)') as path, count(*)::int as count
+              from events
+              where name = 'page.viewed' and created_at >= ${since}
+              group by 1 order by 2 desc limit 10`,
+        )
+        .then((r) => r.rows),
     ]);
 
     const funnel = [
@@ -127,6 +136,7 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       active,
       eventVolume,
       funnel,
+      topPages,
     } as const);
   })
   .get("/activity", async (c) => {

@@ -5,6 +5,9 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CourseDetail } from "./course-detail";
 
+const track = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/track", () => ({ track: (...a: unknown[]) => track(...a) }));
+
 function mockFetchOnce(body: unknown, status = 200) {
   vi.stubGlobal(
     "fetch",
@@ -19,6 +22,7 @@ function mockFetchOnce(body: unknown, status = 200) {
 }
 
 afterEach(() => {
+  vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -40,13 +44,13 @@ const fullCourse = {
   coursePageUrl: "https://example.com/course",
 };
 
-function renderDetail(course: unknown) {
+function renderDetail(course: unknown, id = "c1") {
   mockFetchOnce({ course });
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
-        <MemoryRouter initialEntries={["/courses/c1"]}>
+        <MemoryRouter initialEntries={[`/courses/${id}`]}>
           <Routes>
             <Route path="/courses/:id" element={<CourseDetail />} />
           </Routes>
@@ -57,6 +61,11 @@ function renderDetail(course: unknown) {
 }
 
 describe("CourseDetail", () => {
+  it("emits course.viewed on mount", () => {
+    renderDetail({ ...fullCourse, id: "co1" }, "co1");
+    expect(track).toHaveBeenCalledWith("course.viewed", { id: "co1" });
+  });
+
   it("renders the overview, a skill, and prerequisites", async () => {
     renderDetail(fullCourse);
     await waitFor(() => expect(screen.getByText("Puppy Manners 1")).toBeInTheDocument());

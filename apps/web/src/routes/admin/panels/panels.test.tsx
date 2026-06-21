@@ -2,8 +2,10 @@ import { render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import type { Activity, Metrics } from "../use-metrics";
 import { ActivityFeed } from "./activity-feed";
+import { FeatureUsage } from "./feature-usage";
 import { Funnel } from "./funnel";
 import { KpiStrip } from "./kpi-strip";
+import { TopPages } from "./top-pages";
 
 const metrics: Metrics = {
   rangeDays: 30,
@@ -20,6 +22,7 @@ const metrics: Metrics = {
   active: [{ day: "2026-05-01", count: 5 }],
   eventVolume: [{ name: "page.viewed", count: 1900 }],
   funnel: [{ step: "signup", users: 128 }],
+  topPages: [{ path: "/my", count: 90 }],
 };
 
 it("KpiStrip shows the headline numbers", () => {
@@ -79,4 +82,23 @@ it("ActivityFeed shows anon for null userId", () => {
   };
   render(<ActivityFeed activity={activity} />);
   expect(screen.getByText("anon")).toBeInTheDocument();
+});
+
+it("FeatureUsage lists events and excludes page.viewed", () => {
+  render(
+    <FeatureUsage
+      eventVolume={[
+        { name: "page.viewed", count: 1900 },
+        { name: "dog.created", count: 12 },
+      ]}
+    />,
+  );
+  expect(screen.getByText("dog.created")).toBeInTheDocument();
+  expect(screen.queryByText("page.viewed")).toBeNull();
+});
+
+it("TopPages lists paths and counts", () => {
+  render(<TopPages topPages={[{ path: "/my", count: 90 }]} />);
+  expect(screen.getByText("/my")).toBeInTheDocument();
+  expect(screen.getByText("90")).toBeInTheDocument();
 });

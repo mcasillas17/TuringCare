@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useSession } from "@/lib/auth-client";
+import { track } from "@/lib/track";
 import { useTrainer } from "@/lib/trainers";
+import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 
 export function TrainerDetail() {
@@ -9,6 +11,9 @@ export function TrainerDetail() {
   const { id = "" } = useParams();
   const { data: session } = useSession();
   const { data: tr, isLoading, isError } = useTrainer(id);
+  useEffect(() => {
+    if (id) track("trainer.viewed", { id });
+  }, [id]);
   if (isLoading) return <p>{t("common.loading")}</p>;
   if (isError || !tr) return <p className="text-red-600">{t("trainersDir.loadError")}</p>;
   return (
