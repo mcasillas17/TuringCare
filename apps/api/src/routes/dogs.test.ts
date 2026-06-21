@@ -565,25 +565,6 @@ describe("dogs: progress skills", () => {
     expect(body.skill.confidence).toBe(4);
   });
 
-  it("PATCH /skills/:skillId/confidence updates only confidence", async () => {
-    const u = await createTestUser();
-    users.push(u);
-    const dog = await makeDog(u);
-    const goal = await makeGoal(dog.id);
-    const skill = await makeSkill(goal.id, "Door-knock threshold");
-
-    const res = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/confidence`, {
-      method: "PATCH",
-      headers: u.authHeaders,
-      body: JSON.stringify({ confidence: 5 }),
-    });
-
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { skill: { name: string; confidence: number } };
-    expect(body.skill.name).toBe("Door-knock threshold");
-    expect(body.skill.confidence).toBe(5);
-  });
-
   it("DELETE /skills/:skillId removes the skill from progress", async () => {
     const u = await createTestUser();
     users.push(u);

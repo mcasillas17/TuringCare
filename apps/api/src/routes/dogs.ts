@@ -11,7 +11,6 @@ import {
   journalEntryCreateSchema,
   journalEntryUpdateSchema,
   practiceSessionSchema,
-  skillConfidenceSchema,
   skillLevelSchema,
   trainingGoalSchema,
   trainingSkillSchema,
@@ -218,23 +217,6 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!updated) throw new Error("failed to update skill");
     return c.json({ skill: updated });
   })
-  .patch(
-    "/:id/skills/:skillId/confidence",
-    zValidator("json", skillConfidenceSchema),
-    async (c) => {
-      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
-      if (!dog) return c.json({ error: "not_found" } as const, 404);
-      const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
-      if (!skill) return c.json({ error: "not_found" } as const, 404);
-      const [updated] = await db
-        .update(trainingSkills)
-        .set(c.req.valid("json"))
-        .where(eq(trainingSkills.id, skill.id))
-        .returning();
-      if (!updated) throw new Error("failed to update skill confidence");
-      return c.json({ skill: updated });
-    },
-  )
   .put("/:id/skills/:skillId/level", zValidator("json", skillLevelSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);

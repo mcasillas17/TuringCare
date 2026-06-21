@@ -9,11 +9,6 @@ export const trainingSkillSchema = z.object({
 });
 export type TrainingSkillInput = z.infer<typeof trainingSkillSchema>;
 
-export const skillConfidenceSchema = z.object({
-  confidence: z.number().int().min(CONFIDENCE_MIN).max(CONFIDENCE_MAX),
-});
-export type SkillConfidenceInput = z.infer<typeof skillConfidenceSchema>;
-
 export const skillLevelSchema = z.object({
   level: z.number().int().min(CONFIDENCE_MIN).max(CONFIDENCE_MAX),
 });

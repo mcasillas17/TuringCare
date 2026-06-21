@@ -1,10 +1,6 @@
 import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  PracticeSessionInput,
-  SkillConfidenceInput,
-  TrainingSkillInput,
-} from "@turingcare/shared";
+import type { PracticeSessionInput, TrainingSkillInput } from "@turingcare/shared";
 import { api } from "./api";
 
 export type ProgressSession = {
@@ -79,21 +75,6 @@ export function useUpdateSkill(dogId: string) {
   return useMutation({
     mutationFn: async (args: { skillId: string; body: TrainingSkillInput }) => {
       const res = await dogSkills[":skillId"].$put({
-        param: { id: dogId, skillId: args.skillId },
-        json: args.body,
-      });
-      if (!res.ok) throw new Error("update_failed");
-      return (await res.json()).skill;
-    },
-    onSuccess: () => invalidateProgress(qc, dogId),
-  });
-}
-
-export function useUpdateSkillConfidence(dogId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (args: { skillId: string; body: SkillConfidenceInput }) => {
-      const res = await dogSkills[":skillId"].confidence.$patch({
         param: { id: dogId, skillId: args.skillId },
         json: args.body,
       });

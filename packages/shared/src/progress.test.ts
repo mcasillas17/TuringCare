@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  practiceSessionSchema,
-  skillConfidenceSchema,
-  skillLevelSchema,
-  trainingSkillSchema,
-} from "./progress";
+import { practiceSessionSchema, skillLevelSchema, trainingSkillSchema } from "./progress";
 
 describe("trainingSkillSchema", () => {
   it("accepts a valid skill with confidence", () => {
@@ -21,15 +16,6 @@ describe("trainingSkillSchema", () => {
     expect(trainingSkillSchema.safeParse({ name: "Mat settle", confidence: 6 }).success).toBe(
       false,
     );
-  });
-});
-
-describe("skillConfidenceSchema", () => {
-  it("accepts only integer confidence values from 1 to 5", () => {
-    expect(skillConfidenceSchema.safeParse({ confidence: 1 }).success).toBe(true);
-    expect(skillConfidenceSchema.safeParse({ confidence: 5 }).success).toBe(true);
-    expect(skillConfidenceSchema.safeParse({ confidence: 2.5 }).success).toBe(false);
-    expect(skillConfidenceSchema.safeParse({ confidence: 0 }).success).toBe(false);
   });
 });
 
