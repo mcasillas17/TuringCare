@@ -104,7 +104,14 @@ export function composeBrief(i: BriefInput): string {
         `  ${goal.goal} -- ${confidenceLabel(Math.round(avgConfidence))} (${avgConfidence.toFixed(1)}/5)`,
       );
       for (const skill of goal.skills) {
-        lines.push(`    * ${skill.name} -- ${skill.confidence}/5, ${sessionSummary(skill)}`);
+        const label = confidenceLabel(skill.confidence);
+        const reached = skill.milestones?.find((m) => m.level === skill.confidence)?.reachedAt;
+        const when = reached
+          ? ` (reached ${new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(reached))})`
+          : "";
+        lines.push(
+          `    * ${skill.name} — Level ${skill.confidence}: ${label}${when} — ${sessionSummary(skill)}`,
+        );
         if (skill.lastNote) lines.push(`      last: "${truncateNote(skill.lastNote)}"`);
       }
     }

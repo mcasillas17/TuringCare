@@ -63,7 +63,7 @@ describe("composeBrief", () => {
               lastSessionAt: "2026-05-22T10:00:00.000Z",
               lastNote: "held sit through a very long note that should stay readable",
               sessions: [],
-              milestones: [],
+              milestones: [{ level: 3, reachedAt: "2026-06-03T10:00:00.000Z" }],
             },
             {
               id: "s2",
@@ -86,8 +86,8 @@ describe("composeBrief", () => {
     expect(out).toContain("Training progress:");
     expect(out).toContain("Calm greetings");
     expect(out).toContain("Sometimes (3.0/5)");
-    expect(out).toContain("Door-knock threshold -- 3/5, 2 sessions");
-    expect(out).toContain("Greeting strangers -- 2/5, no sessions yet");
+    expect(out).toMatch(/Door-knock threshold — Level 3: Sometimes \(reached Jun 3\)/);
+    expect(out).toMatch(/Greeting strangers — Level 2: Learning — no sessions yet/);
     expect(out).not.toContain("Empty goal");
   });
 
