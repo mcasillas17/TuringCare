@@ -1,8 +1,11 @@
 import { useI18n } from "@/i18n/index";
 import type { MessageKey } from "@/i18n/types";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { TuringArt } from "./turing-art";
-import { TURING_TIP_KEYS } from "./turing-tips";
+import { TURING_TIP_BUCKETS, tipContextForPath } from "./turing-tips";
+import { useTuring } from "./turing/turing-context";
+import type { TuringPose } from "./turing/turing-poses";
 
 /**
  * Turing — the TuringCare companion mascot.
@@ -32,6 +35,8 @@ type Mode = "idle" | "tilt" | "bark";
 
 export function TuringCompanion() {
   const { t } = useI18n();
+  const { eventPose, asleep } = useTuring();
+  const { pathname } = useLocation();
   const rootRef = useRef<HTMLButtonElement>(null);
   const bubbleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -92,15 +97,15 @@ export function TuringCompanion() {
 
   const onClick = useCallback(() => {
     clearTimeout(bubbleTimer.current);
-    const key =
-      TURING_TIP_KEYS[Math.floor(Math.random() * TURING_TIP_KEYS.length)] ?? "turing.tip1";
+    const bucket = TURING_TIP_BUCKETS[tipContextForPath(pathname)];
+    const key = bucket[Math.floor(Math.random() * bucket.length)] ?? "turing.tip1";
     setTipKey(key);
     setMode("bark");
     bubbleTimer.current = setTimeout(() => {
       setTipKey(null);
       setMode("idle");
     }, BUBBLE_MS);
-  }, []);
+  }, [pathname]);
 
   const onEnter = useCallback(() => {
     setMode((m) => (m === "bark" ? m : "tilt"));
@@ -109,18 +114,11 @@ export function TuringCompanion() {
     setMode((m) => (m === "bark" ? m : "idle"));
   }, []);
 
-  const eyesClosed = blink;
-
-  const bodyAnim = reduceMotion
-    ? "none"
-    : mode === "bark"
-      ? "tg-breathe 2.3s ease-in-out infinite"
-      : "tg-breathe-slow 4.6s ease-in-out infinite";
-  const tailAnim = reduceMotion
-    ? "none"
-    : mode === "bark"
-      ? "tg-wag .54s ease-in-out infinite"
-      : "tg-sway 3.6s ease-in-out infinite";
+  const sleeping = asleep && mode === "idle" && !eventPose;
+  const eyesClosed = blink || sleeping;
+  const pose: TuringPose =
+    eventPose ??
+    (mode === "bark" ? "bark" : mode === "tilt" ? "tilt" : sleeping ? "sleep" : "idle");
 
   const px = eyesClosed ? 0 : pupil.x;
   const py = eyesClosed ? 0 : pupil.y;
@@ -147,14 +145,10 @@ export function TuringCompanion() {
       )}
 
       <TuringArt
-        bodyAnim={bodyAnim}
-        tailAnim={tailAnim}
-        headTransform={mode === "tilt" ? "rotate(-13deg)" : "rotate(0deg)"}
-        earLrot={mode === "tilt" ? -7 : 0}
-        earRrot={mode === "tilt" ? 6 : 0}
+        pose={pose}
+        reduceMotion={reduceMotion}
         pupilStyle={pupilStyle}
-        lidRy={eyesClosed ? 21 : 0}
-        mouthOpen={mode === "bark"}
+        eyesClosed={eyesClosed}
       />
     </button>
   );

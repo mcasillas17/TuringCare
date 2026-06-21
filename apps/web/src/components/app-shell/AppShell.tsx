@@ -1,6 +1,7 @@
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { TuringCompanion } from "@/components/turing-companion";
+import { TuringProvider } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { useI18n } from "@/i18n";
@@ -87,59 +88,61 @@ export function AppShell() {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-cream">
-      <header className="flex h-16 items-center justify-between border-b border-silver/60 bg-cream px-4">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="md:hidden"
-            aria-label={t("shell.menu")}
-            onClick={() => setDrawerOpen(true)}
-          >
-            <Menu className="size-6 text-slate" />
-          </button>
-          <Link to="/my">
-            <BrandMark />
-          </Link>
-          <span className="hidden text-slate-soft sm:inline">·</span>
-          <span className="hidden font-semibold text-slate sm:inline">
-            {current ? t(current.labelKey) : ""}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await signOut();
-              toast.success(t("app.signedOut"));
-              navigate("/login");
-            }}
-          >
-            {t("app.signOut")}
-          </Button>
-          <span aria-hidden="true" className="h-5 w-px bg-silver/70" />
-          <LanguageToggle />
-        </div>
-      </header>
-      <VerifyEmailBanner />
-      <div className="flex flex-1">
-        <div className="hidden md:block">{rail}</div>
-        {drawerOpen && (
-          <div className="fixed inset-0 z-40 md:hidden">
+    <TuringProvider>
+      <div className="flex min-h-screen flex-col bg-cream">
+        <header className="flex h-16 items-center justify-between border-b border-silver/60 bg-cream px-4">
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              aria-label="Close menu"
-              className="absolute inset-0 bg-slate/40"
-              onClick={() => setDrawerOpen(false)}
-            />
-            <div className="absolute left-0 top-0 h-full">{rail}</div>
+              className="md:hidden"
+              aria-label={t("shell.menu")}
+              onClick={() => setDrawerOpen(true)}
+            >
+              <Menu className="size-6 text-slate" />
+            </button>
+            <Link to="/my">
+              <BrandMark />
+            </Link>
+            <span className="hidden text-slate-soft sm:inline">·</span>
+            <span className="hidden font-semibold text-slate sm:inline">
+              {current ? t(current.labelKey) : ""}
+            </span>
           </div>
-        )}
-        <main className="flex-1 overflow-auto p-6">
-          <Outlet />
-        </main>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                await signOut();
+                toast.success(t("app.signedOut"));
+                navigate("/login");
+              }}
+            >
+              {t("app.signOut")}
+            </Button>
+            <span aria-hidden="true" className="h-5 w-px bg-silver/70" />
+            <LanguageToggle />
+          </div>
+        </header>
+        <VerifyEmailBanner />
+        <div className="flex flex-1">
+          <div className="hidden md:block">{rail}</div>
+          {drawerOpen && (
+            <div className="fixed inset-0 z-40 md:hidden">
+              <button
+                type="button"
+                aria-label="Close menu"
+                className="absolute inset-0 bg-slate/40"
+                onClick={() => setDrawerOpen(false)}
+              />
+              <div className="absolute left-0 top-0 h-full">{rail}</div>
+            </div>
+          )}
+          <main className="flex-1 overflow-auto p-6">
+            <Outlet />
+          </main>
+        </div>
+        <TuringCompanion />
       </div>
-      <TuringCompanion />
-    </div>
+    </TuringProvider>
   );
 }

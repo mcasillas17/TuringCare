@@ -2,17 +2,28 @@ import { en } from "@/i18n/en";
 import { es } from "@/i18n/es";
 import { LocaleProvider } from "@/i18n/index";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TuringCompanion } from "./turing-companion";
-import { TURING_TIP_KEYS } from "./turing-tips";
+import { TURING_TIP_BUCKETS, TURING_TIP_KEYS } from "./turing-tips";
+import { TuringProvider } from "./turing/turing-context";
 
-const EN_TIPS = TURING_TIP_KEYS.map((k) => en.turing[k.split(".")[1] as keyof typeof en.turing]);
+const EN_TIPS = Object.values(TURING_TIP_BUCKETS)
+  .flat()
+  .map((k) => en.turing[k.split(".")[1] as keyof typeof en.turing]);
 const ES_TIPS = TURING_TIP_KEYS.map((k) => es.turing[k.split(".")[1] as keyof typeof es.turing]);
 
-function renderEs(ui: ReactElement) {
-  localStorage.setItem("tc-locale", "es");
-  return render(<LocaleProvider>{ui}</LocaleProvider>);
+function renderAt(path = "/my", locale?: "es") {
+  if (locale) localStorage.setItem("tc-locale", locale);
+  return render(
+    <LocaleProvider>
+      <TuringProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <TuringCompanion />
+        </MemoryRouter>
+      </TuringProvider>
+    </LocaleProvider>,
+  );
 }
 
 afterEach(() => {
@@ -22,24 +33,24 @@ afterEach(() => {
 
 describe("TuringCompanion", () => {
   it("renders an accessible button labelled for the tip interaction", () => {
-    render(<TuringCompanion />);
+    renderAt();
     expect(screen.getByRole("button", { name: en.turing.tipAria })).toBeInTheDocument();
   });
 
   it("does not show a tip bubble until interacted with", () => {
-    render(<TuringCompanion />);
+    renderAt();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("shows one of the training tips when clicked", () => {
-    render(<TuringCompanion />);
+  it("shows one of the tips when clicked", () => {
+    renderAt();
     fireEvent.click(screen.getByRole("button", { name: en.turing.tipAria }));
     expect(EN_TIPS).toContain(screen.getByRole("status").textContent);
   });
 
   it("hides the tip again after the display timeout elapses", () => {
     vi.useFakeTimers();
-    render(<TuringCompanion />);
+    renderAt();
     fireEvent.click(screen.getByRole("button", { name: en.turing.tipAria }));
     expect(screen.getByRole("status")).toBeInTheDocument();
     act(() => {
@@ -49,7 +60,7 @@ describe("TuringCompanion", () => {
   });
 
   it("localizes the label and tips in Spanish", () => {
-    renderEs(<TuringCompanion />);
+    renderAt("/my", "es");
     const button = screen.getByRole("button", { name: es.turing.tipAria });
     fireEvent.click(button);
     expect(ES_TIPS).toContain(screen.getByRole("status").textContent);
@@ -68,7 +79,7 @@ describe("TuringCompanion", () => {
       dispatchEvent: vi.fn(),
     }));
     try {
-      const { container } = render(<TuringCompanion />);
+      const { container } = renderAt();
       const animated = Array.from(container.querySelectorAll("g")).filter(
         (g) => g.style.animation && g.style.animation !== "none",
       );
@@ -87,5 +98,14 @@ describe("TuringCompanion", () => {
       "turing.tip5",
       "turing.tip6",
     ]);
+  });
+
+  it("shows a training-context tip on the training route", () => {
+    renderAt("/my/dogs/abc/training");
+    fireEvent.click(screen.getByRole("button", { name: en.turing.tipAria }));
+    const trainingTips = TURING_TIP_BUCKETS.training.map(
+      (k) => en.turing[k.split(".")[1] as keyof typeof en.turing],
+    );
+    expect(trainingTips).toContain(screen.getByRole("status").textContent);
   });
 });
