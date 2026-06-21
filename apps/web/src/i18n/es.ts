@@ -378,6 +378,12 @@ export const es = {
     avgConfidence: "prom",
     expandSkill: "Mostrar {name}",
     collapseSkill: "Ocultar {name}",
+    milestonesTitle: "Hitos · nivel {n} de 5",
+    reachedOn: "alcanzado {date}",
+    markReached: "Toca para marcar logrado",
+    levelStart: "inicio",
+    currentTag: "actual",
+    levelBadge: "Nivel {n} — {label}",
   },
   dogHub: {
     backToDashboard: "Todos los perros",
