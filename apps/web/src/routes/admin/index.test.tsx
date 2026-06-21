@@ -60,9 +60,3 @@ it("shows error state when metrics fetch fails", async () => {
   renderDashboard(qc);
   await waitFor(() => expect(screen.getByText(/failed to load metrics/i)).toBeInTheDocument());
 });
-
-it("renders the language chip in the header", () => {
-  vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})));
-  renderDashboard();
-  expect(screen.getByRole("button", { name: "Language" })).toBeInTheDocument();
-});

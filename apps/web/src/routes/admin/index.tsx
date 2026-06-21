@@ -1,6 +1,4 @@
-import { LanguageToggle } from "@/components/LanguageToggle";
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { ActiveUsage } from "./panels/active-usage";
 import { ActivityFeed } from "./panels/activity-feed";
 import { Funnel } from "./panels/funnel";
@@ -16,22 +14,16 @@ export function AdminDashboard() {
   const activity = useActivity();
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">TuringCare · Admin</h1>
-        <div className="flex items-center gap-3">
-          <Link to="/admin/trainers" className="text-sm underline">
-            Manage trainers
-          </Link>
-          <Link to="/admin/courses" className="text-sm underline">
-            Manage courses
-          </Link>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate">Admin dashboard</h1>
+        <div>
           <label htmlFor="range-select" className="sr-only">
             Date range
           </label>
           <select
             id="range-select"
-            className="rounded border bg-background px-2 py-1 text-sm"
+            className="rounded border border-silver bg-white px-2 py-1 text-sm text-slate"
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
           >
@@ -41,15 +33,13 @@ export function AdminDashboard() {
               </option>
             ))}
           </select>
-          <span aria-hidden="true" className="h-5 w-px bg-silver/70" />
-          <LanguageToggle />
         </div>
-      </header>
+      </div>
 
       {metrics.isPending ? (
         <p className="p-8">Loading metrics…</p>
       ) : metrics.isError || !metrics.data ? (
-        <p className="p-8 text-destructive">Failed to load metrics.</p>
+        <p className="p-8 text-red-600">Failed to load metrics.</p>
       ) : (
         <>
           <KpiStrip kpis={metrics.data.kpis} />
@@ -59,7 +49,7 @@ export function AdminDashboard() {
             <Funnel funnel={metrics.data.funnel} />
           </div>
           {activity.isError ? (
-            <p className="rounded-lg border bg-card p-4 text-sm text-destructive">
+            <p className="rounded-lg border border-silver bg-white p-4 text-sm text-red-600">
               Activity feed unavailable.
             </p>
           ) : (
