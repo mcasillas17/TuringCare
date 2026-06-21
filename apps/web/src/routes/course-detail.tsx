@@ -1,11 +1,16 @@
 import { useI18n } from "@/i18n";
 import { useCourse } from "@/lib/courses";
+import { track } from "@/lib/track";
+import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 
 export function CourseDetail() {
   const { t } = useI18n();
   const { id = "" } = useParams();
   const { data: co, isLoading, isError } = useCourse(id);
+  useEffect(() => {
+    if (id) track("course.viewed", { id });
+  }, [id]);
   if (isLoading) return <p>{t("common.loading")}</p>;
   if (isError || !co) return <p className="text-red-600">{t("courses.loadError")}</p>;
 

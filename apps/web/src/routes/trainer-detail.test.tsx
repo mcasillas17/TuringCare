@@ -4,6 +4,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const track = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/track", () => ({ track: (...a: unknown[]) => track(...a) }));
+
 let mockSession: { user: { id: string } } | null = null;
 vi.mock("@/lib/auth-client", () => ({
   useSession: () => ({ data: mockSession, isPending: false }),
@@ -63,9 +66,23 @@ function renderDetail(id = "t1") {
 beforeEach(() => {
   mockSession = null;
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("TrainerDetail", () => {
+  it("emits trainer.viewed on mount", () => {
+    stubTrainer({
+      id: "tr1",
+      name: "Jane Rivera",
+      city: "Seattle",
+      state: "WA",
+    });
+    renderDetail("tr1");
+    expect(track).toHaveBeenCalledWith("trainer.viewed", { id: "tr1" });
+  });
+
   it("renders the Send Brief cross-link when authed and the trainer has an email", async () => {
     mockSession = { user: { id: "u1" } };
     stubTrainer({
