@@ -95,6 +95,7 @@ export function ResetPassword() {
                 id="newPassword"
                 name="newPassword"
                 type="password"
+                autoComplete="new-password"
                 minLength={8}
                 aria-invalid={pwError ? true : undefined}
                 aria-describedby={pwError ? "newPassword-error" : undefined}
@@ -112,6 +113,7 @@ export function ResetPassword() {
                 id="confirmPassword"
                 name="confirmPassword"
                 type="password"
+                autoComplete="new-password"
                 aria-invalid={confirmError ? true : undefined}
                 aria-describedby={confirmError ? "confirmPassword-error" : undefined}
                 required

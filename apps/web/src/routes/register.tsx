@@ -45,15 +45,15 @@ export function Register() {
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-1">
               <Label htmlFor="name">{t("auth.name")}</Label>
-              <Input id="name" name="name" required />
+              <Input id="name" name="name" type="text" autoComplete="name" required />
             </div>
             <div className="space-y-1">
               <Label htmlFor="email">{t("auth.email")}</Label>
-              <Input id="email" name="email" type="email" required />
+              <Input id="email" name="email" type="email" autoComplete="email" required />
             </div>
             <div className="space-y-1">
               <Label htmlFor="password">{t("auth.password")}</Label>
-              <Input id="password" name="password" type="password" minLength={8} required />
+              <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
             </div>
             <Button type="submit" disabled={pending} className="w-full">
               {pending ? t("auth.registerPending") : t("auth.registerSubmit")}

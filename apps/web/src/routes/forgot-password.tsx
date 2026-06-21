@@ -58,7 +58,7 @@ export function ForgotPassword() {
               <p className="text-sm text-muted-foreground">{t("auth.forgotIntro")}</p>
               <div className="space-y-1">
                 <Label htmlFor="email">{t("auth.email")}</Label>
-                <Input id="email" name="email" type="email" required />
+                <Input id="email" name="email" type="email" autoComplete="email" required />
               </div>
               <Button type="submit" disabled={pending} aria-busy={pending} className="w-full">
                 {pending ? t("auth.forgotPending") : t("auth.forgotSubmit")}
