@@ -76,3 +76,34 @@ earns the treat, not the jump." / "End every session on a win."
 - `pnpm test` (apps/web) green, including new component tests.
 - Manual: `pnpm dev`, sign in, confirm Turing in the corner of `/my/*`, breathing/blink,
   eyes follow cursor, hover tilt, tap shows a tip; not present on public/auth pages.
+
+## Phase 2 — tip library (deferred, owner: hold for phase 2)
+
+Phase 1 ships 6 training-fundamentals tips. Phase 2 should grow the library and,
+ideally, make tips **contextual** rather than purely random — bucket the tip pool by
+`category` and surface the relevant bucket per route (training tips on
+`/my/dogs/:id/training`, observation tips on the journal, a focus-skill nudge on the
+weekly-focus tab). This pairs naturally with the event-driven pose work and makes Turing
+feel attentive instead of reciting.
+
+Candidate categories (all reward-based, on-brand; keep each to one short line for the
+~184px bubble; translate to `es` when i18n lands):
+
+- **Timing & marking** — mark the instant it's right; a "yes!" bridges to the treat.
+- **Reinforcement strategy** — reward the behavior not the begging; jackpot breakthroughs;
+  pet/play/praise are paychecks too.
+- **Session design** — three short sessions beat one long one; stop while he wants more;
+  train before meals.
+- **Management & setup** — prevent the mistake instead of correcting it; every rehearsal
+  makes a habit.
+- **Reading your dog** — sniffing/yawning means a breather; train under threshold; a
+  loose body is a ready-to-learn body.
+- **Consistency & cues** — one word per cue; everyone cues the same way; say it once.
+- **Owner mindset** — progress isn't a straight line; end on an easy win when frustrated;
+  he's still learning, not stubborn.
+- **Product nudges** (double as gentle CTAs) — log that moment while it's fresh; pick this
+  week's focus skill; send your trainer the brief.
+
+Guardrails: no aversive/correction framing (brand moved off "force-free"/punishment
+language); no medical or clinical-behavior advice (separation anxiety, aggression, etc. —
+those route to a professional, not the mascot).
