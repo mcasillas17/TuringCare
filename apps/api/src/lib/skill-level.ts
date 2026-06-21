@@ -25,7 +25,10 @@ export async function setSkillLevel(skillId: string, level: number) {
     for (let lvl = 2; lvl <= level; lvl++) {
       if (!have.has(lvl)) toInsert.push({ skillId, level: lvl });
     }
-    if (toInsert.length > 0) await db.insert(skillMilestones).values(toInsert);
+    // onConflictDoNothing guards against a concurrent double-tap inserting the
+    // same (skillId, level) and tripping the unique constraint.
+    if (toInsert.length > 0)
+      await db.insert(skillMilestones).values(toInsert).onConflictDoNothing();
   }
   return updated;
 }
