@@ -20,6 +20,7 @@ const metrics: Metrics = {
   active: [{ day: "2026-05-01", count: 5 }],
   eventVolume: [{ name: "page.viewed", count: 1900 }],
   funnel: [{ step: "signup", users: 128 }],
+  topPages: [{ path: "/my", count: 90 }],
 };
 
 it("KpiStrip shows the headline numbers", () => {

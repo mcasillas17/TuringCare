@@ -16,6 +16,7 @@ export type Metrics = {
   active: { day: string; count: number }[];
   eventVolume: { name: string; count: number }[];
   funnel: { step: string; users: number }[];
+  topPages: { path: string; count: number }[];
 };
 
 export type Activity = {
