@@ -202,11 +202,11 @@
 @keyframes tg-bubble {
   0% {
     opacity: 0;
-    transform: translateX(-40%) translateY(8px) scale(0.9);
+    transform: translateY(8px) scale(0.9);
   }
   100% {
     opacity: 1;
-    transform: translateX(-40%) translateY(0) scale(1);
+    transform: translateY(0) scale(1);
   }
 }
 .turing-companion {
@@ -228,11 +228,13 @@
 }
 .turing-bubble {
   position: absolute;
-  left: 50%;
+  /* Turing sits in the bottom-right corner, so the bubble opens up-and-left from
+     his head — anchored to his right edge — to stay fully on-screen. */
+  right: 0;
+  left: auto;
   bottom: 84%;
-  transform: translateX(-40%);
   width: max-content;
-  max-width: min(184px, 60vw);
+  max-width: min(184px, calc(100vw - 24px));
   padding: 9px 13px;
   border: 2px solid #1c1916;
   border-radius: 15px;
@@ -248,7 +250,9 @@
 }
 .turing-bubble-tip {
   position: absolute;
-  left: 32%;
+  /* Near the bubble's right edge so it points down at Turing's head. */
+  right: 28px;
+  left: auto;
   bottom: -7px;
   width: 13px;
   height: 13px;

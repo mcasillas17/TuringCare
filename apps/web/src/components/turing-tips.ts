@@ -1,12 +1,16 @@
+import type { MessageKey } from "@/i18n/types";
+
 /**
- * The six approved training tips Turing "barks" when tapped (exact copy from the
- * design handoff). English-only for phase 1; i18n is a phase-2 follow-up.
+ * i18n catalog keys for the six training tips Turing "barks" when tapped. The
+ * strings themselves live in the `turing` section of the en/es catalogs (with
+ * parity enforced by the i18n test); this module just lists the keys so the
+ * component can pick one at random and resolve it via `t()`.
  */
-export const TURING_TIPS = [
-  "Catch him being good — then reward it.",
-  "Mark the moment, then treat.",
-  "Short sessions beat long ones.",
-  "Reward what you want repeated.",
-  "Calm earns the treat, not the jump.",
-  "End every session on a win.",
-] as const;
+export const TURING_TIP_KEYS: MessageKey[] = [
+  "turing.tip1",
+  "turing.tip2",
+  "turing.tip3",
+  "turing.tip4",
+  "turing.tip5",
+  "turing.tip6",
+];

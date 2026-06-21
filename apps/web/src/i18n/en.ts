@@ -630,6 +630,15 @@ export const en = {
     resendSuccess: "Verification email sent",
     resendError: "Could not send verification email",
   },
+  turing: {
+    tipAria: "Turing — tap for a training tip",
+    tip1: "Catch him being good — then reward it.",
+    tip2: "Mark the moment, then treat.",
+    tip3: "Short sessions beat long ones.",
+    tip4: "Reward what you want repeated.",
+    tip5: "Calm earns the treat, not the jump.",
+    tip6: "End every session on a win.",
+  },
 } as const;
 
 export type En = typeof en;

@@ -634,4 +634,13 @@ export const es = {
     resendSuccess: "Correo de verificación enviado",
     resendError: "No se pudo enviar el correo de verificación",
   },
+  turing: {
+    tipAria: "Turing — toca para ver un consejo",
+    tip1: "Sorpréndelo portándose bien y prémialo.",
+    tip2: "Marca el momento y luego premia.",
+    tip3: "Las sesiones cortas funcionan mejor que las largas.",
+    tip4: "Premia lo que quieras que se repita.",
+    tip5: "La calma gana el premio, no el salto.",
+    tip6: "Termina cada sesión con un logro.",
+  },
 } satisfies Messages;
