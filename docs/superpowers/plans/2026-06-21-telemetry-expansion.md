@@ -28,7 +28,7 @@ Worktree: `/Users/elopenmike/build/Apps/Care/TuringCare/.worktrees/telemetry-exp
 
 **Modified**
 - `apps/api/src/telemetry/events.ts` — extend `KNOWN_EVENTS` + `CLIENT_EVENTS`.
-- `apps/api/src/routes/dogs.ts` — import `recordEvent`; 9 emit calls.
+- `apps/api/src/routes/dogs.ts` — import `recordEvent`; 10 emit calls (incl. `training.level_set` from #54).
 - `apps/api/src/routes/admin.ts` — `topPages` aggregation in `/metrics`.
 - `apps/api/src/routes/admin.test.ts` — assert `topPages` present.
 - `apps/web/src/routes/admin/use-metrics.ts` — `topPages` on `Metrics`.
@@ -65,6 +65,7 @@ describe("telemetry events allowlist", () => {
     expect(isKnownEvent("brief.emailed")).toBe(true);
     expect(isKnownEvent("training.practice_logged")).toBe(true);
     expect(isKnownEvent("focus.week_set")).toBe(true);
+    expect(isKnownEvent("training.level_set")).toBe(true);
     expect(isKnownEvent("trainer.viewed")).toBe(true);
     expect(isKnownEvent("course.viewed")).toBe(true);
   });
@@ -108,6 +109,7 @@ export const KNOWN_EVENTS = [
   "training.goal_added",
   "training.practice_logged",
   "focus.week_set",
+  "training.level_set",
   "trainer.viewed",
   "course.viewed",
 ] as const;
@@ -202,7 +204,7 @@ describe("server-side telemetry emission", () => {
     expect(await countEvents(u.userId, "journal.entry_created")).toBe(1);
   });
 
-  it("records training.goal_added, training.practice_logged and focus.week_set", async () => {
+  it("records training.goal_added, practice_logged, focus.week_set and level_set", async () => {
     const u = await createTestUser();
     users.push(u);
     const dogId = await createDog(u);
@@ -222,9 +224,15 @@ describe("server-side telemetry emission", () => {
       headers: u.authHeaders,
       body: JSON.stringify({ skillId: skill.id }),
     });
+    await app.request(`/api/dogs/${dogId}/skills/${skill.id}/level`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ level: 3 }),
+    });
     expect(await countEvents(u.userId, "training.goal_added")).toBe(1);
     expect(await countEvents(u.userId, "training.practice_logged")).toBe(1);
     expect(await countEvents(u.userId, "focus.week_set")).toBe(1);
+    expect(await countEvents(u.userId, "training.level_set")).toBe(1);
   });
 
   it("records the brief lifecycle (generated, finalized, shared)", async () => {
@@ -338,6 +346,26 @@ with:
     if (!row) throw new Error("failed to add focus skill");
     await recordEvent("focus.week_set", { userId: c.get("userId") });
     return c.json({ focus: row }, 201);
+```
+
+- [ ] **Step 6c: Emit `training.level_set` (skill milestones, #54)**
+
+In `PUT /:id/skills/:skillId/level`, replace:
+
+```ts
+    const updated = await setSkillLevel(skill.id, c.req.valid("json").level);
+    return c.json({ skill: updated });
+```
+
+with:
+
+```ts
+    const updated = await setSkillLevel(skill.id, c.req.valid("json").level);
+    await recordEvent("training.level_set", {
+      userId: c.get("userId"),
+      props: { level: c.req.valid("json").level },
+    });
+    return c.json({ skill: updated });
 ```
 
 - [ ] **Step 7: Emit `journal.entry_created`**

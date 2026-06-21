@@ -3,7 +3,7 @@
 - **Date:** 2026-06-21
 - **Status:** Approved (design); ready for implementation plan
 - **Scope:** `apps/api` + `apps/web`. No DB schema change — the `events` table already stores everything.
-- **Base:** branched off the admin-portal redesign (the new `AdminShell` + dashboard panels), since this adds panels to that dashboard.
+- **Base:** `origin/main` (the admin redesign #53 is now live, and #54 "Skill milestones" added a new `PUT /:id/skills/:skillId/level` mutation that is also instrumented here).
 
 ## Goal
 
@@ -35,8 +35,9 @@ Make the admin analytics real and useful: actually emit feature-usage events (to
 | `training.goal_added` | `POST /:id/goals` **and** `POST /:id/goals/from-template` | `{ source: "custom" \| "template" }` |
 | `training.practice_logged` | `POST /:id/skills/:skillId/sessions` | `{}` |
 | `focus.week_set` | `POST /:id/focus` | `{}` |
+| `training.level_set` | `PUT /:id/skills/:skillId/level` | `{ level }` (skill milestone 1–5; from #54) |
 
-`dog.created`, `journal.entry_created`, `brief.generated` already exist in `KNOWN_EVENTS`; the other six names are **new** and must be added to `KNOWN_EVENTS`.
+`dog.created`, `journal.entry_created`, `brief.generated` already exist in `KNOWN_EVENTS`; the other seven names are **new** and must be added to `KNOWN_EVENTS`.
 
 **Client-emitted** (pure views) via the existing `track(name, props)` helper:
 
@@ -47,11 +48,11 @@ Make the admin analytics real and useful: actually emit feature-usage events (to
 
 These two names must be added to **`CLIENT_EVENTS`** and therefore to the `eventIngestSchema` `name` enum in `apps/api/src/telemetry/events.ts`, so the ingest endpoint accepts them. All props remain scalar-only and ≤1KB (existing guard). `id` is the internal trainer/course UUID (not PII).
 
-Net: 8 new event names; the funnel's three middle steps light up for the first time.
+Net: 9 new event names; the funnel's three middle steps light up for the first time.
 
 ### 2. Ingest / allowlist changes (`apps/api/src/telemetry/events.ts`)
 
-- Extend `KNOWN_EVENTS` with: `brief.finalized`, `brief.shared`, `brief.emailed`, `training.goal_added`, `training.practice_logged`, `focus.week_set`, `trainer.viewed`, `course.viewed`.
+- Extend `KNOWN_EVENTS` with: `brief.finalized`, `brief.shared`, `brief.emailed`, `training.goal_added`, `training.practice_logged`, `focus.week_set`, `training.level_set`, `trainer.viewed`, `course.viewed`.
 - Extend `CLIENT_EVENTS` with: `trainer.viewed`, `course.viewed`. (`eventIngestSchema` derives its `name` enum from `CLIENT_EVENTS`, so this is the only ingest change.)
 - `recordEvent`'s `name: EventName` typing then accepts the new server names automatically.
 
