@@ -341,6 +341,11 @@ export const es = {
     saveFailed: "No se pudo guardar",
     noteRequired: "Escribe una nota rápida antes de guardar.",
     dogRequired: "Elige un perro antes de guardar.",
+    postSaveTitle: "¿Quieres agregar un poco de contexto?",
+    postSaveAntecedent: "¿Qué pasó justo antes?",
+    postSaveAnswer: "Responder",
+    postSaveSkip: "Saltar",
+    postSaveDone: "Listo",
   },
   progress: {
     title: "Progreso de entrenamiento",
