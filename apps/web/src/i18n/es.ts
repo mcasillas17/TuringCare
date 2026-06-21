@@ -658,5 +658,7 @@ export const es = {
     weekTip2: "Unos minutos al día suman rápido.",
     briefTip1: "Comparte el resumen para que tu entrenador vea el patrón.",
     briefTip2: "Finaliza antes de enviar — eso fija la versión.",
+    celebrateDog: "¡Buen trabajo! 🐾",
+    celebrateBrief: "¡Resumen generado! 🎉",
   },
 } satisfies Messages;
