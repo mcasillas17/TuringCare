@@ -49,7 +49,13 @@ export function Login() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="password">{t("auth.password")}</Label>
-              <Input id="password" name="password" type="password" autoComplete="current-password" required />
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+              />
             </div>
             <div className="text-right -mt-2">
               <Link className="underline text-sm text-muted-foreground" to="/forgot-password">
