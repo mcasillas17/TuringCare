@@ -946,3 +946,29 @@ reaching level 5 via the stepper now triggers the hop (`celebrate(level >= CONFI
 - Spec/plan: `docs/superpowers/specs/2026-06-21-skill-milestones-design.md`,
   `docs/superpowers/plans/2026-06-21-skill-milestones.md`
 - Commits: branch `feat/skill-milestones`. Shipping as a PR.
+
+## 2026-06-21 — Turing companion: celebration bubbles + cooldown — phase 2d — SHIPPED
+2c connected Turing to many events, but every hop was silent/identical and frequent wags
+risked becoming noise. This gives **milestones a short contextual message** and **throttles
+wags**. Built via subagent-driven development (3 TDD tasks + a test-hygiene fix, each
+task-reviewed, whole-branch opus review → ready to merge). Changes:
+- **`celebrate(big?, messageKey?)`** + `eventMessage` on the context. Messages show on
+  **hops only** (a wag forces `eventMessage` null); the message clears with the pose. Shown
+  even under reduced motion (the hop is suppressed but the text isn't — an a11y win).
+- **Wag cooldown** (`WAG_COOLDOWN_MS = 8000`): a wag is skipped if one played within 8s; a
+  **hop always plays** and re-arms the cooldown. Ref-based, cleaned up on unmount.
+- **Bubble** renders `eventMessage ?? tipKey` (a live celebration wins over a tap tip).
+- **Copy** (en/es, parity-enforced): New pup! 🐾 / Mastered it! 🎉 / You're all set! 🎉 /
+  Week done! 🏅 / Brief ready! 📋 (+ Spanish).
+- **Wired** the message key at each hop: add-dog, skill **mastery** (`useSetSkillLevel`,
+  `level >= CONFIDENCE_MAX` = level 5 — verified the ceiling), onboarding-complete,
+  week-complete, brief finalize/share/send. Wags (journal/session/template/goal) unchanged
+  and silent; all invalidates preserved.
+Gates: web **245/245** tests, tsc 0, **root** `biome check .` clean, build OK. react-doctor
+findings on changed files are pre-existing/adjudicated (derived-state effect; intentional
+handoff easing) — none new.
+- **Out of scope / future:** streaks & first-of-day greeting, a "quiet Turing" setting,
+  state-aware tips, ambient micro-animations, centralizing triggers into a reaction registry.
+- Spec/plan: `docs/superpowers/specs/2026-06-21-turing-celebration-bubbles-design.md`,
+  `docs/superpowers/plans/2026-06-21-turing-celebration-bubbles.md`
+- Commits: this branch. Shipped as a PR from `worktree-feat+turing-celebration-bubbles`.
