@@ -40,8 +40,9 @@ export function Sheet({ open, title, onClose, children, closeLabel = "Close" }: 
       <button
         type="button"
         data-testid="sheet-backdrop"
-        aria-label={closeLabel}
-        className="absolute inset-0 bg-slate/40"
+        aria-hidden="true"
+        tabIndex={-1}
+        className="absolute inset-0 bg-black/40"
         onClick={onClose}
       />
       <div
