@@ -41,6 +41,7 @@ import { loadFocusWeek } from "../lib/focus";
 import { loadProgress } from "../lib/progress";
 import { setSkillLevel } from "../lib/skill-level";
 import { type Vars, requireUser } from "../middleware/require-user";
+import { recordEvent } from "../telemetry/record-event";
 
 const invalidJournalField = (path: "occurredAt" | "trend", message: string) =>
   ({
@@ -70,6 +71,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         weightLbs: weightLbs == null ? weightLbs : String(weightLbs),
       })
       .returning();
+    await recordEvent("dog.created", { userId: c.get("userId") });
     return c.json({ dog }, 201);
   })
   .get("/:id", async (c) => {
@@ -135,6 +137,10 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .values({ goalId: goal.id, name: body.goal, confidence: 1, position: 0 })
       .returning();
     if (!skill) throw new Error("failed to create default skill");
+    await recordEvent("training.goal_added", {
+      userId: c.get("userId"),
+      props: { source: "custom" },
+    });
     return c.json({ goal, skill }, 201);
   })
   .post("/:id/goals/from-template", zValidator("json", goalFromTemplateSchema), async (c) => {
@@ -165,6 +171,10 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       return { goal: createdGoal, skills: createdSkills };
     });
 
+    await recordEvent("training.goal_added", {
+      userId: c.get("userId"),
+      props: { source: "template" },
+    });
     return c.json({ goal, skills }, 201);
   })
   .delete("/:id/goals/:goalId", async (c) => {
@@ -225,6 +235,10 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
     if (!skill) return c.json({ error: "not_found" } as const, 404);
     const updated = await setSkillLevel(skill.id, c.req.valid("json").level);
+    await recordEvent("training.level_set", {
+      userId: c.get("userId"),
+      props: { level: c.req.valid("json").level },
+    });
     return c.json({ skill: updated });
   })
   .delete("/:id/skills/:skillId", async (c) => {
@@ -255,6 +269,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       })
       .returning();
     if (!session) throw new Error("failed to create practice session");
+    await recordEvent("training.practice_logged", { userId: c.get("userId") });
     return c.json({ session }, 201);
   })
   .delete("/:id/skills/:skillId/sessions/:sessionId", async (c) => {
@@ -302,6 +317,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .values({ dogId: dog.id, skillId, position: (maxPos ?? -1) + 1 })
       .returning();
     if (!row) throw new Error("failed to add focus skill");
+    await recordEvent("focus.week_set", { userId: c.get("userId") });
     return c.json({ focus: row }, 201);
   })
   .delete("/:id/focus/:skillId", async (c) => {
@@ -352,6 +368,10 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         ownerResponse: b.kind === "moment" ? (b.ownerResponse ?? null) : null,
       })
       .returning();
+    await recordEvent("journal.entry_created", {
+      userId: c.get("userId"),
+      props: { kind: b.kind },
+    });
     return c.json({ entry }, 201);
   })
   .put("/:id/journal/:entryId", zValidator("json", journalEntryUpdateSchema), async (c) => {
@@ -449,6 +469,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       token = randomBytes(18).toString("base64url");
       await db.update(briefs).set({ shareToken: token }).where(eq(briefs.id, brief.id));
     }
+    await recordEvent("brief.shared", { userId: c.get("userId") });
     return c.json({ token, url: `${env.FRONTEND_URL}/b/${token}` });
   })
   .delete("/:id/brief/share", async (c) => {
@@ -506,6 +527,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .insert(briefs)
       .values({ dogId: dog.id, summary, version: (last?.version ?? 0) + 1, status: "draft" })
       .returning();
+    await recordEvent("brief.generated", { userId: c.get("userId"), props: { window } });
     return c.json({ brief }, 201);
   })
   .put("/:id/brief", async (c) => {
@@ -523,6 +545,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .set({ status: "finalized" })
       .where(eq(briefs.id, latest.id))
       .returning();
+    await recordEvent("brief.finalized", { userId: c.get("userId") });
     return c.json({ brief });
   })
   .post("/:id/brief/send", zValidator("json", briefSendSchema), async (c) => {
@@ -590,6 +613,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       })
       .returning();
 
+    await recordEvent("brief.emailed", { userId });
     return c.json({ send }, 201);
   })
   .get("/:id/brief/sends", async (c) => {
