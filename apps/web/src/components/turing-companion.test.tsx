@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TuringCompanion } from "./turing-companion";
 import { TURING_TIP_BUCKETS, TURING_TIP_KEYS } from "./turing-tips";
+import * as turingCtx from "./turing/turing-context";
 import { TuringProvider } from "./turing/turing-context";
 
 const EN_TIPS = Object.values(TURING_TIP_BUCKETS)
@@ -107,5 +108,23 @@ describe("TuringCompanion", () => {
       (k) => en.turing[k.split(".")[1] as keyof typeof en.turing],
     );
     expect(trainingTips).toContain(screen.getByRole("status").textContent);
+  });
+
+  it("shows the celebration message in the bubble", () => {
+    vi.spyOn(turingCtx, "useTuring").mockReturnValue({
+      eventPose: "celebrate",
+      eventMessage: "turing.celebrateBrief",
+      asleep: false,
+      celebrate: vi.fn(),
+    });
+    render(
+      <LocaleProvider>
+        <MemoryRouter>
+          <TuringCompanion />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+    expect(screen.getByRole("status").textContent).toBe(en.turing.celebrateBrief);
+    vi.restoreAllMocks();
   });
 });
