@@ -11,6 +11,7 @@ const metrics = {
   active: [{ day: "2026-05-01", count: 1 }],
   eventVolume: [{ name: "page.viewed", count: 12 }],
   funnel: [{ step: "signup", users: 7 }],
+  topPages: [{ path: "/my", count: 5 }],
 };
 
 function renderDashboard(client?: QueryClient) {
