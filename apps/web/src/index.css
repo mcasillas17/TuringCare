@@ -160,6 +160,109 @@
   }
 }
 
+/* Turing companion mascot (see components/turing-companion.tsx). The component
+   already gates these on prefers-reduced-motion in JS; the keyframes live here
+   because they are referenced by name from inline styles. */
+@keyframes tg-breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.025);
+  }
+}
+@keyframes tg-breathe-slow {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.016);
+  }
+}
+@keyframes tg-wag {
+  0%,
+  100% {
+    transform: rotate(-16deg);
+  }
+  50% {
+    transform: rotate(20deg);
+  }
+}
+@keyframes tg-sway {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(9deg);
+  }
+}
+@keyframes tg-bubble {
+  0% {
+    opacity: 0;
+    transform: translateX(-40%) translateY(8px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-40%) translateY(0) scale(1);
+  }
+}
+.turing-companion {
+  position: fixed;
+  right: 14px;
+  bottom: 8px;
+  width: clamp(96px, 24vw, 138px);
+  height: clamp(112px, 28vw, 160px);
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  /* Below the sonner Toaster and the mobile nav drawer overlay (z-40) so they
+     stay interactive / can cover him. */
+  z-index: 30;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  filter: drop-shadow(0 10px 14px rgba(28, 25, 22, 0.22));
+}
+.turing-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: 84%;
+  transform: translateX(-40%);
+  width: max-content;
+  max-width: min(184px, 60vw);
+  padding: 9px 13px;
+  border: 2px solid #1c1916;
+  border-radius: 15px;
+  background: #ffffff;
+  color: #28323d;
+  font: 600 13px / 1.35 "Hanken Grotesk", sans-serif;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 8px 20px rgba(28, 25, 22, 0.22);
+  pointer-events: none;
+  z-index: 6;
+  animation: tg-bubble 0.26s cubic-bezier(0.34, 1.4, 0.5, 1) both;
+}
+.turing-bubble-tip {
+  position: absolute;
+  left: 32%;
+  bottom: -7px;
+  width: 13px;
+  height: 13px;
+  background: #ffffff;
+  border-right: 2px solid #1c1916;
+  border-bottom: 2px solid #1c1916;
+  transform: rotate(45deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .turing-bubble {
+    animation: none;
+  }
+}
+
 @media print {
   body * {
     visibility: hidden;
