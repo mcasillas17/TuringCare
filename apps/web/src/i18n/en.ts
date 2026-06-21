@@ -638,6 +638,16 @@ export const en = {
     tip4: "Reward what you want repeated.",
     tip5: "Calm earns the treat, not the jump.",
     tip6: "End every session on a win.",
+    trainingTip1: "Break each skill into tiny, winnable steps.",
+    trainingTip2: "Practice one cue per short session.",
+    trainingTip3: "Raise difficulty only after three easy wins.",
+    journalTip1: "Note what happened right before the behavior.",
+    journalTip2: "Log the small wins, not just the rough days.",
+    journalTip3: "A quick note now beats a perfect one later.",
+    weekTip1: "Pick two focus skills and rep them daily.",
+    weekTip2: "A few minutes a day adds up fast.",
+    briefTip1: "Share the brief so your trainer sees the pattern.",
+    briefTip2: "Finalize before you send — it locks the version.",
   },
 } as const;
 
