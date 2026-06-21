@@ -889,3 +889,27 @@ re-scoring already-merged code.
 - Spec/plan: `docs/superpowers/specs/2026-06-21-turing-living-mascot-design.md`,
   `docs/superpowers/plans/2026-06-21-turing-living-mascot.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-living-mascot`.
+
+## 2026-06-21 — Turing companion: connect all the events — phase 2c — SHIPPED
+2b's reactions only fired on a few events (and the common ones use the subtle wag), so Turing
+felt inert. This connects him to the rest of the meaningful events, reserving the **hop** for
+milestones. Built via subagent-driven development (3 TDD tasks + 1 refactor, implementer +
+task-review each, whole-branch opus review → ready to merge). New triggers:
+- **Add a dog** (`useCreateDog`) → hop · **Add a goal** (`useAddGoal`) → wag.
+- **Skill confidence raised** (`useUpdateSkillConfidence`) → wag, or **hop at mastery**
+  (`variables.body.confidence >= CONFIDENCE_MAX`).
+- **Onboarding checklist completed** (`checklist.tsx`) → hop **once**, on a real false→true
+  transition (undefined-baseline ref avoids firing on mount for already-onboarded users).
+- **Weekly focus completed** (`dog-week.tsx`) → hop **once** for the **current** week, via a
+  pure `shouldCelebrateWeek` helper (moved to `lib/week.ts`) + a transition ref that
+  re-baselines on week change (paging to a complete past week is silent).
+Existing 2b triggers unchanged (journal/session/template → wag; brief finalize·share·send →
+hop). The two derived-state triggers use an effect-watching-query-state (the completion comes
+from refetched/cumulative data, not a single event) — react-doctor's "event logic in an
+effect" warning was reviewed and is a **false positive**; documented with inline comments.
+Gates: web **244/244** tests, tsc 0, **root** `biome check .` clean, build OK.
+- **Out of scope:** concern-adds / profile / settings / deletes (low signal); a celebratory
+  text bubble on hop (good follow-up). Optional: an error-path test per new mutation trigger.
+- Spec/plan: `docs/superpowers/specs/2026-06-21-turing-connect-events-design.md`,
+  `docs/superpowers/plans/2026-06-21-turing-connect-events.md`
+- Commits: this branch. Shipped as a PR from `worktree-feat+turing-connect-events`.
