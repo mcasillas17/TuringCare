@@ -113,7 +113,7 @@ export function QuickMomentComposer({
             <button
               key={n}
               type="button"
-              aria-label={`Intensity ${n}`}
+              aria-label={t("journal.intensityValue", { n })}
               aria-pressed={intensity === n}
               onClick={() => setIntensity(intensity === n ? null : n)}
               className={`h-10 w-10 rounded-full border text-sm font-semibold ${

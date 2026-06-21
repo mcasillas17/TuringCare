@@ -309,6 +309,7 @@ export const es = {
     intensityHint: "opcional, un toque",
     howWasToday: "¿Cómo fue hoy?",
     checkInNotePlaceholder: "Una línea sobre hoy…",
+    intensityValue: "Intensidad {n}",
     addDetails: "Agregar detalles",
     editDetails: "Editar detalles",
     detailsEmpty: "Aún no hay detalles extra.",

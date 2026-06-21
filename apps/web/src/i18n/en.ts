@@ -306,6 +306,7 @@ export const en = {
     intensityHint: "optional, one tap",
     howWasToday: "How did today go?",
     checkInNotePlaceholder: "A line about today…",
+    intensityValue: "Intensity {n}",
     addDetails: "Add details",
     editDetails: "Edit details",
     detailsEmpty: "No extra details yet.",
