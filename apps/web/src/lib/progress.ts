@@ -15,6 +15,8 @@ export type ProgressSession = {
   createdAt: string;
 };
 
+export type ProgressMilestone = { level: number; reachedAt: string };
+
 export type ProgressSkill = {
   id: string;
   name: string;
@@ -26,6 +28,7 @@ export type ProgressSkill = {
   lastSessionAt: string | null;
   lastNote: string | null;
   sessions: ProgressSession[];
+  milestones: ProgressMilestone[];
 };
 
 export type ProgressGoal = {
@@ -98,6 +101,24 @@ export function useUpdateSkillConfidence(dogId: string) {
       return (await res.json()).skill;
     },
     onSuccess: () => invalidateProgress(qc, dogId),
+  });
+}
+
+export function useSetSkillLevel(dogId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { skillId: string; level: number }) => {
+      const res = await dogSkills[":skillId"].level.$put({
+        param: { id: dogId, skillId: args.skillId },
+        json: { level: args.level },
+      });
+      if (!res.ok) throw new Error("set_level_failed");
+      return (await res.json()).skill;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["progress", dogId] });
+      qc.invalidateQueries({ queryKey: ["overview"] });
+    },
   });
 }
 
