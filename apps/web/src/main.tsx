@@ -1,10 +1,10 @@
 import { DirectoryLayout } from "@/components/DirectoryLayout";
+import { AdminShell } from "@/components/admin-shell/AdminShell";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { DogLayout } from "@/components/dog-layout";
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/i18n";
 import { PageViewTracker } from "@/lib/track";
-import { AdminShell } from "@/components/admin-shell/AdminShell";
 import { RequireAdmin } from "@/routes/admin/require-admin";
 import { Brief } from "@/routes/brief";
 import { CourseDetail } from "@/routes/course-detail";
