@@ -89,7 +89,7 @@ describe("JournalView", () => {
 
   it("opens the Log a moment sheet from the tile", () => {
     setup();
-    fireEvent.click(screen.getByRole("button", { name: /log a moment/i }));
+    fireEvent.click(screen.getByRole("button", { name: /log moment/i }));
     expect(screen.getByRole("dialog", { name: /log/i })).toBeInTheDocument();
   });
 });

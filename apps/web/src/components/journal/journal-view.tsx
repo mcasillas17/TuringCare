@@ -126,7 +126,6 @@ export function JournalView({ scopedDogId, composeMode }: JournalViewProps) {
       <div className="grid gap-3 sm:grid-cols-2">
         <button
           type="button"
-          aria-label={t("dogHub.logAMoment")}
           onClick={() => setSheet("moment")}
           className="flex items-center gap-3 rounded-xl bg-slate p-4 text-left font-semibold text-cream"
         >
