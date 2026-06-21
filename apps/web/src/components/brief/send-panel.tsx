@@ -83,13 +83,9 @@ export function SendPanel({
           {errors.message && <span className="text-xs text-red-600">{errors.message.message}</span>}
         </label>
 
-        {briefStatus === "finalized" ? (
-          <Button type="submit" disabled={isSubmitting} className="bg-slate text-cream">
-            {isSubmitting ? t("briefSend.sending") : t("briefSend.send")}
-          </Button>
-        ) : (
-          <p className="text-sm text-slate-soft">ⓘ {t("briefSend.needsFinalized")}</p>
-        )}
+        <Button type="submit" disabled={isSubmitting} className="w-full bg-slate text-cream">
+          {isSubmitting ? t("briefSend.sending") : t("briefSend.send")}
+        </Button>
       </form>
 
       {sends && sends.length > 0 && (
