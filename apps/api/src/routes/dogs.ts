@@ -37,6 +37,7 @@ import { renderBriefEmail } from "../email/brief-email";
 import { sendEmail } from "../email/send-email";
 import { env } from "../env";
 import { composeBrief } from "../lib/brief";
+import { loadDogsOverview } from "../lib/dogs-overview";
 import { loadFocusWeek } from "../lib/focus";
 import { loadProgress } from "../lib/progress";
 import { setSkillLevel } from "../lib/skill-level";
@@ -73,6 +74,9 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .returning();
     await recordEvent("dog.created", { userId: c.get("userId") });
     return c.json({ dog }, 201);
+  })
+  .get("/overview", async (c) => {
+    return c.json({ dogs: await loadDogsOverview(c.get("userId")) });
   })
   .get("/:id", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
