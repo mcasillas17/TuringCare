@@ -5,6 +5,7 @@ import type {
   SkillConfidenceInput,
   TrainingSkillInput,
 } from "@turingcare/shared";
+import { CONFIDENCE_MAX } from "@turingcare/shared";
 import { api } from "./api";
 
 export type ProgressSession = {
@@ -88,6 +89,7 @@ export function useUpdateSkill(dogId: string) {
 
 export function useUpdateSkillConfidence(dogId: string) {
   const qc = useQueryClient();
+  const { celebrate } = useTuring();
   return useMutation({
     mutationFn: async (args: { skillId: string; body: SkillConfidenceInput }) => {
       const res = await dogSkills[":skillId"].confidence.$patch({
@@ -97,7 +99,10 @@ export function useUpdateSkillConfidence(dogId: string) {
       if (!res.ok) throw new Error("update_failed");
       return (await res.json()).skill;
     },
-    onSuccess: () => invalidateProgress(qc, dogId),
+    onSuccess: (_data, variables) => {
+      celebrate(variables.body.confidence >= CONFIDENCE_MAX);
+      invalidateProgress(qc, dogId);
+    },
   });
 }
 
