@@ -1,3 +1,4 @@
+import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   JournalEntryCreateInput,
@@ -56,6 +57,7 @@ export function useDogJournal(dogId: string) {
 
 export function useAddEntry(dogId: string) {
   const qc = useQueryClient();
+  const { celebrate } = useTuring();
   return useMutation({
     mutationFn: async (body: JournalEntryCreateInput) => {
       const res = await dogJournal.$post({ param: { id: dogId }, json: body });
@@ -63,6 +65,7 @@ export function useAddEntry(dogId: string) {
       return (await res.json()).entry as JournalEntry;
     },
     onSuccess: () => {
+      celebrate(false);
       qc.invalidateQueries({ queryKey: ["journal"] });
       qc.invalidateQueries({ queryKey: ["dog-journal", dogId] });
       qc.invalidateQueries({ queryKey: ["overview"] });

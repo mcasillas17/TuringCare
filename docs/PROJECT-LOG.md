@@ -856,3 +856,36 @@ easing).
   / brief finalize-send (owner-selected), idle→`sleep`, and contextual per-route tips.
 - Spec: `docs/superpowers/specs/2026-06-21-turing-polish-i18n-design.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-polish-i18n`.
+
+## 2026-06-21 — Turing companion: living, event-driven mascot — phase 2b — SHIPPED
+Turing now reacts to wins, dozes when idle, and gives page-relevant tips — the 8-pose
+handoff variant wired into the app. Built via subagent-driven development (6 TDD tasks,
+implementer + task-review each, plus a whole-branch opus review → ready to merge, no
+Critical/Important findings). Pieces:
+- **`turing-poses.ts`** — pure `posePresentation(pose, reduceMotion)` mapping the 6 poses
+  (idle/tilt/bark/wag/celebrate/sleep) to CSS anim/transform values (handoff-exact); loops
+  collapse to `none` under reduced motion.
+- **Artwork** (`turing-art.tsx`/`turing-head.tsx` + 3 new keyframes `tg-hop`/`tg-wag-fast`/
+  `tg-zzz`) — pose-driven; sleep = closed-eye lines + floating "zzz", celebrate = hop on a
+  new outer wrapper + fast wag + tongue. SVG geometry copied verbatim.
+- **`TuringProvider`/`useTuring()`** (`components/turing/turing-context.tsx`) — mirrors
+  `LocaleProvider`; exposes `celebrate(big?)`, tracks 60s idle→`asleep` (suppressed under
+  reduced motion), no-op fallback when unmounted. Mounted once in `AppShell` wrapping both
+  content and the mascot (single shared instance).
+- **`TuringCompanion`** — effective-pose precedence `eventPose > bark > tilt > sleep > idle`;
+  route-contextual tips via `tipContextForPath` + `TURING_TIP_BUCKETS`.
+- **Contextual tips** — general (the original 6) + training/journal/week/brief buckets, en+es
+  (parity test enforced).
+- **Event wiring** — tiered `celebrate`: small **wag** on journal save / training session /
+  template apply; big **hop** on brief finalize / share / send. Added first in each existing
+  `onSuccess`, never awaited, can't break invalidation.
+Gates: web **234/234** tests, tsc 0, Biome clean, build OK. react-doctor: the few findings on
+new files are the intentional handoff animation values (head-tilt bounce, 2.4s zzz) + a
+false-positive effect-deps flag (deps verified correct); the score is the stale-base artifact
+re-scoring already-merged code.
+- **Out of scope (future):** `sit`/`lie` poses, sound, a disable-Turing setting. Minor
+  follow-ups noted in review: throttle the provider pointermove handler; symmetrize es/en
+  tip derivation in the companion test.
+- Spec/plan: `docs/superpowers/specs/2026-06-21-turing-living-mascot-design.md`,
+  `docs/superpowers/plans/2026-06-21-turing-living-mascot.md`
+- Commits: this branch. Shipped as a PR from `worktree-feat+turing-living-mascot`.
