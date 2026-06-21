@@ -51,7 +51,7 @@ function pathOf(input: RequestInfo | URL) {
 }
 
 describe("Journal", () => {
-  it("renders the quick composer and note-first entries", async () => {
+  it("renders note-first entries and opens the moment composer from the tile", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -64,14 +64,16 @@ describe("Journal", () => {
       }),
     );
 
+    const user = userEvent.setup();
     renderJournal();
 
     expect(await screen.findByText("Barked at delivery truck")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Log moment" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /log moment/i }));
+    expect(screen.getByRole("dialog", { name: /log moment/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Quick note")).toBeInTheDocument();
   });
 
-  it("saves a note-only moment and shows the follow-up prompt", async () => {
+  it("saves a note-only moment from the moment sheet", async () => {
     const calls: Array<{ path: string; method?: string; body?: unknown }> = [];
     vi.stubGlobal(
       "fetch",
@@ -96,7 +98,8 @@ describe("Journal", () => {
     const user = userEvent.setup();
     renderJournal();
 
-    await user.type(await screen.findByLabelText("Quick note"), "Barked at delivery truck");
+    await user.click(await screen.findByRole("button", { name: /log moment/i }));
+    await user.type(screen.getByLabelText("Quick note"), "Barked at delivery truck");
     await user.click(screen.getByRole("button", { name: "Save moment" }));
 
     await waitFor(() =>
@@ -110,7 +113,6 @@ describe("Journal", () => {
         ),
       ).toBe(true),
     );
-    expect(await screen.findByText("What happened right before?")).toBeInTheDocument();
   });
 
   it("saves a daily check-in", async () => {
@@ -141,10 +143,10 @@ describe("Journal", () => {
     const user = userEvent.setup();
     renderJournal();
 
-    await user.click(await screen.findByRole("button", { name: "Daily check-in" }));
+    await user.click(await screen.findByRole("button", { name: /daily check-in/i }));
     expect(screen.getByRole("group", { name: "Trend" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Better" }));
-    await user.type(screen.getByLabelText("Quick note"), "Settled faster today");
+    await user.type(screen.getByPlaceholderText(/a line about today/i), "Settled faster today");
     await user.click(screen.getByRole("button", { name: "Save check-in" }));
 
     await waitFor(() =>
