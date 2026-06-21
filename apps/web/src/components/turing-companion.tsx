@@ -1,6 +1,8 @@
+import { useI18n } from "@/i18n/index";
+import type { MessageKey } from "@/i18n/types";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { TuringArt } from "./turing-art";
-import { TURING_TIPS } from "./turing-tips";
+import { TURING_TIP_KEYS } from "./turing-tips";
 
 /**
  * Turing — the TuringCare companion mascot.
@@ -29,13 +31,14 @@ function prefersReducedMotion(): boolean {
 type Mode = "idle" | "tilt" | "bark";
 
 export function TuringCompanion() {
+  const { t } = useI18n();
   const rootRef = useRef<HTMLButtonElement>(null);
   const bubbleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const reduceMotion = prefersReducedMotion();
 
   const [mode, setMode] = useState<Mode>("idle");
-  const [bubble, setBubble] = useState("");
+  const [tipKey, setTipKey] = useState<MessageKey | null>(null);
   const [blink, setBlink] = useState(false);
   const [pupil, setPupil] = useState({ x: 0, y: 0 });
 
@@ -89,11 +92,12 @@ export function TuringCompanion() {
 
   const onClick = useCallback(() => {
     clearTimeout(bubbleTimer.current);
-    const tip = TURING_TIPS[Math.floor(Math.random() * TURING_TIPS.length)] ?? TURING_TIPS[0];
-    setBubble(tip);
+    const key =
+      TURING_TIP_KEYS[Math.floor(Math.random() * TURING_TIP_KEYS.length)] ?? "turing.tip1";
+    setTipKey(key);
     setMode("bark");
     bubbleTimer.current = setTimeout(() => {
-      setBubble("");
+      setTipKey(null);
       setMode("idle");
     }, BUBBLE_MS);
   }, []);
@@ -130,14 +134,14 @@ export function TuringCompanion() {
       ref={rootRef}
       type="button"
       className="turing-companion"
-      aria-label="Turing — tap for a training tip"
+      aria-label={t("turing.tipAria")}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
       onClick={onClick}
     >
-      {bubble && (
+      {tipKey && (
         <output className="turing-bubble">
-          {bubble}
+          {t(tipKey)}
           <span className="turing-bubble-tip" />
         </output>
       )}

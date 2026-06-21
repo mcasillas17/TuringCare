@@ -835,3 +835,24 @@ green: web tsc 0, lint 0 (Biome), web 196 passing, web build OK.
   week); i18n of the 6 English tips (currently hardcoded).
 - Spec: `docs/superpowers/specs/2026-06-20-turing-companion-mascot-design.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-companion-mascot`.
+
+## 2026-06-21 — Turing companion: polish (bubble-fit + Spanish) — phase 2a — SHIPPED
+Two fixes to the live phase-1 mascot. (1) **Bubble fits the window:** the tip bubble was
+centered on Turing and grew rightward, spilling off the right edge (he sits in the
+bottom-right corner). Re-anchored `.turing-bubble` to `right:0; left:auto` so it opens
+up-and-left, capped `max-width: min(184px, calc(100vw - 24px))`, moved the pointer tail to
+the right side, and dropped the now-wrong `translateX(-40%)` from the `tg-bubble` keyframe.
+(2) **Spanish:** the 6 tips + the button `aria-label` now live in the `turing` section of
+the en/es i18n catalogs (parity test enforces es↔en); `turing-tips.ts` became a list of
+catalog **keys** and `TuringCompanion` resolves them via `useI18n().t()` (storing the key,
+not the resolved string, so the bubble stays locale-correct). Full TDD — updated/added
+component tests (incl. an es-locale render asserting Spanish label + tip) and the existing
+i18n parity test covers the new keys. Gates: web tsc 0, Biome clean, **207 web tests**,
+build OK. react-doctor: my changed files add zero findings (the worktree `--diff` re-scores
+already-merged #46/#47 code; the lone turing finding is the phase-1 intentional bounce
+easing).
+- **Out of scope (phase 2b):** the 8-pose `state`-driven mascot + a `TuringProvider`/
+  `playPose()` trigger wired to app events — `celebrate` on journal save / training session
+  / brief finalize-send (owner-selected), idle→`sleep`, and contextual per-route tips.
+- Spec: `docs/superpowers/specs/2026-06-21-turing-polish-i18n-design.md`
+- Commits: this branch. Shipped as a PR from `worktree-feat+turing-polish-i18n`.

@@ -1,19 +1,29 @@
+import { en } from "@/i18n/en";
+import { es } from "@/i18n/es";
+import { LocaleProvider } from "@/i18n/index";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TuringCompanion } from "./turing-companion";
-import { TURING_TIPS } from "./turing-tips";
+import { TURING_TIP_KEYS } from "./turing-tips";
+
+const EN_TIPS = TURING_TIP_KEYS.map((k) => en.turing[k.split(".")[1] as keyof typeof en.turing]);
+const ES_TIPS = TURING_TIP_KEYS.map((k) => es.turing[k.split(".")[1] as keyof typeof es.turing]);
+
+function renderEs(ui: ReactElement) {
+  localStorage.setItem("tc-locale", "es");
+  return render(<LocaleProvider>{ui}</LocaleProvider>);
+}
 
 afterEach(() => {
   vi.useRealTimers();
+  localStorage.clear();
 });
 
 describe("TuringCompanion", () => {
   it("renders an accessible button labelled for the tip interaction", () => {
     render(<TuringCompanion />);
-    const button = screen.getByRole("button", {
-      name: /turing.*tip/i,
-    });
-    expect(button).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: en.turing.tipAria })).toBeInTheDocument();
   });
 
   it("does not show a tip bubble until interacted with", () => {
@@ -23,20 +33,26 @@ describe("TuringCompanion", () => {
 
   it("shows one of the training tips when clicked", () => {
     render(<TuringCompanion />);
-    fireEvent.click(screen.getByRole("button", { name: /turing.*tip/i }));
-    const bubble = screen.getByRole("status");
-    expect(TURING_TIPS).toContain(bubble.textContent);
+    fireEvent.click(screen.getByRole("button", { name: en.turing.tipAria }));
+    expect(EN_TIPS).toContain(screen.getByRole("status").textContent);
   });
 
   it("hides the tip again after the display timeout elapses", () => {
     vi.useFakeTimers();
     render(<TuringCompanion />);
-    fireEvent.click(screen.getByRole("button", { name: /turing.*tip/i }));
+    fireEvent.click(screen.getByRole("button", { name: en.turing.tipAria }));
     expect(screen.getByRole("status")).toBeInTheDocument();
     act(() => {
       vi.advanceTimersByTime(3600);
     });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("localizes the label and tips in Spanish", () => {
+    renderEs(<TuringCompanion />);
+    const button = screen.getByRole("button", { name: es.turing.tipAria });
+    fireEvent.click(button);
+    expect(ES_TIPS).toContain(screen.getByRole("status").textContent);
   });
 
   it("disables ambient animation when reduced motion is preferred", () => {
@@ -62,14 +78,14 @@ describe("TuringCompanion", () => {
     }
   });
 
-  it("exposes exactly the six approved training tips", () => {
-    expect(TURING_TIPS).toEqual([
-      "Catch him being good — then reward it.",
-      "Mark the moment, then treat.",
-      "Short sessions beat long ones.",
-      "Reward what you want repeated.",
-      "Calm earns the treat, not the jump.",
-      "End every session on a win.",
+  it("exposes exactly the six tip catalog keys", () => {
+    expect(TURING_TIP_KEYS).toEqual([
+      "turing.tip1",
+      "turing.tip2",
+      "turing.tip3",
+      "turing.tip4",
+      "turing.tip5",
+      "turing.tip6",
     ]);
   });
 });
