@@ -1,10 +1,8 @@
-import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { type CourseInput, courseAgeGroups, courseFormats } from "@turingcare/shared";
 import { type FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   type Course,
   useAdminCourses,
@@ -142,19 +140,10 @@ export function AdminCourses() {
   const pending = create.isPending || update.isPending;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">TuringCare · Courses</h1>
-        <div className="flex items-center gap-3">
-          <Link to="/admin" className="text-sm underline">
-            ← Back to dashboard
-          </Link>
-          <span aria-hidden="true" className="h-5 w-px bg-silver/70" />
-          <LanguageToggle />
-        </div>
-      </header>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <h1 className="text-2xl font-bold text-slate">Courses</h1>
 
-      <form onSubmit={onSubmit} className="space-y-4 rounded-lg border bg-card p-4">
+      <form onSubmit={onSubmit} className="space-y-4 rounded-lg border border-silver bg-white p-4">
         <h2 className="font-semibold">{editingId ? "Edit course" : "Add a course"}</h2>
         <div className="grid gap-4 md:grid-cols-2">
           <Field
@@ -257,45 +246,63 @@ export function AdminCourses() {
           ) : null}
         </div>
         {create.isError || update.isError ? (
-          <p className="text-sm text-destructive">Could not save the course. Try again.</p>
+          <p className="text-sm text-red-600">Could not save the course. Try again.</p>
         ) : null}
       </form>
 
       <section className="space-y-2">
-        <h2 className="font-semibold">Courses</h2>
+        <h2 className="font-semibold text-slate">Courses</h2>
         {list.isPending ? (
-          <p>Loading courses…</p>
+          <p className="text-slate-soft">Loading courses…</p>
         ) : list.isError ? (
-          <p className="text-destructive">Failed to load courses.</p>
+          <p className="text-red-600">Failed to load courses.</p>
         ) : list.data && list.data.length > 0 ? (
-          <ul className="divide-y rounded-lg border bg-card">
-            {list.data.map((c) => (
-              <li key={c.id} className="flex items-center justify-between p-3">
-                <div>
-                  <p className="font-medium">{c.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {[c.organizationName, `${c.city}, ${c.state}`].filter(Boolean).join(" · ")}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => startEdit(c)}>
-                    Edit
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={remove.isPending}
-                    onClick={() => remove.mutate(c.id)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-x-auto rounded-lg border border-silver bg-white">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-silver text-left text-xs uppercase tracking-wide text-slate-soft">
+                  <th className="px-3 py-2 font-medium">Name</th>
+                  <th className="px-3 py-2 font-medium">Organization</th>
+                  <th className="px-3 py-2 font-medium">Location</th>
+                  <th className="px-3 py-2 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.data.map((c) => (
+                  <tr key={c.id} className="border-b border-silver/60 last:border-0">
+                    <td className="px-3 py-2 font-medium text-slate">{c.name}</td>
+                    <td className="px-3 py-2 text-slate-soft">{c.organizationName}</td>
+                    <td className="px-3 py-2 text-slate-soft">
+                      {c.city}, {c.state}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => startEdit(c)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={remove.isPending}
+                          onClick={() => remove.mutate(c.id)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
-          <p className="text-muted-foreground">No courses yet. Add one above.</p>
+          <p className="text-slate-soft">No courses yet. Add one above.</p>
         )}
       </section>
     </div>

@@ -12,9 +12,9 @@ export function KpiStrip({ kpis }: { kpis: Metrics["kpis"] }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
       {CARDS.map((c) => (
-        <div key={c.key} className="rounded-lg border bg-card p-4">
-          <div className="text-xs uppercase text-muted-foreground">{c.label}</div>
-          <div className="mt-1 text-2xl font-bold">
+        <div key={c.key} className="rounded-lg border border-silver bg-white p-4">
+          <div className="text-xs uppercase text-slate-soft">{c.label}</div>
+          <div className="mt-1 text-2xl font-bold text-slate">
             {c.format ? c.format(kpis[c.key]) : kpis[c.key]}
           </div>
         </div>
