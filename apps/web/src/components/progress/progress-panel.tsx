@@ -3,6 +3,7 @@ import { SessionForm } from "@/components/progress/session-form";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import {
+  LEVEL_KEYS,
   type ProgressGoal,
   type ProgressSession,
   type ProgressSkill,
@@ -19,13 +20,6 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
-const genericKeys = [
-  "progress.level1",
-  "progress.level2",
-  "progress.level3",
-  "progress.level4",
-  "progress.level5",
-] as const;
 
 function sessionCountLabel(skill: ProgressSkill, t: ReturnType<typeof useI18n>["t"]) {
   const label = skill.sessionCount === 1 ? t("progress.session") : t("progress.sessions");
@@ -144,7 +138,10 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   const [mode, setMode] = useState<"view" | "editing" | "logging">("view");
   const updateSkill = useUpdateSkill(dogId);
   const deleteSkill = useDeleteSkill(dogId);
-  const displaySkill = (updateSkill.data as ProgressSkill | undefined) ?? skill;
+  // Always use the prop (a full ProgressSkill from the progress query). The skill
+  // PUT mutation returns a bare DB row without milestones/sessions, so reading it
+  // here would crash the stepper/session list after a name edit.
+  const displaySkill = skill;
   const lastSession = formatDate(displaySkill.lastSessionAt);
   const { data: catalog } = useTrainingCatalog();
   const catalogSkill = findCatalogSkill(catalog, displaySkill.catalogSkillKey);
@@ -183,7 +180,7 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
             <span className="mt-1 inline-block rounded-full bg-cream px-2 py-0.5 text-xs font-semibold text-slate-soft">
               {t("progress.levelBadge", {
                 n: displaySkill.confidence,
-                label: t(genericKeys[displaySkill.confidence - 1] ?? "progress.level1"),
+                label: t(LEVEL_KEYS[displaySkill.confidence - 1] ?? "progress.level1"),
               })}
             </span>
           </div>

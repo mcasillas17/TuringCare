@@ -3,6 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PracticeSessionInput, TrainingSkillInput } from "@turingcare/shared";
 import { api } from "./api";
 
+/** i18n keys for the generic confidence labels, indexed by level-1 (used as fallback milestone labels). */
+export const LEVEL_KEYS = [
+  "progress.level1",
+  "progress.level2",
+  "progress.level3",
+  "progress.level4",
+  "progress.level5",
+] as const;
+
 export type ProgressSession = {
   id: string;
   occurredAt: string;
