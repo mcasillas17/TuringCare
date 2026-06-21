@@ -45,11 +45,17 @@ export function Login() {
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-1">
               <Label htmlFor="email">{t("auth.email")}</Label>
-              <Input id="email" name="email" type="email" required />
+              <Input id="email" name="email" type="email" autoComplete="email" required />
             </div>
             <div className="space-y-1">
               <Label htmlFor="password">{t("auth.password")}</Label>
-              <Input id="password" name="password" type="password" required />
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+              />
             </div>
             <div className="text-right -mt-2">
               <Link className="underline text-sm text-muted-foreground" to="/forgot-password">
