@@ -5,7 +5,24 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DogWeek } from "./dog-week";
+import { DogWeek, shouldCelebrateWeek } from "./dog-week";
+
+describe("shouldCelebrateWeek", () => {
+  it("fires only on an incomplete→complete transition for the current week", () => {
+    expect(shouldCelebrateWeek({ prev: false, complete: true, isCurrentWeek: true })).toBe(true);
+  });
+  it("does not fire on baseline (prev undefined)", () => {
+    expect(shouldCelebrateWeek({ prev: undefined, complete: true, isCurrentWeek: true })).toBe(
+      false,
+    );
+  });
+  it("does not fire for a past week", () => {
+    expect(shouldCelebrateWeek({ prev: false, complete: true, isCurrentWeek: false })).toBe(false);
+  });
+  it("does not fire when staying complete", () => {
+    expect(shouldCelebrateWeek({ prev: true, complete: true, isCurrentWeek: true })).toBe(false);
+  });
+});
 
 vi.mock("@/lib/weekly-focus", async () => {
   const actual = await vi.importActual<typeof import("@/lib/weekly-focus")>("@/lib/weekly-focus");
