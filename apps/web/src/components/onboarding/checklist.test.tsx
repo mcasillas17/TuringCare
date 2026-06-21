@@ -10,6 +10,12 @@ vi.mock("@/lib/onboarding", () => ({
   useOnboardingStatus: vi.fn(),
 }));
 
+// celebrate spy — used in the Turing hop tests below
+const celebrate = vi.fn();
+vi.mock("@/components/turing/turing-context", () => ({
+  useTuring: () => ({ celebrate, eventPose: null, asleep: false }),
+}));
+
 const fresh = {
   hasDog: false,
   momentsCount: 0,
@@ -102,5 +108,58 @@ describe("OnboardingChecklist", () => {
     setStatus(null);
     const { container } = renderChecklist();
     expect(container.firstChild).toBeNull();
+  });
+});
+
+describe("OnboardingChecklist — Turing hop", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+  });
+
+  it("hops once when onboarding flips incomplete→complete", () => {
+    setStatus({ ...complete, hasSentBrief: false });
+    const { rerender } = renderChecklist();
+    expect(celebrate).not.toHaveBeenCalled();
+
+    setStatus(complete);
+    rerender(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <LocaleProvider>
+          <MemoryRouter>
+            <OnboardingChecklist />
+          </MemoryRouter>
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+    expect(celebrate).toHaveBeenCalledTimes(1);
+    expect(celebrate).toHaveBeenCalledWith(true);
+  });
+
+  it("does not hop when already complete on mount", () => {
+    setStatus(complete);
+    renderChecklist();
+    expect(celebrate).not.toHaveBeenCalled();
+  });
+
+  it("does not re-hop when complete stays complete across a rerender", () => {
+    setStatus(complete);
+    const { rerender } = renderChecklist();
+    celebrate.mockClear();
+
+    rerender(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <LocaleProvider>
+          <MemoryRouter>
+            <OnboardingChecklist />
+          </MemoryRouter>
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+    expect(celebrate).not.toHaveBeenCalled();
   });
 });
