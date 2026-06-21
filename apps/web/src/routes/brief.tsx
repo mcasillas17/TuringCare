@@ -4,7 +4,7 @@ import { useI18n } from "@/i18n";
 import { useBrief, useGenerateBrief } from "@/lib/brief";
 import { useDogs } from "@/lib/dogs";
 import { type BriefWindow, briefWindows } from "@turingcare/shared";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -21,6 +21,14 @@ export function Brief() {
   const dog = dogs?.find((d) => d.id === dogId);
   const gen = useGenerateBrief(dogId);
   const [shareOpen, setShareOpen] = useState(false);
+
+  // On the global brief route, default to the first dog so the screen lands on
+  // the brief itself instead of an empty dog picker.
+  useEffect(() => {
+    if (routeId || picked) return;
+    const first = dogs?.[0];
+    if (first) setPicked(first.id);
+  }, [routeId, picked, dogs]);
 
   const windowLabels: Record<BriefWindow, string> = {
     "7d": t("brief.window7d"),
@@ -60,7 +68,7 @@ export function Brief() {
     <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-2xl font-bold text-slate">{t("brief.title")}</h1>
 
-      {!routeId && (
+      {!routeId && (dogs?.length ?? 0) > 1 && (
         <label className="block">
           <span className="text-sm font-medium text-slate">{t("brief.pickDog")}</span>
           <select
