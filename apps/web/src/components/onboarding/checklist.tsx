@@ -64,7 +64,7 @@ export function OnboardingChecklist() {
   // false->true transition (the undefined baseline avoids firing on mount).
   useEffect(() => {
     if (!status) return;
-    if (prevAllDone.current === false && allDone) celebrate(true);
+    if (prevAllDone.current === false && allDone) celebrate(true, "turing.celebrateOnboarding");
     prevAllDone.current = allDone;
   }, [status, allDone, celebrate]);
 

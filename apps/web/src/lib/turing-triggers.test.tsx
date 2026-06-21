@@ -79,7 +79,7 @@ describe("turing celebrate triggers", () => {
     await act(async () => {
       await result.current.mutateAsync({ recipientEmail: "vet@example.com" } as never);
     });
-    await waitFor(() => expect(celebrate).toHaveBeenCalledWith(true));
+    await waitFor(() => expect(celebrate).toHaveBeenCalledWith(true, "turing.celebrateBrief"));
   });
 
   it("add dog fires a big hop", async () => {
@@ -87,7 +87,7 @@ describe("turing celebrate triggers", () => {
     await act(async () => {
       await result.current.mutateAsync({ name: "Rex" } as never);
     });
-    await waitFor(() => expect(celebrate).toHaveBeenCalledWith(true));
+    await waitFor(() => expect(celebrate).toHaveBeenCalledWith(true, "turing.celebrateDog"));
   });
 
   it("add goal fires a small wag", async () => {
@@ -103,7 +103,7 @@ describe("turing celebrate triggers", () => {
     await act(async () => {
       await result.current.mutateAsync({ skillId: "s1", level: 5 });
     });
-    await waitFor(() => expect(celebrate).toHaveBeenCalledWith(true));
+    await waitFor(() => expect(celebrate).toHaveBeenCalledWith(true, "turing.celebrateMastery"));
     celebrate.mockClear();
     await act(async () => {
       await result.current.mutateAsync({ skillId: "s1", level: 3 });

@@ -27,7 +27,7 @@ export function useSendBrief(dogId: string) {
       return (await res.json()).send;
     },
     onSuccess: () => {
-      celebrate(true);
+      celebrate(true, "turing.celebrateBrief");
       qc.invalidateQueries({ queryKey: ["brief-sends", dogId] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
     },

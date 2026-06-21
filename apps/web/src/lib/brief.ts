@@ -42,7 +42,7 @@ export function useFinalizeBrief(dogId: string) {
       return (await res.json()).brief;
     },
     onSuccess: () => {
-      celebrate(true);
+      celebrate(true, "turing.celebrateBrief");
       qc.invalidateQueries({ queryKey: ["brief", dogId] });
       qc.invalidateQueries({ queryKey: ["overview"] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
@@ -59,7 +59,7 @@ export function useShareBrief(dogId: string) {
       return (await res.json()) as { token: string; url: string };
     },
     onSuccess: () => {
-      celebrate(true);
+      celebrate(true, "turing.celebrateBrief");
       qc.invalidateQueries({ queryKey: ["brief", dogId] });
     },
   });

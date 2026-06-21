@@ -57,7 +57,7 @@ export function DogWeek() {
     if (
       shouldCelebrateWeek({ prev: prevComplete.current, complete: weekComplete, isCurrentWeek })
     ) {
-      celebrate(true);
+      celebrate(true, "turing.celebrateWeek");
     }
     prevComplete.current = weekComplete;
   }, [focusSkills, weekKey, weekComplete, isCurrentWeek, celebrate]);
