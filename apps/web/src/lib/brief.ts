@@ -2,6 +2,7 @@ import type { BriefWindow } from "@turingcare/shared";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { useTuring } from "@/components/turing/turing-context";
 import { api } from "./api";
 
 const b = api.api.dogs[":id"].brief;
@@ -33,6 +34,7 @@ export function useGenerateBrief(dogId: string) {
 }
 export function useFinalizeBrief(dogId: string) {
   const qc = useQueryClient();
+  const { celebrate } = useTuring();
   return useMutation({
     mutationFn: async () => {
       const res = await b.$put({ param: { id: dogId } });
@@ -40,6 +42,7 @@ export function useFinalizeBrief(dogId: string) {
       return (await res.json()).brief;
     },
     onSuccess: () => {
+      celebrate(true);
       qc.invalidateQueries({ queryKey: ["brief", dogId] });
       qc.invalidateQueries({ queryKey: ["overview"] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
@@ -48,13 +51,17 @@ export function useFinalizeBrief(dogId: string) {
 }
 export function useShareBrief(dogId: string) {
   const qc = useQueryClient();
+  const { celebrate } = useTuring();
   return useMutation({
     mutationFn: async () => {
       const res = await b.share.$post({ param: { id: dogId } });
       if (!res.ok) throw new Error("share_failed");
       return (await res.json()) as { token: string; url: string };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["brief", dogId] }),
+    onSuccess: () => {
+      celebrate(true);
+      qc.invalidateQueries({ queryKey: ["brief", dogId] });
+    },
   });
 }
 export function useRevokeShare(dogId: string) {

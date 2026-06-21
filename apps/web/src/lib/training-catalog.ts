@@ -1,3 +1,4 @@
+import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CatalogSkill, CatalogTemplate } from "@turingcare/shared";
 import { api } from "./api";
@@ -38,6 +39,7 @@ export function findCatalogSkill(
 
 export function useApplyTemplate(dogId: string) {
   const qc = useQueryClient();
+  const { celebrate } = useTuring();
   return useMutation({
     mutationFn: async (templateKey: string) => {
       // POST /:id/goals/from-template parses its body manually (no zValidator)
@@ -57,6 +59,7 @@ export function useApplyTemplate(dogId: string) {
       return await res.json();
     },
     onSuccess: () => {
+      celebrate(false);
       qc.invalidateQueries({ queryKey: ["dogs", dogId] });
       qc.invalidateQueries({ queryKey: ["progress", dogId] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });

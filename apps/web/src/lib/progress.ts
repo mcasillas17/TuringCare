@@ -1,3 +1,4 @@
+import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   PracticeSessionInput,
@@ -114,6 +115,7 @@ export function useDeleteSkill(dogId: string) {
 
 export function useLogSession(dogId: string) {
   const qc = useQueryClient();
+  const { celebrate } = useTuring();
   return useMutation({
     mutationFn: async (args: { skillId: string; body: PracticeSessionInput }) => {
       const res = await dogSkills[":skillId"].sessions.$post({
@@ -123,7 +125,10 @@ export function useLogSession(dogId: string) {
       if (!res.ok) throw new Error("save_failed");
       return (await res.json()).session;
     },
-    onSuccess: () => invalidateProgress(qc, dogId),
+    onSuccess: () => {
+      celebrate(false);
+      invalidateProgress(qc, dogId);
+    },
   });
 }
 

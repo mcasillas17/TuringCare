@@ -1,3 +1,4 @@
+import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BriefSendInput } from "@turingcare/shared";
 import { api } from "./api";
@@ -18,6 +19,7 @@ export function useBriefSends(dogId: string) {
 
 export function useSendBrief(dogId: string) {
   const qc = useQueryClient();
+  const { celebrate } = useTuring();
   return useMutation({
     mutationFn: async (body: BriefSendInput) => {
       const res = await b.send.$post({ param: { id: dogId }, json: body });
@@ -25,6 +27,7 @@ export function useSendBrief(dogId: string) {
       return (await res.json()).send;
     },
     onSuccess: () => {
+      celebrate(true);
       qc.invalidateQueries({ queryKey: ["brief-sends", dogId] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
     },
