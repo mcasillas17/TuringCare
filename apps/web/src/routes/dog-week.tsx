@@ -45,6 +45,9 @@ export function DogWeek() {
   const weekKey = dayKey(monday);
   const prevComplete = useRef<boolean | undefined>(undefined);
   const prevWeekKey = useRef(weekKey);
+  // Derived-state trigger: week completion comes from the refetched focus query
+  // (not the log-session mutation response), so we watch it here and hop once on
+  // a real false->true transition for the current week (refs keep it idempotent).
   useEffect(() => {
     if (focusSkills === undefined) return; // not loaded yet
     if (prevWeekKey.current !== weekKey) {

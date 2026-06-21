@@ -59,6 +59,9 @@ export function OnboardingChecklist() {
   const allDone = !!status && items.every((item) => item.done);
 
   const prevAllDone = useRef<boolean | undefined>(undefined);
+  // Derived-state trigger: onboarding completion spans multiple mutations across
+  // pages, so we watch the query-derived `allDone` and hop once on a real
+  // false->true transition (the undefined baseline avoids firing on mount).
   useEffect(() => {
     if (!status) return;
     if (prevAllDone.current === false && allDone) celebrate(true);
