@@ -1,4 +1,4 @@
-import { ConfidenceChip } from "@/components/progress/confidence-chip";
+import { MilestoneStepper } from "@/components/progress/milestone-stepper";
 import { SessionForm } from "@/components/progress/session-form";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
@@ -19,6 +19,13 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
+const genericKeys = [
+  "progress.level1",
+  "progress.level2",
+  "progress.level3",
+  "progress.level4",
+  "progress.level5",
+] as const;
 
 function sessionCountLabel(skill: ProgressSkill, t: ReturnType<typeof useI18n>["t"]) {
   const label = skill.sessionCount === 1 ? t("progress.session") : t("progress.sessions");
@@ -141,8 +148,6 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   const lastSession = formatDate(displaySkill.lastSessionAt);
   const { data: catalog } = useTrainingCatalog();
   const catalogSkill = findCatalogSkill(catalog, displaySkill.catalogSkillKey);
-  const currentLevel =
-    catalogSkill?.levels.find((l) => l.level === displaySkill.confidence) ?? null;
 
   return (
     <li className="space-y-3 rounded border border-silver p-3">
@@ -175,22 +180,19 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
               {sessionCountLabel(displaySkill, t)}
               {lastSession ? ` · ${t("progress.lastSession")}: ${lastSession}` : ""}
             </div>
-            {currentLevel && (
-              <p className="mt-1 text-xs italic text-copper">
-                {t("training.levelPrefix")} {currentLevel.level} — {currentLevel.description}
-              </p>
-            )}
+            <span className="mt-1 inline-block rounded-full bg-cream px-2 py-0.5 text-xs font-semibold text-slate-soft">
+              {t("progress.levelBadge", {
+                n: displaySkill.confidence,
+                label: t(genericKeys[displaySkill.confidence - 1] ?? "progress.level1"),
+              })}
+            </span>
           </div>
         </div>
-        <ConfidenceChip
-          dogId={dogId}
-          skillId={displaySkill.id}
-          confidence={displaySkill.confidence}
-        />
       </div>
 
       {expanded && (
         <>
+          <MilestoneStepper dogId={dogId} skill={displaySkill} />
           {displaySkill.lastNote && (
             <p className="text-sm text-slate-soft">{displaySkill.lastNote}</p>
           )}
@@ -292,16 +294,6 @@ function SkillFields({
       <label className="block">
         <span className="text-sm">{t("progress.skillName")}</span>
         <input className={input} placeholder={t("progress.skillNamePh")} {...register("name")} />
-      </label>
-      <label className="block">
-        <span className="text-sm">{t("progress.confidence")}</span>
-        <select className={input} {...register("confidence", { valueAsNumber: true })}>
-          <option value={1}>{t("progress.level1")}</option>
-          <option value={2}>{t("progress.level2")}</option>
-          <option value={3}>{t("progress.level3")}</option>
-          <option value={4}>{t("progress.level4")}</option>
-          <option value={5}>{t("progress.level5")}</option>
-        </select>
       </label>
     </>
   );
