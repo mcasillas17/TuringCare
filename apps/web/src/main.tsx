@@ -1,4 +1,5 @@
 import { DirectoryLayout } from "@/components/DirectoryLayout";
+import { AdminShell } from "@/components/admin-shell/AdminShell";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { DogLayout } from "@/components/dog-layout";
 import { Toaster } from "@/components/ui/sonner";
@@ -32,7 +33,7 @@ import { Terms } from "@/routes/terms";
 import { TrainerDetail } from "@/routes/trainer-detail";
 import { Trainers } from "@/routes/trainers";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { StrictMode, Suspense, lazy } from "react";
+import { StrictMode, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "./index.css";
@@ -113,32 +114,14 @@ createRoot(document.getElementById("root") as HTMLElement).render(
               path="/admin"
               element={
                 <RequireAdmin>
-                  <Suspense fallback={<p className="p-8">Loading…</p>}>
-                    <AdminDashboard />
-                  </Suspense>
+                  <AdminShell />
                 </RequireAdmin>
               }
-            />
-            <Route
-              path="/admin/trainers"
-              element={
-                <RequireAdmin>
-                  <Suspense fallback={<p className="p-8">Loading…</p>}>
-                    <AdminTrainers />
-                  </Suspense>
-                </RequireAdmin>
-              }
-            />
-            <Route
-              path="/admin/courses"
-              element={
-                <RequireAdmin>
-                  <Suspense fallback={<p className="p-8">Loading…</p>}>
-                    <AdminCourses />
-                  </Suspense>
-                </RequireAdmin>
-              }
-            />
+            >
+              <Route index element={<AdminDashboard />} />
+              <Route path="trainers" element={<AdminTrainers />} />
+              <Route path="courses" element={<AdminCourses />} />
+            </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -75,7 +75,37 @@ it("submitting the form calls the create endpoint", async () => {
   expect(call.json.name).toBe("New Trainer");
 });
 
-it("renders the language chip in the header", async () => {
-  setup();
-  expect(await screen.findByRole("button", { name: "Language" })).toBeInTheDocument();
+it("renders trainers as a table", async () => {
+  listTrainers.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      trainers: [
+        {
+          id: "t1",
+          name: "Jane Rivera",
+          businessName: "Pawsitive K9",
+          city: "Seattle",
+          state: "WA",
+          methodologyTags: [],
+          certifications: [],
+          specialties: [],
+          website: null,
+          email: null,
+          phone: null,
+        },
+      ],
+    }),
+  });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <AdminTrainers />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByRole("table")).toBeInTheDocument();
+  expect(screen.getByRole("columnheader", { name: /organization/i })).toBeInTheDocument();
+  expect(screen.getByRole("cell", { name: "Jane Rivera" })).toBeInTheDocument();
+  expect(screen.getByRole("cell", { name: "Pawsitive K9" })).toBeInTheDocument();
 });
