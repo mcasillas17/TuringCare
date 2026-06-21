@@ -122,7 +122,7 @@ export function DailyCheckInComposer({
             type="datetime-local"
             aria-label={t("journal.changeTime")}
             className="rounded border border-silver bg-white px-2 py-1 text-sm text-slate"
-            value={customTime ?? toLocalInputValue(new Date())}
+            value={customTime ?? ""}
             onChange={(e) => setCustomTime(e.target.value)}
           />
         ) : (

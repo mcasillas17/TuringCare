@@ -17,11 +17,15 @@ type SheetProps = {
 export function Sheet({ open, title, onClose, children, closeLabel = "Close" }: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  // Keep the latest onClose without re-subscribing the listener every render
+  // (parents pass an inline onClose, which would otherwise change identity).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
@@ -31,7 +35,7 @@ export function Sheet({ open, title, onClose, children, closeLabel = "Close" }: 
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
