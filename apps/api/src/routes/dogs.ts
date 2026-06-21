@@ -12,6 +12,7 @@ import {
   journalEntryUpdateSchema,
   practiceSessionSchema,
   skillConfidenceSchema,
+  skillLevelSchema,
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
@@ -39,6 +40,7 @@ import { env } from "../env";
 import { composeBrief } from "../lib/brief";
 import { loadFocusWeek } from "../lib/focus";
 import { loadProgress } from "../lib/progress";
+import { setSkillLevel } from "../lib/skill-level";
 import { type Vars, requireUser } from "../middleware/require-user";
 
 const invalidJournalField = (path: "occurredAt" | "trend", message: string) =>
@@ -233,6 +235,14 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       return c.json({ skill: updated });
     },
   )
+  .put("/:id/skills/:skillId/level", zValidator("json", skillLevelSchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+    if (!skill) return c.json({ error: "not_found" } as const, 404);
+    const updated = await setSkillLevel(skill.id, c.req.valid("json").level);
+    return c.json({ skill: updated });
+  })
   .delete("/:id/skills/:skillId", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
