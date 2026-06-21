@@ -1,13 +1,22 @@
+import { useTuring } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
 import { FocusPicker } from "@/components/week/focus-picker";
 import { WeekGrid } from "@/components/week/week-grid";
 import { WeekNav } from "@/components/week/week-nav";
 import { useI18n } from "@/i18n";
 import { useDeleteSession, useLogSession } from "@/lib/progress";
-import { addDays, dayKey, mondayOf, sameWeek, weekBounds, weekDays } from "@/lib/week";
+import {
+  addDays,
+  dayKey,
+  mondayOf,
+  sameWeek,
+  shouldCelebrateWeek,
+  weekBounds,
+  weekDays,
+} from "@/lib/week";
 import { focusKey, useFocusWeek } from "@/lib/weekly-focus";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 export function DogWeek() {
@@ -29,6 +38,29 @@ export function DogWeek() {
 
   const sessionCount = skills.reduce((sum, s) => sum + s.sessions.length, 0);
   const doneCount = skills.filter((s) => s.sessions.length > 0).length;
+
+  const { celebrate } = useTuring();
+  const isCurrentWeek = sameWeek(monday, today);
+  const weekComplete = skills.length > 0 && doneCount === skills.length;
+  const weekKey = dayKey(monday);
+  const prevComplete = useRef<boolean | undefined>(undefined);
+  const prevWeekKey = useRef(weekKey);
+  // Derived-state trigger: week completion comes from the refetched focus query
+  // (not the log-session mutation response), so we watch it here and hop once on
+  // a real false->true transition for the current week (refs keep it idempotent).
+  useEffect(() => {
+    if (focusSkills === undefined) return; // not loaded yet
+    if (prevWeekKey.current !== weekKey) {
+      prevWeekKey.current = weekKey;
+      prevComplete.current = undefined; // new week → re-baseline, no fire
+    }
+    if (
+      shouldCelebrateWeek({ prev: prevComplete.current, complete: weekComplete, isCurrentWeek })
+    ) {
+      celebrate(true);
+    }
+    prevComplete.current = weekComplete;
+  }, [focusSkills, weekKey, weekComplete, isCurrentWeek, celebrate]);
 
   const refreshFocus = () => qc.invalidateQueries({ queryKey: focusKey(id) });
 

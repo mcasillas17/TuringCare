@@ -1,6 +1,7 @@
 import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PracticeSessionInput, TrainingSkillInput } from "@turingcare/shared";
+import { CONFIDENCE_MAX } from "@turingcare/shared";
 import { api } from "./api";
 
 /** i18n keys for the generic confidence labels, indexed by level-1 (used as fallback milestone labels). */
@@ -96,6 +97,7 @@ export function useUpdateSkill(dogId: string) {
 
 export function useSetSkillLevel(dogId: string) {
   const qc = useQueryClient();
+  const { celebrate } = useTuring();
   return useMutation({
     mutationFn: async (args: { skillId: string; level: number }) => {
       const res = await dogSkills[":skillId"].level.$put({
@@ -105,8 +107,10 @@ export function useSetSkillLevel(dogId: string) {
       if (!res.ok) throw new Error("set_level_failed");
       return (await res.json()).skill;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["progress", dogId] });
+    onSuccess: (_data, variables) => {
+      // Mascot celebrates when a skill reaches the top level.
+      celebrate(variables.level >= CONFIDENCE_MAX);
+      invalidateProgress(qc, dogId);
       qc.invalidateQueries({ queryKey: ["overview"] });
     },
   });

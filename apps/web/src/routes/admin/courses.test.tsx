@@ -77,3 +77,41 @@ it("submitting the form calls the create endpoint", async () => {
   const call = createCourse.mock.calls[0]?.[0] as { json: { name: string } };
   expect(call.json.name).toBe("New Course");
 });
+
+it("renders courses as a table", async () => {
+  listCourses.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      courses: [
+        {
+          id: "c1",
+          organizationName: "Seattle Humane",
+          city: "Bellevue",
+          state: "WA",
+          name: "Puppy Start Right",
+          description: null,
+          format: "group",
+          ageGroup: "any",
+          ageRange: null,
+          durationWeeks: null,
+          sessionMinutes: null,
+          prerequisites: null,
+          skillsTaught: [],
+          isOnline: false,
+          coursePageUrl: null,
+        },
+      ],
+    }),
+  });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>
+        <AdminCourses />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByRole("table")).toBeInTheDocument();
+  expect(screen.getByRole("cell", { name: "Puppy Start Right" })).toBeInTheDocument();
+  expect(screen.getByRole("cell", { name: "Seattle Humane" })).toBeInTheDocument();
+});

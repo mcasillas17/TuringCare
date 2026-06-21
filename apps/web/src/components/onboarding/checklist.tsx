@@ -1,7 +1,8 @@
+import { useTuring } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { type OnboardingStatus, useOnboardingStatus } from "@/lib/onboarding";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 const DISMISSED_KEY = "turingcare.onboarding.celebrationDismissed";
@@ -51,12 +52,23 @@ function buildItems(status: OnboardingStatus): { key: ItemKey; done: boolean; hr
 export function OnboardingChecklist() {
   const { t } = useI18n();
   const { data: status } = useOnboardingStatus();
+  const { celebrate } = useTuring();
   const [dismissed, setDismissed] = useState<boolean>(readDismissed);
 
-  if (!status) return null;
+  const items = status ? buildItems(status) : [];
+  const allDone = !!status && items.every((item) => item.done);
 
-  const items = buildItems(status);
-  const allDone = items.every((item) => item.done);
+  const prevAllDone = useRef<boolean | undefined>(undefined);
+  // Derived-state trigger: onboarding completion spans multiple mutations across
+  // pages, so we watch the query-derived `allDone` and hop once on a real
+  // false->true transition (the undefined baseline avoids firing on mount).
+  useEffect(() => {
+    if (!status) return;
+    if (prevAllDone.current === false && allDone) celebrate(true);
+    prevAllDone.current = allDone;
+  }, [status, allDone, celebrate]);
+
+  if (!status) return null;
 
   if (allDone && dismissed) return null;
 

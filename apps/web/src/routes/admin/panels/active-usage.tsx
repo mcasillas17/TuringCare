@@ -14,9 +14,9 @@ export function ActiveUsage({
   kpis,
 }: { active: Metrics["active"]; kpis: Metrics["kpis"] }) {
   return (
-    <section className="rounded-lg border bg-card p-4">
-      <h2 className="mb-1 text-sm font-semibold uppercase text-muted-foreground">Active users</h2>
-      <p className="mb-3 text-xs text-muted-foreground">
+    <section className="rounded-lg border border-silver bg-white p-4">
+      <h2 className="mb-1 text-sm font-semibold uppercase text-slate-soft">Active users</h2>
+      <p className="mb-3 text-xs text-slate-soft">
         DAU {kpis.dau} · WAU {kpis.wau} · MAU {kpis.mau}
       </p>
       <ResponsiveContainer width="100%" height={220}>
@@ -25,7 +25,7 @@ export function ActiveUsage({
           <XAxis dataKey="day" fontSize={11} />
           <YAxis allowDecimals={false} fontSize={11} />
           <Tooltip />
-          <Line type="monotone" dataKey="count" stroke="#b45309" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="count" stroke="#c8893b" strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </section>

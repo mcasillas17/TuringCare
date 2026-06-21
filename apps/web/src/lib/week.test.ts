@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { addDays, dayKey, mondayOf, sameWeek, weekBounds, weekDays } from "./week";
+import {
+  addDays,
+  dayKey,
+  mondayOf,
+  sameWeek,
+  shouldCelebrateWeek,
+  weekBounds,
+  weekDays,
+} from "./week";
 
 describe("week helpers", () => {
   it("mondayOf returns the Monday of that local week", () => {
@@ -37,5 +45,22 @@ describe("week helpers", () => {
   it("sameWeek compares by Monday", () => {
     expect(sameWeek(new Date(2026, 5, 1), new Date(2026, 5, 7))).toBe(true);
     expect(sameWeek(new Date(2026, 5, 1), new Date(2026, 5, 8))).toBe(false);
+  });
+});
+
+describe("shouldCelebrateWeek", () => {
+  it("fires only on an incomplete→complete transition for the current week", () => {
+    expect(shouldCelebrateWeek({ prev: false, complete: true, isCurrentWeek: true })).toBe(true);
+  });
+  it("does not fire on baseline (prev undefined)", () => {
+    expect(shouldCelebrateWeek({ prev: undefined, complete: true, isCurrentWeek: true })).toBe(
+      false,
+    );
+  });
+  it("does not fire for a past week", () => {
+    expect(shouldCelebrateWeek({ prev: false, complete: true, isCurrentWeek: false })).toBe(false);
+  });
+  it("does not fire when staying complete", () => {
+    expect(shouldCelebrateWeek({ prev: true, complete: true, isCurrentWeek: true })).toBe(false);
   });
 });
