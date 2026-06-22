@@ -366,12 +366,10 @@ export const es = {
     dogRequired: "Elige un perro antes de guardar.",
   },
   progress: {
-    title: "Progreso de entrenamiento",
-    empty: "Aún no hay objetivos — agrega uno en la sección Objetivos.",
+    empty: "Aún no hay objetivos — agrega uno con “＋ Agregar objetivo” arriba.",
     addSkill: "Agregar habilidad",
     skillName: "Nombre de habilidad",
     skillNamePh: "ej. Tolerar el timbre",
-    confidence: "Confianza",
     level1: "Aún no",
     level2: "Aprendiendo",
     level3: "A veces",

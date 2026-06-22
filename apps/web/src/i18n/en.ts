@@ -363,12 +363,10 @@ export const en = {
     dogRequired: "Choose a dog before saving.",
   },
   progress: {
-    title: "Training progress",
-    empty: "No training goals yet — add one in the Goals section above.",
+    empty: "No training goals yet — add one with “＋ Add goal” above.",
     addSkill: "Add skill",
     skillName: "Skill name",
     skillNamePh: "e.g. Door-knock threshold",
-    confidence: "Confidence",
     level1: "Not yet",
     level2: "Learning",
     level3: "Sometimes",
