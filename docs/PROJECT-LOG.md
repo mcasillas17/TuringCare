@@ -972,3 +972,23 @@ handoff easing) — none new.
 - Spec/plan: `docs/superpowers/specs/2026-06-21-turing-celebration-bubbles-design.md`,
   `docs/superpowers/plans/2026-06-21-turing-celebration-bubbles.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-celebration-bubbles`.
+
+## 2026-06-21 — Turing companion: "Quiet Turing" hide setting — phase 2e — SHIPPED
+Turing was a persistent animated element with no off-switch — a real gap for users who find a
+mascot distracting. Added a **Settings show/hide toggle**. Built via subagent-driven
+development (2 TDD tasks, each task-reviewed, whole-branch review → ready to merge). Changes:
+- **`TuringProvider`** gains `hidden` + `setHidden`, persisted per-device in localStorage
+  (`tc-turing-hidden`, default shown). When hidden, the idle/activity listeners are skipped.
+- **`TuringCompanion`** returns `null` when hidden (after all hooks) and short-circuits its
+  ambient effects.
+- **Settings** has a new "Companion" section with an accessible checkbox (checked = shown),
+  driving the live mascot through the shared provider; en/es copy (parity-enforced).
+- Mutation hooks still call `celebrate()` when hidden — harmless no-op.
+Gates: web **261/261** tests, tsc 0, **root** `biome check .` clean, build OK. react-doctor:
+no new findings on changed files (pre-existing/adjudicated only).
+- **Per-device, not account-synced** (localStorage), matching the app's other client prefs.
+- **Future ideas (unbuilt):** streaks + first-of-day greeting, state-aware tips, ambient
+  micro-animations, empathetic reactions, centralizing triggers into a reaction registry.
+- Spec/plan: `docs/superpowers/specs/2026-06-21-turing-quiet-setting-design.md`,
+  `docs/superpowers/plans/2026-06-21-turing-quiet-setting.md`
+- Commits: this branch. Shipped as a PR from `worktree-feat+turing-quiet-setting`.
