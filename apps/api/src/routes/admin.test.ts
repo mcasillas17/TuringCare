@@ -34,6 +34,8 @@ describe("/api/admin", () => {
     expect(body).toHaveProperty("active");
     expect(body).toHaveProperty("eventVolume");
     expect(body).toHaveProperty("topPages");
+    expect(body).toHaveProperty("eventsByDay");
+    expect(Array.isArray((body as { eventsByDay: unknown[] }).eventsByDay)).toBe(true);
     expect(Array.isArray((body as { topPages: unknown[] }).topPages)).toBe(true);
     expect(body).toHaveProperty("funnel");
     expect(typeof (body as { kpis: { totalUsers: number } }).kpis.totalUsers).toBe("number");
