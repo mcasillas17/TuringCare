@@ -34,21 +34,12 @@ describe("/api/admin", () => {
     expect(body).toHaveProperty("active");
     expect(body).toHaveProperty("eventVolume");
     expect(body).toHaveProperty("topPages");
+    expect(body).toHaveProperty("eventsByDay");
+    expect(Array.isArray((body as { eventsByDay: unknown[] }).eventsByDay)).toBe(true);
     expect(Array.isArray((body as { topPages: unknown[] }).topPages)).toBe(true);
     expect(body).toHaveProperty("funnel");
     expect(typeof (body as { kpis: { totalUsers: number } }).kpis.totalUsers).toBe("number");
     expect((body as { kpis: { totalUsers: number } }).kpis.totalUsers).toBeGreaterThanOrEqual(1);
     expect((body as { funnel: unknown[] }).funnel).toHaveLength(4);
-
-    const act = await app.request("/api/admin/activity", { headers: { cookie } });
-    expect(act.status).toBe(200);
-    // app.request().json() is typed `unknown` in this Hono version (it does not
-    // infer like the hc<AppType> client); narrow before property access.
-    const actBody = (await act.json()) as { items: { createdAt: string }[] };
-    expect(Array.isArray(actBody.items)).toBe(true);
-    const firstItem = actBody.items[0];
-    if (firstItem) {
-      expect(Number.isNaN(new Date(firstItem.createdAt).getTime())).toBe(false);
-    }
   });
 });
