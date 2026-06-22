@@ -1,4 +1,5 @@
 import { LocaleProvider } from "@/i18n";
+import * as dogsLib from "@/lib/dogs";
 import * as progressLib from "@/lib/progress";
 import type { ProgressGoal } from "@/lib/progress";
 import * as catalogLib from "@/lib/training-catalog";
@@ -23,6 +24,10 @@ vi.mock("@/lib/training-catalog", async () => {
   const actual =
     await vi.importActual<typeof import("@/lib/training-catalog")>("@/lib/training-catalog");
   return { ...actual, useTrainingCatalog: vi.fn() };
+});
+vi.mock("@/lib/dogs", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/dogs")>("@/lib/dogs");
+  return { ...actual, useRemoveGoal: vi.fn() };
 });
 
 const goals: ProgressGoal[] = [
@@ -72,6 +77,9 @@ function setup() {
   vi.mocked(catalogLib.useTrainingCatalog).mockReturnValue({ data: [] } as unknown as ReturnType<
     typeof catalogLib.useTrainingCatalog
   >);
+  vi.mocked(dogsLib.useRemoveGoal).mockReturnValue({ mutate: vi.fn() } as unknown as ReturnType<
+    typeof dogsLib.useRemoveGoal
+  >);
   render(
     <LocaleProvider>
       <QueryClientProvider client={new QueryClient()}>
@@ -87,5 +95,11 @@ describe("ProgressPanel", () => {
     expect(screen.getByText(/Level 3 — Sometimes/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
     expect(screen.getByText(/Milestones · level 3 of 5/i)).toBeInTheDocument();
+  });
+
+  it("drops the panel header and gives each goal a remove control", () => {
+    setup();
+    expect(screen.queryByText(/Confidence: 1-5/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /remove basic manners/i })).toBeInTheDocument();
   });
 });

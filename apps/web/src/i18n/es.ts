@@ -408,6 +408,8 @@ export const es = {
     levelStart: "inicio",
     currentTag: "actual",
     levelBadge: "Nivel {n} — {label}",
+    removeGoal: "Quitar {name}",
+    goalsAndSkills: "Objetivos y habilidades",
   },
   dogHub: {
     backToDashboard: "Todos los perros",

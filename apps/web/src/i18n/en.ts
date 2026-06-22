@@ -405,6 +405,8 @@ export const en = {
     levelStart: "start",
     currentTag: "current",
     levelBadge: "Level {n} — {label}",
+    removeGoal: "Remove {name}",
+    goalsAndSkills: "Goals & skills",
   },
   dogHub: {
     backToDashboard: "All dogs",

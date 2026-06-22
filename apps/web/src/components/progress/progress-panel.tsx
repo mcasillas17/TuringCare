@@ -2,6 +2,7 @@ import { MilestoneStepper } from "@/components/progress/milestone-stepper";
 import { SessionForm } from "@/components/progress/session-form";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useRemoveGoal } from "@/lib/dogs";
 import {
   LEVEL_KEYS,
   type ProgressGoal,
@@ -39,11 +40,7 @@ export function ProgressPanel({ dogId }: { dogId: string }) {
   const goals = data ?? [];
 
   return (
-    <section className="space-y-3 rounded border border-silver p-4">
-      <div>
-        <h2 className="font-semibold text-slate">{t("progress.title")}</h2>
-        <p className="text-sm text-slate-soft">{t("progress.confidence")}: 1-5</p>
-      </div>
+    <div className="space-y-3">
       {isLoading && <p className="text-slate-soft">{t("common.loading")}</p>}
       {isError && <p className="text-red-600">{t("progress.loadError")}</p>}
       {!isLoading && !isError && goals.length === 0 && (
@@ -52,22 +49,32 @@ export function ProgressPanel({ dogId }: { dogId: string }) {
       {!isLoading &&
         !isError &&
         goals.map((goal) => <GoalSection key={goal.id} dogId={dogId} goal={goal} />)}
-    </section>
+    </div>
   );
 }
 
 function GoalSection({ dogId, goal }: { dogId: string; goal: ProgressGoal }) {
   const { t } = useI18n();
+  const removeGoal = useRemoveGoal(dogId);
 
   return (
     <article className="space-y-3 rounded border border-silver bg-white p-3">
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="font-medium text-slate">{goal.goal}</h3>
-        {goal.avgConfidence != null && (
-          <span className="rounded bg-cream px-2 py-1 text-xs text-slate-soft">
-            {t("progress.avgConfidence")} {goal.avgConfidence.toFixed(1)}/5
-          </span>
-        )}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-medium text-slate">{goal.goal}</h3>
+          {goal.avgConfidence != null && (
+            <span className="rounded bg-cream px-2 py-1 text-xs text-slate-soft">
+              {t("progress.avgConfidence")} {goal.avgConfidence.toFixed(1)}/5
+            </span>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          aria-label={t("progress.removeGoal", { name: goal.goal })}
+          onClick={() => removeGoal.mutate(goal.id)}
+        >
+          {t("dogs.remove")}
+        </Button>
       </div>
       {goal.skills.length === 0 ? (
         <p className="text-sm text-slate-soft">{t("progress.noSessions")}</p>
