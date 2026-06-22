@@ -59,7 +59,7 @@ export function JournalView({ scopedDogId, composeMode }: JournalViewProps) {
   }, [dogList, filterDogId]);
 
   // Open the matching sheet when arrived at via a ?compose= deep link, even if
-  // this view was already mounted (e.g. the dog-hub "Log a moment" link).
+  // this view was already mounted (e.g. a "Log a moment" deep link).
   useEffect(() => {
     if (composeMode) setSheet(composeMode);
   }, [composeMode]);

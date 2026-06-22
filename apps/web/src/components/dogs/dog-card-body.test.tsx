@@ -4,17 +4,17 @@ import type { DogOverview } from "@/lib/dogs";
 import * as journalLib from "@/lib/journal";
 import * as progressLib from "@/lib/progress";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { DogCardBody } from "./dog-card-body";
 
 vi.mock("@/lib/dogs", async () => {
   const actual = await vi.importActual<typeof import("@/lib/dogs")>("@/lib/dogs");
-  return { ...actual, useDog: vi.fn() };
+  return { ...actual, useDog: vi.fn(), useAddConcern: vi.fn(), useRemoveConcern: vi.fn() };
 });
 vi.mock("@/lib/progress", () => ({ useProgress: vi.fn() }));
-vi.mock("@/lib/journal", () => ({ useJournal: vi.fn() }));
+vi.mock("@/lib/journal", () => ({ useJournal: vi.fn(), useAddEntry: vi.fn() }));
 
 const overview: DogOverview = {
   id: "d1",
@@ -32,53 +32,24 @@ const overview: DogOverview = {
 };
 
 function setup() {
-  vi.mocked(progressLib.useProgress).mockReturnValue({
-    data: [
-      {
-        id: "g1",
-        goal: "Basic Manners",
-        catalogGoalKey: null,
-        avgConfidence: 3,
-        skills: [
-          {
-            id: "s1",
-            name: "Sit",
-            confidence: 3,
-            position: 0,
-            catalogSkillKey: null,
-            sessionCount: 0,
-            firstSessionAt: null,
-            lastSessionAt: null,
-            lastNote: null,
-            sessions: [],
-            milestones: [],
-          },
-        ],
-      },
-    ],
-  } as unknown as ReturnType<typeof progressLib.useProgress>);
-  vi.mocked(journalLib.useJournal).mockReturnValue({
-    data: [
-      {
-        id: "e1",
-        dogId: "d1",
-        kind: "moment",
-        occurredAt: new Date().toISOString(),
-        note: "barked at bushes",
-        trend: null,
-        antecedent: null,
-        behavior: null,
-        consequence: null,
-        intensity: null,
-        location: null,
-        notes: null,
-        durationSeconds: null,
-        recoverySeconds: null,
-        peoplePresent: null,
-        ownerResponse: null,
-      },
-    ],
-  } as unknown as ReturnType<typeof journalLib.useJournal>);
+  vi.mocked(progressLib.useProgress).mockReturnValue({ data: [] } as unknown as ReturnType<
+    typeof progressLib.useProgress
+  >);
+  vi.mocked(journalLib.useJournal).mockReturnValue({ data: [] } as unknown as ReturnType<
+    typeof journalLib.useJournal
+  >);
+  vi.mocked(journalLib.useAddEntry).mockReturnValue({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof journalLib.useAddEntry>);
+  const removeConcern = { mutate: vi.fn() };
+  const addConcern = { mutateAsync: vi.fn().mockResolvedValue({}) };
+  vi.mocked(dogsLib.useRemoveConcern).mockReturnValue(
+    removeConcern as unknown as ReturnType<typeof dogsLib.useRemoveConcern>,
+  );
+  vi.mocked(dogsLib.useAddConcern).mockReturnValue(
+    addConcern as unknown as ReturnType<typeof dogsLib.useAddConcern>,
+  );
   vi.mocked(dogsLib.useDog).mockReturnValue({
     data: {
       dog: { id: "d1" },
@@ -94,18 +65,42 @@ function setup() {
       </QueryClientProvider>
     </LocaleProvider>,
   );
+  return { removeConcern, addConcern };
 }
 
 describe("DogCardBody", () => {
-  it("renders training goals with level badges, recent activity, and concerns", () => {
+  it("opens the Log moment dialog in place (no navigation)", () => {
     setup();
-    expect(screen.getByText("Basic Manners")).toBeInTheDocument();
-    expect(screen.getByText(/Sit/)).toBeInTheDocument();
-    expect(screen.getByText("barked at bushes")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /log moment/i }));
+    expect(screen.getByRole("dialog", { name: /log moment/i })).toBeInTheDocument();
+  });
+
+  it("opens the Daily check-in dialog in place", () => {
+    setup();
+    fireEvent.click(screen.getByRole("button", { name: /daily check-in/i }));
+    expect(screen.getByRole("dialog", { name: /daily check-in/i })).toBeInTheDocument();
+  });
+
+  it("lists concerns with a remove control and an add row", () => {
+    const { removeConcern } = setup();
     expect(screen.getByText("Leash reactivity")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open Training/i })).toHaveAttribute(
-      "href",
-      "/my/dogs/d1/training",
-    );
+    fireEvent.click(screen.getByRole("button", { name: /remove leash reactivity/i }));
+    expect(removeConcern.mutate).toHaveBeenCalledWith("c1");
+    expect(screen.getByPlaceholderText(/concern/i)).toBeInTheDocument();
+  });
+
+  it("adds a concern and clears the input", async () => {
+    const { addConcern } = setup();
+    const input = screen.getByPlaceholderText(/concern/i) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Counter surfing" } });
+    fireEvent.change(screen.getByRole("combobox", { name: /severity/i }), {
+      target: { value: "severe" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add concern/i }));
+    expect(addConcern.mutateAsync).toHaveBeenCalledWith({
+      concern: "Counter surfing",
+      severity: "severe",
+    });
+    await waitFor(() => expect(input.value).toBe(""));
   });
 });

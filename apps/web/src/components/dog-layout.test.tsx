@@ -36,10 +36,10 @@ function renderLayoutAt(path: string) {
         <MemoryRouter initialEntries={[path]}>
           <Routes>
             <Route path="/my/dogs/:id" element={<DogLayout />}>
-              <Route index element={<p>OVERVIEW</p>} />
               <Route path="journal" element={<p>JOURNAL</p>} />
               <Route path="training" element={<p>TRAINING</p>} />
               <Route path="brief" element={<p>BRIEF</p>} />
+              <Route path="week" element={<p>WEEK</p>} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -59,43 +59,49 @@ afterEach(() => {
 });
 
 describe("DogLayout", () => {
-  it("renders the dog banner + 4 tabs + child route content", () => {
-    renderLayoutAt("/my/dogs/d1");
+  it("renders the dog banner + tabs (no Overview) + child route content", () => {
+    renderLayoutAt("/my/dogs/d1/journal");
     expect(screen.getByText("Biscuit")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Overview/i })).toHaveAttribute("href", "/my/dogs/d1");
-    expect(screen.getByRole("link", { name: /Journal/i })).toHaveAttribute(
+    expect(screen.queryByRole("link", { name: /overview/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /journal/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /journal/i })).toHaveAttribute(
       "href",
       "/my/dogs/d1/journal",
     );
-    expect(screen.getByRole("link", { name: /Training/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /training/i })).toHaveAttribute(
       "href",
       "/my/dogs/d1/training",
     );
-    expect(screen.getByRole("link", { name: /Brief/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /brief/i })).toHaveAttribute(
       "href",
       "/my/dogs/d1/brief",
     );
-    expect(screen.getByText("OVERVIEW")).toBeInTheDocument();
+    expect(screen.getByText("JOURNAL")).toBeInTheDocument();
+  });
+
+  it("links 'All dogs' to the dogs list", () => {
+    renderLayoutAt("/my/dogs/d1/journal");
+    expect(screen.getByRole("link", { name: /all dogs/i })).toHaveAttribute("href", "/my/dogs");
   });
 
   it("highlights the active tab based on the URL", () => {
     renderLayoutAt("/my/dogs/d1/training");
-    const trainingLink = screen.getByRole("link", { name: /Training/i });
+    const trainingLink = screen.getByRole("link", { name: /training/i });
     expect(trainingLink).toHaveAttribute("aria-current", "page");
-    const overviewLink = screen.getByRole("link", { name: /Overview/i });
-    expect(overviewLink).not.toHaveAttribute("aria-current", "page");
+    const journalLink = screen.getByRole("link", { name: /journal/i });
+    expect(journalLink).not.toHaveAttribute("aria-current", "page");
   });
 
   it("renders a 'not found' message when useDog returns isError", () => {
     setDog(null, { isError: true });
-    renderLayoutAt("/my/dogs/missing");
+    renderLayoutAt("/my/dogs/missing/journal");
     expect(screen.getByText(/couldn't find this dog/i)).toBeInTheDocument();
-    expect(screen.queryByText("OVERVIEW")).not.toBeInTheDocument();
+    expect(screen.queryByText("JOURNAL")).not.toBeInTheDocument();
   });
 
   it("renders nothing visible while useDog is loading (no banner content)", () => {
     setDog(null, { isLoading: true });
-    renderLayoutAt("/my/dogs/d1");
+    renderLayoutAt("/my/dogs/d1/journal");
     expect(screen.queryByText("Biscuit")).not.toBeInTheDocument();
   });
 });

@@ -2,57 +2,62 @@ import { ProgressPanel } from "@/components/progress/progress-panel";
 import { TemplatePicker } from "@/components/training/template-picker";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { useAddGoal, useDog, useRemoveGoal } from "@/lib/dogs";
+import { useAddGoal } from "@/lib/dogs";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 
-const inputCls = "flex-1 rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
+const inputCls = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
 
 export function DogTraining() {
   const { t } = useI18n();
   const { id = "" } = useParams();
-  const { data: dogData } = useDog(id);
   const addGoal = useAddGoal(id);
-  const removeGoal = useRemoveGoal(id);
+  const [adding, setAdding] = useState(false);
   const [goal, setGoal] = useState("");
 
-  if (!dogData) return null;
-  const { goals } = dogData;
-
   return (
-    <div className="space-y-5">
-      <section className="space-y-2">
-        <h2 className="font-semibold text-slate">{t("dogs.goalsTitle")}</h2>
-        {goals.length === 0 && <p className="text-slate-soft">{t("dogs.goalsEmpty")}</p>}
-        <ul className="space-y-1">
-          {goals.map((g) => (
-            <li key={g.id} className="flex items-center justify-between">
-              <span>{g.goal}</span>
-              <Button variant="outline" onClick={() => removeGoal.mutate(g.id)}>
-                {t("dogs.remove")}
-              </Button>
-            </li>
-          ))}
-        </ul>
-        <div className="flex flex-wrap items-start gap-2">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-bold text-slate">{t("progress.goalsAndSkills")}</h2>
+        <div className="flex gap-2">
+          <TemplatePicker dogId={id} />
+          <Button onClick={() => setAdding((v) => !v)} className="bg-slate text-cream">
+            ＋ {t("dogs.addGoal")}
+          </Button>
+        </div>
+      </div>
+
+      {adding && (
+        <div className="flex flex-wrap items-start gap-2 rounded-xl border border-silver bg-cream p-3">
           <input
+            // biome-ignore lint/a11y/noAutofocus: focus the new-goal field when opened
+            autoFocus
             className={inputCls}
             placeholder={t("dogs.goalPlaceholder")}
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
           />
           <Button
-            disabled={!goal.trim()}
+            disabled={!goal.trim() || addGoal.isPending}
             onClick={async () => {
               await addGoal.mutateAsync({ goal });
               setGoal("");
+              setAdding(false);
             }}
           >
             {t("dogs.addGoal")}
           </Button>
-          <TemplatePicker dogId={id} />
+          <Button
+            variant="outline"
+            onClick={() => {
+              setGoal("");
+              setAdding(false);
+            }}
+          >
+            {t("dogs.cancel")}
+          </Button>
         </div>
-      </section>
+      )}
 
       <ProgressPanel dogId={id} />
     </div>

@@ -10,7 +10,6 @@ import { Brief } from "@/routes/brief";
 import { CourseDetail } from "@/routes/course-detail";
 import { Courses } from "@/routes/courses";
 import { DogForm } from "@/routes/dog-form";
-import { DogHub } from "@/routes/dog-hub";
 import { DogJournal } from "@/routes/dog-journal";
 import { DogTraining } from "@/routes/dog-training";
 import { DogWeek } from "@/routes/dog-week";
@@ -35,7 +34,7 @@ import { Trainers } from "@/routes/trainers";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, lazy } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./index.css";
 
 const AdminDashboard = lazy(() =>
@@ -98,7 +97,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
               <Route path="/my/dogs" element={<DogsList />} />
               <Route path="/my/dogs/new" element={<DogForm mode="create" />} />
               <Route path="/my/dogs/:id" element={<DogLayout />}>
-                <Route index element={<DogHub />} />
+                <Route index element={<Navigate to="journal" replace />} />
                 <Route path="journal" element={<DogJournal />} />
                 <Route path="training" element={<DogTraining />} />
                 <Route path="brief" element={<Brief />} />

@@ -19,7 +19,7 @@ export function DogLayout() {
       <div className="mx-auto max-w-2xl space-y-4 p-4">
         <p className="text-red-600">{t("dogHub.notFound")}</p>
         <Button asChild variant="outline">
-          <Link to="/my">{t("dogHub.backToDashboard")}</Link>
+          <Link to="/my/dogs">{t("dogHub.backToDashboard")}</Link>
         </Button>
       </div>
     );
@@ -39,7 +39,6 @@ export function DogLayout() {
   const subtitle = [dog.breed, sizeLabel[dog.size], sexLabel[dog.sex]].filter(Boolean).join(" · ");
 
   const tabs = [
-    { to: `/my/dogs/${dog.id}`, label: t("dogHub.tabOverview"), end: true },
     { to: `/my/dogs/${dog.id}/journal`, label: t("dogHub.tabJournal"), end: false },
     { to: `/my/dogs/${dog.id}/training`, label: t("dogHub.tabTraining"), end: false },
     { to: `/my/dogs/${dog.id}/brief`, label: t("dogHub.tabBrief"), end: false },
@@ -50,7 +49,7 @@ export function DogLayout() {
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="sticky top-0 z-10 -mx-4 space-y-3 border-b border-silver bg-cream/95 px-4 pt-3 pb-2 backdrop-blur">
         <div className="flex items-start justify-between gap-2">
-          <Link to="/my" className="text-xs text-slate-soft hover:underline">
+          <Link to="/my/dogs" className="text-xs text-slate-soft hover:underline">
             ← {t("dogHub.backToDashboard")}
           </Link>
         </div>
@@ -71,7 +70,7 @@ export function DogLayout() {
                     try {
                       await del.mutateAsync(dog.id);
                       toast.success(t("dogs.deleted"));
-                      navigate("/my");
+                      navigate("/my/dogs");
                     } catch {
                       toast.error(t("dogs.saveFailed"));
                     }
@@ -92,7 +91,7 @@ export function DogLayout() {
           </div>
         </div>
         {confirming && <p className="text-sm text-red-600">{t("dogHub.deleteConfirm")}</p>}
-        <nav className="-mb-px flex gap-1 overflow-x-auto" aria-label={t("dogHub.tabOverview")}>
+        <nav className="-mb-px flex gap-1 overflow-x-auto" aria-label={t("dogHub.backToDashboard")}>
           {tabs.map((tab) => (
             <NavLink
               key={tab.to}
