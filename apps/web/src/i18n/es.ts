@@ -587,6 +587,9 @@ export const es = {
   settings: {
     title: "Ajustes",
     language: "Idioma",
+    companion: "Compañero",
+    showTuring: "Mostrar a Turing",
+    showTuringHint: "Tu compañero de entrenamiento en la esquina",
     account: "Cuenta",
     signOut: "Cerrar sesión",
     editProfile: "Editar perfil",

@@ -583,6 +583,9 @@ export const en = {
   settings: {
     title: "Settings",
     language: "Language",
+    companion: "Companion",
+    showTuring: "Show Turing",
+    showTuringHint: "Your training companion in the corner",
     account: "Account",
     signOut: "Sign out",
     editProfile: "Edit profile",
