@@ -45,6 +45,7 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       firstJournal,
       firstBrief,
       topPages,
+      eventsByDay,
     ] = await Promise.all([
       db
         .execute<{ totalUsers: number }>(sql`select count(*)::int as "totalUsers" from "user"`)
@@ -111,6 +112,14 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
               group by 1 order by 2 desc limit 10`,
         )
         .then((r) => r.rows),
+      db
+        .execute<{ day: string; name: string; count: number }>(
+          sql`select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,
+                     name, count(*)::int as count
+              from events where created_at >= ${since}
+              group by 1, 2 order by 1`,
+        )
+        .then((r) => r.rows),
     ]);
 
     const funnel = [
@@ -137,20 +146,6 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       eventVolume,
       funnel,
       topPages,
+      eventsByDay,
     } as const);
-  })
-  .get("/activity", async (c) => {
-    const { rows: items } = await db.execute<{
-      id: string;
-      name: string;
-      userId: string | null;
-      createdAt: string;
-      props: unknown;
-    }>(
-      sql`select id, name, user_id as "userId",
-                 to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
-                 props
-          from events order by created_at desc limit 100`,
-    );
-    return c.json({ items } as const);
   });
