@@ -217,6 +217,7 @@ export const es = {
     vaccineComplete: "Completa",
     vaccineUnknown: "Desconocida",
     concernsTitle: "Conductas a trabajar",
+    removeConcern: "Quitar {name}",
     concernsEmpty: "Sin conductas registradas.",
     concernPlaceholder: "Describe una conducta",
     addConcern: "Agregar conducta",

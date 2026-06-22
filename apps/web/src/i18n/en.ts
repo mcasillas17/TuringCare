@@ -214,6 +214,7 @@ export const en = {
     vaccineComplete: "Complete",
     vaccineUnknown: "Unknown",
     concernsTitle: "Behavior concerns",
+    removeConcern: "Remove {name}",
     concernsEmpty: "No concerns logged.",
     concernPlaceholder: "Describe a concern",
     addConcern: "Add concern",

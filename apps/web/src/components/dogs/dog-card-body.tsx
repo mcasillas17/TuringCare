@@ -1,19 +1,39 @@
+import { DailyCheckInComposer } from "@/components/journal/daily-check-in-composer";
+import { QuickMomentComposer } from "@/components/journal/quick-moment-composer";
+import { Sheet } from "@/components/ui/sheet";
 import { useI18n } from "@/i18n";
-import { type DogOverview, useDog } from "@/lib/dogs";
+import { type DogOverview, useAddConcern, useDog, useRemoveConcern } from "@/lib/dogs";
 import { useJournal } from "@/lib/journal";
 import { useProgress } from "@/lib/progress";
 import { timeAgo } from "@/lib/time-ago";
 import { humanTime } from "@/lib/when";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "react-router-dom";
+
+type Sev = "mild" | "moderate" | "severe";
 
 export function DogCardBody({ dog }: { dog: DogOverview }) {
   const { t, locale } = useI18n();
+  const qc = useQueryClient();
   const { summary } = dog;
   const { data: goals } = useProgress(dog.id);
   const { data: entries } = useJournal(dog.id);
   const { data: detail } = useDog(dog.id);
+  const addConcern = useAddConcern(dog.id);
+  const removeConcern = useRemoveConcern(dog.id);
   const recent = (entries ?? []).slice(0, 2);
   const concerns = detail?.concerns ?? [];
+
+  const [sheet, setSheet] = useState<"moment" | "daily_checkin" | null>(null);
+  const [concern, setConcern] = useState("");
+  const [severity, setSeverity] = useState<Sev>("mild");
+
+  const closeSheet = () => {
+    setSheet(null);
+    qc.invalidateQueries({ queryKey: ["dogs-overview"] });
+  };
+  const dogList = [{ id: dog.id, name: dog.name }];
 
   return (
     <div className="space-y-4 border-t border-silver bg-cream/40 p-4">
@@ -96,32 +116,74 @@ export function DogCardBody({ dog }: { dog: DogOverview }) {
       </section>
 
       {/* concerns */}
-      {concerns.length > 0 && (
-        <section>
-          <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-soft">
-            {t("dogs.concernsTitle")}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {concerns.map((cn) => (
-              <span
-                key={cn.id}
-                className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700"
+      <section>
+        <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-soft">
+          {t("dogs.concernsTitle")}
+        </div>
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {concerns.map((cn) => (
+            <span
+              key={cn.id}
+              className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700"
+            >
+              {cn.concern}
+              <button
+                type="button"
+                aria-label={t("dogs.removeConcern", { name: cn.concern })}
+                onClick={() => removeConcern.mutate(cn.id)}
+                className="text-red-500 hover:text-red-800"
               >
-                {cn.concern}
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input
+            className="flex-1 rounded border border-silver bg-white px-2 py-1.5 text-sm"
+            placeholder={t("dogs.concernPlaceholder")}
+            value={concern}
+            onChange={(e) => setConcern(e.target.value)}
+          />
+          <select
+            className="rounded border border-silver bg-white px-2 text-sm"
+            value={severity}
+            onChange={(e) => setSeverity(e.target.value as Sev)}
+          >
+            <option value="mild">{t("dogs.severityMild")}</option>
+            <option value="moderate">{t("dogs.severityModerate")}</option>
+            <option value="severe">{t("dogs.severitySevere")}</option>
+          </select>
+          <button
+            type="button"
+            disabled={!concern.trim()}
+            className="rounded-lg border border-silver bg-white px-3 py-1.5 text-sm font-bold text-slate disabled:opacity-50"
+            onClick={async () => {
+              await addConcern.mutateAsync({ concern, severity });
+              setConcern("");
+            }}
+          >
+            {t("dogs.addConcern")}
+          </button>
+        </div>
+      </section>
 
       {/* actions */}
       <div className="flex flex-wrap gap-2">
-        <Link
-          to={`/my/dogs/${dog.id}/journal?compose=moment`}
+        <button
+          type="button"
+          onClick={() => setSheet("moment")}
           className="rounded-lg bg-slate px-3 py-2 text-sm font-bold text-cream"
         >
-          {t("dogs.actLogMoment")}
-        </Link>
+          ＋ {t("journal.logMoment")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setSheet("daily_checkin")}
+          className="rounded-lg border border-silver bg-white px-3 py-2 text-sm font-bold text-slate"
+        >
+          📋 {t("journal.dailyCheckIn")}
+        </button>
         <Link
           to={`/my/dogs/${dog.id}/brief`}
           className="rounded-lg border border-silver bg-white px-3 py-2 text-sm font-bold text-slate"
@@ -141,6 +203,35 @@ export function DogCardBody({ dog }: { dog: DogOverview }) {
           {t("dogs.actEdit")}
         </Link>
       </div>
+
+      <Sheet
+        open={sheet === "moment"}
+        title={t("journal.logMoment")}
+        closeLabel={t("journal.closeSheet")}
+        onClose={closeSheet}
+      >
+        <QuickMomentComposer
+          dogs={dogList}
+          selectedDogId={dog.id}
+          onDogChange={() => {}}
+          autoFocus
+          onSaved={closeSheet}
+        />
+      </Sheet>
+      <Sheet
+        open={sheet === "daily_checkin"}
+        title={t("journal.dailyCheckIn")}
+        closeLabel={t("journal.closeSheet")}
+        onClose={closeSheet}
+      >
+        <DailyCheckInComposer
+          dogs={dogList}
+          selectedDogId={dog.id}
+          onDogChange={() => {}}
+          autoFocus
+          onSaved={closeSheet}
+        />
+      </Sheet>
     </div>
   );
 }
