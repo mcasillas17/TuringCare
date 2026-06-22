@@ -1,7 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
-import type { Activity, Metrics } from "../use-metrics";
-import { ActivityFeed } from "./activity-feed";
+import type { Metrics } from "../use-metrics";
 import { FeatureUsage } from "./feature-usage";
 import { Funnel } from "./funnel";
 import { KpiStrip } from "./kpi-strip";
@@ -33,56 +32,8 @@ it("KpiStrip shows the headline numbers", () => {
   expect(screen.getByText("15%")).toBeInTheDocument();
 });
 
-it("ActivityFeed lists events", () => {
-  const activity: Activity = {
-    items: [
-      {
-        id: "1",
-        name: "user.signed_in",
-        userId: "abcdef123",
-        createdAt: "2026-05-17T10:00:00Z",
-        props: {},
-      },
-    ],
-  };
-  render(<ActivityFeed activity={activity} />);
-  expect(screen.getByText("user.signed_in")).toBeInTheDocument();
-});
-
-it("ActivityFeed does not throw on a malformed date and shows the raw string", () => {
-  const activity: Activity = {
-    items: [
-      {
-        id: "3",
-        name: "user.signed_in",
-        userId: "abcdef123",
-        createdAt: "2026-05-17T10:00:00+00",
-        props: {},
-      },
-    ],
-  };
-  expect(() => render(<ActivityFeed activity={activity} />)).not.toThrow();
-  expect(screen.getByText("2026-05-17T10:00:00+00")).toBeInTheDocument();
-});
-
 it("Funnel renders with empty data without throwing", () => {
   expect(() => render(<Funnel funnel={[]} />)).not.toThrow();
-});
-
-it("ActivityFeed shows anon for null userId", () => {
-  const activity: Activity = {
-    items: [
-      {
-        id: "2",
-        name: "page.viewed",
-        userId: null,
-        createdAt: "2026-05-17T10:00:00Z",
-        props: {},
-      },
-    ],
-  };
-  render(<ActivityFeed activity={activity} />);
-  expect(screen.getByText("anon")).toBeInTheDocument();
 });
 
 it("FeatureUsage lists events and excludes page.viewed", () => {

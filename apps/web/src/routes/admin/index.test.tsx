@@ -12,6 +12,7 @@ const metrics = {
   eventVolume: [{ name: "page.viewed", count: 12 }],
   funnel: [{ step: "signup", users: 7 }],
   topPages: [{ path: "/my", count: 5 }],
+  eventsByDay: [{ day: "2026-05-01", name: "page.viewed", count: 12 }],
 };
 
 function renderDashboard(client?: QueryClient) {
@@ -32,13 +33,8 @@ it("renders the dashboard with KPI numbers", async () => {
     "fetch",
     vi
       .fn()
-      .mockImplementation((url: string) =>
-        Promise.resolve(
-          new Response(
-            JSON.stringify(String(url).includes("/activity") ? { items: [] } : metrics),
-            { status: 200 },
-          ),
-        ),
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify(metrics), { status: 200 })),
       ),
   );
   renderDashboard();
