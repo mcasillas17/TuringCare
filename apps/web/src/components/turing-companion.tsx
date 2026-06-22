@@ -35,7 +35,7 @@ type Mode = "idle" | "tilt" | "bark";
 
 export function TuringCompanion() {
   const { t } = useI18n();
-  const { eventPose, eventMessage, asleep } = useTuring();
+  const { eventPose, eventMessage, asleep, hidden } = useTuring();
   const { pathname } = useLocation();
   const rootRef = useRef<HTMLButtonElement>(null);
   const bubbleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -50,7 +50,7 @@ export function TuringCompanion() {
   // Cursor eye-follow: translate the pupils toward the pointer, clamped.
   // Pointer-only and skipped under reduced-motion.
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion || hidden) return;
     const onMove = (e: MouseEvent) => {
       const el = rootRef.current;
       if (!el) return;
@@ -63,11 +63,11 @@ export function TuringCompanion() {
     };
     window.addEventListener("mousemove", onMove);
     return () => window.removeEventListener("mousemove", onMove);
-  }, [reduceMotion]);
+  }, [reduceMotion, hidden]);
 
   // Self-rescheduling blink loop (lids close 130ms, every 2.4–5.6s).
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion || hidden) return;
     let alive = true;
     let gap: ReturnType<typeof setTimeout>;
     let close: ReturnType<typeof setTimeout>;
@@ -90,7 +90,7 @@ export function TuringCompanion() {
       clearTimeout(gap);
       clearTimeout(close);
     };
-  }, [reduceMotion]);
+  }, [reduceMotion, hidden]);
 
   // Tidy the bubble timer on unmount.
   useEffect(() => () => clearTimeout(bubbleTimer.current), []);
@@ -128,6 +128,8 @@ export function TuringCompanion() {
     transform: `translate(${px}px,${py}px)`,
     transition: "transform .09s linear",
   };
+
+  if (hidden) return null;
 
   return (
     <button

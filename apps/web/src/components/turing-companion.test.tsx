@@ -129,7 +129,9 @@ describe("TuringCompanion", () => {
       eventPose: "celebrate",
       eventMessage: "turing.celebrateBrief",
       asleep: false,
+      hidden: false,
       celebrate: vi.fn(),
+      setHidden: vi.fn(),
     });
     render(
       <LocaleProvider>
@@ -139,5 +141,24 @@ describe("TuringCompanion", () => {
       </LocaleProvider>,
     );
     expect(screen.getByRole("status").textContent).toBe(en.turing.celebrateBrief);
+  });
+
+  it("renders nothing when hidden", () => {
+    vi.spyOn(turingCtx, "useTuring").mockReturnValue({
+      eventPose: null,
+      eventMessage: null,
+      asleep: false,
+      hidden: true,
+      celebrate: vi.fn(),
+      setHidden: vi.fn(),
+    });
+    render(
+      <LocaleProvider>
+        <MemoryRouter>
+          <TuringCompanion />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+    expect(screen.queryByRole("button", { name: /turing/i })).toBeNull();
   });
 });

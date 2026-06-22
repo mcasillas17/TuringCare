@@ -17,8 +17,20 @@ type TuringApi = {
   eventPose: EventPose | null;
   eventMessage: MessageKey | null;
   asleep: boolean;
+  hidden: boolean;
   celebrate: (big?: boolean, messageKey?: MessageKey) => void;
+  setHidden: (v: boolean) => void;
 };
+
+const HIDDEN_KEY = "tc-turing-hidden";
+
+function readHidden(): boolean {
+  try {
+    return typeof localStorage !== "undefined" && localStorage.getItem(HIDDEN_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
 
 const WAG_MS = 1600;
 const CELEBRATE_MS = 2600;
@@ -39,11 +51,21 @@ export function TuringProvider({ children }: { children: ReactNode }) {
   const [eventPose, setEventPose] = useState<EventPose | null>(null);
   const [eventMessage, setEventMessage] = useState<MessageKey | null>(null);
   const [asleep, setAsleep] = useState(false);
+  const [hidden, setHiddenState] = useState<boolean>(readHidden);
   const poseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const wagCooldown = useRef(false);
   const wagCdTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reduce = prefersReducedMotion();
+
+  const setHidden = useCallback((v: boolean) => {
+    setHiddenState(v);
+    try {
+      localStorage.setItem(HIDDEN_KEY, String(v));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const resetIdle = useCallback(() => {
     setAsleep(false);
@@ -76,6 +98,7 @@ export function TuringProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    if (hidden) return;
     resetIdle();
     const onActivity = () => resetIdle();
     window.addEventListener("pointermove", onActivity, { passive: true });
@@ -87,11 +110,11 @@ export function TuringProvider({ children }: { children: ReactNode }) {
       clearTimeout(poseTimer.current);
       clearTimeout(wagCdTimer.current);
     };
-  }, [resetIdle]);
+  }, [resetIdle, hidden]);
 
   const value = useMemo<TuringApi>(
-    () => ({ eventPose, eventMessage, asleep, celebrate }),
-    [eventPose, eventMessage, asleep, celebrate],
+    () => ({ eventPose, eventMessage, asleep, hidden, celebrate, setHidden }),
+    [eventPose, eventMessage, asleep, hidden, celebrate, setHidden],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -102,7 +125,9 @@ export function useTuring(): TuringApi {
       eventPose: null,
       eventMessage: null,
       asleep: false,
+      hidden: false,
       celebrate: () => {},
+      setHidden: () => {},
     }
   );
 }
