@@ -222,8 +222,6 @@ export const en = {
     severityModerate: "Moderate",
     severitySevere: "Severe",
     severityLabel: "Severity",
-    goalsTitle: "Training goals",
-    goalsEmpty: "No goals yet.",
     goalPlaceholder: "Describe a goal",
     addGoal: "Add goal",
     remove: "Remove",
@@ -410,7 +408,6 @@ export const en = {
   },
   dogHub: {
     backToDashboard: "All dogs",
-    tabOverview: "Overview",
     tabJournal: "Journal",
     tabTraining: "Training",
     tabBrief: "Brief",

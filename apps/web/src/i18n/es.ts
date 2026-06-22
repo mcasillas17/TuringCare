@@ -225,8 +225,6 @@ export const es = {
     severityModerate: "Moderada",
     severitySevere: "Grave",
     severityLabel: "Gravedad",
-    goalsTitle: "Objetivos de adiestramiento",
-    goalsEmpty: "Aún no hay objetivos.",
     goalPlaceholder: "Describe un objetivo",
     addGoal: "Agregar objetivo",
     remove: "Quitar",
@@ -413,7 +411,6 @@ export const es = {
   },
   dogHub: {
     backToDashboard: "Todos los perros",
-    tabOverview: "Resumen",
     tabJournal: "Diario",
     tabTraining: "Entrenamiento",
     tabBrief: "Informe",
