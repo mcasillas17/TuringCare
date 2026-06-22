@@ -8,10 +8,10 @@ import { useProgress } from "@/lib/progress";
 import { timeAgo } from "@/lib/time-ago";
 import { humanTime } from "@/lib/when";
 import { useQueryClient } from "@tanstack/react-query";
+import type { BehaviorConcernInput } from "@turingcare/shared";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-
-type Sev = "mild" | "moderate" | "severe";
+import { toast } from "sonner";
 
 export function DogCardBody({ dog }: { dog: DogOverview }) {
   const { t, locale } = useI18n();
@@ -27,7 +27,7 @@ export function DogCardBody({ dog }: { dog: DogOverview }) {
 
   const [sheet, setSheet] = useState<"moment" | "daily_checkin" | null>(null);
   const [concern, setConcern] = useState("");
-  const [severity, setSeverity] = useState<Sev>("mild");
+  const [severity, setSeverity] = useState<BehaviorConcernInput["severity"]>("mild");
 
   const closeSheet = () => {
     setSheet(null);
@@ -147,8 +147,9 @@ export function DogCardBody({ dog }: { dog: DogOverview }) {
           />
           <select
             className="rounded border border-silver bg-white px-2 text-sm"
+            aria-label={t("dogs.severityLabel")}
             value={severity}
-            onChange={(e) => setSeverity(e.target.value as Sev)}
+            onChange={(e) => setSeverity(e.target.value as BehaviorConcernInput["severity"])}
           >
             <option value="mild">{t("dogs.severityMild")}</option>
             <option value="moderate">{t("dogs.severityModerate")}</option>
@@ -156,11 +157,15 @@ export function DogCardBody({ dog }: { dog: DogOverview }) {
           </select>
           <button
             type="button"
-            disabled={!concern.trim()}
+            disabled={!concern.trim() || addConcern.isPending}
             className="rounded-lg border border-silver bg-white px-3 py-1.5 text-sm font-bold text-slate disabled:opacity-50"
             onClick={async () => {
-              await addConcern.mutateAsync({ concern, severity });
-              setConcern("");
+              try {
+                await addConcern.mutateAsync({ concern, severity });
+                setConcern("");
+              } catch {
+                toast.error(t("journal.saveFailed"));
+              }
             }}
           >
             {t("dogs.addConcern")}

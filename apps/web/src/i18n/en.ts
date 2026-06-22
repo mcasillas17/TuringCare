@@ -221,6 +221,7 @@ export const en = {
     severityMild: "Mild",
     severityModerate: "Moderate",
     severitySevere: "Severe",
+    severityLabel: "Severity",
     goalsTitle: "Training goals",
     goalsEmpty: "No goals yet.",
     goalPlaceholder: "Describe a goal",

@@ -224,6 +224,7 @@ export const es = {
     severityMild: "Leve",
     severityModerate: "Moderada",
     severitySevere: "Grave",
+    severityLabel: "Gravedad",
     goalsTitle: "Objetivos de adiestramiento",
     goalsEmpty: "Aún no hay objetivos.",
     goalPlaceholder: "Describe un objetivo",

@@ -4,7 +4,7 @@ import type { DogOverview } from "@/lib/dogs";
 import * as journalLib from "@/lib/journal";
 import * as progressLib from "@/lib/progress";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { DogCardBody } from "./dog-card-body";
@@ -65,7 +65,7 @@ function setup() {
       </QueryClientProvider>
     </LocaleProvider>,
   );
-  return { removeConcern };
+  return { removeConcern, addConcern };
 }
 
 describe("DogCardBody", () => {
@@ -87,5 +87,20 @@ describe("DogCardBody", () => {
     fireEvent.click(screen.getByRole("button", { name: /remove leash reactivity/i }));
     expect(removeConcern.mutate).toHaveBeenCalledWith("c1");
     expect(screen.getByPlaceholderText(/concern/i)).toBeInTheDocument();
+  });
+
+  it("adds a concern and clears the input", async () => {
+    const { addConcern } = setup();
+    const input = screen.getByPlaceholderText(/concern/i) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Counter surfing" } });
+    fireEvent.change(screen.getByRole("combobox", { name: /severity/i }), {
+      target: { value: "severe" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add concern/i }));
+    expect(addConcern.mutateAsync).toHaveBeenCalledWith({
+      concern: "Counter surfing",
+      severity: "severe",
+    });
+    await waitFor(() => expect(input.value).toBe(""));
   });
 });
