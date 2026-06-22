@@ -136,16 +136,11 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .values({ ...body, dogId: dog.id })
       .returning();
     if (!goal) throw new Error("failed to create training goal");
-    const [skill] = await db
-      .insert(trainingSkills)
-      .values({ goalId: goal.id, name: body.goal, confidence: 1, position: 0 })
-      .returning();
-    if (!skill) throw new Error("failed to create default skill");
     await recordEvent("training.goal_added", {
       userId: c.get("userId"),
       props: { source: "custom" },
     });
-    return c.json({ goal, skill }, 201);
+    return c.json({ goal }, 201);
   })
   .post("/:id/goals/from-template", zValidator("json", goalFromTemplateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));

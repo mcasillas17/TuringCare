@@ -193,7 +193,7 @@ describe("dogs: concerns & goals", () => {
     expect(((await after.json()) as { concerns: unknown[] }).concerns).toEqual([]);
   });
 
-  it("adds and removes a goal", async () => {
+  it("adds a goal with no default skill, then removes it", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
@@ -203,17 +203,13 @@ describe("dogs: concerns & goals", () => {
       body: JSON.stringify({ goal: "Calm greetings" }),
     });
     expect(add.status).toBe(201);
-    const { goal, skill } = (await add.json()) as {
-      goal: { id: string };
-      skill: { name: string; confidence: number; position: number };
-    };
-    expect(skill.name).toBe("Calm greetings");
-    expect(skill.confidence).toBe(1);
-    expect(skill.position).toBe(0);
+    const body = (await add.json()) as { goal: { id: string }; skill?: unknown };
+    expect(body.goal).toBeTruthy();
+    expect(body.skill).toBeUndefined();
     const progress = await app.request(`/api/dogs/${dog.id}/progress`, { headers: u.authHeaders });
     const progressBody = (await progress.json()) as { goals: Array<{ skills: unknown[] }> };
-    expect(progressBody.goals[0]?.skills).toHaveLength(1);
-    const del = await app.request(`/api/dogs/${dog.id}/goals/${goal.id}`, {
+    expect(progressBody.goals[0]?.skills).toEqual([]);
+    const del = await app.request(`/api/dogs/${dog.id}/goals/${body.goal.id}`, {
       method: "DELETE",
       headers: u.authHeaders,
     });
@@ -778,7 +774,13 @@ describe("dogs: brief", () => {
       headers: u.authHeaders,
       body: JSON.stringify({ goal: "Calm greetings" }),
     });
-    const { skill } = (await goalRes.json()) as { skill: { id: string } };
+    const { goal } = (await goalRes.json()) as { goal: { id: string } };
+    const skillRes = await app.request(`/api/dogs/${dog.id}/goals/${goal.id}/skills`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ name: "Calm greetings", confidence: 1 }),
+    });
+    const { skill } = (await skillRes.json()) as { skill: { id: string } };
     await app.request(`/api/dogs/${dog.id}/skills/${skill.id}`, {
       method: "PUT",
       headers: u.authHeaders,
