@@ -6,7 +6,10 @@ import { TuringProvider, useTuring } from "./turing-context";
 
 const wrap = ({ children }: { children: ReactNode }) => <TuringProvider>{children}</TuringProvider>;
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  localStorage.clear();
+});
 
 describe("useTuring", () => {
   it("no-op fallback without a provider", () => {
@@ -82,5 +85,19 @@ describe("useTuring", () => {
     act(() => vi.advanceTimersByTime(2600));
     act(() => result.current.celebrate(false)); // still within 8s of the hop → suppressed
     expect(result.current.eventPose).toBeNull();
+  });
+
+  it("hidden defaults to false and setHidden persists", () => {
+    const { result } = renderHook(() => useTuring(), { wrapper: wrap });
+    expect(result.current.hidden).toBe(false);
+    act(() => result.current.setHidden(true));
+    expect(result.current.hidden).toBe(true);
+    expect(localStorage.getItem("tc-turing-hidden")).toBe("true");
+  });
+
+  it("reads an existing hidden preference on init", () => {
+    localStorage.setItem("tc-turing-hidden", "true");
+    const { result } = renderHook(() => useTuring(), { wrapper: wrap });
+    expect(result.current.hidden).toBe(true);
   });
 });
