@@ -27,6 +27,34 @@ export function useDog(id: string) {
   });
 }
 
+export type DogSummary = {
+  journalCount: number;
+  lastActivityAt: string | null;
+  goalCount: number;
+  skillCount: number;
+  avgLevel: number | null;
+  briefStatus: "draft" | "finalized" | null;
+  briefVersion: number | null;
+};
+
+export type DogOverview = {
+  id: string;
+  name: string;
+  breed: string | null;
+  summary: DogSummary;
+};
+
+export function useDogsOverview() {
+  return useQuery({
+    queryKey: ["dogs-overview"],
+    queryFn: async () => {
+      const res = await dogs.overview.$get();
+      if (!res.ok) throw new Error("load_failed");
+      return (await res.json()).dogs as DogOverview[];
+    },
+  });
+}
+
 export function useCreateDog() {
   const qc = useQueryClient();
   const { celebrate } = useTuring();
@@ -40,6 +68,7 @@ export function useCreateDog() {
       celebrate(true, "turing.celebrateDog");
       qc.invalidateQueries({ queryKey: ["dogs"] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
+      qc.invalidateQueries({ queryKey: ["dogs-overview"] });
     },
   });
 }
@@ -55,6 +84,7 @@ export function useUpdateDog(id: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["dogs"] });
       qc.invalidateQueries({ queryKey: ["dogs", id] });
+      qc.invalidateQueries({ queryKey: ["dogs-overview"] });
     },
   });
 }
@@ -67,7 +97,10 @@ export function useDeleteDog() {
       if (!res.ok) throw new Error("delete_failed");
       return res.json();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dogs"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dogs"] });
+      qc.invalidateQueries({ queryKey: ["dogs-overview"] });
+    },
   });
 }
 

@@ -1316,6 +1316,54 @@ describe("dogs: brief send", () => {
   });
 });
 
+describe("dogs: overview", () => {
+  const users: TestUser[] = [];
+  afterEach(async () => {
+    for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
+  });
+
+  async function makeDog(u: TestUser) {
+    const r = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify(validDog),
+    });
+    return ((await r.json()) as { dog: { id: string } }).dog;
+  }
+
+  async function makeGoal(dogId: string, goalName = "Recall") {
+    const [goal] = await db.insert(trainingGoals).values({ dogId, goal: goalName }).returning();
+    if (!goal) throw new Error("expected goal");
+    return goal;
+  }
+
+  async function makeSkill(goalId: string, name = "Sit", position = 0) {
+    const [skill] = await db
+      .insert(trainingSkills)
+      .values({ goalId, name, confidence: 1, position })
+      .returning();
+    if (!skill) throw new Error("expected skill");
+    return skill;
+  }
+
+  it("GET /overview returns dogs with summary", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const goal = await makeGoal(dog.id);
+    await makeSkill(goal.id);
+
+    const res = await app.request("/api/dogs/overview", { headers: u.authHeaders });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      dogs: Array<{ id: string; summary: { goalCount: number; skillCount: number } }>;
+    };
+    const row = body.dogs.find((d) => d.id === dog.id);
+    expect(row?.summary.goalCount).toBe(1);
+    expect(row?.summary.skillCount).toBe(1);
+  });
+});
+
 describe("dogs: POST /:id/goals/from-template", () => {
   const users: TestUser[] = [];
   afterEach(async () => {

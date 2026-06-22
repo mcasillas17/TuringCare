@@ -46,7 +46,24 @@ describe("DogsList", () => {
   });
 
   it("lists the user's dogs", async () => {
-    mockFetchOnce({ dogs: [{ id: "d1", name: "Biscuit", breed: "Aussie" }] });
+    mockFetchOnce({
+      dogs: [
+        {
+          id: "d1",
+          name: "Biscuit",
+          breed: "Aussie",
+          summary: {
+            journalCount: 0,
+            lastActivityAt: null,
+            goalCount: 0,
+            skillCount: 0,
+            avgLevel: null,
+            briefStatus: null,
+            briefVersion: null,
+          },
+        },
+      ],
+    });
     renderList();
     await waitFor(() => expect(screen.getByText("Biscuit")).toBeInTheDocument());
   });
