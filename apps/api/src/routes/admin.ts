@@ -148,19 +148,4 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       topPages,
       eventsByDay,
     } as const);
-  })
-  .get("/activity", async (c) => {
-    const { rows: items } = await db.execute<{
-      id: string;
-      name: string;
-      userId: string | null;
-      createdAt: string;
-      props: unknown;
-    }>(
-      sql`select id, name, user_id as "userId",
-                 to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "createdAt",
-                 props
-          from events order by created_at desc limit 100`,
-    );
-    return c.json({ items } as const);
   });
