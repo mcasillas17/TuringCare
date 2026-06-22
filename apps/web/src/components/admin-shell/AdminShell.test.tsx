@@ -30,6 +30,14 @@ describe("AdminShell", () => {
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
   });
 
+  it("puts Back to app in the header, not inside the sidebar nav", () => {
+    setup("/admin");
+    const back = screen.getByRole("link", { name: /back to app/i });
+    expect(back).toHaveAttribute("href", "/my");
+    const nav = screen.getByRole("navigation", { name: /admin menu/i });
+    expect(nav).not.toContainElement(back);
+  });
+
   it("marks the active section with aria-current", () => {
     setup("/admin/trainers");
     expect(screen.getByRole("link", { name: /trainers/i })).toHaveAttribute("aria-current", "page");
