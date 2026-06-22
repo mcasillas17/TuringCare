@@ -51,7 +51,6 @@ function sessionSummary(skill: ProgressGoal["skills"][number]) {
 export function composeBrief(i: BriefInput): string {
   const { dog, concerns, goals, entries, progress = [], windowDays } = i;
   const lines: string[] = [];
-  lines.push(`Behavior Brief — ${dog.name}`);
   lines.push(`${dog.name} is a ${dog.size} ${dog.sex}${dog.breed ? ` ${dog.breed}` : ""}.`);
   lines.push("");
   lines.push("Concerns:");

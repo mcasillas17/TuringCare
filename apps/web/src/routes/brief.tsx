@@ -66,8 +66,6 @@ export function Brief() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className="text-2xl font-bold text-slate">{t("brief.title")}</h1>
-
       {!routeId && (dogs?.length ?? 0) > 1 && (
         <label className="block">
           <span className="text-sm font-medium text-slate">{t("brief.pickDog")}</span>

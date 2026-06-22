@@ -27,6 +27,7 @@ describe("composeBrief", () => {
       ],
     });
     expect(out).toContain("Biscuit");
+    expect(out).not.toMatch(/^Behavior Brief — /m);
     expect(out).toContain("Leash reactivity (moderate)");
     expect(out).toContain("Calm greetings");
     expect(out).toContain("2 entries in the last 30 days");
