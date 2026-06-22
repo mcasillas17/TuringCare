@@ -66,7 +66,13 @@ describe("server-side telemetry emission", () => {
       headers: u.authHeaders,
       body: JSON.stringify({ goal: "Calm greetings" }),
     });
-    const { skill } = (await goalRes.json()) as { skill: { id: string } };
+    const { goal } = (await goalRes.json()) as { goal: { id: string } };
+    const skillRes = await app.request(`/api/dogs/${dogId}/goals/${goal.id}/skills`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ name: "Door-knock threshold", confidence: 1 }),
+    });
+    const { skill } = (await skillRes.json()) as { skill: { id: string } };
     await app.request(`/api/dogs/${dogId}/skills/${skill.id}/sessions`, {
       method: "POST",
       headers: u.authHeaders,
