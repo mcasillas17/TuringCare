@@ -42,14 +42,12 @@ describe("loadDogsOverview", () => {
       { goalId: goal.id, name: "Sit", confidence: 3, position: 0 },
       { goalId: goal.id, name: "Down", confidence: 2, position: 1 },
     ]);
-    await db
-      .insert(journalEntries)
-      .values({
-        dogId: dog.id,
-        kind: "moment",
-        note: "barked",
-        occurredAt: new Date("2026-06-10T10:00:00Z"),
-      });
+    await db.insert(journalEntries).values({
+      dogId: dog.id,
+      kind: "moment",
+      note: "barked",
+      occurredAt: new Date("2026-06-10T10:00:00Z"),
+    });
     await db.insert(briefs).values({ dogId: dog.id, status: "draft", summary: "x", version: 2 });
 
     const overview = await loadDogsOverview(u.userId);
