@@ -71,19 +71,11 @@ export function AdminShell() {
           </NavLink>
         );
       })}
-      <NavLink
-        to="/my"
-        onClick={() => setDrawerOpen(false)}
-        className="mt-auto flex items-center gap-3 rounded px-3 py-2 text-sm text-cream/70 hover:bg-cream/10"
-      >
-        <ArrowLeft className="size-5 shrink-0" />
-        {expanded && <span>Back to app</span>}
-      </NavLink>
       <button
         type="button"
         onClick={toggleExpanded}
         aria-label={expanded ? "Collapse menu" : "Expand menu"}
-        className="flex items-center gap-3 rounded px-3 py-2 text-sm text-cream/70 hover:bg-cream/10"
+        className="mt-auto flex items-center gap-3 rounded px-3 py-2 text-sm text-cream/70 hover:bg-cream/10"
       >
         {expanded ? <PanelLeftClose className="size-5" /> : <PanelLeftOpen className="size-5" />}
         {expanded && <span>Collapse</span>}
@@ -111,16 +103,26 @@ export function AdminShell() {
             {current ? current.label : "Admin"}
           </span>
         </div>
-        <Button
-          variant="outline"
-          onClick={async () => {
-            await signOut();
-            toast.success("Signed out");
-            navigate("/login");
-          }}
-        >
-          Sign out
-        </Button>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/my"
+            aria-label="Back to app"
+            className="flex items-center gap-1.5 text-sm font-medium text-slate-soft hover:text-slate"
+          >
+            <ArrowLeft className="size-4 shrink-0" />
+            <span className="hidden sm:inline">Back to app</span>
+          </Link>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              await signOut();
+              toast.success("Signed out");
+              navigate("/login");
+            }}
+          >
+            Sign out
+          </Button>
+        </div>
       </header>
       <div className="flex flex-1">
         <div className="hidden md:block">{rail}</div>
