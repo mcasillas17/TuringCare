@@ -32,7 +32,7 @@ pnpm --filter @turingcare/api exec vitest run src/routes/dogs.test.ts
 pnpm --filter @turingcare/shared exec vitest run src/dog.test.ts
 ```
 
-Add `-t "test name"` to run one matching test. API test commands still need the exported environment and migrated/pushed local database described above.
+Add `-t "test name"` to run one matching test. API tests load the root `.env` via `apps/api/vitest.setup.ts` and still need a migrated/pushed local database; manual shell export is for API dev and Drizzle commands, not Vitest.
 
 ## Architecture
 
