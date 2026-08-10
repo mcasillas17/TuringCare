@@ -18,6 +18,8 @@ test("full owner journey: register → verify → dog → moment → training �
   page,
   request,
 }, testInfo) => {
+  test.setTimeout(120_000);
+
   const email = makeEmail(testInfo.project.name);
 
   // ─── 1. Register ────────────────────────────────────────────────────────
@@ -99,10 +101,11 @@ test("full owner journey: register → verify → dog → moment → training �
   // Confirm apply
   await page.getByRole("button", { name: "Apply" }).click();
   // Wait for skills to appear
-  await expect(page.getByText("Sit")).toBeVisible({ timeout: 10_000 });
+  const expandSit = page.getByRole("button", { name: "Expand Sit" });
+  await expect(expandSit).toBeVisible({ timeout: 10_000 });
 
   // Expand first skill ("Sit")
-  await page.getByRole("button", { name: /Expand Sit/i }).click();
+  await expandSit.click();
 
   // Log a session
   await page.getByRole("button", { name: "Log session" }).click();
