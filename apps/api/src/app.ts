@@ -17,6 +17,7 @@ import { onboardingApp } from "./routes/onboarding";
 import { overviewApp } from "./routes/overview";
 import { profileApp } from "./routes/profile";
 import { shareApp } from "./routes/share";
+import { createTestEmailApp } from "./routes/test-email";
 import { trainersApp } from "./routes/trainers";
 import { trainingApp } from "./routes/training";
 import { eventIngestSchema } from "./telemetry/events";
@@ -79,6 +80,7 @@ const app = new Hono()
   .route("/api/admin", adminApp)
   .route("/api/admin/courses", adminCoursesApp)
   .route("/api/admin/trainers", adminTrainersApp)
+  .route("/api/test", createTestEmailApp({ enabled: env.E2E_TEST_MODE }))
   .on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 export { app };
