@@ -74,14 +74,10 @@ test("full owner journey: register → verify → dog → moment → training �
   await page.getByLabel("Vaccination").selectOption("complete");
   await page.getByRole("button", { name: "Save" }).click();
 
-  // Redirects to dog journal route /my/dogs/:id(/journal)
-  await expect(page).toHaveURL(/\/my\/dogs\/[^/]+/, { timeout: 10_000 });
+  // Wait for the create route to redirect to this dog's journal.
+  await expect(page).toHaveURL(/\/my\/dogs\/[^/]+\/journal$/, { timeout: 10_000 });
 
   // ─── 4. Log a quick moment ─────────────────────────────────────────────
-  // Navigate to journal tab (may already be there)
-  const journalTab = page.getByRole("link", { name: "Journal" });
-  if (await journalTab.isVisible()) await journalTab.click();
-
   // Open moment composer
   await page.getByRole("button", { name: /Log moment/i }).click();
 
