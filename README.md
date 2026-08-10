@@ -20,7 +20,7 @@ pnpm install
 cp .env.example .env
 docker compose up -d --wait                # Postgres 16 on :5432 (waits for healthy)
 set -a && . ./.env && set +a               # export env for this shell
-pnpm --filter @turingcare/api db:migrate   # apply the schema
+pnpm --filter @turingcare/api db:push      # apply the schema
 pnpm dev                                   # api :3001, web :3000
 ```
 
@@ -29,11 +29,11 @@ pnpm dev                                   # api :3001, web :3000
 > port mapping in `docker-compose.yml` (e.g. `"5433:5432"`) and update `DATABASE_URL`
 > in `.env` to match.
 
-> **Why `set -a && . ./.env && set +a`?** Neither drizzle-kit (`db:migrate`) nor the
+> **Why `set -a && . ./.env && set +a`?** Neither drizzle-kit (`db:push`) nor the
 > API server (`pnpm dev`) auto-loads `.env`. That line exports the variables into
 > your shell so both pick them up. Run it once per shell session (or use a tool
 > like `direnv` to automate it). Alternative one-offs:
-> `DATABASE_URL=... pnpm --filter @turingcare/api db:migrate`.
+> `DATABASE_URL=... pnpm --filter @turingcare/api db:push`.
 
 Open http://localhost:3000, register an account, and you land on `/app`.
 
