@@ -131,10 +131,13 @@ test("full owner journey: register → verify → dog → moment → training �
 
   // Sharing finalizes the brief — assert Final v1
   await page.getByRole("button", { name: /Back to brief/i }).click();
-  // Close the sheet (if needed) by clicking Close or pressing Escape
+  // Close the share sheet by clicking the Close button
   const closeBtn = page.getByRole("button", { name: "Close" });
-  if (await closeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+  try {
+    await closeBtn.waitFor({ state: "visible", timeout: 2000 });
     await closeBtn.click();
+  } catch {
+    // Sheet already closed or Close button not present
   }
   await expect(page.getByText("Final · v1")).toBeVisible({ timeout: 10_000 });
 });
