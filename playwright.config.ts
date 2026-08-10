@@ -11,7 +11,7 @@ export default defineConfig({
   workers: 1,
   reporter: isCI ? [["github"], ["html"]] : [["list"], ["html"]],
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://localhost:3000",
     trace: "retain-on-failure",
     video: "retain-on-failure",
     screenshot: "only-on-failure",
@@ -19,14 +19,14 @@ export default defineConfig({
   webServer: [
     {
       command: "pnpm --filter @turingcare/api dev",
-      url: "http://127.0.0.1:3001/health",
+      url: "http://localhost:3001/health",
       timeout: 120_000,
       reuseExistingServer: !isCI,
       env: { E2E_TEST_MODE: "true" },
     },
     {
-      command: "pnpm --filter @turingcare/web dev --host 127.0.0.1",
-      url: "http://127.0.0.1:3000",
+      command: "pnpm --filter @turingcare/web dev",
+      url: "http://localhost:3000",
       timeout: 120_000,
       reuseExistingServer: !isCI,
     },
