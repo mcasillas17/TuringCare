@@ -15,10 +15,14 @@
     "test": "pnpm -r test",
     "db:generate": "pnpm --filter @turingcare/api db:generate",
     "db:migrate": "pnpm --filter @turingcare/api db:migrate",
-    "db:push": "pnpm --filter @turingcare/api db:push"
+    "db:push": "pnpm --filter @turingcare/api db:push",
+    "test:e2e": "playwright test --config playwright.config.ts",
+    "test:e2e:production": "playwright test --config playwright.production.config.ts",
+    "test:e2e:report": "playwright show-report"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@playwright/test": "^1.62.1",
     "concurrently": "^9.1.0",
     "typescript": "^5.7.0",
     "wrangler": "^4.92.0"
