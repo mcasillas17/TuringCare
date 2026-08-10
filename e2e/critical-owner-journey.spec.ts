@@ -112,7 +112,7 @@ test("full owner journey: register → verify → dog → moment → training �
   await expect(page.getByText(/1 session/)).toBeVisible({ timeout: 10_000 });
 
   // ─── 6. Brief: generate, share, finalize ───────────────────────────────
-  await page.getByRole("link", { name: "Brief" }).click();
+  await page.getByRole("link", { name: "Brief", exact: true }).click();
   await page.getByRole("button", { name: "Generate Brief" }).click();
 
   // Assert draft v1
