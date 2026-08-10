@@ -65,7 +65,7 @@ test("full owner journey: register → verify → dog → moment → training �
   // ─── 3. Create dog ─────────────────────────────────────────────────────
   await page.goto("/my/dogs/new");
   await page.getByLabel("Name").fill("Maple");
-  await page.getByLabel("Breed").fill("Australian Shepherd");
+  await page.getByLabel("Breed", { exact: true }).fill("Australian Shepherd");
   await page.getByLabel("Size").selectOption("medium");
   await page.getByLabel("Sex").selectOption("female");
   await page.getByLabel("Source").selectOption("rescue");
