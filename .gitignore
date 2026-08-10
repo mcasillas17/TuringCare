@@ -25,6 +25,10 @@ apps/web/assets/turing.jpg
 # Brainstorm visual-companion scratch
 .superpowers/
 
+# Playwright artifacts
+test-results/
+playwright-report/
+
 # Local git worktrees
 .worktrees/
 

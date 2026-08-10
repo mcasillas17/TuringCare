@@ -87,6 +87,50 @@ Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highligh
 - **i18n** — typed en/es catalogs with compile-time parity.
 - **Telemetry + admin dashboard** with rate-limited event ingestion.
 
+## Browser tests
+
+Playwright covers the **critical owner journey** (register → add dog → log moments →
+finalize a Behavior Brief → email and share it) at two viewports: `desktop-chromium`
+(Desktop Chrome) and `phone-chromium` (Pixel 7 / Chromium).
+
+Tests run against the local dev servers with a local Postgres database and a
+**test-only captured email outbox** (`E2E_TEST_MODE=true` on the API) so no real
+email is sent and no external services are required.
+
+### Run locally
+
+```bash
+# 1. Configure environment as described in Local setup above (copy .env.example → .env,
+#    start Docker Compose Postgres, export env vars).
+pnpm --filter @turingcare/api db:migrate # migrate DB
+pnpm dlx playwright install chromium    # install Chromium once
+pnpm test:e2e                           # run all projects (desktop + phone)
+```
+
+Run a single project:
+
+```bash
+pnpm test:e2e --project desktop-chromium
+```
+
+### Production smoke
+
+`pnpm test:e2e:production` runs the read-only smoke suite against
+`https://turingcare.dog`. It is **read-only** — no data is written.
+
+GitHub Actions runs this automatically after each deploy, on a daily schedule
+(`cron: '17 15 * * *'`), and on manual `workflow_dispatch`. The workflow
+requires two **repository secrets** for a dedicated, verified non-admin smoke
+account:
+
+| Secret | Purpose |
+|---|---|
+| `SMOKE_EMAIL` | Email of the smoke account |
+| `SMOKE_PASSWORD` | Password of the smoke account |
+
+Do not commit credentials; configure them in **Settings → Secrets and
+variables → Actions**.
+
 ## What's next
 
 - Dog profile photos (storage + upload + thumbnail on cards/brief).

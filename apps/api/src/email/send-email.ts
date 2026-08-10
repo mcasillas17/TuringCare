@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { env } from "../env";
+import { captureTestEmail } from "./test-outbox";
 
 export class EmailSendError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -34,6 +35,9 @@ export interface SendEmailDeps {
   client?: ResendLike;
   apiKey?: string;
   from?: string;
+  /** Optional capture callback. When provided, the email is recorded here
+   *  instead of being sent via Resend (useful for tests / E2E mode). */
+  capture?: ((args: SendEmailArgs) => void) | undefined;
 }
 
 /**
@@ -51,6 +55,17 @@ export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): 
 
   // `in` check (not `?? env`): tests force log-mode via { apiKey: undefined }
   // without touching env; production callers omit deps → env.RESEND_API_KEY.
+  //
+  // Capture resolution: explicit `capture` key in deps takes priority; then
+  // E2E_TEST_MODE auto-captures; otherwise undefined (normal send path).
+  const capture: ((args: SendEmailArgs) => void) | undefined =
+    "capture" in deps ? deps.capture : env.E2E_TEST_MODE ? captureTestEmail : undefined;
+
+  if (capture) {
+    capture(args);
+    return;
+  }
+
   const apiKey = "apiKey" in deps ? deps.apiKey : env.RESEND_API_KEY;
   const from = deps.from ?? env.EMAIL_FROM;
 

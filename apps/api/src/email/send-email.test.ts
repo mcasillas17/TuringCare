@@ -117,3 +117,18 @@ describe("sendEmail replyTo", () => {
     expect(first.reply_to).toBeUndefined();
   });
 });
+
+describe("sendEmail capture injection", () => {
+  it("calls injected capture with exact args and never calls client.emails.send", async () => {
+    const captured: unknown[] = [];
+    const capture = vi.fn((args: unknown) => captured.push(args));
+    const send = vi.fn();
+    const client: ResendLike = { emails: { send } };
+
+    await sendEmail(ARGS, { client, apiKey: "re_x", from: "F <f@x.com>", capture });
+
+    expect(capture).toHaveBeenCalledOnce();
+    expect(capture).toHaveBeenCalledWith(ARGS);
+    expect(send).not.toHaveBeenCalled();
+  });
+});
