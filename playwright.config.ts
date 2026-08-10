@@ -21,7 +21,7 @@ export default defineConfig({
   webServer: [
     {
       command: "pnpm --filter @turingcare/api dev",
-      url: "http://127.0.0.1:8787/health",
+      url: "http://127.0.0.1:3001/health",
       timeout: 120_000,
       reuseExistingServer: !isCI,
       env: { E2E_TEST_MODE: "true" },
