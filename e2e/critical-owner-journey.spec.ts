@@ -40,8 +40,8 @@ test("full owner journey: register → verify → dog → moment → training �
       async () => {
         const res = await request.get(outboxUrl);
         if (res.status() !== 200) return null;
-        const json = await res.json();
-        emailBody = json.text ?? json.html ?? "";
+        const json = (await res.json()) as { email: { text?: string; html?: string } };
+        emailBody = json.email.text ?? json.email.html ?? "";
         return emailBody;
       },
       { timeout: 15_000, intervals: [500, 1000, 2000] },
