@@ -35,6 +35,12 @@ const schema = z.object({
   // From address for all transactional email. Prod uses the verified
   // send.turingcare.dog subdomain; local default is a harmless placeholder.
   EMAIL_FROM: z.string().default("TuringCare <noreply@send.turingcare.dog>"),
+  // When true, all outbound email is captured into the in-memory test outbox
+  // instead of being sent via Resend. Set only in E2E / smoke-test runs.
+  E2E_TEST_MODE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
 });
 
 export const env = schema.parse(process.env);
