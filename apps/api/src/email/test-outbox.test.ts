@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  captureTestEmail,
-  findLatestTestEmail,
-  resetTestOutbox,
-} from "./test-outbox";
+import { captureTestEmail, findLatestTestEmail, resetTestOutbox } from "./test-outbox";
 
 const BASE = { subject: "S", html: "<p>h</p>", text: "t" };
 

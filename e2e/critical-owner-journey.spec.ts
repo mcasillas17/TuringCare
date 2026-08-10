@@ -51,7 +51,8 @@ test("full owner journey: register → verify → dog → moment → training �
   // Extract verification URL — handle trailing punctuation/HTML
   const urlMatch = emailBody.match(/https?:\/\/[^\s"<>)]+\/api\/auth\/verify[^\s"<>)]*/);
   expect(urlMatch, "verification URL found in email").toBeTruthy();
-  const verifyUrl = urlMatch![0].replace(/[.,;!?)>]+$/, "");
+  if (!urlMatch) throw new Error("verification URL not found in email");
+  const verifyUrl = urlMatch[0].replace(/[.,;!?)>]+$/, "");
 
   // Visit verification link
   await page.goto(verifyUrl);

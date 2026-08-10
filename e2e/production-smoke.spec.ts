@@ -11,9 +11,7 @@ test("public smoke: health check, landing, trainers, and courses", async ({ page
 
   // 2. Landing headline
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Understand your dog." }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Understand your dog." })).toBeVisible();
 
   // 3. Trainers directory
   await page.goto("/trainers");

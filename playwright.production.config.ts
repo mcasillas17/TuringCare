@@ -8,8 +8,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["github"], ["html"]],
   use: {
-    baseURL:
-      process.env.SMOKE_BASE_URL ?? "https://turingcare.dog",
+    baseURL: process.env.SMOKE_BASE_URL ?? "https://turingcare.dog",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

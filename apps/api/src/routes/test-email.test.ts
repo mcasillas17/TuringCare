@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { resetTestOutbox, captureTestEmail } from "../email/test-outbox";
+import { captureTestEmail, resetTestOutbox } from "../email/test-outbox";
 import { createTestEmailApp } from "./test-email";
 
 describe("createTestEmailApp", () => {
@@ -50,7 +50,9 @@ describe("createTestEmailApp", () => {
 
       const res = await app.request("/emails/latest?to=owner@example.com");
       expect(res.status).toBe(200);
-      const body = await res.json() as { email: { to: string; subject: string; html: string; capturedAt: string } };
+      const body = (await res.json()) as {
+        email: { to: string; subject: string; html: string; capturedAt: string };
+      };
       expect(body).toHaveProperty("email");
       expect(body.email.to).toBe("owner@example.com");
       expect(body.email.subject).toBe("Verify your email");
@@ -68,7 +70,7 @@ describe("createTestEmailApp", () => {
 
       const res = await app.request("/emails/latest?to=  owner@example.com  ");
       expect(res.status).toBe(200);
-      const body = await res.json() as { email: { to: string } };
+      const body = (await res.json()) as { email: { to: string } };
       expect(body.email.to).toBe("Owner@Example.com");
     });
   });

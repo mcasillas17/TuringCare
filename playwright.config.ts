@@ -9,9 +9,7 @@ export default defineConfig({
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
   workers: 1,
-  reporter: isCI
-    ? [["github"], ["html"]]
-    : [["list"], ["html"]],
+  reporter: isCI ? [["github"], ["html"]] : [["list"], ["html"]],
   use: {
     baseURL: "http://127.0.0.1:3000",
     trace: "retain-on-failure",
