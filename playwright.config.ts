@@ -25,7 +25,7 @@ export default defineConfig({
       env: { E2E_TEST_MODE: "true" },
     },
     {
-      command: "pnpm --filter @turingcare/web dev",
+      command: "pnpm --filter @turingcare/web dev -- --host 127.0.0.1",
       url: "http://127.0.0.1:3000",
       timeout: 120_000,
       reuseExistingServer: !isCI,
