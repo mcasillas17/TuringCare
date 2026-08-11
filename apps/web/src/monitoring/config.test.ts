@@ -64,6 +64,34 @@ describe("resolveMonitoringConfig", () => {
       expect(result.warning).not.toContain("secret-token-should-not-leak");
     }
   });
+
+  it("requires a non-empty username in the DSN", () => {
+    const result = resolveMonitoringConfig({
+      ...complete,
+      dsn: "https://o12345.ingest.sentry.io/6789",
+    });
+    expect(result.enabled).toBe(false);
+  });
+
+  it("warns without throwing and names VITE_SENTRY_RELEASE when release is omitted", () => {
+    const missingRelease = { ...complete, release: undefined };
+    expect(() => resolveMonitoringConfig(missingRelease)).not.toThrow();
+    const result = resolveMonitoringConfig(missingRelease);
+    expect(result.enabled).toBe(false);
+    if (!result.enabled) {
+      expect(result.warning).toContain("VITE_SENTRY_RELEASE");
+    }
+  });
+
+  it("is enabled with a release of exactly the minimum length (7 characters)", () => {
+    const result = resolveMonitoringConfig({ ...complete, release: "720c524" });
+    expect(result).toEqual({
+      enabled: true,
+      dsn: complete.dsn,
+      environment: "production",
+      release: "720c524",
+    });
+  });
 });
 
 describe("readWebMonitoringConfig", () => {
