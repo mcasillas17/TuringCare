@@ -7,6 +7,8 @@ import { auth } from "./auth";
 import { resolveAdminRole } from "./auth/admin-bootstrap";
 import { env } from "./env";
 import { globalRateLimit } from "./middleware/rate-limit";
+import { createMonitoringErrorHandler } from "./monitoring/error-handler";
+import { type ApiEnv, requestIdMiddleware } from "./monitoring/request-id";
 import { adminApp } from "./routes/admin";
 import { adminCoursesApp } from "./routes/admin-courses";
 import { adminTrainersApp } from "./routes/admin-trainers";
@@ -23,7 +25,8 @@ import { trainingApp } from "./routes/training";
 import { eventIngestSchema } from "./telemetry/events";
 import { recordEvent } from "./telemetry/record-event";
 
-const app = new Hono()
+const app = new Hono<ApiEnv>()
+  .use("*", requestIdMiddleware)
   .use(
     "*",
     secureHeaders({
@@ -40,6 +43,7 @@ const app = new Hono()
       credentials: true,
       allowHeaders: ["Content-Type"],
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      exposeHeaders: ["X-Request-ID"],
     }),
   )
   .use("*", globalRateLimit())
@@ -82,6 +86,8 @@ const app = new Hono()
   .route("/api/admin/trainers", adminTrainersApp)
   .route("/api/test", createTestEmailApp({ enabled: env.E2E_TEST_MODE }))
   .on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+
+app.onError(createMonitoringErrorHandler());
 
 export { app };
 export type AppType = typeof app;

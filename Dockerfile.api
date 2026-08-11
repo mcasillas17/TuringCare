@@ -22,4 +22,4 @@ ENV NODE_ENV=production
 WORKDIR /app/apps/api
 EXPOSE 3001
 # Binds 0.0.0.0:$PORT (default 3001) via @hono/node-server.
-CMD ["pnpm", "exec", "tsx", "src/index.ts"]
+CMD ["pnpm", "exec", "tsx", "--import", "./src/instrument.ts", "src/index.ts"]

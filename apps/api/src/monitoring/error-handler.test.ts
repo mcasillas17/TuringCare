@@ -1,0 +1,79 @@
+import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
+import { describe, expect, it, vi } from "vitest";
+import { createMonitoringErrorHandler } from "./error-handler";
+import { type ApiEnv, requestIdMiddleware } from "./request-id";
+
+/**
+ * Throwaway Hono application built inline for this test only — the
+ * production `app` instance in src/app.ts is never given a synthetic
+ * failure route (see design doc).
+ */
+function buildApp(capture: ReturnType<typeof vi.fn>) {
+  const app = new Hono<ApiEnv>()
+    .use("*", requestIdMiddleware)
+    .get("/boom", () => {
+      throw new Error("raw failure detail: password=hunter2");
+    })
+    .get("/upstream", () => {
+      throw new HTTPException(502, { message: "bad gateway upstream detail" });
+    })
+    .get("/forbidden", () => {
+      throw new HTTPException(403, { message: "forbidden" });
+    });
+  app.onError(createMonitoringErrorHandler(capture));
+  return app;
+}
+
+describe("createMonitoringErrorHandler", () => {
+  it("captures a generic exception once and returns only a generic 500 body", async () => {
+    const capture = vi.fn();
+    const res = await buildApp(capture).request("/boom");
+
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "internal_server_error" });
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+
+  it("never leaks the raw error message in the response", async () => {
+    const res = await buildApp(vi.fn()).request("/boom");
+    const text = await res.text();
+
+    expect(text).not.toContain("password");
+    expect(text).not.toContain("hunter2");
+    expect(text).not.toContain("raw failure detail");
+  });
+
+  it("carries the request ID on the captured-error response", async () => {
+    const res = await buildApp(vi.fn()).request("/boom");
+    expect(res.headers.get("X-Request-ID")).toBeTruthy();
+  });
+
+  it("preserves an unmatched route's 404 exactly and never captures it", async () => {
+    const capture = vi.fn();
+    const res = await buildApp(capture).request("/missing");
+
+    expect(res.status).toBe(404);
+    expect(capture).not.toHaveBeenCalled();
+    expect(res.headers.get("X-Request-ID")).toBeTruthy();
+  });
+
+  it("preserves a 5xx HTTPException response exactly, and captures it", async () => {
+    const capture = vi.fn();
+    const res = await buildApp(capture).request("/upstream");
+
+    expect(res.status).toBe(502);
+    expect(await res.text()).toBe("bad gateway upstream detail");
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture.mock.calls[0]?.[1]).toMatchObject({ method: "GET", status: 502 });
+  });
+
+  it("preserves a 4xx HTTPException response exactly and never captures it", async () => {
+    const capture = vi.fn();
+    const res = await buildApp(capture).request("/forbidden");
+
+    expect(res.status).toBe(403);
+    expect(await res.text()).toBe("forbidden");
+    expect(capture).not.toHaveBeenCalled();
+  });
+});
