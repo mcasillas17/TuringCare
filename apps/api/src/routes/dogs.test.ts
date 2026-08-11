@@ -1,8 +1,23 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { Hono } from "hono";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { db } from "../db";
 import { practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
+import { createMonitoringErrorHandler } from "../monitoring/error-handler";
+import { type ApiEnv, requestIdMiddleware } from "../monitoring/request-id";
 import { type TestUser, createTestUser } from "../test-helpers";
+import { sendFailedException } from "./dogs";
+
+// Wraps the real `sendEmail` so its normal (log-mode, no RESEND_API_KEY)
+// behavior is unchanged for every other test in this file; only the
+// dedicated "send_failed" test below overrides it for a single call via
+// `mockRejectedValueOnce`. This mocks the documented provider-swap seam
+// (see email/send-email.ts's `ResendLike`/`SendEmailDeps`), not the whole
+// dogs route module, so it stays robust across vitest's module cache.
+vi.mock("../email/send-email", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../email/send-email")>();
+  return { ...actual, sendEmail: vi.fn(actual.sendEmail) };
+});
 
 const validDog = {
   name: "Biscuit",
@@ -1260,11 +1275,51 @@ describe("dogs: brief send", () => {
     expect(r.status).toBe(404);
   });
 
-  // TODO: 502 when sendEmail throws — requires vi.doMock + dynamic re-import of
-  // the route module to swap the sendEmail implementation. The 502 branch is a
-  // single line of code (`return c.json({ error: "send_failed" }, 502)`); the
-  // plan permits skipping this integration test rather than fighting vitest's
-  // module-cache semantics. Revisit if/when we add a DI seam to the route.
+  it("POST send: 502 + monitored capture when sendEmail fails (no raw log, request ID present)", async () => {
+    // createTestUser triggers its own verification-email send through the
+    // same `sendEmail` seam (see auth.ts), so the user/dog/brief setup must
+    // happen before arming `mockRejectedValueOnce` — otherwise that
+    // unrelated verification send would consume the one-time rejection.
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockRejectedValueOnce(new Error("resend-timeout-sentinel-do-not-leak"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "sarah@example.com" }),
+    });
+    const text = await r.text();
+
+    expect(r.status).toBe(502);
+    expect(JSON.parse(text)).toEqual({ error: "send_failed" });
+    expect(r.headers.get("X-Request-ID")).toBeTruthy();
+
+    // Exactly one privacy-safe structured log — never the removed raw
+    // `console.error("brief send failed", err)` line, and never the
+    // original provider failure detail.
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const [line, meta] = errorSpy.mock.calls[0] ?? [];
+    expect(line).toBe("[monitoring] unexpected server error");
+    expect(meta).toMatchObject({
+      route: "/api/dogs/:id/brief/send",
+      method: "POST",
+      status: 502,
+    });
+    expect(meta).toHaveProperty("requestId");
+
+    const serializedLog = JSON.stringify(errorSpy.mock.calls[0]);
+    expect(serializedLog).not.toContain("resend-timeout-sentinel-do-not-leak");
+    expect(serializedLog).not.toContain("brief send failed");
+    expect(text).not.toContain("resend-timeout-sentinel-do-not-leak");
+
+    errorSpy.mockRestore();
+  });
 
   it("GET sends: returns newest-first", async () => {
     const u = await createTestUser();
@@ -1439,5 +1494,71 @@ describe("dogs: POST /:id/goals/from-template", () => {
       body: JSON.stringify({ templateKey: "basic-manners" }),
     });
     expect(r.status).toBe(404);
+  });
+});
+
+describe("sendFailedException (brief send-failed monitoring seam)", () => {
+  /**
+   * Throwaway probe app: exercises the exported `sendFailedException` helper
+   * directly, wired through the same `requestIdMiddleware` +
+   * `createMonitoringErrorHandler` used by the real `app` (see app.ts), so
+   * the 502 path is proven end-to-end without dynamically re-mocking the
+   * whole `dogs.ts` module.
+   */
+  function buildProbeApp(capture: ReturnType<typeof vi.fn>) {
+    const probe = new Hono<ApiEnv>()
+      .use("*", requestIdMiddleware)
+      .get("/probe", (c) => {
+        throw sendFailedException(c, new Error("provider-sentinel-do-not-leak"));
+      })
+      .get("/not-found-ish", (c) => c.json({ error: "not_found" } as const, 404));
+    probe.onError(createMonitoringErrorHandler(capture));
+    return probe;
+  }
+
+  it("preserves the exact { error: 'send_failed' } 502 response and request ID", async () => {
+    const res = await buildProbeApp(vi.fn()).request("/probe");
+    const text = await res.text();
+
+    expect(res.status).toBe(502);
+    expect(JSON.parse(text)).toEqual({ error: "send_failed" });
+    expect(res.headers.get("X-Request-ID")).toBeTruthy();
+  });
+
+  it("routes through the global monitoring handler: captured exactly once", async () => {
+    const capture = vi.fn();
+    const res = await buildProbeApp(capture).request("/probe");
+
+    expect(res.status).toBe(502);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture.mock.calls[0]?.[1]).toMatchObject({ status: 502, method: "GET" });
+  });
+
+  it("logs exactly one privacy-safe structured line and never the original cause", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await buildProbeApp(vi.fn()).request("/probe");
+
+    expect(res.status).toBe(502);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const [line, meta] = errorSpy.mock.calls[0] ?? [];
+    expect(line).toBe("[monitoring] unexpected server error");
+    expect(meta).toMatchObject({ status: 502 });
+    expect(meta).toHaveProperty("requestId");
+
+    const serialized = JSON.stringify(errorSpy.mock.calls[0]);
+    expect(serialized).not.toContain("provider-sentinel-do-not-leak");
+    errorSpy.mockRestore();
+  });
+
+  it("does not capture or log a preserved 4xx response (4xx behavior unaffected)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const capture = vi.fn();
+    const res = await buildProbeApp(capture).request("/not-found-ish");
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "not_found" });
+    expect(capture).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });
