@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { app } from "./app";
+import { env } from "./env";
 
 describe("api", () => {
   it("GET /health returns ok", async () => {
@@ -8,10 +9,27 @@ describe("api", () => {
     expect(await res.json()).toEqual({ status: "ok" });
   });
 
+  it("GET /health carries a correlation request ID", async () => {
+    const res = await app.request("/health");
+    expect(res.headers.get("X-Request-ID")).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
   it("GET /me without a session returns 401", async () => {
     const res = await app.request("/me");
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "unauthorized" });
+  });
+
+  it("GET /me without a session carries a correlation request ID", async () => {
+    const res = await app.request("/me");
+    expect(res.headers.get("X-Request-ID")).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("CORS exposes X-Request-ID to the configured frontend origin", async () => {
+    const res = await app.request("/health", {
+      headers: { Origin: env.FRONTEND_URL },
+    });
+    expect(res.headers.get("Access-Control-Expose-Headers")).toContain("X-Request-ID");
   });
 
   it("GET /health is never rate-limited", async () => {

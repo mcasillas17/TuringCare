@@ -3,6 +3,7 @@ packages:
   - "packages/*"
 allowBuilds:
   '@biomejs/biome': true
+  '@sentry/cli': false
   esbuild: true
   msw: false
   sharp: false

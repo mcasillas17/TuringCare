@@ -17,6 +17,8 @@ import {
 } from "@turingcare/shared";
 import { and, count, desc, eq, gte, lt, max } from "drizzle-orm";
 import { Hono } from "hono";
+import type { Context } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { trainingCatalog } from "../data/training-catalog";
 import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
@@ -51,6 +53,23 @@ const invalidJournalField = (path: "occurredAt" | "trend", message: string) =>
       issues: [{ code: "custom", path: [path], message }],
     },
   }) as const;
+
+/**
+ * Builds the 502 thrown when `sendEmail` fails while delivering a brief.
+ * Uses `c.json` to construct the *exact* `{ error: "send_failed" }` response
+ * previously returned directly, then wraps it as an `HTTPException` so the
+ * global monitoring error handler (see monitoring/error-handler.ts) captures
+ * and logs it exactly once instead of it bypassing monitoring entirely.
+ * `cause` carries the original `sendEmail` failure for monitoring only: the
+ * handler never reads `HTTPException#cause` for the client response or for
+ * its own structured `console.error` line (see monitoring/log-error.ts), so
+ * the original error/provider detail never reaches the client body or logs.
+ * Exported so this 502 path can be asserted directly in tests without
+ * dynamically re-mocking the whole route module.
+ */
+export function sendFailedException(c: Context, cause: unknown): HTTPException {
+  return new HTTPException(502, { res: c.json({ error: "send_failed" } as const, 502), cause });
+}
 
 export const dogsApp = new Hono<{ Variables: Vars }>()
   .use("*", requireUser)
@@ -598,8 +617,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         text: email.text,
       });
     } catch (err) {
-      console.error("brief send failed", err);
-      return c.json({ error: "send_failed" } as const, 502);
+      throw sendFailedException(c, err);
     }
 
     const [send] = await db
