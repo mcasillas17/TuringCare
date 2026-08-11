@@ -107,9 +107,9 @@ source maps during CI/deployment using a GitHub Actions secret scoped only to
 release uploads.
 
 The web build uses hidden source maps: maps are uploaded to Sentry but are not
-served publicly by Cloudflare Pages. API source maps are uploaded for the
-compiled server release and are not copied into the production runtime image
-unless the runtime requires them locally.
+served publicly by Cloudflare Pages. The API intentionally runs TypeScript
+source with `tsx`, so there is no compiled API source-map artifact; the source
+files remain in the Fly image and Sentry stack frames use those runtime paths.
 
 Required configuration:
 
@@ -202,7 +202,8 @@ Use mocked Sentry transports; tests never send network events.
 - An API test triggers a synthetic unhandled exception and verifies the
   sanitized captured envelope and unchanged HTTP response contract.
 - A web test throws from a child route and verifies the recovery screen.
-- CI verifies source-map upload configuration without exposing the upload token.
+- CI verifies web source-map upload configuration without exposing the upload
+  token.
 - Existing lint, typecheck, unit, build, and Playwright suites remain required.
 
 ### Production diagnostic
@@ -227,8 +228,8 @@ transport failures are logged without retry loops in request paths and never
 block an API response or React render. Sanitization failure drops the event
 rather than sending an unsanitized fallback.
 
-If source-map upload fails, deployment fails before production release because
-an unsymbolicated monitoring rollout is not considered complete.
+If web source-map upload fails, web deployment fails before production release
+because an unsymbolicated monitoring rollout is not considered complete.
 
 ## Documentation
 
