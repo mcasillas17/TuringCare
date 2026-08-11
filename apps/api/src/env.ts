@@ -44,3 +44,10 @@ const schema = z.object({
 });
 
 export const env = schema.parse(process.env);
+
+// SENTRY_DSN / SENTRY_ENVIRONMENT / SENTRY_RELEASE are intentionally NOT part
+// of this schema. Monitoring must fail open: it is a diagnostic side channel
+// that can never prevent the API from booting or change its behavior, so
+// these vars are read and validated independently (never throwing) by
+// readApiMonitoringConfig() in src/monitoring/config.ts instead of by this
+// fail-fast Zod parse.
