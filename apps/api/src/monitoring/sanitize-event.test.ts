@@ -122,6 +122,82 @@ describe("sanitizeApiEvent", () => {
     assertNoSentinel(result);
   });
 
+  it("normalizes every exception value independently, so a linked cause chain (from LinkedErrors) is as privacy-safe as the wrapper", () => {
+    // Shape produced by Sentry's `linkedErrorsIntegration` for a wrapper
+    // error with `{ cause }`: `event.exception.values` holds the outermost
+    // exception last, its cause(s) before it, oldest-first. Each entry here
+    // carries a distinct unsafe raw message/sentinel and distinct stack
+    // frame context/vars, so this proves the sanitizer's `.map` normalizes
+    // every linked exception on its own — not just the first/last one.
+    const event = baseEvent({
+      exception: {
+        values: [
+          {
+            type: "PayloadTooLargeError",
+            value: `provider rejected body: ${SENTINEL}-root-cause`,
+            mechanism: { type: "chained", handled: true, source: "cause", exception_id: 0 },
+            stacktrace: {
+              frames: [
+                {
+                  filename: "provider-client.js",
+                  function: "sendEmail",
+                  lineno: 12,
+                  context_line: SENTINEL,
+                  vars: { body: SENTINEL },
+                },
+              ],
+            },
+          },
+          {
+            type: "HTTPException",
+            value: `send failed: ${SENTINEL}-wrapper`,
+            mechanism: { type: "generic", handled: true, exception_id: 1 },
+            stacktrace: {
+              frames: [
+                {
+                  filename: "dogs.ts",
+                  function: "sendFailedException",
+                  lineno: 71,
+                  context_line: SENTINEL,
+                  vars: { cause: SENTINEL },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    const result = sanitizeApiEvent(event, hint);
+
+    expect(result?.exception?.values).toEqual([
+      {
+        type: "PayloadTooLargeError",
+        value: "Unexpected PayloadTooLargeError",
+        mechanism: { type: "chained", handled: true },
+        stacktrace: {
+          frames: [{ filename: "provider-client.js", function: "sendEmail", lineno: 12 }],
+        },
+      },
+      {
+        type: "HTTPException",
+        value: "Unexpected HTTPException",
+        mechanism: { type: "generic", handled: true },
+        stacktrace: {
+          frames: [{ filename: "dogs.ts", function: "sendFailedException", lineno: 71 }],
+        },
+      },
+    ]);
+    // Every unsafe raw message/sentinel and every stack context_line/vars
+    // field, for both the cause and the wrapper, must be gone.
+    assertNoSentinel(result);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("context_line");
+    expect(serialized).not.toContain('"vars"');
+    expect(serialized).not.toContain("exception_id");
+    expect(serialized).not.toContain("source");
+  });
+
   it("falls back to a safe generic type and value when the exception type is unsafe", () => {
     const event = baseEvent({
       exception: {

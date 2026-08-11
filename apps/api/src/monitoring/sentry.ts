@@ -12,6 +12,7 @@ import {
   flush,
   functionToStringIntegration,
   init,
+  linkedErrorsIntegration,
   onUncaughtExceptionIntegration,
   onUnhandledRejectionIntegration,
 } from "@sentry/node";
@@ -99,6 +100,15 @@ export function initializeApiMonitoring(nodeVersion: string = process.version): 
       dedupeIntegration(),
       eventFiltersIntegration(),
       functionToStringIntegration(),
+      // Links an `Error#cause` chain (e.g. `sendFailedException`'s stored
+      // provider error) into `event.exception.values` as additional entries,
+      // capped at Sentry's default depth of 5 causes. This never bypasses
+      // the sanitizer: `sanitizeApiEvent` already maps every entry in
+      // `event.exception.values` through the same allowlist independently
+      // (see sanitize-event.ts), so each linked cause is normalized on its
+      // own — no raw message/stack var ever reaches Sentry, for the wrapper
+      // exception or any of its causes.
+      linkedErrorsIntegration(),
       // The only capture path for a process-level crash (see design doc);
       // preserves Node's existing non-zero-exit behavior.
       onUncaughtExceptionIntegration(),

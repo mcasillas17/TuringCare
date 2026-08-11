@@ -14,6 +14,7 @@ const sentryMocks = vi.hoisted(() => ({
   dedupeIntegration: vi.fn(() => ({ name: "Dedupe" }) as const),
   eventFiltersIntegration: vi.fn(() => ({ name: "EventFilters" }) as const),
   functionToStringIntegration: vi.fn(() => ({ name: "FunctionToString" }) as const),
+  linkedErrorsIntegration: vi.fn(() => ({ name: "LinkedErrors" }) as const),
   onUncaughtExceptionIntegration: vi.fn(() => ({ name: "OnUncaughtException" }) as const),
   onUnhandledRejectionIntegration: vi.fn(
     (options?: { mode: string }) => ({ name: "OnUnhandledRejection", options }) as const,
@@ -27,6 +28,7 @@ vi.mock("@sentry/node", () => ({
   dedupeIntegration: sentryMocks.dedupeIntegration,
   eventFiltersIntegration: sentryMocks.eventFiltersIntegration,
   functionToStringIntegration: sentryMocks.functionToStringIntegration,
+  linkedErrorsIntegration: sentryMocks.linkedErrorsIntegration,
   onUncaughtExceptionIntegration: sentryMocks.onUncaughtExceptionIntegration,
   onUnhandledRejectionIntegration: sentryMocks.onUnhandledRejectionIntegration,
 }));
@@ -220,6 +222,8 @@ describe("initializeApiMonitoring", () => {
     expect(sentryMocks.dedupeIntegration).toHaveBeenCalledTimes(1);
     expect(sentryMocks.eventFiltersIntegration).toHaveBeenCalledTimes(1);
     expect(sentryMocks.functionToStringIntegration).toHaveBeenCalledTimes(1);
+    expect(sentryMocks.linkedErrorsIntegration).toHaveBeenCalledTimes(1);
+    expect(sentryMocks.linkedErrorsIntegration).toHaveBeenCalledWith();
     expect(sentryMocks.onUncaughtExceptionIntegration).toHaveBeenCalledTimes(1);
     expect(sentryMocks.onUnhandledRejectionIntegration).toHaveBeenCalledTimes(1);
     expect(sentryMocks.onUnhandledRejectionIntegration).toHaveBeenCalledWith({
@@ -229,6 +233,7 @@ describe("initializeApiMonitoring", () => {
       { name: "Dedupe" },
       { name: "EventFilters" },
       { name: "FunctionToString" },
+      { name: "LinkedErrors" },
       { name: "OnUncaughtException" },
       { name: "OnUnhandledRejection", options: { mode: "strict" } },
     ]);

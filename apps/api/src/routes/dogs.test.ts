@@ -1534,6 +1534,26 @@ describe("sendFailedException (brief send-failed monitoring seam)", () => {
     expect(capture.mock.calls[0]?.[1]).toMatchObject({ status: 502, method: "GET" });
   });
 
+  it("preserves the original provider error as HTTPException#cause for Sentry's linked-errors chain, without it ever reaching the response", async () => {
+    const capture = vi.fn();
+    const res = await buildProbeApp(capture).request("/probe");
+    const capturedError = capture.mock.calls[0]?.[0];
+
+    expect(res.status).toBe(502);
+    // Documents that the cause is present on the captured error — Sentry's
+    // `linkedErrorsIntegration` (see sentry.ts) walks this `cause` chain and
+    // `sanitizeApiEvent` (see sanitize-event.ts) normalizes it — without
+    // asserting that the raw message is ever sent anywhere: `capture` here
+    // is a bare mock, not the real Sentry adapter, so this test cannot and
+    // does not claim the raw message reaches Sentry.
+    expect(capturedError).toBeInstanceOf(Error);
+    expect((capturedError as { cause?: unknown } | undefined)?.cause).toBeInstanceOf(Error);
+    expect(((capturedError as { cause?: Error } | undefined)?.cause as Error)?.message).toBe(
+      "provider-sentinel-do-not-leak",
+    );
+    expect(JSON.parse(await res.text())).toEqual({ error: "send_failed" });
+  });
+
   it("logs exactly one privacy-safe structured line and never the original cause", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const res = await buildProbeApp(vi.fn()).request("/probe");
