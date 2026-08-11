@@ -11,7 +11,7 @@ describe("api", () => {
 
   it("GET /health carries a correlation request ID", async () => {
     const res = await app.request("/health");
-    expect(res.headers.get("X-Request-ID")).toBeTruthy();
+    expect(res.headers.get("X-Request-ID")).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("GET /me without a session returns 401", async () => {
@@ -22,7 +22,7 @@ describe("api", () => {
 
   it("GET /me without a session carries a correlation request ID", async () => {
     const res = await app.request("/me");
-    expect(res.headers.get("X-Request-ID")).toBeTruthy();
+    expect(res.headers.get("X-Request-ID")).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("CORS exposes X-Request-ID to the configured frontend origin", async () => {

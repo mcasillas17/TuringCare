@@ -35,7 +35,7 @@ export function isApiMonitoringEnabled(): boolean {
 export function initializeApiMonitoring(): void {
   const config = readApiMonitoringConfig();
   if (!config.enabled) {
-    if (config.warning) console.warn(config.warning);
+    if (config.warning) console.warn(`[monitoring] ${config.warning}`);
     enabled = false;
     return;
   }
@@ -100,11 +100,13 @@ export interface ApiErrorMeta {
  * Captures an API error, but only when monitoring is enabled AND the
  * response is an unexpected server error (status >= 500). Expected 4xx
  * responses — validation, auth, not-found, rate-limit, ... — are never sent
- * to Sentry, including when raised as a framework `HTTPException`.
+ * to Sentry, including when raised as a framework `HTTPException`. Returns
+ * the Sentry event ID when the error was captured, or `undefined` when
+ * monitoring is disabled or the status doesn't qualify.
  */
-export function captureApiError(error: unknown, meta: ApiErrorMeta): void {
-  if (!enabled || meta.status < 500) return;
-  captureException(error, {
+export function captureApiError(error: unknown, meta: ApiErrorMeta): string | undefined {
+  if (!enabled || meta.status < 500) return undefined;
+  return captureException(error, {
     tags: {
       application: "api",
       route: meta.route,
@@ -125,7 +127,13 @@ export async function captureApiStartupFailure(error: unknown): Promise<void> {
   if (!enabled) return;
   captureException(error, {
     level: "fatal",
-    tags: { application: "api" },
+    tags: {
+      application: "api",
+      route: "startup",
+      method: "STARTUP",
+      status: "500",
+      request_id: "startup",
+    },
   });
   await flush(5000);
 }

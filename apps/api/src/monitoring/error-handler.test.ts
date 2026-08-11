@@ -33,6 +33,11 @@ describe("createMonitoringErrorHandler", () => {
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: "internal_server_error" });
     expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture.mock.calls[0]?.[1]).toMatchObject({
+      route: "/boom",
+      method: "GET",
+      status: 500,
+    });
   });
 
   it("never leaks the raw error message in the response", async () => {
@@ -75,5 +80,27 @@ describe("createMonitoringErrorHandler", () => {
     expect(res.status).toBe(403);
     expect(await res.text()).toBe("forbidden");
     expect(capture).not.toHaveBeenCalled();
+  });
+
+  it("captures with route 'unmatched' and requestId 'unknown' when nothing set either", async () => {
+    const capture = vi.fn();
+    // No requestIdMiddleware and no wildcard route/middleware registered, so
+    // nothing matches this request: routePath(c) returns "" and c.get(
+    // "requestId") returns undefined, exercising both error-handler fallbacks.
+    const app = new Hono<ApiEnv>().get("/known", (c) => c.text("ok"));
+    app.notFound(() => {
+      throw new Error("no route matched");
+    });
+    app.onError(createMonitoringErrorHandler(capture));
+
+    const res = await app.request("/does-not-exist");
+
+    expect(res.status).toBe(500);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture.mock.calls[0]?.[1]).toMatchObject({
+      route: "unmatched",
+      requestId: "unknown",
+      status: 500,
+    });
   });
 });

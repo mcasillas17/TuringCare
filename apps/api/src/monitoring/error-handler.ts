@@ -27,9 +27,9 @@ export function createMonitoringErrorHandler(
   capture: Capture = captureApiError,
 ): ErrorHandler<ApiEnv> {
   return (err, c) => {
-    const route = routePath(c);
+    const route = routePath(c) || "unmatched";
     const method = c.req.method;
-    const requestId = c.get("requestId");
+    const requestId = c.get("requestId") ?? "unknown";
 
     if (err instanceof HTTPException) {
       const res = err.getResponse();
