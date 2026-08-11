@@ -78,11 +78,17 @@ function sanitizeException(exception: Exception): Exception {
   return sanitized;
 }
 
+/** A tag value is only ever forwarded when it is a plain string or number. */
+function isSafeTagValue(value: unknown): value is string | number {
+  return typeof value === "string" || typeof value === "number";
+}
+
 function sanitizeTags(tags: ErrorEvent["tags"]): ErrorEvent["tags"] | undefined {
   if (!tags) return undefined;
   const sanitized: NonNullable<ErrorEvent["tags"]> = {};
   for (const key of ALLOWED_TAGS) {
-    if (key in tags) sanitized[key] = tags[key];
+    const value = tags[key];
+    if (key in tags && isSafeTagValue(value)) sanitized[key] = value;
   }
   return Object.keys(sanitized).length > 0 ? sanitized : undefined;
 }
@@ -92,9 +98,18 @@ function sanitizeTags(tags: ErrorEvent["tags"]): ErrorEvent["tags"] | undefined 
  * containing only allowlisted fields, or `null` if sanitization itself
  * throws (fail closed: never forward an event we couldn't sanitize).
  */
-export function sanitizeEvent(event: ErrorEvent, _hint: EventHint): ErrorEvent | null {
+export function sanitizeApiEvent(event: ErrorEvent, _hint: EventHint): ErrorEvent | null {
   try {
     const sanitized: ErrorEvent = { type: undefined };
+
+    // Operational metadata: identifies/dates/environments the event without
+    // carrying any application or owner content.
+    if (event.event_id !== undefined) sanitized.event_id = event.event_id;
+    if (event.timestamp !== undefined) sanitized.timestamp = event.timestamp;
+    if (event.platform !== undefined) sanitized.platform = event.platform;
+    if (event.level !== undefined) sanitized.level = event.level;
+    if (event.release !== undefined) sanitized.release = event.release;
+    if (event.environment !== undefined) sanitized.environment = event.environment;
 
     const tags = sanitizeTags(event.tags);
     if (tags) sanitized.tags = tags;
@@ -120,6 +135,6 @@ export function sanitizeEvent(event: ErrorEvent, _hint: EventHint): ErrorEvent |
  * bodies, console output, and other free-form application data, so none of
  * that risk is worth the diagnostic value: every breadcrumb is dropped.
  */
-export function sanitizeBreadcrumb(_breadcrumb: unknown, _hint?: unknown): null {
+export function sanitizeApiBreadcrumb(_breadcrumb?: unknown, _hint?: unknown): null {
   return null;
 }

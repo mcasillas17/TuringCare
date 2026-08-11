@@ -1,6 +1,6 @@
 import type { ErrorEvent, EventHint } from "@sentry/node";
 import { describe, expect, it } from "vitest";
-import { classifyExceptionValue, sanitizeBreadcrumb, sanitizeEvent } from "./sanitize-event";
+import { classifyExceptionValue, sanitizeApiBreadcrumb, sanitizeApiEvent } from "./sanitize-event";
 
 const SENTINEL = "OWNER-CONTENT-DO-NOT-SEND";
 const hint: EventHint = {};
@@ -15,10 +15,15 @@ function assertNoSentinel(value: unknown): void {
   expect(JSON.stringify(value)).not.toContain(SENTINEL);
 }
 
-describe("sanitizeEvent", () => {
+describe("sanitizeApiEvent", () => {
   it("drops every field not on the explicit allowlist", () => {
     const event = baseEvent({
-      event_id: `id-${SENTINEL}`,
+      event_id: "3c1b8f2a4d5e4c6f9a0b1c2d3e4f5061",
+      timestamp: 1_700_000_000,
+      level: "error",
+      platform: "node",
+      release: "api@1.4.2",
+      environment: "production",
       message: SENTINEL,
       logentry: { message: SENTINEL },
       transaction: SENTINEL,
@@ -43,20 +48,23 @@ describe("sanitizeEvent", () => {
         unapproved: SENTINEL,
         another_bad_tag: SENTINEL,
       },
-      environment: SENTINEL,
-      release: SENTINEL,
       server_name: SENTINEL,
-      platform: SENTINEL,
       dist: SENTINEL,
       sdk: { name: SENTINEL, version: "1.0.0" },
       fingerprint: [SENTINEL],
       modules: { foo: SENTINEL },
     });
 
-    const result = sanitizeEvent(event, hint);
+    const result = sanitizeApiEvent(event, hint);
 
     expect(result).toEqual({
       type: undefined,
+      event_id: "3c1b8f2a4d5e4c6f9a0b1c2d3e4f5061",
+      timestamp: 1_700_000_000,
+      level: "error",
+      platform: "node",
+      release: "api@1.4.2",
+      environment: "production",
       tags: {
         application: "api",
         route: "/patients/:id",
@@ -65,6 +73,26 @@ describe("sanitizeEvent", () => {
         request_id: "req-123",
       },
       request: { method: "POST" },
+    });
+    assertNoSentinel(result);
+  });
+
+  it("drops non-string/number tag values even under an approved tag key", () => {
+    const event = baseEvent({
+      tags: {
+        application: { nested: SENTINEL } as unknown as string,
+        route: true as unknown as string,
+        method: null as unknown as string,
+        status: [SENTINEL] as unknown as string,
+        request_id: "req-123",
+      },
+    });
+
+    const result = sanitizeApiEvent(event, hint);
+
+    expect(result).toEqual({
+      type: undefined,
+      tags: { request_id: "req-123" },
     });
     assertNoSentinel(result);
   });
@@ -82,7 +110,7 @@ describe("sanitizeEvent", () => {
       },
     });
 
-    const result = sanitizeEvent(event, hint);
+    const result = sanitizeApiEvent(event, hint);
 
     expect(result?.exception?.values).toEqual([
       {
@@ -106,7 +134,7 @@ describe("sanitizeEvent", () => {
       },
     });
 
-    const result = sanitizeEvent(event, hint);
+    const result = sanitizeApiEvent(event, hint);
 
     expect(result?.exception?.values).toEqual([
       {
@@ -122,7 +150,7 @@ describe("sanitizeEvent", () => {
       exception: { values: [{ value: SENTINEL }] },
     });
 
-    const result = sanitizeEvent(event, hint);
+    const result = sanitizeApiEvent(event, hint);
 
     expect(result?.exception?.values).toEqual([
       { type: "Error", value: "Unexpected application error" },
@@ -148,7 +176,7 @@ describe("sanitizeEvent", () => {
       },
     });
 
-    const result = sanitizeEvent(event, hint);
+    const result = sanitizeApiEvent(event, hint);
 
     expect(result?.exception?.values?.[0]?.mechanism).toEqual({
       type: "onunhandledrejection",
@@ -175,7 +203,7 @@ describe("sanitizeEvent", () => {
       },
     });
 
-    const result = sanitizeEvent(event, hint);
+    const result = sanitizeApiEvent(event, hint);
 
     expect(result?.exception?.values?.[0]?.mechanism).toEqual({
       type: "generic",
@@ -217,7 +245,7 @@ describe("sanitizeEvent", () => {
       },
     });
 
-    const result = sanitizeEvent(event, hint);
+    const result = sanitizeApiEvent(event, hint);
 
     expect(result?.debug_meta).toEqual({
       images: [{ type: "sourcemap", code_file: "app.js", debug_id: "abc-123" }],
@@ -245,7 +273,7 @@ describe("sanitizeEvent", () => {
       },
     });
 
-    expect(sanitizeEvent(event, hint)).toBeNull();
+    expect(sanitizeApiEvent(event, hint)).toBeNull();
   });
 });
 
@@ -262,10 +290,14 @@ describe("classifyExceptionValue", () => {
   });
 });
 
-describe("sanitizeBreadcrumb", () => {
+describe("sanitizeApiBreadcrumb", () => {
   it("always drops every breadcrumb", () => {
-    expect(sanitizeBreadcrumb({ message: SENTINEL }, {})).toBeNull();
-    expect(sanitizeBreadcrumb({ category: "http", data: { url: SENTINEL } }, {})).toBeNull();
-    expect(sanitizeBreadcrumb({}, {})).toBeNull();
+    expect(sanitizeApiBreadcrumb({ message: SENTINEL }, {})).toBeNull();
+    expect(sanitizeApiBreadcrumb({ category: "http", data: { url: SENTINEL } }, {})).toBeNull();
+    expect(sanitizeApiBreadcrumb({}, {})).toBeNull();
+  });
+
+  it("compiles and returns null when called with no arguments", () => {
+    expect(sanitizeApiBreadcrumb()).toBeNull();
   });
 });
