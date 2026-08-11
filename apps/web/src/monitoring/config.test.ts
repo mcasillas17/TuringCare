@@ -73,6 +73,38 @@ describe("resolveMonitoringConfig", () => {
     expect(result.enabled).toBe(false);
   });
 
+  it("rejects a plain http DSN (HTTPS only)", () => {
+    const result = resolveMonitoringConfig({
+      ...complete,
+      dsn: "http://publickey123@o12345.ingest.sentry.io/6789",
+    });
+    expect(result.enabled).toBe(false);
+  });
+
+  it("rejects a DSN with no project ID path segment", () => {
+    expect(resolveMonitoringConfig({ ...complete, dsn: "https://a@b" }).enabled).toBe(false);
+    expect(
+      resolveMonitoringConfig({ ...complete, dsn: "https://publickey123@o12345.ingest.sentry.io/" })
+        .enabled,
+    ).toBe(false);
+  });
+
+  it("rejects a DSN with a non-numeric project ID", () => {
+    const result = resolveMonitoringConfig({
+      ...complete,
+      dsn: "https://publickey123@o12345.ingest.sentry.io/not-a-project-id",
+    });
+    expect(result.enabled).toBe(false);
+  });
+
+  it("rejects a non-http(s) scheme such as ftp", () => {
+    const result = resolveMonitoringConfig({
+      ...complete,
+      dsn: "ftp://publickey123@o12345.ingest.sentry.io/6789",
+    });
+    expect(result.enabled).toBe(false);
+  });
+
   it("warns without throwing and names VITE_SENTRY_RELEASE when release is omitted", () => {
     const missingRelease = { ...complete, release: undefined };
     expect(() => resolveMonitoringConfig(missingRelease)).not.toThrow();

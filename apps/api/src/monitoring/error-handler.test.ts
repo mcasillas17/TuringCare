@@ -121,3 +121,76 @@ describe("createMonitoringErrorHandler", () => {
     });
   });
 });
+
+describe("createMonitoringErrorHandler console.error observability", () => {
+  it("logs a generic exception exactly once with safe metadata and never the raw message", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await buildApp(vi.fn()).request("/boom");
+    expect(res.status).toBe(500);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const [line, meta] = errorSpy.mock.calls[0] ?? [];
+    expect(line).toBe("[monitoring] unexpected server error");
+    expect(meta).toMatchObject({ route: "/boom", method: "GET", status: 500 });
+    expect(meta).toHaveProperty("requestId");
+    expect(meta).toHaveProperty("errorType");
+
+    const serialized = JSON.stringify(errorSpy.mock.calls[0]);
+    expect(serialized).not.toContain("raw failure detail");
+    errorSpy.mockRestore();
+  });
+
+  it("logs a 5xx HTTPException exactly once with safe metadata and never the response body", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await buildApp(vi.fn()).request("/upstream");
+    expect(res.status).toBe(502);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const [line, meta] = errorSpy.mock.calls[0] ?? [];
+    expect(line).toBe("[monitoring] unexpected server error");
+    expect(meta).toMatchObject({ route: "/upstream", method: "GET", status: 502 });
+
+    const serialized = JSON.stringify(errorSpy.mock.calls[0]);
+    expect(serialized).not.toContain("bad gateway upstream detail");
+    errorSpy.mockRestore();
+  });
+
+  it("never logs for a preserved 4xx HTTPException response", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await buildApp(vi.fn()).request("/forbidden");
+    expect(res.status).toBe(403);
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it("never logs for a preserved 404 (unmatched route)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await buildApp(vi.fn()).request("/missing");
+    expect(res.status).toBe(404);
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it("logs a normalized non-Error (sentinel) throw exactly once and never leaks the sentinel", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await buildApp(vi.fn()).request("/sentinel");
+    expect(res.status).toBe(500);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const serialized = JSON.stringify(errorSpy.mock.calls[0]);
+    expect(serialized).not.toContain(SENTINEL);
+    errorSpy.mockRestore();
+  });
+
+  it("logs exactly once per request even when capture also runs (no duplicate logging)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const capture = vi.fn();
+    await buildApp(capture).request("/boom");
+
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    errorSpy.mockRestore();
+  });
+});

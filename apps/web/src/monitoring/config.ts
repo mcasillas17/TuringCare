@@ -18,7 +18,15 @@ export type MonitoringSource = {
 
 const MIN_RELEASE_LENGTH = 7;
 
-/** True only for a well-formed http(s) URL with a non-empty username, i.e. a Sentry-style DSN. */
+/** A Sentry DSN's trailing path segment is always its numeric project ID. */
+const NUMERIC_PROJECT_ID = /^[0-9]+$/;
+
+/**
+ * True only for a well-formed Sentry-style DSN: HTTPS (never plain HTTP —
+ * this is production-only monitoring transport, not a general URL check), a
+ * non-empty username (the DSN's public key), a non-empty hostname, and a
+ * non-empty, purely numeric final path segment (the Sentry project ID).
+ */
 function isValidDsn(value: string): boolean {
   let url: URL;
   try {
@@ -26,8 +34,13 @@ function isValidDsn(value: string): boolean {
   } catch {
     return false;
   }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
-  return url.username.length > 0;
+  if (url.protocol !== "https:") return false;
+  if (url.username.length === 0) return false;
+  if (url.hostname.length === 0) return false;
+
+  const segments = url.pathname.split("/").filter((segment) => segment.length > 0);
+  const projectId = segments.at(-1);
+  return projectId !== undefined && NUMERIC_PROJECT_ID.test(projectId);
 }
 
 /**
