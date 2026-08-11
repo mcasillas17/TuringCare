@@ -26,16 +26,43 @@ export function isApiMonitoringEnabled(): boolean {
 }
 
 /**
+ * Only Node 22 is supported for Sentry init under this project's `tsx`
+ * runtime (see Dockerfile.api / package.json engines): on Node >=24, the
+ * `@sentry/node` + `tsx` combination has been verified to make the process
+ * exit silently instead of booting. Pure and side-effect-free so tests can
+ * exercise both branches without spawning a real process.
+ */
+export function isSupportedMonitoringNodeMajor(nodeVersion: string): boolean {
+  return nodeMajorVersion(nodeVersion) === 22;
+}
+
+/** Parses the major version out of a `process.version`-style string, e.g. `"v22.4.0"` -> `22`. */
+function nodeMajorVersion(nodeVersion: string): number {
+  return Number.parseInt(nodeVersion.replace(/^v/, "").split(".")[0] ?? "", 10);
+}
+
+/**
  * Initializes (or leaves disabled) API monitoring. Must run before the Hono
  * application is constructed (see `src/instrument.ts`). Never throws: per the
  * fail-open design, a missing or malformed configuration logs at most one
  * warning and leaves monitoring off rather than preventing the API from
- * booting.
+ * booting. `nodeVersion` defaults to the running process's version but is
+ * injectable so tests can prove the Node 22/>=24 behavior without actually
+ * running under a different Node binary.
  */
-export function initializeApiMonitoring(): void {
+export function initializeApiMonitoring(nodeVersion: string = process.version): void {
   const config = readApiMonitoringConfig();
   if (!config.enabled) {
     if (config.warning) console.warn(`[monitoring] ${config.warning}`);
+    enabled = false;
+    return;
+  }
+
+  // Fail-open runtime guard: a config that would otherwise be valid is still
+  // left disabled outside Node 22, rather than calling into Sentry, because
+  // Sentry + tsx has been verified to exit the process silently on Node >=24.
+  if (!isSupportedMonitoringNodeMajor(nodeVersion)) {
+    console.warn("[monitoring] monitoring disabled: Sentry with the tsx runtime requires Node 22");
     enabled = false;
     return;
   }

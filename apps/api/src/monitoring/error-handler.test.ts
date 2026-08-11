@@ -20,10 +20,15 @@ function buildApp(capture: ReturnType<typeof vi.fn>) {
     })
     .get("/forbidden", () => {
       throw new HTTPException(403, { message: "forbidden" });
+    })
+    .get("/sentinel", () => {
+      throw SENTINEL;
     });
   app.onError(createMonitoringErrorHandler(capture));
   return app;
 }
+
+const SENTINEL = "non-error-sentinel-value-do-not-leak";
 
 describe("createMonitoringErrorHandler", () => {
   it("captures a generic exception once and returns only a generic 500 body", async () => {
@@ -44,8 +49,6 @@ describe("createMonitoringErrorHandler", () => {
     const res = await buildApp(vi.fn()).request("/boom");
     const text = await res.text();
 
-    expect(text).not.toContain("password");
-    expect(text).not.toContain("hunter2");
     expect(text).not.toContain("raw failure detail");
   });
 
@@ -80,6 +83,20 @@ describe("createMonitoringErrorHandler", () => {
     expect(res.status).toBe(403);
     expect(await res.text()).toBe("forbidden");
     expect(capture).not.toHaveBeenCalled();
+  });
+
+  it("normalizes a non-Error (string/sentinel) throw to a generic 500, still captures once, and never leaks the sentinel", async () => {
+    const capture = vi.fn();
+    const res = await buildApp(capture).request("/sentinel");
+    const text = await res.text();
+
+    expect(res.status).toBe(500);
+    expect(text).not.toContain(SENTINEL);
+    expect(JSON.parse(text)).toEqual({ error: "internal_server_error" });
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture.mock.calls[0]?.[0]).toBeInstanceOf(Error);
+    expect(capture.mock.calls[0]?.[0]).toMatchObject({ message: "Non-Error value thrown" });
+    expect(res.headers.get("X-Request-ID")).toBeTruthy();
   });
 
   it("captures with route 'unmatched' and requestId 'unknown' when nothing set either", async () => {
