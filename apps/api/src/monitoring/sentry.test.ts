@@ -81,7 +81,7 @@ describe("captureApiError", () => {
     stubEnabledEnv();
     const { initializeApiMonitoring, captureApiError, isApiMonitoringEnabled } =
       await loadSentryModule();
-    initializeApiMonitoring();
+    initializeApiMonitoring("v22.4.0");
     expect(isApiMonitoringEnabled()).toBe(true);
 
     const result = captureApiError(new Error("not found"), {
@@ -98,7 +98,7 @@ describe("captureApiError", () => {
   it("captures and returns the Sentry event ID for a 5xx error when enabled", async () => {
     stubEnabledEnv();
     const { initializeApiMonitoring, captureApiError } = await loadSentryModule();
-    initializeApiMonitoring();
+    initializeApiMonitoring("v22.4.0");
 
     const error = new Error("boom");
     const result = captureApiError(error, {
@@ -136,7 +136,7 @@ describe("captureApiStartupFailure", () => {
   it("captures with the fixed startup tag set and flushes when enabled", async () => {
     stubEnabledEnv();
     const { initializeApiMonitoring, captureApiStartupFailure } = await loadSentryModule();
-    initializeApiMonitoring();
+    initializeApiMonitoring("v22.4.0");
 
     const error = new Error("boom");
     await captureApiStartupFailure(error);
