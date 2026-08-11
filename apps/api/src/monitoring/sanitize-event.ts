@@ -13,6 +13,62 @@ import type { ErrorEvent, EventHint, Exception, StackFrame } from "@sentry/node"
 const ALLOWED_TAGS = ["application", "route", "method", "status", "request_id"] as const;
 
 /**
+ * Matches short, all-caps HTTP-method-shaped tokens: current standard verbs
+ * (GET, POST, PATCH, DELETE, OPTIONS, ...) as well as the planned `MANUAL`
+ * diagnostic pseudo-method. Anything else (non-strings, lowercase, or
+ * free-form content) is rejected so `request.method` can never carry
+ * arbitrary application/owner content.
+ */
+const SAFE_METHOD = /^[A-Z]{3,16}$/;
+
+function isSafeMethod(value: unknown): value is string {
+  return typeof value === "string" && SAFE_METHOD.test(value);
+}
+
+/** The only debug image fields ever forwarded: enough to symbolicate stack frames. */
+interface SanitizedDebugImage {
+  type?: string;
+  code_file?: string;
+  debug_id?: string;
+}
+
+/**
+ * Rebuilds a single debug image from scratch, preserving only the
+ * symbolication fields the approved plan allows. Malformed entries (not an
+ * object, missing/non-string fields) are handled safely: unsafe fields are
+ * simply omitted rather than thrown on.
+ */
+function sanitizeDebugImage(image: unknown): SanitizedDebugImage | null {
+  if (typeof image !== "object" || image === null) return null;
+  const raw = image as Record<string, unknown>;
+  const sanitized: SanitizedDebugImage = {};
+  if (typeof raw.type === "string") sanitized.type = raw.type;
+  if (typeof raw.code_file === "string") sanitized.code_file = raw.code_file;
+  if (typeof raw.debug_id === "string") sanitized.debug_id = raw.debug_id;
+  return Object.keys(sanitized).length > 0 ? sanitized : null;
+}
+
+/**
+ * Rebuilds `debug_meta` from scratch, keeping only a fresh `images` array of
+ * sanitized entries (never the original object/array by reference). Any
+ * other `debug_meta` key, and any other per-image key, is dropped. Absent or
+ * malformed `debug_meta`/`images` values are handled safely and simply
+ * result in no `debug_meta` being forwarded.
+ */
+function sanitizeDebugMeta(
+  debugMeta: ErrorEvent["debug_meta"],
+): ErrorEvent["debug_meta"] | undefined {
+  if (!debugMeta || !Array.isArray(debugMeta.images)) return undefined;
+  const images = debugMeta.images
+    .map(sanitizeDebugImage)
+    .filter((image): image is SanitizedDebugImage => image !== null);
+  // The sanitized image shape intentionally carries only a subset of the
+  // Sentry SDK's `DebugImage` union fields, so it's cast back to the SDK
+  // type here rather than trying to satisfy every union variant exactly.
+  return images.length > 0 ? ({ images } as ErrorEvent["debug_meta"]) : undefined;
+}
+
+/**
  * Matches short, code-identifier-shaped strings (e.g. exception/mechanism
  * type names like `TypeError` or `onunhandledrejection`). Used to allow a
  * small amount of structural information through while rejecting anything
@@ -118,11 +174,14 @@ export function sanitizeApiEvent(event: ErrorEvent, _hint: EventHint): ErrorEven
       sanitized.exception = { values: event.exception.values.map(sanitizeException) };
     }
 
-    // Source-map symbolication metadata only (image paths/debug ids); no
-    // application content lives here.
-    if (event.debug_meta) sanitized.debug_meta = event.debug_meta;
+    // Source-map symbolication metadata only (image type/code_file/debug_id);
+    // rebuilt from scratch so no other debug_meta/image key or object
+    // reference ever passes through.
+    const debugMeta = sanitizeDebugMeta(event.debug_meta);
+    if (debugMeta) sanitized.debug_meta = debugMeta;
 
-    if (event.request?.method) sanitized.request = { method: event.request.method };
+    const method = event.request?.method;
+    if (isSafeMethod(method)) sanitized.request = { method };
 
     return sanitized;
   } catch {

@@ -265,6 +265,67 @@ describe("sanitizeApiEvent", () => {
     assertNoSentinel(result);
   });
 
+  it("rebuilds debug_meta from scratch, dropping any non-allowlisted debug_meta/image keys", () => {
+    const originalDebugMeta = {
+      images: [
+        {
+          type: "sourcemap",
+          code_file: "app.js",
+          debug_id: "abc-123",
+          extra_image_field: SENTINEL,
+        },
+      ],
+      extra_debug_meta_field: SENTINEL,
+    } as unknown as ErrorEvent["debug_meta"];
+    const event = baseEvent({ debug_meta: originalDebugMeta });
+
+    const result = sanitizeApiEvent(event, hint);
+
+    expect(result?.debug_meta).toEqual({
+      images: [{ type: "sourcemap", code_file: "app.js", debug_id: "abc-123" }],
+    });
+    expect(result?.debug_meta).not.toBe(originalDebugMeta);
+    expect(result?.debug_meta?.images).not.toBe(originalDebugMeta?.images);
+    assertNoSentinel(result);
+  });
+
+  it("omits debug_meta entirely when it is absent or malformed, without throwing", () => {
+    expect(sanitizeApiEvent(baseEvent(), hint)?.debug_meta).toBeUndefined();
+
+    const malformedImages = baseEvent({
+      debug_meta: { images: "not-an-array" } as unknown as ErrorEvent["debug_meta"],
+    });
+    expect(sanitizeApiEvent(malformedImages, hint)?.debug_meta).toBeUndefined();
+
+    const nonObjectImage = baseEvent({
+      debug_meta: { images: [null, "bad", 42] } as unknown as ErrorEvent["debug_meta"],
+    });
+    expect(sanitizeApiEvent(nonObjectImage, hint)?.debug_meta).toBeUndefined();
+  });
+
+  it("forwards request.method only when it is a safe uppercase HTTP-method-shaped token", () => {
+    expect(sanitizeApiEvent(baseEvent({ request: { method: "MANUAL" } }), hint)?.request).toEqual({
+      method: "MANUAL",
+    });
+
+    const unsafeMethods: unknown[] = [
+      123,
+      null,
+      undefined,
+      "get",
+      "PO",
+      `${SENTINEL}`,
+      `POST-${SENTINEL}`,
+      "A".repeat(17),
+    ];
+    for (const method of unsafeMethods) {
+      const event = baseEvent({ request: { method: method as unknown as string } });
+      const result = sanitizeApiEvent(event, hint);
+      expect(result?.request).toBeUndefined();
+      assertNoSentinel(result);
+    }
+  });
+
   it("returns null when reading the event throws", () => {
     const event = baseEvent();
     Object.defineProperty(event, "tags", {
