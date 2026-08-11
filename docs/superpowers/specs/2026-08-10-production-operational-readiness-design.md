@@ -43,8 +43,16 @@ Every event may contain only:
 - normalized route template, not a raw URL;
 - HTTP method and status;
 - generated request/correlation ID;
-- exception type, sanitized message, and stack trace;
-- browser and runtime metadata supplied by the SDK after sanitization.
+- identifier-shaped exception type, a normalized exception value, and stack trace;
+- stack-frame paths, module names, and build/debug identifiers required for
+  symbolication;
+- the exception mechanism's handled/unhandled classification.
+
+The exception value is never the raw error message, which is free-form and can
+embed owner content. It is replaced with a fixed classification derived only
+from the exception type, such as `Unexpected TypeError` or, when the type is not
+a recognizable code identifier, `Unexpected application error`. Grouping still
+works because Sentry groups on exception type and stack trace.
 
 The API returns the request ID in an `X-Request-ID` response header. The web API
 client retains that ID when surfacing a failed request, allowing a browser error
@@ -56,7 +64,23 @@ Add request-ID middleware before application routes. Use a Hono-level error
 boundary to capture unhandled exceptions and unexpected 5xx responses, then
 preserve the repository's existing HTTP response behavior. Expected validation,
 authentication, authorization, not-found, rate-limit, and other 4xx responses
-are not Sentry errors.
+are not Sentry errors, including those raised as framework `HTTPException`
+values: their status, body, and headers are returned unchanged.
+
+The error boundary is a small reusable handler installed on the existing
+application instance. The application is not restructured into a factory and no
+synthetic failure route is added to it, so the exported `AppType` used by the
+typed web client is unchanged.
+
+A failure while the API is starting — environment validation, database pool
+construction, or port binding — is captured, flushed, and followed by a non-zero
+process exit so a crash-looping deploy is visible rather than silent.
+
+After startup the SDK's Node crash handlers capture uncaught exceptions and
+unhandled promise rejections, which have no other capture path because they
+never reach the Hono error boundary. Both preserve the existing crash semantics:
+the process still terminates with a non-zero exit rather than continuing in an
+undefined state.
 
 Explicitly handled exceptions may call a small monitoring adapter when they
 represent an operational failure. Application modules depend on that adapter,
@@ -68,7 +92,9 @@ centralized.
 Wrap the authenticated and public route tree in a top-level React error
 boundary. On an unexpected render failure it:
 
-- captures the sanitized exception;
+- captures the sanitized exception, tagged with the current browser location
+  normalized to its route template by the same helper the monitored fetch uses,
+  so a share link is reported as `/b/:token` and never as a raw token;
 - shows a localized recovery screen;
 - provides reload and return-home actions;
 - displays the Sentry event ID only as a support reference;
@@ -76,7 +102,19 @@ boundary. On an unexpected render failure it:
 
 Failed API calls are captured only for network failures and unexpected 5xx
 responses. Expected 4xx responses continue through existing form and toast
-handling.
+handling. Authentication traffic, which does not use the typed RPC client, is
+routed through the same monitored transport so auth 5xx failures are not blind
+spots.
+
+The browser SDK's automatic global handlers stay disabled, so an asynchronous
+browser error that escapes both the error boundary and the monitored fetch — a
+rejection inside a `setTimeout` callback, or a throw from a non-React event
+listener — is not captured. This limitation is accepted deliberately: enabling
+the global browser handlers would re-report every error the boundary and fetch
+already capture, and duplicate issues are worse for a 10–20 owner beta than a
+narrow blind spot. The limitation is recorded in the monitoring runbook, and the
+API keeps its process-level handlers because the API has no equivalent
+boundary-based path for a crash.
 
 ## Privacy and Sanitization
 
@@ -98,7 +136,20 @@ The following data must never leave TuringCare systems through Sentry:
 
 Both applications implement `beforeSend` sanitization. Breadcrumb sanitization
 removes form input, request payloads, and raw URLs before an event can be sent.
-Synthetic tests include every forbidden category and fail if any value survives.
+Synthetic tests include every forbidden category and fail if any value survives,
+and equally fail if the metadata symbolication depends on — stack-frame paths,
+module names, and build/debug identifiers — is stripped.
+
+Both SDKs run with an explicit deny-all data-collection configuration covering
+user info, cookies, request and response headers, HTTP bodies, URL query
+parameters, GraphQL documents and variables, generative-AI inputs and outputs,
+database query data, stack-frame variables, and source-context lines. Event
+deduplication and inbound event filtering stay enabled in both applications. The
+API additionally enables the Node uncaught-exception and unhandled-rejection
+handlers, which are the only capture path for a process-level crash and keep
+their non-zero exit behavior. Browser global handlers and browser API
+instrumentation stay disabled because they would duplicate the explicit error
+boundary and fetch captures.
 
 ## Source Maps and Releases
 
@@ -106,8 +157,12 @@ Set the Sentry release to the deployed Git SHA in both applications. Upload
 source maps during CI/deployment using a GitHub Actions secret scoped only to
 release uploads.
 
-The web build uses hidden source maps: maps are uploaded to Sentry but are not
-served publicly by Cloudflare Pages. The API intentionally runs TypeScript
+The web build emits source maps only when a production monitoring build resolves
+complete Sentry upload options: `build.sourcemap` is `"hidden"` in that case and
+`false` otherwise. A local or credential-less build therefore writes no `.map`
+file at all. When maps are emitted they are hidden — no `sourceMappingURL`
+comment — uploaded to Sentry, and deleted from the artifact before publication,
+so Cloudflare Pages never serves one. The API intentionally runs TypeScript
 source with `tsx`, so there is no compiled API source-map artifact; the source
 files remain in the Fly image and Sentry stack frames use those runtime paths.
 
@@ -120,6 +175,12 @@ Required configuration:
 - shared deployment metadata: `SENTRY_ENVIRONMENT=production` and release SHA.
 
 No Sentry credential is committed to the repository.
+
+The production web build fails when a production monitoring DSN is configured
+but any source-map upload input is missing. Web deployment fails if any `.map`
+file remains in the build output before the Cloudflare Pages upload; that guard
+is unconditional, so it also protects a build in which monitoring was disabled
+or a future plugin re-enabled map emission.
 
 ## Alerting and GitHub Issues
 
@@ -167,50 +228,102 @@ point-in-time recovery capabilities.
 
 Perform one dated restore drill:
 
-1. Create a temporary isolated Postgres target with encryption and access
+1. Capture a non-sensitive aggregate baseline from production before the
+   restore: schema presence, applied-migration totals, integrity totals, and row
+   counts only, read inside a read-only transaction.
+2. Create a temporary isolated Postgres target with encryption and access
    limited to the operator performing the drill.
-2. Restore the latest available production backup without changing production.
-3. Record backup age, restore start/end time, and total recovery duration.
-4. Run committed migrations in verification mode and confirm schema version.
-5. Compare aggregate row counts for critical tables: users, sessions, dogs,
-   journal entries, training goals/skills/sessions, briefs, and events.
-6. Verify foreign-key integrity and that Better Auth account/session tables are
+3. Restore the latest available production backup without changing production.
+4. Record backup age, restore start/end time, and total recovery duration.
+5. Verify the restored migration state against the committed migration journal.
+   An exact match — same applied migration count, same latest applied migration
+   — passes. A clone that is *behind* the repository, where its applied
+   migrations are a leading subset of the journal, is a backup taken before the
+   newest migration was deployed, not a corrupt one: it is recorded as an
+   explicit operator-review item naming the missing migrations, and the operator
+   may apply `db:migrate` to the isolated clone and re-run the verifier. A clone
+   that is *ahead of* or inconsistent with the journal fails.
+6. Require meaningful restored data. A clone whose owner-bearing tables are
+   empty is a failed restore, not a passing one.
+7. Compare aggregate row counts for critical tables side by side with the
+   pre-restore baseline: users, sessions, accounts, dogs, journal entries,
+   training goals/skills/sessions/milestones, weekly focus, briefs, brief sends,
+   trainers, courses, and events. Transient operational tables such as the rate
+   limiter's are excluded from this comparison because they are rewritten
+   continuously; their schema presence is still required.
+8. Verify foreign-key integrity and that Better Auth account/session tables are
    present.
-7. Read representative records only through count/existence checks; do not copy
-   owner content into logs, screenshots, issues, or documentation.
-8. Record pass/fail results and any recovery gaps.
-9. Destroy the temporary database and confirm deletion.
+9. Require explicit operator review of every non-zero count difference and of
+   any migration lag. There is no automated tolerance: a smaller restored count
+   is the expected consequence of backup lag and a larger one is the expected
+   consequence of deletions after the recovery point, and no threshold can
+   distinguish either from real data loss. The operator records a written
+   judgement against the measured backup lag.
+10. Read representative records only through count/existence checks; do not copy
+    owner content into logs, screenshots, issues, or documentation.
+11. Record pass/fail results and any recovery gaps.
+12. Destroy the temporary database and confirm deletion.
 
 The drill is complete only when the restore target is removed and the runbook
 contains measured RPO/RTO evidence from the exercise.
+
+Automated verification runs against a disposable database created and dropped
+per test run. It never asserts against the shared development or CI database.
 
 ## Testing
 
 ### Unit tests
 
-- API sanitizer removes every forbidden field and retains approved metadata.
+- API sanitizer removes every forbidden field and retains approved metadata,
+  including the stack-frame and debug metadata symbolication needs.
 - Web sanitizer removes user, request, breadcrumb, and URL-sensitive data.
+- Exception values are normalized to a fixed classification; arbitrary error
+  text does not survive sanitization.
+- Monitoring configuration is fail-open: incomplete or malformed values disable
+  capture with a warning and never throw. Environment-reading tests stub the
+  environment and restore it afterwards.
 - Monitoring adapters are no-ops when disabled.
-- Expected 4xx errors are not captured.
+- Expected 4xx errors are not captured, including framework `HTTPException`
+  responses, whose status and body are preserved.
 - Unexpected API errors retain the request ID and are captured once.
-- React error boundary renders localized recovery actions and captures once.
+- React error boundary renders localized recovery actions, normalizes the
+  current browser location to its route template before capture (`/b/<token>`
+  becomes `/b/:token`), and captures once.
+- The web source-map build-option resolver skips upload for local builds and
+  fails a production monitoring build with incomplete upload inputs; source-map
+  emission is enabled only when it returns upload options.
+- The API restore verifier treats a self-consistent older backup as a migration
+  lag requiring operator review, not as corruption, and still fails a clone that
+  is ahead of or inconsistent with the committed journal.
 
-Use mocked Sentry transports; tests never send network events.
+Use mocked Sentry transports; tests never send network events. Test-only Hono
+applications are constructed inside test files; the production application
+instance is never given a synthetic failure route.
 
 ### Integration and build tests
 
-- An API test triggers a synthetic unhandled exception and verifies the
-  sanitized captured envelope and unchanged HTTP response contract.
+- An API test triggers a synthetic unhandled exception on a throwaway
+  application built in the test and verifies the sanitized capture and unchanged
+  HTTP response contract.
 - A web test throws from a child route and verifies the recovery screen.
 - CI verifies web source-map upload configuration without exposing the upload
-  token.
+  token, and blocks deployment if `.map` files remain in the artifact.
+- A local build without monitoring credentials produces no `.map` file at all.
 - Existing lint, typecheck, unit, build, and Playwright suites remain required.
 
 ### Production diagnostic
 
-Provide an operator-only diagnostic command or deployment action that emits a
-fixed synthetic exception containing no user data. It is unavailable through a
-public application route.
+Provide operator-only diagnostics that emit a fixed synthetic exception
+containing no user data. Neither is reachable through a public application
+route.
+
+- API: a command in the API workspace, run through a manually dispatched,
+  environment-protected workflow. It depends only on the monitoring variables,
+  not on application environment validation, so it can run without a database.
+- Web: the event must come from the real browser SDK, so a diagnostic function
+  is registered on `window` only while an authenticated admin is on the admin
+  route and removed when that view unmounts. The operator invokes it from
+  browser DevTools. It is not a route, not a UI control, and accepts no input.
 
 After deployment:
 
@@ -228,6 +341,12 @@ transport failures are logged without retry loops in request paths and never
 block an API response or React render. Sanitization failure drops the event
 rather than sending an unsanitized fallback.
 
+Monitoring configuration fails open. A missing, incomplete, or malformed Sentry
+variable disables capture and logs one warning that names only the variables at
+fault; it never throws and never prevents the API from booting or the web app
+from rendering. Because of this, the monitoring variables are deliberately kept
+out of the application's fail-fast environment schema.
+
 If web source-map upload fails, web deployment fails before production release
 because an unsymbolicated monitoring rollout is not considered complete.
 
@@ -235,11 +354,15 @@ because an unsymbolicated monitoring rollout is not considered complete.
 
 Update:
 
-- `README.md` with local disabled-mode behavior;
-- deployment documentation with Sentry configuration and source-map secrets;
+- `README.md` with local disabled-mode behavior and a pointer to the recovery
+  runbook;
+- deployment documentation with Sentry configuration, source-map secrets, and
+  recovery prerequisites, added as one distinct `DEPLOY.md` section per
+  workstream;
 - `docs/SECURITY-BACKLOG.md` with monitoring and restore-drill status;
 - a new production recovery runbook;
-- `docs/PROJECT-LOG.md` after the implementation ships.
+- a new production monitoring runbook;
+- `docs/PROJECT-LOG.md` after each workstream ships.
 
 ## Acceptance Criteria
 
@@ -250,14 +373,21 @@ Update:
 - Unexpected 5xx and React crashes include a correlation/event ID and produce
   actionable, deduplicated alerts.
 - Sentry creates GitHub Issues without copying event payloads.
-- Source maps are uploaded and not publicly served.
-- A controlled production diagnostic is captured and symbolicated.
+- Source maps are emitted only for a production monitoring build, uploaded, not
+  publicly served, and no `.map` file is published with the web artifact.
+- A controlled production diagnostic is captured and symbolicated in each
+  project, the web one originating from a real browser session.
 - The backup runbook contains provider-confirmed recovery capabilities.
 - A real isolated restore drill is completed, measured, documented, and cleaned
-  up.
+  up, with restored migration state and critical counts verified against the
+  repository journal and the pre-restore source baseline, and any migration lag
+  reviewed and recorded by the operator.
 - Existing CI and browser checks pass.
 
 ## Delivery Order
+
+The monitoring workstream ships first and the backup/restore workstream second.
+Each is separately shippable and neither depends on the other's code.
 
 1. Shared monitoring contracts, request IDs, and sanitization tests.
 2. API Sentry integration and source maps.
