@@ -144,16 +144,126 @@ export const trainingSkills = pgTable(
   (t) => [check("confidence_range", sql`${t.confidence} BETWEEN 1 AND 5`)],
 );
 
-export const practiceSessions = pgTable("practice_sessions", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  skillId: uuid("skill_id")
-    .notNull()
-    .references(() => trainingSkills.id, { onDelete: "cascade" }),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-  durationMinutes: integer("duration_minutes"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const practiceOutcomeEnum = pgEnum("practice_outcome", ["went_well", "mixed", "too_hard"]);
+export const practiceCueSupportEnum = pgEnum("practice_cue_support", [
+  "food_lure",
+  "hand_signal",
+  "verbal_cue",
+  "no_extra_help",
+]);
+export const practiceEnvironmentEnum = pgEnum("practice_environment", [
+  "home_quiet",
+  "home_busy",
+  "yard",
+  "quiet_outdoor",
+  "busy_outdoor",
+]);
+export const practiceDistanceEnum = pgEnum("practice_distance", [
+  "at_side",
+  "few_steps",
+  "across_room",
+  "across_yard",
+  "far_away",
+]);
+export const practiceDurationBandEnum = pgEnum("practice_duration_band", [
+  "under_5_seconds",
+  "about_15_seconds",
+  "about_30_seconds",
+  "one_to_two_minutes",
+  "five_to_fifteen_minutes",
+  "about_30_minutes",
+  "one_to_two_hours",
+  "half_day_or_more",
+]);
+export const practiceVariantEnum = pgEnum("practice_variant", ["primary", "fallback"]);
+export const practiceDistractionEnum = pgEnum("practice_distraction", [
+  "none",
+  "mild",
+  "moderate",
+  "strong",
+]);
+export const practiceDimensionEnum = pgEnum("practice_dimension", [
+  "cue_support",
+  "environment",
+  "distance",
+  "duration",
+  "distraction",
+]);
+export const safetySignalTypeEnum = pgEnum("safety_signal_type", [
+  "aggression_or_bite_risk",
+  "injury_or_pain",
+  "severe_fear_or_panic",
+  // Internal structured rule derived from severity, never shown as an owner option.
+  "severe_behavior_concern",
+]);
+export const safetySignalSourceEnum = pgEnum("safety_signal_source", [
+  "practice_session",
+  "behavior_concern",
+]);
+
+export const practiceSessions = pgTable(
+  "practice_sessions",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    skillId: uuid("skill_id")
+      .notNull()
+      .references(() => trainingSkills.id, { onDelete: "cascade" }),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    durationMinutes: integer("duration_minutes"),
+    notes: text("notes"),
+    // Structured evidence. All nullable: capture is always optional and must
+    // never block a practice save.
+    outcome: practiceOutcomeEnum("outcome"),
+    cueSupport: practiceCueSupportEnum("cue_support"),
+    environment: practiceEnvironmentEnum("environment"),
+    distance: practiceDistanceEnum("distance"),
+    durationBand: practiceDurationBandEnum("duration_band"),
+    distraction: practiceDistractionEnum("distraction"),
+    // The curriculum level the dog was practising at when this was logged, so
+    // advancement evidence is level-anchored and resets after a level change.
+    curriculumLevel: integer("curriculum_level"),
+    curriculumVersion: text("curriculum_version"),
+    practiceVariant: practiceVariantEnum("practice_variant"),
+    // Exact audited suggestion the owner said they practised. The API validates
+    // ownership/currentness before storing this UUID; Task 10 cannot add an FK
+    // because the suggestion table is created by the following migration.
+    suggestionId: uuid("suggestion_id"),
+    // Owner-local calendar date derived once from occurredAt + the offset sent
+    // for that specific session. This remains correct across DST boundaries.
+    practiceDay: date("practice_day"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("practice_sessions_skill_occurred_idx").on(t.skillId, t.occurredAt),
+    check(
+      "practice_curriculum_level_range",
+      sql`${t.curriculumLevel} IS NULL OR ${t.curriculumLevel} BETWEEN 1 AND 5`,
+    ),
+  ],
+);
+
+/**
+ * Explicit, owner-answered safety reports. Written only from structured inputs
+ * (never from free text) and deliberately not deletable through the API: the
+ * suppression they cause must not be dismissible by the owner. Injury/pain is
+ * time-bounded; aggression/bite risk, severe fear/panic, and the internal
+ * severe-concern signal persist until a future reviewed
+ * professional-resolution workflow exists.
+ */
+export const dogSafetySignals = pgTable(
+  "dog_safety_signals",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    dogId: uuid("dog_id")
+      .notNull()
+      .references(() => dogs.id, { onDelete: "cascade" }),
+    type: safetySignalTypeEnum("type").notNull(),
+    source: safetySignalSourceEnum("source").notNull(),
+    reportedAt: timestamp("reported_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("dog_safety_signals_dog_reported_idx").on(t.dogId, t.reportedAt)],
+);
 
 export const skillMilestones = pgTable(
   "skill_milestones",
