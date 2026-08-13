@@ -1,4 +1,5 @@
-import { and, eq, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
@@ -245,17 +246,16 @@ describe("suggestion orchestration", () => {
   });
 
   it("fails open when an audit insert fails after the safety decision", async () => {
-    const ctx = await setup();
+    const user = await createTestUser();
+    users.push(user);
+    const dogId = randomUUID();
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    await db.execute(
-      sql`alter table training_suggestions add constraint suggestion_test_audit_failure check (false) not valid`,
-    );
 
     try {
       await expect(
         loadSuggestion({
-          userId: ctx.user.userId,
-          dogId: ctx.dogId,
+          userId: user.userId,
+          dogId,
           weekKey: WEEK_KEY,
           timezoneOffsetMinutes: 0,
           now: NOW,
@@ -263,12 +263,9 @@ describe("suggestion orchestration", () => {
       ).resolves.toMatchObject({ type: "needs_focus_skill", suggestionId: null });
       expect(error).toHaveBeenCalledWith(
         "[suggestion] audit_write_failed",
-        expect.objectContaining({ suggestionType: "needs_focus_skill" }),
+        expect.objectContaining({ dogId, suggestionType: "needs_focus_skill" }),
       );
     } finally {
-      await db.execute(
-        sql`alter table training_suggestions drop constraint if exists suggestion_test_audit_failure`,
-      );
       error.mockRestore();
     }
   });

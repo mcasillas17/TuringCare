@@ -35,7 +35,11 @@ const EMPTY_EVIDENCE = {
   lastPracticeAt: null,
 };
 
-export class SuggestionAuditWriteError extends Error {
+/**
+ * Raised only for audit-table statements, so the fail-open wrapper can tell an
+ * audit write failure apart from a safety-input load failure, which must surface.
+ */
+class SuggestionAuditWriteError extends Error {
   constructor(cause: unknown) {
     super("suggestion audit write failed", { cause });
     this.name = "SuggestionAuditWriteError";
@@ -67,6 +71,11 @@ async function loadPrimaryFocusSkill(dogId: string, weekKey: string) {
   return row ?? null;
 }
 
+/**
+ * Persists the suggestion for review and cohort analysis. Runs on the
+ * safety-locked transaction and never swallows a failed statement: it has
+ * already aborted that transaction, so it is re-thrown for the caller to roll back.
+ */
 async function recordSuggestion(
   tx: TransactionType,
   input: {
@@ -146,6 +155,7 @@ async function persistSuggestionAudit(
   }
 }
 
+/** Side channel only: runs after the audit transaction commits and never throws. */
 async function emitAfterCommit(userId: string, suggestion: TrainingSuggestion): Promise<void> {
   try {
     await recordEvent("training.suggestion_shown", {
@@ -172,6 +182,11 @@ async function emitAfterCommit(userId: string, suggestion: TrainingSuggestion): 
   }
 }
 
+/**
+ * Takes the final safety decision and writes the audit rows in one transaction
+ * holding the dog safety lock. A recognized audit-write failure rolls back and
+ * returns the built suggestion without an audit ID; every other error surfaces.
+ */
 async function finalizeUnderSafetyLock(input: {
   userId: string;
   dogId: string;
@@ -180,6 +195,7 @@ async function finalizeUnderSafetyLock(input: {
   now: Date;
   build: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<TrainingSuggestion>;
 }): Promise<TrainingSuggestion> {
+  // A plain `let` would be narrowed to `null`; the holder remains readable from `catch`.
   const state: { built: TrainingSuggestion | null } = { built: null };
   try {
     const { suggestion, inserted } = await evaluateSafetyWithLock(
@@ -204,16 +220,19 @@ async function finalizeUnderSafetyLock(input: {
         };
       },
     );
+    // The audit transaction committed, so telemetry cannot affect it.
     if (inserted) await emitAfterCommit(input.userId, suggestion);
     return suggestion;
   } catch (error) {
-    if (!(error instanceof SuggestionAuditWriteError) || !state.built) throw error;
+    const built = state.built;
+    if (!(error instanceof SuggestionAuditWriteError) || !built) throw error;
     console.error("[suggestion] audit_write_failed", {
-      suggestionType: state.built.type,
-      suppressed: state.built.safety !== null,
+      dogId: input.dogId,
+      suggestionType: built.type,
+      suppressed: built.safety !== null,
       error,
     });
-    return { ...state.built, suggestionId: null, dismissed: false };
+    return { ...built, suggestionId: null, dismissed: false };
   }
 }
 
@@ -258,6 +277,10 @@ export async function loadSuggestion(input: {
     safety: null,
     advancementProposal: null,
   } satisfies Omit<TrainingSuggestion, "type" | "ruleId">;
+  /**
+   * Runs on the safety-locked transaction, so suppression withdrawal takes the
+   * skill lock after the dog safety lock and never opens a nested transaction.
+   */
   const buildSuppressed = async (
     decision: NonNullable<TrainingSuggestion["safety"]>,
     tx: TransactionType,
@@ -327,6 +350,7 @@ export async function loadSuggestion(input: {
     });
   }
 
+  // This wrapper commits before taking the safety lock, preserving dog safety → skill order.
   const advancement = focus
     ? await syncAdvancementProposal(
         focus.id,

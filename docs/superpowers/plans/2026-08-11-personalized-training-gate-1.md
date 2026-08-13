@@ -6531,7 +6531,10 @@ The orchestrator has seven DB-backed tests of its own: owner-local Monday
 calculation; no-focus audit deduplication; reviewed exercise/fallback audit;
 persisted-safety suppression and proposal withdrawal; idempotent concurrent
 skip/dismissal behavior under the suggestion lock; owner isolation; and
-fail-open audit persistence with a console-error spy.
+fail-open audit persistence with a console-error spy. Trigger the final case
+with a valid UUID for a dog that does not exist: safety and evidence reads stay
+natural, while the audit insert's dog foreign key fails. Do not mutate shared
+schema state in this test.
 
 Every path that produces a returned suggestion — the initial already-suppressed
 path, the target-missing path and the exercise path — finishes inside
