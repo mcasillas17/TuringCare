@@ -38,7 +38,15 @@ export function SessionForm({
 
   const onSubmit = handleSubmit(async (body) => {
     try {
-      await logSession.mutateAsync({ skillId, body });
+      const occurredAt = new Date(body.occurredAt);
+      await logSession.mutateAsync({
+        skillId,
+        body: {
+          ...body,
+          occurredAt: occurredAt.toISOString(),
+          timezoneOffsetMinutes: occurredAt.getTimezoneOffset(),
+        },
+      });
       toast.success(t("progress.saved"));
       onSaved?.();
     } catch {
@@ -56,7 +64,12 @@ export function SessionForm({
     >
       <label className="block">
         <span className="text-sm">{t("progress.occurredAt")}</span>
-        <input type="datetime-local" className={input} {...register("occurredAt")} />
+        <input
+          type="datetime-local"
+          max={localDateTime()}
+          className={input}
+          {...register("occurredAt")}
+        />
         {errors.occurredAt && (
           <span className="text-xs text-red-600">{errors.occurredAt.message}</span>
         )}

@@ -11,7 +11,8 @@ import {
   focusAddSchema as newFocusAddSchema,
   focusRemoveQuerySchema as newFocusRemoveQuerySchema,
   focusWeekQuerySchema as newFocusWeekQuerySchema,
-  practiceSessionSchema,
+  practiceEvidenceSchema,
+  practiceSessionApiSchema,
   skillLevelSchema,
   trainingGoalSchema,
   trainingSkillSchema,
@@ -26,9 +27,11 @@ import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
 import { findOwnedSkill } from "../db/owned-skill";
 import {
+  advancementProposals,
   behaviorConcerns,
   briefSends,
   briefs,
+  dogSafetySignals,
   dogs,
   journalEntries,
   practiceSessions,
@@ -50,7 +53,13 @@ import {
   weekBoundsFromOffset,
   withFocusWeekLock,
 } from "../lib/focus";
+import {
+  isSuggestionSkipped,
+  lockSuggestionAnchor,
+  resolvePracticeTargetAudit,
+} from "../lib/practice-anchor";
 import { loadProgress } from "../lib/progress";
+import { lockDogSafety } from "../lib/safety-lock";
 import { setSkillLevel } from "../lib/skill-level";
 import { type Vars, requireUser } from "../middleware/require-user";
 import { recordEvent } from "../telemetry/record-event";
@@ -80,6 +89,25 @@ const focusRemoveCompatSchema = z.union([
   newFocusRemoveQuerySchema.strict(),
   legacyFocusRemoveQuerySchema,
 ]);
+
+export const MAX_FUTURE_CLOCK_SKEW_MS = 5 * 60_000;
+export const MAX_LEGACY_FUTURE_SKEW_MS = 15 * 60 * 60_000;
+export const PRACTICE_TARGET_MAX_AGE_MS = 24 * 60 * 60_000;
+const legacyPracticeDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+
+function practiceDay(occurredAt: Date, timezoneOffsetMinutes: number | undefined) {
+  if (timezoneOffsetMinutes === undefined) return null;
+  return new Date(occurredAt.getTime() - timezoneOffsetMinutes * 60_000).toISOString().slice(0, 10);
+}
+
+function practiceOccurredAt(value: string) {
+  const legacy = legacyPracticeDateTime.test(value);
+  const occurredAt = new Date(value);
+  if (Number.isNaN(occurredAt.getTime())) return null;
+  const futureLimit = legacy ? MAX_LEGACY_FUTURE_SKEW_MS : MAX_FUTURE_CLOCK_SKEW_MS;
+  if (occurredAt.getTime() > Date.now() + futureLimit) return "future" as const;
+  return occurredAt;
+}
 
 type NormalizedFocusWeek = z.infer<typeof newFocusWeekQuerySchema>;
 
@@ -189,10 +217,34 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   .post("/:id/concerns", zValidator("json", behaviorConcernSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const [concern] = await db
-      .insert(behaviorConcerns)
-      .values({ ...c.req.valid("json"), dogId: dog.id })
-      .returning();
+    const { safetySignal, ...input } = c.req.valid("json");
+    const reportedSignals = [
+      ...(input.severity === "severe" ? ["severe_behavior_concern"] : []),
+      ...(safetySignal ? [safetySignal] : []),
+    ];
+    const concern = await db.transaction(async (tx) => {
+      await lockDogSafety(tx, dog.id);
+      const [created] = await tx
+        .insert(behaviorConcerns)
+        .values({ ...input, dogId: dog.id })
+        .returning();
+      if (!created) throw new Error("failed to create behavior concern");
+      if (safetySignal) {
+        await tx.insert(dogSafetySignals).values({
+          dogId: dog.id,
+          type: safetySignal,
+          source: "behavior_concern",
+          reportedAt: new Date(),
+        });
+      }
+      return created;
+    });
+    for (const signal of reportedSignals) {
+      await recordEvent("safety.signal_reported", {
+        userId: c.get("userId"),
+        props: { signal, source: "behavior_concern" },
+      });
+    }
     return c.json({ concern }, 201);
   })
   .delete("/:id/concerns/:concernId", async (c) => {
@@ -330,39 +382,297 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
-  .post("/:id/skills/:skillId/sessions", zValidator("json", practiceSessionSchema), async (c) => {
-    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
-    if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
-    if (!skill) return c.json({ error: "not_found" } as const, 404);
-    const body = c.req.valid("json");
-    const [session] = await db
-      .insert(practiceSessions)
-      .values({
-        skillId: skill.id,
-        occurredAt: new Date(body.occurredAt),
-        durationMinutes: body.durationMinutes ?? null,
-        notes: body.notes ?? null,
-      })
-      .returning();
-    if (!session) throw new Error("failed to create practice session");
-    await recordEvent("training.practice_logged", { userId: c.get("userId") });
-    return c.json({ session }, 201);
-  })
+  .post(
+    "/:id/skills/:skillId/sessions",
+    zValidator("json", practiceSessionApiSchema),
+    async (c) => {
+      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+      if (!skill) return c.json({ error: "not_found" } as const, 404);
+      const body = c.req.valid("json");
+      const occurredAt = practiceOccurredAt(body.occurredAt);
+      if (occurredAt === null) return c.json({ error: "invalid_practice_session" } as const, 400);
+      if (occurredAt === "future") {
+        return c.json({ error: "future_practice_session" } as const, 400);
+      }
+      const target = body.practicedTarget;
+      const audit = target
+        ? await resolvePracticeTargetAudit({
+            dogId: dog.id,
+            skillId: skill.id,
+            suggestionId: target.suggestionId,
+            createdAfter: new Date(Date.now() - PRACTICE_TARGET_MAX_AGE_MS),
+          })
+        : null;
+      const result = await db.transaction(async (tx) => {
+        if (body.safetySignal) await lockDogSafety(tx, dog.id);
+        if (target) await lockSuggestionAnchor(tx, target.suggestionId);
+        const [lockedSkill] = await tx
+          .select()
+          .from(trainingSkills)
+          .where(eq(trainingSkills.id, skill.id))
+          .for("update");
+        if (!lockedSkill) return null;
+
+        let anchorRejected:
+          | "practice_day_required"
+          | "audit_unavailable"
+          | "invalid_anchor"
+          | "invalid_target"
+          | null = null;
+        let anchor:
+          | {
+              level: number;
+              curriculumVersion: string;
+              variant: "primary" | "fallback";
+              suggestionId: string;
+            }
+          | undefined;
+        if (target) {
+          if (!practiceDay(occurredAt, body.timezoneOffsetMinutes)) {
+            anchorRejected = "practice_day_required";
+          } else if (audit === "unavailable") {
+            anchorRejected = "audit_unavailable";
+          } else if (!audit || (await isSuggestionSkipped(tx, target.suggestionId))) {
+            anchorRejected = "invalid_anchor";
+          } else {
+            const level = target.variant === "primary" ? audit.level : audit.fallbackLevel;
+            if (level === null || level > lockedSkill.confidence) {
+              anchorRejected = "invalid_target";
+            } else {
+              anchor = {
+                level,
+                curriculumVersion: audit.curriculumVersion,
+                variant: target.variant,
+                suggestionId: target.suggestionId,
+              };
+            }
+          }
+        }
+        const [session] = await tx
+          .insert(practiceSessions)
+          .values({
+            skillId: skill.id,
+            occurredAt,
+            durationMinutes: body.durationMinutes ?? null,
+            notes: body.notes ?? null,
+            outcome: body.outcome ?? null,
+            cueSupport: body.cueSupport ?? null,
+            environment: body.environment ?? null,
+            distance: body.distance ?? null,
+            durationBand: body.durationBand ?? null,
+            distraction: body.distraction ?? null,
+            curriculumLevel: anchor?.level ?? null,
+            curriculumVersion: anchor?.curriculumVersion ?? null,
+            practiceVariant: anchor?.variant ?? null,
+            suggestionId: anchor?.suggestionId ?? null,
+            practiceDay: practiceDay(occurredAt, body.timezoneOffsetMinutes),
+          })
+          .returning();
+        if (!session) throw new Error("failed to create practice session");
+        if (body.safetySignal) {
+          await tx.insert(dogSafetySignals).values({
+            dogId: dog.id,
+            type: body.safetySignal,
+            source: "practice_session",
+            reportedAt: new Date(),
+          });
+        }
+        return { session, anchorRejected };
+      });
+      if (!result) return c.json({ error: "not_found" } as const, 404);
+      await recordEvent("training.practice_logged", { userId: c.get("userId") });
+      if (result.session.outcome) {
+        await recordEvent("training.practice_outcome_recorded", {
+          userId: c.get("userId"),
+          props: {
+            outcome: result.session.outcome,
+            level: result.session.curriculumLevel ?? 0,
+            variant: result.session.practiceVariant ?? "unlinked",
+            curriculumVersion: result.session.curriculumVersion ?? "unlinked",
+          },
+        });
+      }
+      if (body.safetySignal) {
+        await recordEvent("safety.signal_reported", {
+          userId: c.get("userId"),
+          props: { signal: body.safetySignal, source: "practice_session" },
+        });
+      }
+      return c.json(result, 201);
+    },
+  )
+  .patch(
+    "/:id/skills/:skillId/sessions/:sessionId/evidence",
+    zValidator("json", practiceEvidenceSchema),
+    async (c) => {
+      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+      if (!skill) return c.json({ error: "not_found" } as const, 404);
+      const body = c.req.valid("json");
+      const target = body.practicedTarget;
+      const audit = target
+        ? await resolvePracticeTargetAudit({
+            dogId: dog.id,
+            skillId: skill.id,
+            suggestionId: target.suggestionId,
+            createdAfter: new Date(Date.now() - PRACTICE_TARGET_MAX_AGE_MS),
+          })
+        : null;
+      const result = await db.transaction(async (tx) => {
+        if (body.safetySignal) await lockDogSafety(tx, dog.id);
+        if (target) await lockSuggestionAnchor(tx, target.suggestionId);
+        const [lockedSkill] = await tx
+          .select()
+          .from(trainingSkills)
+          .where(eq(trainingSkills.id, skill.id))
+          .for("update");
+        if (!lockedSkill) return null;
+        const [existing] = await tx
+          .select()
+          .from(practiceSessions)
+          .where(
+            and(
+              eq(practiceSessions.id, c.req.param("sessionId")),
+              eq(practiceSessions.skillId, skill.id),
+            ),
+          )
+          .for("update");
+        if (!existing) return null;
+
+        let anchorRejected:
+          | "practice_day_required"
+          | "audit_unavailable"
+          | "invalid_anchor"
+          | "invalid_target"
+          | "target_locked"
+          | null = null;
+        let anchor:
+          | {
+              level: number;
+              curriculumVersion: string;
+              variant: "primary" | "fallback";
+              suggestionId: string;
+            }
+          | undefined;
+        if (target) {
+          if (!existing.practiceDay) {
+            anchorRejected = "practice_day_required";
+          } else if (audit === "unavailable") {
+            anchorRejected = "audit_unavailable";
+          } else if (!audit || (await isSuggestionSkipped(tx, target.suggestionId))) {
+            anchorRejected = "invalid_anchor";
+          } else {
+            const level = target.variant === "primary" ? audit.level : audit.fallbackLevel;
+            if (level === null || level > lockedSkill.confidence) {
+              anchorRejected = "invalid_target";
+            } else if (
+              existing.curriculumLevel !== null &&
+              (existing.suggestionId !== target.suggestionId ||
+                existing.practiceVariant !== target.variant ||
+                existing.curriculumLevel !== level)
+            ) {
+              anchorRejected = "target_locked";
+            } else if (existing.curriculumLevel === null) {
+              anchor = {
+                level,
+                curriculumVersion: audit.curriculumVersion,
+                variant: target.variant,
+                suggestionId: target.suggestionId,
+              };
+            }
+          }
+        }
+        const changes: Partial<typeof practiceSessions.$inferInsert> = {};
+        if (body.outcome !== undefined) changes.outcome = body.outcome;
+        if (body.cueSupport !== undefined) changes.cueSupport = body.cueSupport;
+        if (body.environment !== undefined) changes.environment = body.environment;
+        if (body.distance !== undefined) changes.distance = body.distance;
+        if (body.durationBand !== undefined) changes.durationBand = body.durationBand;
+        if (body.distraction !== undefined) changes.distraction = body.distraction;
+        if (anchor) {
+          changes.curriculumLevel = anchor.level;
+          changes.curriculumVersion = anchor.curriculumVersion;
+          changes.practiceVariant = anchor.variant;
+          changes.suggestionId = anchor.suggestionId;
+        }
+        const session =
+          Object.keys(changes).length === 0
+            ? existing
+            : (
+                await tx
+                  .update(practiceSessions)
+                  .set(changes)
+                  .where(eq(practiceSessions.id, existing.id))
+                  .returning()
+              )[0];
+        if (!session) throw new Error("failed to update practice session");
+        if (body.safetySignal) {
+          await tx.insert(dogSafetySignals).values({
+            dogId: dog.id,
+            type: body.safetySignal,
+            source: "practice_session",
+            reportedAt: new Date(),
+          });
+        }
+        return { session, anchorRejected };
+      });
+      if (!result) return c.json({ error: "not_found" } as const, 404);
+      if (result.session.outcome && body.outcome !== undefined) {
+        await recordEvent("training.practice_outcome_recorded", {
+          userId: c.get("userId"),
+          props: {
+            outcome: result.session.outcome,
+            level: result.session.curriculumLevel ?? 0,
+            variant: result.session.practiceVariant ?? "unlinked",
+            curriculumVersion: result.session.curriculumVersion ?? "unlinked",
+          },
+        });
+      }
+      if (body.safetySignal) {
+        await recordEvent("safety.signal_reported", {
+          userId: c.get("userId"),
+          props: { signal: body.safetySignal, source: "practice_session" },
+        });
+      }
+      return c.json(result);
+    },
+  )
   .delete("/:id/skills/:skillId/sessions/:sessionId", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
     if (!skill) return c.json({ error: "not_found" } as const, 404);
-    const [deleted] = await db
-      .delete(practiceSessions)
-      .where(
-        and(
-          eq(practiceSessions.id, c.req.param("sessionId")),
-          eq(practiceSessions.skillId, skill.id),
-        ),
-      )
-      .returning({ id: practiceSessions.id });
+    const deleted = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skill.id}))`);
+      const [session] = await tx
+        .select({ id: practiceSessions.id })
+        .from(practiceSessions)
+        .where(
+          and(
+            eq(practiceSessions.id, c.req.param("sessionId")),
+            eq(practiceSessions.skillId, skill.id),
+          ),
+        )
+        .for("update");
+      if (!session) return null;
+      const [row] = await tx
+        .delete(practiceSessions)
+        .where(eq(practiceSessions.id, session.id))
+        .returning({ id: practiceSessions.id });
+      await tx
+        .update(advancementProposals)
+        .set({ status: "withdrawn", decidedAt: new Date() })
+        .where(
+          and(
+            eq(advancementProposals.skillId, skill.id),
+            eq(advancementProposals.status, "proposed"),
+          ),
+        );
+      return row;
+    });
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
