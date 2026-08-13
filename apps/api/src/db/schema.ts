@@ -182,6 +182,10 @@ export const weeklyFocus = pgTable(
     skillId: uuid("skill_id")
       .notNull()
       .references(() => trainingSkills.id, { onDelete: "cascade" }),
+    // Local Monday of the focus week. Focus is versioned per week so past weeks
+    // keep the selection that was actually active then.
+    // Nullable only for preserved pre-migration rows whose owner-local week is
+    // unknowable. Every Gate 1 write supplies a non-null Monday.
     weekStart: date("week_start"),
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -195,6 +199,7 @@ export const weeklyFocus = pgTable(
   ],
 );
 
+/** Short-lived owner-local context scoped to one authenticated legacy client. */
 export const focusCompatibilityWeeks = pgTable(
   "focus_compatibility_weeks",
   {
@@ -209,6 +214,7 @@ export const focusCompatibilityWeeks = pgTable(
   (t) => [unique("focus_compatibility_dog_session").on(t.dogId, t.sessionId)],
 );
 
+/** Durable marker ensuring preserved undated focus seeds at most one week. */
 export const legacyFocusClaims = pgTable("legacy_focus_claims", {
   dogId: uuid("dog_id")
     .primaryKey()

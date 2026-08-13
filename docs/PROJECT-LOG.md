@@ -993,10 +993,14 @@ no new findings on changed files (pre-existing/adjudicated only).
   `docs/superpowers/plans/2026-06-21-turing-quiet-setting.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-quiet-setting`.
 
-## 2026-08-12 — Weekly focus week-start versioning — LOCAL VERIFICATION
+## 2026-08-12 — Weekly focus week-start versioning — MIGRATION VERIFICATION
 Gate 1 Task 7 versions `weekly_focus` by owner-local Monday `week_start`, adds
 compatibility/claim tables, and preserves legacy rows as `week_start = NULL` so
 Task 8 can claim at most one preserved row per dog into the owner's real local
-week without guessing from the database timezone. **Local verification only:**
-the current local `turingcare` database had **0** `weekly_focus` rows before
-0013, so there were no legacy rows to convert in-place on this machine.
+week without guessing from the database timezone. The current push-created
+local `turingcare` database had **0** `weekly_focus` rows when inventoried and
+was not used for `db:migrate` because its Drizzle migration journal is empty.
+Migration `0013` was instead applied with `db:migrate` to a dedicated throwaway
+database seeded with a legacy focus row after migrations `0000`–`0012`; the row
+was preserved with `week_start = NULL`, and the constraints, RLS, direct-delete
+guard, authorized deletion, and FK cascade behavior were verified there.
