@@ -55,6 +55,7 @@ const dogSkills = api.api.dogs[":id"].skills;
 
 function invalidateProgress(qc: ReturnType<typeof useQueryClient>, dogId: string) {
   qc.invalidateQueries({ queryKey: ["progress", dogId] });
+  qc.invalidateQueries({ queryKey: ["suggestion", dogId] });
 }
 
 export function useProgress(dogId: string) {

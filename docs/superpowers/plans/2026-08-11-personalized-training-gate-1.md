@@ -8922,8 +8922,23 @@ git commit -m "feat(web): typed option maps for practice evidence and suggestion
 **Files:**
 - Create: `apps/web/src/lib/suggestion.ts`
 - Modify: `apps/web/src/lib/progress.ts`
+- Modify: `apps/web/src/lib/week.ts`
 
-- [ ] **Step 1: Create `apps/web/src/lib/suggestion.ts`**
+- [ ] **Step 1: Add the owner-timezone week helper**
+
+Append to `apps/web/src/lib/week.ts`:
+
+```ts
+/** Monday YYYY-MM-DD for the week containing an instant in a supplied timezone. */
+export function weekKeyAtOffset(date: Date, timezoneOffsetMinutes: number): string {
+  const local = new Date(date.getTime() - timezoneOffsetMinutes * 60_000);
+  const daysSinceMonday = (local.getUTCDay() + 6) % 7;
+  local.setUTCDate(local.getUTCDate() - daysSinceMonday);
+  return local.toISOString().slice(0, 10);
+}
+```
+
+- [ ] **Step 2: Create `apps/web/src/lib/suggestion.ts`**
 
 ```ts
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8934,7 +8949,7 @@ import type {
 } from "@turingcare/shared";
 import { api } from "./api";
 import { suggestionKey } from "./suggestion-key";
-import { weekKeyOf } from "./week";
+import { weekKeyAtOffset } from "./week";
 
 export { suggestionKey } from "./suggestion-key";
 
@@ -8947,7 +8962,7 @@ export function useSuggestion(
 ) {
   return useQuery({
     queryKey: suggestionKey(dogId, weekKey),
-    enabled: !!dogId && weekKey === weekKeyOf(new Date()),
+    enabled: !!dogId && weekKey === weekKeyAtOffset(new Date(), timezoneOffsetMinutes),
     queryFn: async (): Promise<TrainingSuggestion> => {
       const res = await dogsApi.suggestion.$get({
         param: { id: dogId },
@@ -8969,7 +8984,10 @@ export function useSuggestionAction(dogId: string, weekKey: string) {
         param: { id: dogId, suggestionId: args.suggestionId },
         json: { action: args.action },
       });
-      if (!res.ok) throw new Error("action_failed");
+      if (!res.ok) {
+        const failed = await res.json();
+        throw new Error("error" in failed ? failed.error : "action_failed");
+      }
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: suggestionKey(dogId, weekKey) }),
@@ -8984,7 +9002,10 @@ export function useAdvancementDecision(dogId: string, weekKey: string) {
         param: { id: dogId, proposalId: args.proposalId },
         json: { decision: args.decision },
       });
-      if (!res.ok) throw new Error("decision_failed");
+      if (!res.ok) {
+        const failed = await res.json();
+        throw new Error("error" in failed ? failed.error : "decision_failed");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -8996,7 +9017,7 @@ export function useAdvancementDecision(dogId: string, weekKey: string) {
 }
 ```
 
-- [ ] **Step 2: Add the evidence mutation** — append to `apps/web/src/lib/progress.ts`:
+- [ ] **Step 3: Add the evidence mutation** — append to `apps/web/src/lib/progress.ts`:
 
 ```ts
 export function useSetSessionEvidence(dogId: string) {
@@ -9021,7 +9042,11 @@ export function useSetSessionEvidence(dogId: string) {
 
 Add `PracticeEvidenceInput` to the existing `@turingcare/shared` type import at the top of that file.
 
-- [ ] **Step 3: Preserve the API error code for session-form UX**
+Update the existing `invalidateProgress` helper to invalidate both
+`["progress", dogId]` and the `["suggestion", dogId]` prefix. Skill and
+session mutations change inputs or display data used by the suggestion.
+
+- [ ] **Step 4: Preserve the API error code for session-form UX**
 
 In the existing `useLogSession` mutation, replace the generic failed-response
 branch with:
@@ -9034,12 +9059,12 @@ branch with:
       return (await res.json()).session;
 ```
 
-- [ ] **Step 4: Typecheck**
+- [ ] **Step 5: Typecheck**
 
 Run: `pnpm --filter @turingcare/web exec tsc --noEmit`
 Expected: PASS. If the RPC path segments do not resolve, confirm Task 17's routes are mounted on `dogsApp` — the client types come straight from `AppType`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/lib/suggestion.ts apps/web/src/lib/progress.ts

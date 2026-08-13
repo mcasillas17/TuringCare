@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdvancementDecision, SuggestionAction, TrainingSuggestion } from "@turingcare/shared";
 import { api } from "./api";
 import { suggestionKey } from "./suggestion-key";
-import { weekKeyOf } from "./week";
+import { weekKeyAtOffset } from "./week";
 
 export { suggestionKey } from "./suggestion-key";
 
@@ -11,7 +11,7 @@ const dogsApi = api.api.dogs[":id"];
 export function useSuggestion(dogId: string, weekKey: string, timezoneOffsetMinutes: number) {
   return useQuery({
     queryKey: suggestionKey(dogId, weekKey),
-    enabled: !!dogId && weekKey === weekKeyOf(new Date()),
+    enabled: !!dogId && weekKey === weekKeyAtOffset(new Date(), timezoneOffsetMinutes),
     queryFn: async (): Promise<TrainingSuggestion> => {
       const res = await dogsApi.suggestion.$get({
         param: { id: dogId },
@@ -31,10 +31,13 @@ export function useSuggestionAction(dogId: string, weekKey: string) {
         param: { id: dogId, suggestionId: args.suggestionId },
         json: { action: args.action },
       });
-      if (!res.ok) throw new Error("action_failed");
+      if (!res.ok) {
+        const failed = await res.json();
+        throw new Error("error" in failed ? failed.error : "action_failed");
+      }
       return res.json();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: suggestionKey(dogId, weekKey), exact: true }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: suggestionKey(dogId, weekKey) }),
   });
 }
 
@@ -46,7 +49,10 @@ export function useAdvancementDecision(dogId: string, weekKey: string) {
         param: { id: dogId, proposalId: args.proposalId },
         json: { decision: args.decision },
       });
-      if (!res.ok) throw new Error("decision_failed");
+      if (!res.ok) {
+        const failed = await res.json();
+        throw new Error("error" in failed ? failed.error : "decision_failed");
+      }
       return res.json();
     },
     onSuccess: () =>

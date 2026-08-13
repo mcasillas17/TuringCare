@@ -29,7 +29,7 @@ import {
   useSuggestion,
   useSuggestionAction,
 } from "./suggestion";
-import { weekKeyOf } from "./week";
+import { weekKeyAtOffset } from "./week";
 
 function makeWrapper(queryClient: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -49,7 +49,7 @@ describe("suggestion hooks", () => {
   it("only loads the current week's suggestion with timezone offset", async () => {
     getSuggestion.mockResolvedValue({ ok: true, json: async () => ({ suggestion: {} }) });
     const queryClient = makeQueryClient();
-    const weekKey = weekKeyOf(new Date());
+    const weekKey = weekKeyAtOffset(new Date(), 420);
 
     renderHook(() => useSuggestion("dog-1", weekKey, 420), {
       wrapper: makeWrapper(queryClient),
@@ -73,7 +73,7 @@ describe("suggestion hooks", () => {
     expect(getSuggestion).toHaveBeenCalledTimes(1);
   });
 
-  it("posts suggestion actions and invalidates the exact suggestion", async () => {
+  it("posts suggestion actions and invalidates the suggestion", async () => {
     postAction.mockResolvedValue({ ok: true, json: async () => ({}) });
     const queryClient = makeQueryClient();
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
@@ -91,8 +91,34 @@ describe("suggestion hooks", () => {
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: suggestionKey("dog-1", "2026-08-10"),
-      exact: true,
     });
+  });
+
+  it.each([
+    ["action", { error: "suggestion_dismissed" }, "suggestion_dismissed"],
+    ["action", {}, "action_failed"],
+    ["decision", { error: "stale_proposal" }, "stale_proposal"],
+    ["decision", {}, "decision_failed"],
+  ])("preserves structured %s errors", async (mutation, failed, message) => {
+    const queryClient = makeQueryClient();
+    if (mutation === "action") {
+      postAction.mockResolvedValue({ ok: false, json: async () => failed });
+      const { result } = renderHook(() => useSuggestionAction("dog-1", "2026-08-10"), {
+        wrapper: makeWrapper(queryClient),
+      });
+      await expect(
+        result.current.mutateAsync({ suggestionId: "suggestion-1", action: "started" }),
+      ).rejects.toThrow(message);
+      return;
+    }
+
+    postDecision.mockResolvedValue({ ok: false, json: async () => failed });
+    const { result } = renderHook(() => useAdvancementDecision("dog-1", "2026-08-10"), {
+      wrapper: makeWrapper(queryClient),
+    });
+    await expect(
+      result.current.mutateAsync({ proposalId: "proposal-1", decision: "confirmed" }),
+    ).rejects.toThrow(message);
   });
 
   it("posts advancement decisions and invalidates all affected caches", async () => {

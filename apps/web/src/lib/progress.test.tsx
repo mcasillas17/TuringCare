@@ -53,7 +53,7 @@ function makeQueryClient() {
 afterEach(() => vi.clearAllMocks());
 
 describe("progress hooks", () => {
-  it("patches session evidence and invalidates progress", async () => {
+  it("patches session evidence and invalidates derived progress and suggestions", async () => {
     patchEvidence.mockResolvedValue({
       ok: true,
       json: async () => ({ session: { id: "session-1" } }),
@@ -74,6 +74,7 @@ describe("progress hooks", () => {
       json: body,
     });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["progress", "dog-1"] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["suggestion", "dog-1"] });
   });
 
   it.each([
