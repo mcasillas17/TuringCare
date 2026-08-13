@@ -93,7 +93,7 @@ const focusRemoveCompatSchema = z.union([
 export const MAX_FUTURE_CLOCK_SKEW_MS = 5 * 60_000;
 export const MAX_LEGACY_FUTURE_SKEW_MS = 15 * 60 * 60_000;
 export const PRACTICE_TARGET_MAX_AGE_MS = 24 * 60 * 60_000;
-const legacyPracticeDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+const legacyPracticeDateTime = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
 
 function practiceDay(occurredAt: Date, timezoneOffsetMinutes: number | undefined) {
   if (timezoneOffsetMinutes === undefined) return null;
@@ -101,9 +101,28 @@ function practiceDay(occurredAt: Date, timezoneOffsetMinutes: number | undefined
 }
 
 function practiceOccurredAt(value: string) {
-  const legacy = legacyPracticeDateTime.test(value);
-  const occurredAt = new Date(value);
+  const legacyParts = legacyPracticeDateTime.exec(value);
+  const legacy = legacyParts !== null;
+  const occurredAt = legacyParts
+    ? new Date(
+        Number(legacyParts[1]),
+        Number(legacyParts[2]) - 1,
+        Number(legacyParts[3]),
+        Number(legacyParts[4]),
+        Number(legacyParts[5]),
+      )
+    : new Date(value);
   if (Number.isNaN(occurredAt.getTime())) return null;
+  if (
+    legacyParts &&
+    (occurredAt.getFullYear() !== Number(legacyParts[1]) ||
+      occurredAt.getMonth() !== Number(legacyParts[2]) - 1 ||
+      occurredAt.getDate() !== Number(legacyParts[3]) ||
+      occurredAt.getHours() !== Number(legacyParts[4]) ||
+      occurredAt.getMinutes() !== Number(legacyParts[5]))
+  ) {
+    return null;
+  }
   const futureLimit = legacy ? MAX_LEGACY_FUTURE_SKEW_MS : MAX_FUTURE_CLOCK_SKEW_MS;
   if (occurredAt.getTime() > Date.now() + futureLimit) return "future" as const;
   return occurredAt;
