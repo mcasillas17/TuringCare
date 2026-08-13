@@ -2,7 +2,7 @@ import type { TrainingSuggestion } from "@turingcare/shared";
 import { and, eq, sql } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
-import { db } from "../db";
+import { db, pool } from "../db";
 import {
   dogSafetySignals,
   trainingSuggestionActions,
@@ -122,6 +122,17 @@ async function setup() {
 }
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+
+async function waitForAdvisoryLockWaiter() {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const result = await pool.query<{ waiting: boolean }>(
+      "select exists (select 1 from pg_locks where locktype = 'advisory' and not granted and database = (select oid from pg_database where datname = current_database())) as waiting",
+    );
+    if (result.rows[0]?.waiting) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error("timed out waiting for an advisory lock waiter");
+}
 
 afterEach(async () => {
   for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
@@ -387,8 +398,13 @@ describe("GET /api/dogs/:id/suggestion", () => {
       await hold;
     });
     await ready;
-    const suggestionPromise = ctx.getSuggestion();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    let completed = false;
+    const suggestionPromise = ctx.getSuggestion().then((suggestion) => {
+      completed = true;
+      return suggestion;
+    });
+    await waitForAdvisoryLockWaiter();
+    expect(completed).toBe(false);
     release?.();
     await safetyWrite;
 
@@ -533,6 +549,28 @@ describe("GET /api/dogs/:id/suggestion", () => {
       { headers: mine.headers },
     );
     expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for malformed dog IDs on suggestion routes", async () => {
+    const ctx = await setup();
+    const suggestion = await app.request(
+      `/api/dogs/not-a-uuid/suggestion?weekKey=${WEEK_KEY}&timezoneOffsetMinutes=0`,
+      { headers: ctx.headers },
+    );
+    expect(suggestion.status).toBe(404);
+
+    const action = await app.request("/api/dogs/not-a-uuid/suggestions/not-a-uuid/actions", {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({ action: "started" }),
+    });
+    expect(action.status).toBe(404);
+
+    const decision = await app.request(
+      "/api/dogs/not-a-uuid/advancement-proposals/not-a-uuid/decision",
+      { method: "POST", headers: ctx.headers, body: JSON.stringify({ decision: "confirmed" }) },
+    );
+    expect(decision.status).toBe(404);
   });
 
   it("does not create a second audit row for concurrent identical views", async () => {
@@ -987,7 +1025,7 @@ describe("suggestion actions and advancement decisions", () => {
       completed = true;
       return response;
     });
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await waitForAdvisoryLockWaiter();
     expect(completed).toBe(false);
     releaseLock();
     await holder;
@@ -1073,19 +1111,24 @@ describe("suggestion actions and advancement decisions", () => {
       await hold;
     });
     await ready;
-    const decision = app.request(
-      `/api/dogs/${ctx.dogId}/advancement-proposals/${proposal.id}/decision`,
-      {
+    let completed = false;
+    const decision = Promise.resolve(
+      app.request(`/api/dogs/${ctx.dogId}/advancement-proposals/${proposal.id}/decision`, {
         method: "POST",
         headers: ctx.headers,
         body: JSON.stringify({ decision: "confirmed" }),
-      },
+      }),
     );
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    const decisionResult = decision.then((response) => {
+      completed = true;
+      return response;
+    });
+    await waitForAdvisoryLockWaiter();
+    expect(completed).toBe(false);
     release?.();
     await safetyWrite;
 
-    const res = await decision;
+    const res = await decisionResult;
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "safety_suppressed" });
   });

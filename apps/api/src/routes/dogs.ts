@@ -837,7 +837,11 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     return c.json({ ok: true } as const);
   })
   .get("/:id/suggestion", zValidator("query", suggestionQuerySchema), async (c) => {
-    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    const dogId = c.req.param("id");
+    if (!uuidSchema.safeParse(dogId).success) {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    const dog = await findOwnedDog(c.get("userId"), dogId);
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { weekKey, timezoneOffsetMinutes } = c.req.valid("query");
     if (weekKey !== currentWeekKey(new Date(), timezoneOffsetMinutes)) {
@@ -855,7 +859,11 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     "/:id/suggestions/:suggestionId/actions",
     zValidator("json", suggestionActionSchema),
     async (c) => {
-      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      const dogId = c.req.param("id");
+      if (!uuidSchema.safeParse(dogId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
+      const dog = await findOwnedDog(c.get("userId"), dogId);
       if (!dog) return c.json({ error: "not_found" } as const, 404);
       const suggestionId = c.req.param("suggestionId");
       if (!uuidSchema.safeParse(suggestionId).success) {
@@ -878,7 +886,11 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     "/:id/advancement-proposals/:proposalId/decision",
     zValidator("json", advancementDecisionSchema),
     async (c) => {
-      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      const dogId = c.req.param("id");
+      if (!uuidSchema.safeParse(dogId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
+      const dog = await findOwnedDog(c.get("userId"), dogId);
       if (!dog) return c.json({ error: "not_found" } as const, 404);
       const proposalId = c.req.param("proposalId");
       if (!uuidSchema.safeParse(proposalId).success) {

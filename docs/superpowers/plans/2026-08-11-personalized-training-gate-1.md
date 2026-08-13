@@ -7101,7 +7101,7 @@ git commit -m "feat(api): suggestion orchestrator with audit persistence"
 - Modify: `apps/api/src/routes/dogs.ts`
 - Create: `apps/api/src/routes/suggestion.test.ts`
 
-The endpoints go inside the existing `dogs.ts` chain rather than a new sub-app: `dogsApp` already carries the `requireUser` middleware and its RPC types, and mounting a second app at `/api/dogs` would run session lookup twice per request.
+The endpoints go inside the existing `dogs.ts` chain rather than a new sub-app: `dogsApp` already carries the `requireUser` middleware and its RPC types, and mounting a second app at `/api/dogs` would run session lookup twice per request. The route test file has 45 integration tests. `createTestUser()` supplies each local `app.request()` user with a UUID-derived, collision-resistant TEST-NET `fly-client-ip` header so rate-limit state cannot cross-talk between tests; this test-only header does not change the production Fly edge trust boundary.
 
 - [ ] **Step 1: Write the failing test** — create `apps/api/src/routes/suggestion.test.ts`:
 
@@ -7110,7 +7110,7 @@ import type { TrainingSuggestion } from "@turingcare/shared";
 import { and, eq, sql } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
-import { db } from "../db";
+import { db, pool } from "../db";
 import {
   dogSafetySignals,
   trainingSuggestionActions,
@@ -7232,6 +7232,17 @@ async function setup() {
 }
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+
+async function waitForAdvisoryLockWaiter() {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const result = await pool.query<{ waiting: boolean }>(
+      "select exists (select 1 from pg_locks where locktype = 'advisory' and not granted and database = (select oid from pg_database where datname = current_database())) as waiting",
+    );
+    if (result.rows[0]?.waiting) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error("timed out waiting for an advisory lock waiter");
+}
 
 afterEach(async () => {
   for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
@@ -7497,8 +7508,13 @@ describe("GET /api/dogs/:id/suggestion", () => {
       await hold;
     });
     await ready;
-    const suggestionPromise = ctx.getSuggestion();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    let completed = false;
+    const suggestionPromise = ctx.getSuggestion().then((suggestion) => {
+      completed = true;
+      return suggestion;
+    });
+    await waitForAdvisoryLockWaiter();
+    expect(completed).toBe(false);
     release?.();
     await safetyWrite;
 
@@ -7643,6 +7659,28 @@ describe("GET /api/dogs/:id/suggestion", () => {
       { headers: mine.headers },
     );
     expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for malformed dog IDs on suggestion routes", async () => {
+    const ctx = await setup();
+    const suggestion = await app.request(
+      `/api/dogs/not-a-uuid/suggestion?weekKey=${WEEK_KEY}&timezoneOffsetMinutes=0`,
+      { headers: ctx.headers },
+    );
+    expect(suggestion.status).toBe(404);
+
+    const action = await app.request("/api/dogs/not-a-uuid/suggestions/not-a-uuid/actions", {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({ action: "started" }),
+    });
+    expect(action.status).toBe(404);
+
+    const decision = await app.request(
+      "/api/dogs/not-a-uuid/advancement-proposals/not-a-uuid/decision",
+      { method: "POST", headers: ctx.headers, body: JSON.stringify({ decision: "confirmed" }) },
+    );
+    expect(decision.status).toBe(404);
   });
 
   it("does not create a second audit row for concurrent identical views", async () => {
@@ -8103,7 +8141,7 @@ describe("suggestion actions and advancement decisions", () => {
         completed = true;
         return response;
       });
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await waitForAdvisoryLockWaiter();
     expect(completed).toBe(false);
     releaseLock();
     await holder;
@@ -8189,19 +8227,24 @@ describe("suggestion actions and advancement decisions", () => {
       await hold;
     });
     await ready;
-    const decision = app.request(
-      `/api/dogs/${ctx.dogId}/advancement-proposals/${proposal.id}/decision`,
-      {
+    let completed = false;
+    const decision = Promise.resolve(
+      app.request(`/api/dogs/${ctx.dogId}/advancement-proposals/${proposal.id}/decision`, {
         method: "POST",
         headers: ctx.headers,
         body: JSON.stringify({ decision: "confirmed" }),
-      },
+      }),
     );
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    const decisionResult = decision.then((response) => {
+      completed = true;
+      return response;
+    });
+    await waitForAdvisoryLockWaiter();
+    expect(completed).toBe(false);
     release?.();
     await safetyWrite;
 
-    const res = await decision;
+    const res = await decisionResult;
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "safety_suppressed" });
   });
@@ -8221,7 +8264,11 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
 
 ```ts
   .get("/:id/suggestion", zValidator("query", suggestionQuerySchema), async (c) => {
-    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    const dogId = c.req.param("id");
+    if (!uuidSchema.safeParse(dogId).success) {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    const dog = await findOwnedDog(c.get("userId"), dogId);
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { weekKey, timezoneOffsetMinutes } = c.req.valid("query");
     if (weekKey !== currentWeekKey(new Date(), timezoneOffsetMinutes)) {
@@ -8239,10 +8286,14 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
     "/:id/suggestions/:suggestionId/actions",
     zValidator("json", suggestionActionSchema),
     async (c) => {
-      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      const dogId = c.req.param("id");
+      if (!uuidSchema.safeParse(dogId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
+      const dog = await findOwnedDog(c.get("userId"), dogId);
       if (!dog) return c.json({ error: "not_found" } as const, 404);
       const suggestionId = c.req.param("suggestionId");
-      if (!z.string().uuid().safeParse(suggestionId).success) {
+      if (!uuidSchema.safeParse(suggestionId).success) {
         return c.json({ error: "not_found" } as const, 404);
       }
       const result = await recordSuggestionAction({
@@ -8264,10 +8315,14 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
     "/:id/advancement-proposals/:proposalId/decision",
     zValidator("json", advancementDecisionSchema),
     async (c) => {
-      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      const dogId = c.req.param("id");
+      if (!uuidSchema.safeParse(dogId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
+      const dog = await findOwnedDog(c.get("userId"), dogId);
       if (!dog) return c.json({ error: "not_found" } as const, 404);
       const proposalId = c.req.param("proposalId");
-      if (!z.string().uuid().safeParse(proposalId).success) {
+      if (!uuidSchema.safeParse(proposalId).success) {
         return c.json({ error: "not_found" } as const, 404);
       }
       const [owned] = await db
@@ -8325,7 +8380,8 @@ Add to the imports in `apps/api/src/routes/dogs.ts`: `advancementDecisionSchema`
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/routes/suggestion.test.ts`
 Expected: PASS — all suggestion route tests, including recovery, suppression,
-fallback-only advancement, authorization, audit dedupe, and concurrency.
+fallback-only advancement, authorization, malformed dog IDs, audit dedupe, and
+explicit advisory-lock concurrency checks (45 tests).
 
 - [ ] **Step 5: Run the whole API suite, expect PASS**
 
