@@ -16,7 +16,10 @@ machine count, and verifies readiness without a runner gap between phases. If
 migration fails, the workflow restores the old release after the database
 rollback; if deployment or readiness fails after migration, it leaves the API
 drained for operator intervention rather than serving an incompatible release.
-The web deploys only after the migrated API is healthy.
+The first deploy bootstraps one API machine when no prior machine exists. Health
+checks use the stable `turingcare-api.fly.dev` hostname, so custom-domain
+provisioning cannot block recovery. The web deploys only after the migrated API
+is healthy.
 
 > Nothing here is automated by the repo. Do every step below **once**, by hand,
 > before the first push to `main`. The workflows (`.github/workflows/ci.yml`,

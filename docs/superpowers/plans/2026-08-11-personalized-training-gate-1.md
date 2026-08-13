@@ -10699,14 +10699,17 @@ scheduling cannot strand production between jobs:
         run: |
           set -Eeuo pipefail
           original_count=$(flyctl machine list --json --app turingcare-api | jq 'length')
-          if [ "$original_count" -lt 1 ]; then
-            echo "Expected at least one running API machine before deployment" >&2
-            exit 1
+          target_count=$original_count
+          if [ "$target_count" -lt 1 ]; then
+            target_count=1
           fi
           migrated=0
           restore_old_release() {
+            if [ "$original_count" -lt 1 ]; then
+              return
+            fi
             flyctl scale count "$original_count" --yes --app turingcare-api
-            curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://api.turingcare.dog/health
+            curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/health
           }
           recover_on_exit() {
             status=$?
@@ -10737,8 +10740,8 @@ scheduling cannot strand production between jobs:
           pnpm --filter @turingcare/api db:migrate
           migrated=1
           flyctl deploy --remote-only --config apps/api/fly.toml
-          flyctl scale count "$original_count" --yes --app turingcare-api
-          curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://api.turingcare.dog/ready
+          flyctl scale count "$target_count" --yes --app turingcare-api
+          curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/ready
           trap - EXIT INT TERM
 
   # The web uses the expanded focus/session contracts, so publish it only after
@@ -10780,7 +10783,9 @@ Run this structural workflow check:
 drain_line=$(grep -n 'scale count 0' .github/workflows/deploy.yml | head -1 | cut -d: -f1)
 migrate_line=$(grep -n '@turingcare/api db:migrate' .github/workflows/deploy.yml | tail -1 | cut -d: -f1)
 test -n "$drain_line" -a -n "$migrate_line" -a "$drain_line" -lt "$migrate_line"
-test "$(grep -c 'scale count "$original_count" --yes --app turingcare-api' .github/workflows/deploy.yml)" -ge 2
+grep -q 'scale count "$original_count" --yes --app turingcare-api' .github/workflows/deploy.yml
+grep -q 'scale count "$target_count" --yes --app turingcare-api' .github/workflows/deploy.yml
+grep -q 'https://turingcare-api.fly.dev/ready' .github/workflows/deploy.yml
 grep -A3 '^  deploy-api:' .github/workflows/deploy.yml | grep -q 'timeout-minutes: 20'
 grep -A1 '^  deploy-web:' .github/workflows/deploy.yml | grep -q 'needs: deploy-api'
 ```

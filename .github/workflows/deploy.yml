@@ -71,14 +71,17 @@ jobs:
         run: |
           set -Eeuo pipefail
           original_count=$(flyctl machine list --json --app turingcare-api | jq 'length')
-          if [ "$original_count" -lt 1 ]; then
-            echo "Expected at least one running API machine before deployment" >&2
-            exit 1
+          target_count=$original_count
+          if [ "$target_count" -lt 1 ]; then
+            target_count=1
           fi
           migrated=0
           restore_old_release() {
+            if [ "$original_count" -lt 1 ]; then
+              return
+            fi
             flyctl scale count "$original_count" --yes --app turingcare-api
-            curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://api.turingcare.dog/health
+            curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/health
           }
           recover_on_exit() {
             status=$?
@@ -109,8 +112,8 @@ jobs:
           pnpm --filter @turingcare/api db:migrate
           migrated=1
           flyctl deploy --remote-only --config apps/api/fly.toml
-          flyctl scale count "$original_count" --yes --app turingcare-api
-          curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://api.turingcare.dog/ready
+          flyctl scale count "$target_count" --yes --app turingcare-api
+          curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/ready
           trap - EXIT INT TERM
 
   # The web uses the expanded focus/session contracts, so publish it only after
