@@ -65,7 +65,7 @@ describe("training curriculum metadata", () => {
           expect(
             meta.levelStepStrategies[index],
             `${key} distance step ${index + 1} needs a direction`,
-          ).toBeDefined();
+          ).not.toBeNull();
         }
       });
     }
