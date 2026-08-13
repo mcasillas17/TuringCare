@@ -1,8 +1,11 @@
 import { z } from "zod";
 
+/**
+ * Persisted controlled vocabularies. These values are version-compared in
+ * stored records and must not change after shipping.
+ */
 export const practiceOutcomeValues = ["went_well", "mixed", "too_hard"] as const;
 export type PracticeOutcome = (typeof practiceOutcomeValues)[number];
-
 export const practiceDimensionValues = [
   "cue_support",
   "environment",
@@ -18,7 +21,7 @@ export const cueSupportValues = [
   "verbal_cue",
   "no_extra_help",
 ] as const;
-export type PracticeCueSupport = (typeof cueSupportValues)[number];
+export type CueSupport = (typeof cueSupportValues)[number];
 
 export const environmentValues = [
   "home_quiet",
@@ -53,12 +56,13 @@ export type PracticeDurationBand = (typeof durationBandValues)[number];
 export const distractionValues = ["none", "mild", "moderate", "strong"] as const;
 export type PracticeDistraction = (typeof distractionValues)[number];
 
+/** Explicit, owner-answered safety inputs; never inferred from free text. */
 export const safetySignalValues = [
   "aggression_or_bite_risk",
   "injury_or_pain",
   "severe_fear_or_panic",
 ] as const;
-export type PracticeSafetySignal = (typeof safetySignalValues)[number];
+export type SafetySignalType = (typeof safetySignalValues)[number];
 
 export const easingStrategyValues = [
   "add_cue_help",
@@ -68,7 +72,7 @@ export const easingStrategyValues = [
   "shorten_duration",
   "reduce_distractions",
 ] as const;
-export type PracticeEasingStrategy = (typeof easingStrategyValues)[number];
+export type EasingStrategy = (typeof easingStrategyValues)[number];
 
 const practicedTargetVariantValues = ["primary", "fallback"] as const;
 

@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  type PracticeCueSupport,
+  type CueSupport,
+  type EasingStrategy,
   type PracticeDimension,
   type PracticeDistance,
   type PracticeDistraction,
   type PracticeDurationBand,
-  type PracticeEasingStrategy,
   type PracticeEnvironment,
   type PracticeOutcome,
-  type PracticeSafetySignal,
+  type SafetySignalType,
   cueSupportValues,
   distanceValues,
   distractionValues,
@@ -25,13 +25,13 @@ describe("practiceEvidenceSchema", () => {
   it("exports the stable practice evidence vocabularies and types", () => {
     const outcome: PracticeOutcome = "went_well";
     const dimension: PracticeDimension = "distance";
-    const cueSupport: PracticeCueSupport = "hand_signal";
+    const cueSupport: CueSupport = "hand_signal";
     const environment: PracticeEnvironment = "yard";
     const distance: PracticeDistance = "few_steps";
     const durationBand: PracticeDurationBand = "about_30_seconds";
     const distraction: PracticeDistraction = "mild";
-    const safetySignal: PracticeSafetySignal = "injury_or_pain";
-    const easingStrategy: PracticeEasingStrategy = "reduce_distractions";
+    const safetySignal: SafetySignalType = "injury_or_pain";
+    const easingStrategy: EasingStrategy = "reduce_distractions";
 
     expect(outcome).toBe("went_well");
     expect(dimension).toBe("distance");
@@ -107,6 +107,12 @@ describe("practiceEvidenceSchema", () => {
         },
       }).success,
     ).toBe(true);
+  });
+
+  it("rejects values outside the controlled vocabulary", () => {
+    expect(practiceEvidenceSchema.safeParse({ outcome: "great" }).success).toBe(false);
+    expect(practiceEvidenceSchema.safeParse({ distraction: "extreme" }).success).toBe(false);
+    expect(practiceEvidenceSchema.safeParse({ safetySignal: "bit someone" }).success).toBe(false);
   });
 
   it("accepts omitted and null evidence fields and rejects invalid practiced target metadata", () => {
