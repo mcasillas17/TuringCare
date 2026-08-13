@@ -111,7 +111,29 @@ test("full owner journey: register → verify → dog → moment → training �
   // Assert "1 session" visible
   await expect(page.getByText(/1 session/)).toBeVisible({ timeout: 10_000 });
 
-  // ─── 6. Brief: generate, share, finalize ───────────────────────────────
+  // ─── 6. Weekly focus: suggestion and one-tap outcome ───────────────────
+  await page.getByRole("link", { name: "This Week" }).click();
+  await expect(page).toHaveURL(/\/my\/dogs\/[^/]+\/week$/);
+  await page.getByRole("button", { name: "Edit focus" }).first().click();
+  const sitFocus = page.getByRole("radio", { name: "Sit" });
+  await sitFocus.click();
+  await expect(sitFocus).toBeChecked();
+
+  const suggestionCard = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "This week's suggestion" }) });
+  await expect(suggestionCard).toContainText("Lures into a sit with food in a quiet room");
+  await expect(suggestionCard.getByText("If that looks like too much")).toBeVisible();
+
+  await page.getByRole("button", { name: /^Sit on .*: 1 sessions$/ }).click();
+  await page.getByRole("button", { name: "Log another" }).click();
+
+  const outcomeCapture = page.getByLabel("How did it go?");
+  await outcomeCapture.getByRole("button", { name: "Went well" }).click();
+  await outcomeCapture.getByRole("button", { name: "Save response" }).click();
+  await expect(page.getByText("Thanks — logged.")).toBeVisible({ timeout: 10_000 });
+
+  // ─── 7. Brief: generate, share, finalize ───────────────────────────────
   await page.getByRole("link", { name: "Brief", exact: true }).click();
   await page.getByRole("button", { name: "Generate Brief" }).click();
 

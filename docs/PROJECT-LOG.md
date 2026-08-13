@@ -8,6 +8,27 @@ implementation plan (`docs/superpowers/plans/`); this log is the index.
 
 ---
 
+## 2026-08-13 — Personalized training Gate 1 — launch evidence
+Weekly focus is versioned by local week; practice sessions now retain structured
+outcome/context and the curriculum level. A bounded per-skill dimension metadata
+table turns the authored catalog into deterministic targets. Rule-based weekly
+suggestions offer one primary exercise plus one easier fallback, while advancement
+is proposed and then requires the owner's confirmation. Structured safety inputs
+suppress exercises and refer owners out. Suggestion/advancement audit rows and
+eight new telemetry names cover focus, practice outcome, suggestion,
+advancement, and safety decisions, including legacy focus compatibility use.
+- The owner confirmation is intentionally two-step (a proposal followed by an
+  explicit decision); `operations/safety-signal-correction.md` records the
+  support-confirmed input-mistake correction runbook and its exact two-key
+  transaction.
+- Launch follow-up: after rollout telemetry confirms `focus.legacy_compat_used`
+  is unused, remove the legacy focus and legacy `datetime-local` session
+  compatibility branches.
+- Out of scope for Gate 1: Gate 2 dashboards, custom-skill suggestions, and
+  Behavior Brief integration.
+- Spec/plan: `specs/2026-08-11-personalized-training-progress-design.md`,
+  `plans/2026-08-11-personalized-training-gate-1.md`.
+
 ## 2026-05-16 — Session 1: scaffolding, data model & auth
 Monorepo (pnpm workspaces: api/web/shared), Hono + Drizzle + Better Auth
 (email/password, Postgres sessions, httpOnly cookies), Vite + React 19 +

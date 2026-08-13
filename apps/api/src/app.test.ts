@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { app } from "./app";
+import { db } from "./db";
 import { env } from "./env";
 
 describe("api", () => {
@@ -7,6 +8,37 @@ describe("api", () => {
     const res = await app.request("/health");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: "ok" });
+  });
+
+  it("GET /ready verifies the migrated database schema", async () => {
+    const res = await app.request("/ready");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: "ready" });
+  });
+
+  it("GET /ready returns 503 when the database is unavailable", async () => {
+    vi.spyOn(db, "execute").mockRejectedValueOnce(new Error("database unavailable"));
+    const res = await app.request("/ready");
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "database_not_ready" });
+  });
+
+  it("GET /ready returns 503 when the final suggestion schema is missing", async () => {
+    vi.spyOn(db, "execute").mockRejectedValueOnce(
+      new Error('relation "training_suggestions" does not exist'),
+    );
+    const res = await app.request("/ready");
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "database_not_ready" });
+  });
+
+  it("GET /ready returns 503 when focus compatibility tables are missing", async () => {
+    vi.spyOn(db, "execute").mockRejectedValueOnce(
+      new Error('relation "legacy_focus_claims" does not exist'),
+    );
+    const res = await app.request("/ready");
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "database_not_ready" });
   });
 
   it("GET /health carries a correlation request ID", async () => {

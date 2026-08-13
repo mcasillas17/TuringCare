@@ -3,16 +3,19 @@
 End-to-end deploy on every push to `main`:
 
 ```
-push main → ci → migrate ─→ deploy-api (Fly,  api.turingcare.dog)
-                └─────────→ deploy-web (Pages, turingcare.dog + www)
+push main → ci → drain+migrate → deploy-api → deploy-web
 ```
 
 - **Frontend** → Cloudflare Pages (`turingcare.dog`, `www.turingcare.dog`)
 - **Backend** → Fly.io (`api.turingcare.dog`)
 - **Database** → Supabase Postgres
 
-`deploy-web` runs in parallel with `migrate`/`deploy-api` (independent). The API
-never deploys until production migrations succeed.
+Production deploys are serialized. For schema-incompatible migrations, the API
+has a bounded maintenance window while the old machines are drained before the
+migration. If migration fails, the workflow restores the old machine after the
+database rollback; if API deployment or readiness fails, it leaves the API
+drained for operator intervention rather than serving an incompatible release.
+The web deploys only after the migrated API is healthy.
 
 > Nothing here is automated by the repo. Do every step below **once**, by hand,
 > before the first push to `main`. The workflows (`.github/workflows/ci.yml`,
@@ -200,9 +203,9 @@ gh secret set CLOUDFLARE_ACCOUNT_ID
 
 ## 6. First deploy
 
-Push to `main`. `ci` → `migrate` → `deploy-api`, and `deploy-web` in parallel.
-On success: API at the Fly app's `*.fly.dev`, frontend at the Pages
-`*.pages.dev`. Attach the real domains next.
+Push to `main`. `ci` → `drain+migrate` → `deploy-api` → `deploy-web`. On
+success: API at the Fly app's `*.fly.dev`, frontend at the Pages `*.pages.dev`.
+Attach the real domains next.
 
 ---
 
