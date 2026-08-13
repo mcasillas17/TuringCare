@@ -5883,6 +5883,14 @@ describe("evaluateAdvancement", () => {
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/advancement.test.ts`
 Expected: FAIL — `Failed to resolve import "./advancement"`.
 
+- [ ] **Step 2a: Add the terminal-decision regression test** — add a DB-backed
+  `syncAdvancementProposal` test that persists current qualifying sessions and
+  two terminal decisions with the same `evidenceLastSessionAt`. The older
+  `rejected` decision must include the current `lastSessionId`; the
+  newer-created tied `stayed` decision must use different evidence IDs and omit
+  it. Syncing the current evidence must return `{ proposal: null, created: false }`
+  and leave the two historical rows as the only proposals.
+
 - [ ] **Step 3: Allow skill-level updates to participate in a transaction** — in
   `apps/api/src/lib/skill-level.ts`, import `type DB` alongside `db`, add this
   database interface, add the optional parameter, and replace the three direct
@@ -5957,7 +5965,7 @@ import type {
   SuggestionRule,
 } from "@turingcare/shared";
 import { advancementRuleId } from "@turingcare/shared";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import { advancementProposals, practiceSessions, trainingSkills } from "../db/schema";
@@ -6179,7 +6187,7 @@ export async function syncAdvancementProposalInTx(
       .where(eq(advancementProposals.id, open.id));
   }
 
-  const [latestDecision] = await tx
+  const terminalDecisions = await tx
     .select()
     .from(advancementProposals)
     .where(
@@ -6187,6 +6195,7 @@ export async function syncAdvancementProposalInTx(
         eq(advancementProposals.skillId, skillId),
         eq(advancementProposals.fromLevel, evidence.fromLevel),
         eq(advancementProposals.toLevel, evidence.toLevel),
+        gte(advancementProposals.evidenceLastSessionAt, evidence.lastSessionAt),
         inArray(advancementProposals.status, [
           "stayed",
           "rejected",
@@ -6196,16 +6205,14 @@ export async function syncAdvancementProposalInTx(
       ),
     )
     .orderBy(desc(advancementProposals.evidenceLastSessionAt), desc(advancementProposals.createdAt))
-    .limit(1);
-  const latestDecisionCoversEvidence =
-    latestDecision &&
-    (latestDecision.evidenceLastSessionAt.getTime() > evidence.lastSessionAt.getTime() ||
-      (latestDecision.evidenceLastSessionAt.getTime() === evidence.lastSessionAt.getTime() &&
+  const terminalDecisionCoversEvidence = terminalDecisions.some(
+    (decision) =>
+      decision.evidenceLastSessionAt.getTime() > evidence.lastSessionAt.getTime() ||
+      (decision.evidenceLastSessionAt.getTime() === evidence.lastSessionAt.getTime() &&
         (evidence.lastSessionId === null ||
-          latestDecision.evidenceSessionIds.includes(evidence.lastSessionId))));
-  if (latestDecision && latestDecision.status !== "proposed" && latestDecisionCoversEvidence) {
-    return { proposal: null, created: false };
-  }
+          decision.evidenceSessionIds.includes(evidence.lastSessionId))),
+  );
+  if (terminalDecisionCoversEvidence) return { proposal: null, created: false };
 
   const [created] = await tx
     .insert(advancementProposals)
@@ -6350,7 +6357,7 @@ export async function decideAdvancementProposal(
 - [ ] **Step 5: Run it, expect PASS**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/advancement.test.ts`
-Expected: PASS — 7 tests.
+Expected: PASS — 9 tests, including the DB-backed tied-terminal-decision regression.
 
 - [ ] **Step 6: Commit**
 

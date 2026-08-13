@@ -5,7 +5,7 @@ import type {
   SuggestionRule,
 } from "@turingcare/shared";
 import { advancementRuleId } from "@turingcare/shared";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import { advancementProposals, practiceSessions, trainingSkills } from "../db/schema";
@@ -216,7 +216,7 @@ export async function syncAdvancementProposalInTx(
 
   await withdrawOpenProposal(tx, open);
 
-  const [latestDecision] = await tx
+  const terminalDecisions = await tx
     .select()
     .from(advancementProposals)
     .where(
@@ -224,6 +224,7 @@ export async function syncAdvancementProposalInTx(
         eq(advancementProposals.skillId, skillId),
         eq(advancementProposals.fromLevel, evidence.fromLevel),
         eq(advancementProposals.toLevel, evidence.toLevel),
+        gte(advancementProposals.evidenceLastSessionAt, evidence.lastSessionAt),
         inArray(advancementProposals.status, [
           "stayed",
           "rejected",
@@ -232,15 +233,18 @@ export async function syncAdvancementProposalInTx(
         ]),
       ),
     )
-    .orderBy(desc(advancementProposals.evidenceLastSessionAt), desc(advancementProposals.createdAt))
-    .limit(1);
-  const latestDecisionCoversEvidence =
-    latestDecision &&
-    (latestDecision.evidenceLastSessionAt.getTime() > evidence.lastSessionAt.getTime() ||
-      (latestDecision.evidenceLastSessionAt.getTime() === evidence.lastSessionAt.getTime() &&
+    .orderBy(
+      desc(advancementProposals.evidenceLastSessionAt),
+      desc(advancementProposals.createdAt),
+    );
+  const terminalDecisionCoversEvidence = terminalDecisions.some(
+    (decision) =>
+      decision.evidenceLastSessionAt.getTime() > evidence.lastSessionAt.getTime() ||
+      (decision.evidenceLastSessionAt.getTime() === evidence.lastSessionAt.getTime() &&
         (evidence.lastSessionId === null ||
-          latestDecision.evidenceSessionIds.includes(evidence.lastSessionId))));
-  if (latestDecisionCoversEvidence) return { proposal: null, created: false };
+          decision.evidenceSessionIds.includes(evidence.lastSessionId))),
+  );
+  if (terminalDecisionCoversEvidence) return { proposal: null, created: false };
 
   const [created] = await tx
     .insert(advancementProposals)

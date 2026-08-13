@@ -1,9 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { afterEach, describe, expect, it } from "vitest";
+import { db } from "../db";
+import {
+  advancementProposals,
+  dogs,
+  practiceSessions,
+  trainingGoals,
+  trainingSkills,
+} from "../db/schema";
+import { type TestUser, createTestUser } from "../test-helpers";
 import {
   ADVANCEMENT_MIN_DAYS,
   ADVANCEMENT_MIN_SESSIONS,
   type AdvancementInputs,
   evaluateAdvancement,
+  syncAdvancementProposal,
 } from "./advancement";
 
 const day = (iso: string) => new Date(iso);
@@ -13,6 +25,33 @@ const base: AdvancementInputs = {
   level: 3,
   outcomes: [],
 };
+
+async function createSkill(user: TestUser) {
+  const [dog] = await db
+    .insert(dogs)
+    .values({
+      ownerId: user.userId,
+      name: "Biscuit",
+      size: "medium",
+      sex: "female",
+      source: "rescue",
+      vaccineStage: "in_progress",
+      spayedNeutered: true,
+    })
+    .returning();
+  if (!dog) throw new Error("expected dog");
+  const [goal] = await db
+    .insert(trainingGoals)
+    .values({ dogId: dog.id, goal: "Recall" })
+    .returning();
+  if (!goal) throw new Error("expected goal");
+  const [skill] = await db
+    .insert(trainingSkills)
+    .values({ goalId: goal.id, name: "Sit", confidence: 2 })
+    .returning();
+  if (!skill) throw new Error("expected skill");
+  return skill;
+}
 
 describe("evaluateAdvancement", () => {
   it("requires three consecutive good sessions across two days", () => {
@@ -35,6 +74,111 @@ describe("evaluateAdvancement", () => {
       dayCount: 3,
       lastSessionAt: day("2026-08-13T09:00:00.000Z"),
       lastSessionId: null,
+    });
+  });
+
+  describe("syncAdvancementProposal", () => {
+    const users: TestUser[] = [];
+    afterEach(async () => {
+      for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
+    });
+
+    it("suppresses a reproposal when an older tied terminal decision covers current evidence", async () => {
+      const user = await createTestUser();
+      users.push(user);
+      const skill = await createSkill(user);
+      const newestAt = day("2026-08-13T09:00:00.000Z");
+      const evidenceRows = [
+        {
+          id: randomUUID(),
+          outcome: "went_well" as const,
+          occurredAt: newestAt,
+          practiceDay: "2026-08-13",
+        },
+        {
+          id: randomUUID(),
+          outcome: "went_well" as const,
+          occurredAt: day("2026-08-12T09:00:00.000Z"),
+          practiceDay: "2026-08-12",
+        },
+        {
+          id: randomUUID(),
+          outcome: "went_well" as const,
+          occurredAt: day("2026-08-11T09:00:00.000Z"),
+          practiceDay: "2026-08-11",
+        },
+      ];
+      const [newestEvidence, middleEvidence, oldestEvidence] = evidenceRows;
+      if (!newestEvidence || !middleEvidence || !oldestEvidence) {
+        throw new Error("expected qualifying evidence");
+      }
+      const tiedEvidenceId = randomUUID();
+      await db.insert(practiceSessions).values([
+        ...evidenceRows.map((row) => ({
+          ...row,
+          skillId: skill.id,
+          curriculumLevel: 2,
+          practiceVariant: "primary" as const,
+        })),
+        {
+          id: tiedEvidenceId,
+          skillId: skill.id,
+          outcome: "went_well",
+          occurredAt: newestAt,
+          practiceDay: "2026-08-13",
+          curriculumLevel: 2,
+          practiceVariant: "primary",
+        },
+      ]);
+
+      const decision = {
+        skillId: skill.id,
+        fromLevel: 2,
+        toLevel: 3,
+        ruleId: "maintain_current_level",
+        evidenceSessionCount: 3,
+        evidenceDayCount: 3,
+        evidenceWindowDays: 14,
+        evidenceOccurredAt: evidenceRows.map((row) => row.occurredAt),
+        evidencePracticeDays: evidenceRows.map((row) => row.practiceDay),
+        evidenceOutcomes: evidenceRows.map((row) => row.outcome),
+        evidenceLastSessionAt: newestAt,
+      };
+      await db.insert(advancementProposals).values([
+        {
+          ...decision,
+          evidenceSessionIds: evidenceRows.map((row) => row.id),
+          status: "rejected",
+          createdAt: day("2026-08-13T10:00:00.000Z"),
+        },
+        {
+          ...decision,
+          evidenceSessionIds: [tiedEvidenceId, middleEvidence.id, oldestEvidence.id],
+          status: "stayed",
+          createdAt: day("2026-08-13T11:00:00.000Z"),
+        },
+      ]);
+
+      const result = await syncAdvancementProposal(
+        skill.id,
+        {
+          fromLevel: 2,
+          toLevel: 3,
+          sessionCount: 3,
+          dayCount: 3,
+          lastSessionAt: newestAt,
+          lastSessionId: newestEvidence.id,
+        },
+        evidenceRows,
+      );
+
+      expect(result).toEqual({ proposal: null, created: false });
+      expect(
+        await db
+          .select()
+          .from(advancementProposals)
+          .where(eq(advancementProposals.skillId, skill.id)),
+      ).toHaveLength(2);
     });
   });
 
