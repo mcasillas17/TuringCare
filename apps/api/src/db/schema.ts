@@ -182,11 +182,39 @@ export const weeklyFocus = pgTable(
     skillId: uuid("skill_id")
       .notNull()
       .references(() => trainingSkills.id, { onDelete: "cascade" }),
+    weekStart: date("week_start"),
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique("weekly_focus_dog_skill").on(t.dogId, t.skillId)],
+  (t) => [
+    unique("weekly_focus_dog_week").on(t.dogId, t.weekStart),
+    check(
+      "weekly_focus_week_start_monday",
+      sql`${t.weekStart} is null or extract(isodow from ${t.weekStart}) = 1`,
+    ),
+  ],
 );
+
+export const focusCompatibilityWeeks = pgTable(
+  "focus_compatibility_weeks",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    dogId: uuid("dog_id")
+      .notNull()
+      .references(() => dogs.id, { onDelete: "cascade" }),
+    sessionId: text("session_id").notNull(),
+    weekStart: date("week_start").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [unique("focus_compatibility_dog_session").on(t.dogId, t.sessionId)],
+);
+
+export const legacyFocusClaims = pgTable("legacy_focus_claims", {
+  dogId: uuid("dog_id")
+    .primaryKey()
+    .references(() => dogs.id, { onDelete: "cascade" }),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull(),
+});
 
 export const journalEntries = pgTable(
   "journal_entries",

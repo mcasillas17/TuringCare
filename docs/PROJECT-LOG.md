@@ -992,3 +992,11 @@ no new findings on changed files (pre-existing/adjudicated only).
 - Spec/plan: `docs/superpowers/specs/2026-06-21-turing-quiet-setting-design.md`,
   `docs/superpowers/plans/2026-06-21-turing-quiet-setting.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-quiet-setting`.
+
+## 2026-08-12 — Weekly focus week-start versioning — LOCAL VERIFICATION
+Gate 1 Task 7 versions `weekly_focus` by owner-local Monday `week_start`, adds
+compatibility/claim tables, and preserves legacy rows as `week_start = NULL` so
+Task 8 can claim at most one preserved row per dog into the owner's real local
+week without guessing from the database timezone. **Local verification only:**
+the current local `turingcare` database had **0** `weekly_focus` rows before
+0013, so there were no legacy rows to convert in-place on this machine.
