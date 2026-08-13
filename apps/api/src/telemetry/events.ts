@@ -14,6 +14,7 @@ export const KNOWN_EVENTS = [
   "training.goal_added",
   "training.practice_logged",
   "focus.week_set",
+  "focus.legacy_compat_used",
   "training.level_set",
   "trainer.viewed",
   "course.viewed",

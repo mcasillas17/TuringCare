@@ -68,7 +68,7 @@ describe("DogWeek", () => {
   it("shows the pick-focus empty state when there are no focus skills", () => {
     setup([]);
     renderWeek();
-    expect(screen.getByText(/Pick skills to focus on this week/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pick one skill to focus on this week/i)).toBeInTheDocument();
   });
 
   it("renders a focus skill row and its goal", () => {

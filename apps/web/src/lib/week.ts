@@ -31,6 +31,11 @@ export function dayKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Local Monday YYYY-MM-DD key for a date's week. */
+export function weekKeyOf(date: Date): string {
+  return dayKey(mondayOf(date));
+}
+
 /** True if both dates fall in the same local Mon–Sun week. */
 export function sameWeek(a: Date, b: Date): boolean {
   return mondayOf(a).getTime() === mondayOf(b).getTime();

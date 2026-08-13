@@ -1,27 +1,57 @@
 import { describe, expect, it } from "vitest";
-import { focusAddSchema, focusWeekQuerySchema } from "./focus";
+import {
+  focusAddSchema,
+  focusRemoveQuerySchema,
+  focusWeekQuerySchema,
+  weekKeySchema,
+} from "./focus";
+
+const SKILL_ID = "5f3f0b7a-6d1a-4f1e-9a3c-2f5d9d8f6b21";
+const MONDAY = "2026-08-10";
+const TUESDAY = "2026-08-11";
+
+describe("weekKeySchema", () => {
+  it("accepts a Monday date key", () => {
+    expect(weekKeySchema.parse(MONDAY)).toBe(MONDAY);
+  });
+
+  it("rejects a non-Monday, a malformed key and an impossible date", () => {
+    expect(weekKeySchema.safeParse(TUESDAY).success).toBe(false);
+    expect(weekKeySchema.safeParse("2026-8-10").success).toBe(false);
+    expect(weekKeySchema.safeParse("2026-13-45").success).toBe(false);
+  });
+});
 
 describe("focusAddSchema", () => {
-  it("accepts a uuid skillId", () => {
-    const r = focusAddSchema.safeParse({ skillId: "11111111-1111-1111-1111-111111111111" });
-    expect(r.success).toBe(true);
-  });
-  it("rejects a non-uuid skillId", () => {
-    expect(focusAddSchema.safeParse({ skillId: "nope" }).success).toBe(false);
+  it("requires a skill id and a week key", () => {
+    expect(focusAddSchema.parse({ skillId: SKILL_ID, weekKey: MONDAY }).weekKey).toBe(MONDAY);
+    expect(focusAddSchema.safeParse({ skillId: SKILL_ID }).success).toBe(false);
   });
 });
 
 describe("focusWeekQuerySchema", () => {
-  it("accepts ISO datetime bounds", () => {
-    const r = focusWeekQuerySchema.safeParse({
-      weekStart: "2026-06-01T07:00:00.000Z",
-      weekEnd: "2026-06-08T07:00:00.000Z",
+  it("requires the local week key and browser timezone offset", () => {
+    const parsed = focusWeekQuerySchema.parse({
+      weekKey: MONDAY,
+      timezoneOffsetMinutes: "420",
+      weekEndTimezoneOffsetMinutes: "420",
     });
-    expect(r.success).toBe(true);
-  });
-  it("rejects a non-datetime weekStart", () => {
+    expect(parsed.weekKey).toBe(MONDAY);
+    expect(parsed.timezoneOffsetMinutes).toBe(420);
+    expect(parsed.weekEndTimezoneOffsetMinutes).toBe(420);
     expect(
-      focusWeekQuerySchema.safeParse({ weekStart: "2026-06-01", weekEnd: "2026-06-08" }).success,
+      focusWeekQuerySchema.safeParse({
+        weekKey: MONDAY,
+        timezoneOffsetMinutes: 900,
+        weekEndTimezoneOffsetMinutes: 420,
+      }).success,
     ).toBe(false);
+  });
+});
+
+describe("focusRemoveQuerySchema", () => {
+  it("requires the week key", () => {
+    expect(focusRemoveQuerySchema.parse({ weekKey: MONDAY }).weekKey).toBe(MONDAY);
+    expect(focusRemoveQuerySchema.safeParse({}).success).toBe(false);
   });
 });

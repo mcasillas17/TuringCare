@@ -1,6 +1,13 @@
-import { and, asc, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { db } from "../db";
-import { practiceSessions, trainingGoals, trainingSkills, weeklyFocus } from "../db/schema";
+import {
+  focusCompatibilityWeeks,
+  legacyFocusClaims,
+  practiceSessions,
+  trainingGoals,
+  trainingSkills,
+  weeklyFocus,
+} from "../db/schema";
 
 export type FocusSession = {
   id: string;
@@ -17,11 +24,30 @@ export type FocusSkill = {
   sessions: FocusSession[];
 };
 
+export function weekBoundsFromOffset(
+  weekKey: string,
+  timezoneOffsetMinutes: number,
+  weekEndTimezoneOffsetMinutes: number,
+) {
+  const startBase = Date.parse(`${weekKey}T00:00:00.000Z`);
+  const endBase = startBase + 7 * 24 * 60 * 60 * 1000;
+  return {
+    startISO: new Date(startBase + timezoneOffsetMinutes * 60_000).toISOString(),
+    endISO: new Date(endBase + weekEndTimezoneOffsetMinutes * 60_000).toISOString(),
+  };
+}
+
 export async function loadFocusWeek(
   dogId: string,
-  startISO: string,
-  endISO: string,
+  weekKey: string,
+  timezoneOffsetMinutes: number,
+  weekEndTimezoneOffsetMinutes: number,
 ): Promise<{ focusSkills: FocusSkill[] }> {
+  const { startISO, endISO } = weekBoundsFromOffset(
+    weekKey,
+    timezoneOffsetMinutes,
+    weekEndTimezoneOffsetMinutes,
+  );
   const focus = await db
     .select({
       skillId: weeklyFocus.skillId,
@@ -34,7 +60,7 @@ export async function loadFocusWeek(
     .from(weeklyFocus)
     .innerJoin(trainingSkills, eq(weeklyFocus.skillId, trainingSkills.id))
     .innerJoin(trainingGoals, eq(trainingSkills.goalId, trainingGoals.id))
-    .where(eq(weeklyFocus.dogId, dogId))
+    .where(and(eq(weeklyFocus.dogId, dogId), eq(weeklyFocus.weekStart, weekKey)))
     .orderBy(asc(weeklyFocus.position), asc(weeklyFocus.createdAt));
 
   const skillIds = focus.map((f) => f.skillId);
@@ -79,4 +105,95 @@ export async function loadFocusWeek(
       sessions: bySkill.get(f.skillId) ?? [],
     })),
   };
+}
+
+async function lockFocusWeek(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  dogId: string,
+  weekKey: string,
+) {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`legacy-focus:${dogId}`}))`);
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`${dogId}:${weekKey}`}))`);
+}
+
+export async function claimLegacyFocus(dogId: string, weekKey: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await lockFocusWeek(tx, dogId, weekKey);
+    const claimed = await tx
+      .select({ dogId: legacyFocusClaims.dogId })
+      .from(legacyFocusClaims)
+      .where(eq(legacyFocusClaims.dogId, dogId))
+      .for("update");
+    if (claimed[0]) return;
+
+    const current = await tx
+      .select({ id: weeklyFocus.id })
+      .from(weeklyFocus)
+      .where(and(eq(weeklyFocus.dogId, dogId), eq(weeklyFocus.weekStart, weekKey)))
+      .for("update");
+    if (current[0]) {
+      await tx
+        .insert(legacyFocusClaims)
+        .values({ dogId, claimedAt: new Date() })
+        .onConflictDoNothing();
+      return;
+    }
+
+    const [legacy] = await tx
+      .select({ id: weeklyFocus.id })
+      .from(weeklyFocus)
+      .where(and(eq(weeklyFocus.dogId, dogId), isNull(weeklyFocus.weekStart)))
+      .orderBy(asc(weeklyFocus.position), asc(weeklyFocus.createdAt), asc(weeklyFocus.id))
+      .limit(1)
+      .for("update");
+    if (!legacy) return;
+    await tx.update(weeklyFocus).set({ weekStart: weekKey }).where(eq(weeklyFocus.id, legacy.id));
+    await tx
+      .insert(legacyFocusClaims)
+      .values({ dogId, claimedAt: new Date() })
+      .onConflictDoNothing();
+  });
+}
+
+export async function rememberLegacyFocusWeek(
+  dogId: string,
+  sessionId: string,
+  weekKey: string,
+): Promise<void> {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 15 * 60_000);
+  await db.delete(focusCompatibilityWeeks).where(lte(focusCompatibilityWeeks.expiresAt, now));
+  await db
+    .insert(focusCompatibilityWeeks)
+    .values({ dogId, sessionId, weekStart: weekKey, expiresAt })
+    .onConflictDoUpdate({
+      target: [focusCompatibilityWeeks.dogId, focusCompatibilityWeeks.sessionId],
+      set: { weekStart: weekKey, expiresAt },
+    });
+}
+
+export async function legacyFocusWeekKey(dogId: string, sessionId: string): Promise<string | null> {
+  const [context] = await db
+    .select({ weekStart: focusCompatibilityWeeks.weekStart })
+    .from(focusCompatibilityWeeks)
+    .where(
+      and(
+        eq(focusCompatibilityWeeks.dogId, dogId),
+        eq(focusCompatibilityWeeks.sessionId, sessionId),
+        gt(focusCompatibilityWeeks.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+  return context?.weekStart ?? null;
+}
+
+export async function withFocusWeekLock<T>(
+  dogId: string,
+  weekKey: string,
+  callback: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await lockFocusWeek(tx, dogId, weekKey);
+    return callback(tx);
+  });
 }

@@ -7,6 +7,7 @@ import {
   shouldCelebrateWeek,
   weekBounds,
   weekDays,
+  weekKeyOf,
 } from "./week";
 
 describe("week helpers", () => {
@@ -45,6 +46,14 @@ describe("week helpers", () => {
   it("sameWeek compares by Monday", () => {
     expect(sameWeek(new Date(2026, 5, 1), new Date(2026, 5, 7))).toBe(true);
     expect(sameWeek(new Date(2026, 5, 1), new Date(2026, 5, 8))).toBe(false);
+  });
+});
+
+describe("weekKeyOf", () => {
+  it("returns the local Monday key", () => {
+    expect(weekKeyOf(new Date(2026, 7, 13, 23, 30))).toBe("2026-08-10");
+    expect(weekKeyOf(new Date(2026, 7, 10, 0, 0))).toBe("2026-08-10");
+    expect(weekKeyOf(new Date(2026, 7, 9, 23, 59))).toBe("2026-08-03");
   });
 });
 

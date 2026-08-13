@@ -11,8 +11,8 @@ import {
   mondayOf,
   sameWeek,
   shouldCelebrateWeek,
-  weekBounds,
   weekDays,
+  weekKeyOf,
 } from "@/lib/week";
 import { focusKey, useFocusWeek } from "@/lib/weekly-focus";
 import { useQueryClient } from "@tanstack/react-query";
@@ -27,9 +27,16 @@ export function DogWeek() {
   const [monday, setMonday] = useState(() => mondayOf(new Date()));
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const { weekStart, weekEnd } = useMemo(() => weekBounds(monday), [monday]);
   const days = useMemo(() => weekDays(monday), [monday]);
-  const { data: focusSkills } = useFocusWeek(id, weekStart, weekEnd);
+  const weekKey = weekKeyOf(monday);
+  const timezoneOffsetMinutes = monday.getTimezoneOffset();
+  const weekEndTimezoneOffsetMinutes = addDays(monday, 7).getTimezoneOffset();
+  const { data: focusSkills } = useFocusWeek(
+    id,
+    weekKey,
+    timezoneOffsetMinutes,
+    weekEndTimezoneOffsetMinutes,
+  );
   const logSession = useLogSession(id);
   const deleteSession = useDeleteSession(id);
 
@@ -42,7 +49,6 @@ export function DogWeek() {
   const { celebrate } = useTuring();
   const isCurrentWeek = sameWeek(monday, today);
   const weekComplete = skills.length > 0 && doneCount === skills.length;
-  const weekKey = dayKey(monday);
   const prevComplete = useRef<boolean | undefined>(undefined);
   const prevWeekKey = useRef(weekKey);
   // Derived-state trigger: week completion comes from the refetched focus query
@@ -62,7 +68,7 @@ export function DogWeek() {
     prevComplete.current = weekComplete;
   }, [focusSkills, weekKey, weekComplete, isCurrentWeek, celebrate]);
 
-  const refreshFocus = () => qc.invalidateQueries({ queryKey: focusKey(id) });
+  const refreshFocus = () => qc.invalidateQueries({ queryKey: focusKey(id, weekKey) });
 
   const onLog = async (skillId: string, day: Date) => {
     const isToday = dayKey(day) === dayKey(today);
@@ -98,13 +104,16 @@ export function DogWeek() {
       />
 
       {skills.length > 0 && (
-        <p className="text-sm text-slate-soft">
-          {t("week.summary", { done: doneCount, total: skills.length, sessions: sessionCount })}
-        </p>
+        <p className="text-sm text-slate-soft">{t("week.summary", { sessions: sessionCount })}</p>
       )}
 
       {pickerOpen && (
-        <FocusPicker dogId={id} focusSkills={skills} onClose={() => setPickerOpen(false)} />
+        <FocusPicker
+          dogId={id}
+          weekKey={weekKey}
+          focusSkills={skills}
+          onClose={() => setPickerOpen(false)}
+        />
       )}
 
       {skills.length === 0 ? (

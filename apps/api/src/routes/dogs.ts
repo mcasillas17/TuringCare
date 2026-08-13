@@ -5,20 +5,22 @@ import {
   briefGenerateSchema,
   briefSendSchema,
   dogProfileSchema,
-  focusAddSchema,
-  focusWeekQuerySchema,
   goalFromTemplateSchema,
   journalEntryCreateSchema,
   journalEntryUpdateSchema,
+  focusAddSchema as newFocusAddSchema,
+  focusRemoveQuerySchema as newFocusRemoveQuerySchema,
+  focusWeekQuerySchema as newFocusWeekQuerySchema,
   practiceSessionSchema,
   skillLevelSchema,
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
-import { and, count, desc, eq, gte, lt, max } from "drizzle-orm";
+import { and, count, desc, eq, gte, lt, max, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { z } from "zod";
 import { trainingCatalog } from "../data/training-catalog";
 import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
@@ -40,7 +42,14 @@ import { sendEmail } from "../email/send-email";
 import { env } from "../env";
 import { composeBrief } from "../lib/brief";
 import { loadDogsOverview } from "../lib/dogs-overview";
-import { loadFocusWeek } from "../lib/focus";
+import {
+  claimLegacyFocus,
+  legacyFocusWeekKey,
+  loadFocusWeek,
+  rememberLegacyFocusWeek,
+  weekBoundsFromOffset,
+  withFocusWeekLock,
+} from "../lib/focus";
 import { loadProgress } from "../lib/progress";
 import { setSkillLevel } from "../lib/skill-level";
 import { type Vars, requireUser } from "../middleware/require-user";
@@ -53,6 +62,56 @@ const invalidJournalField = (path: "occurredAt" | "trend", message: string) =>
       issues: [{ code: "custom", path: [path], message }],
     },
   }) as const;
+
+const legacyFocusWeekQuerySchema = z
+  .object({
+    weekStart: z.string().datetime({ offset: true }),
+    weekEnd: z.string().datetime({ offset: true }),
+  })
+  .strict();
+const legacyFocusAddSchema = z.object({ skillId: z.string().uuid() }).strict();
+const legacyFocusRemoveQuerySchema = z.object({}).strict();
+const focusWeekCompatSchema = z.union([
+  newFocusWeekQuerySchema.strict(),
+  legacyFocusWeekQuerySchema,
+]);
+const focusAddCompatSchema = z.union([newFocusAddSchema.strict(), legacyFocusAddSchema]);
+const focusRemoveCompatSchema = z.union([
+  newFocusRemoveQuerySchema.strict(),
+  legacyFocusRemoveQuerySchema,
+]);
+
+type NormalizedFocusWeek = z.infer<typeof newFocusWeekQuerySchema>;
+
+function legacyWeekInput(input: z.infer<typeof legacyFocusWeekQuerySchema>) {
+  const start = new Date(input.weekStart);
+  const end = new Date(input.weekEnd);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  const startDay = start.getUTCDay();
+  if (startDay !== 0 && startDay !== 1) return null;
+  const monday = new Date(start);
+  monday.setUTCHours(0, 0, 0, 0);
+  if (startDay === 0) monday.setUTCDate(monday.getUTCDate() + 1);
+  const weekKey = monday.toISOString().slice(0, 10);
+  const startBase = Date.parse(`${weekKey}T00:00:00.000Z`);
+  const endBase = startBase + 7 * 24 * 60 * 60 * 1000;
+  const normalized = newFocusWeekQuerySchema.safeParse({
+    weekKey,
+    timezoneOffsetMinutes: (start.getTime() - startBase) / 60_000,
+    weekEndTimezoneOffsetMinutes: (end.getTime() - endBase) / 60_000,
+  });
+  return normalized.success && "weekKey" in normalized.data ? normalized.data : null;
+}
+
+function isCurrentFocusWeek(input: NormalizedFocusWeek) {
+  const { startISO, endISO } = weekBoundsFromOffset(
+    input.weekKey,
+    input.timezoneOffsetMinutes,
+    input.weekEndTimezoneOffsetMinutes,
+  );
+  const now = Date.now();
+  return now >= Date.parse(startISO) && now < Date.parse(endISO);
+}
 
 /**
  * Builds the 502 thrown when `sendEmail` fails while delivering a brief.
@@ -307,44 +366,123 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
-  .get("/:id/focus", zValidator("query", focusWeekQuerySchema), async (c) => {
+  .get("/:id/focus", zValidator("query", focusWeekCompatSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const { weekStart, weekEnd } = c.req.valid("query");
-    const data = await loadFocusWeek(dog.id, weekStart, weekEnd);
+    const input = c.req.valid("query");
+    let legacy = false;
+    let week: NormalizedFocusWeek | null;
+    if ("weekStart" in input) {
+      legacy = true;
+      week = legacyWeekInput(input);
+    } else {
+      week = input;
+    }
+    if (!week) return c.json({ error: "invalid_focus_week" } as const, 400);
+    const currentWeek = isCurrentFocusWeek(week);
+    if (currentWeek) {
+      await claimLegacyFocus(dog.id, week.weekKey);
+    }
+    if (legacy && currentWeek) {
+      await rememberLegacyFocusWeek(dog.id, c.get("sessionId"), week.weekKey);
+      await recordEvent("focus.legacy_compat_used", {
+        userId: c.get("userId"),
+        sessionId: c.get("sessionId"),
+        props: { operation: "read" },
+      });
+    }
+    const data = await loadFocusWeek(
+      dog.id,
+      week.weekKey,
+      week.timezoneOffsetMinutes,
+      week.weekEndTimezoneOffsetMinutes,
+    );
     return c.json(data);
   })
-  .post("/:id/focus", zValidator("json", focusAddSchema), async (c) => {
+  .post("/:id/focus", zValidator("json", focusAddCompatSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const { skillId } = c.req.valid("json");
-    const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId);
+    const body = c.req.valid("json");
+    const legacy = !("weekKey" in body);
+    let weekKey: string | null;
+    if ("weekKey" in body) {
+      weekKey = body.weekKey;
+    } else {
+      weekKey = await legacyFocusWeekKey(dog.id, c.get("sessionId"));
+    }
+    if (!weekKey) return c.json({ error: "legacy_focus_context_required" } as const, 409);
+    if (legacy) {
+      await recordEvent("focus.legacy_compat_used", {
+        userId: c.get("userId"),
+        sessionId: c.get("sessionId"),
+        props: { operation: "write" },
+      });
+    }
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, body.skillId);
     if (!skill) return c.json({ error: "not_found" } as const, 404);
-    const existing = await db
-      .select({ id: weeklyFocus.id })
-      .from(weeklyFocus)
-      .where(and(eq(weeklyFocus.dogId, dog.id), eq(weeklyFocus.skillId, skillId)))
-      .limit(1);
-    if (existing[0]) return c.json({ error: "already_focused" } as const, 409);
-    const [{ value: maxPos } = { value: null }] = await db
-      .select({ value: max(weeklyFocus.position) })
-      .from(weeklyFocus)
-      .where(eq(weeklyFocus.dogId, dog.id));
-    const [row] = await db
-      .insert(weeklyFocus)
-      .values({ dogId: dog.id, skillId, position: (maxPos ?? -1) + 1 })
-      .returning();
-    if (!row) throw new Error("failed to add focus skill");
-    await recordEvent("focus.week_set", { userId: c.get("userId") });
-    return c.json({ focus: row }, 201);
+    const result = await withFocusWeekLock(dog.id, weekKey, async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(weeklyFocus)
+        .where(and(eq(weeklyFocus.dogId, dog.id), eq(weeklyFocus.weekStart, weekKey)))
+        .for("update");
+      if (existing?.skillId === skill.id) return { kind: "unchanged" as const };
+      if (existing) {
+        const [focus] = await tx
+          .update(weeklyFocus)
+          .set({ skillId: skill.id, position: 0 })
+          .where(eq(weeklyFocus.id, existing.id))
+          .returning();
+        if (!focus) throw new Error("failed to replace focus skill");
+        return { kind: "replaced" as const, focus };
+      }
+      const [focus] = await tx
+        .insert(weeklyFocus)
+        .values({ dogId: dog.id, skillId: skill.id, weekStart: weekKey, position: 0 })
+        .returning();
+      if (!focus) throw new Error("failed to add focus skill");
+      return { kind: "created" as const, focus };
+    });
+    if (result.kind === "unchanged") return c.json({ ok: true, unchanged: true } as const);
+    await recordEvent("focus.week_set", {
+      userId: c.get("userId"),
+      props: { replaced: result.kind === "replaced" },
+    });
+    return c.json({ focus: result.focus }, result.kind === "created" ? 201 : 200);
   })
-  .delete("/:id/focus/:skillId", async (c) => {
+  .delete("/:id/focus/:skillId", zValidator("query", focusRemoveCompatSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const [deleted] = await db
-      .delete(weeklyFocus)
-      .where(and(eq(weeklyFocus.dogId, dog.id), eq(weeklyFocus.skillId, c.req.param("skillId"))))
-      .returning({ id: weeklyFocus.id });
+    const input = c.req.valid("query");
+    const legacy = !("weekKey" in input);
+    let weekKey: string | null;
+    if ("weekKey" in input) {
+      weekKey = input.weekKey;
+    } else {
+      weekKey = await legacyFocusWeekKey(dog.id, c.get("sessionId"));
+    }
+    if (!weekKey) return c.json({ error: "legacy_focus_context_required" } as const, 409);
+    const deleted = await withFocusWeekLock(dog.id, weekKey, async (tx) => {
+      await tx.execute(sql`select set_config('app.allow_weekly_focus_delete', 'on', true)`);
+      const [row] = await tx
+        .delete(weeklyFocus)
+        .where(
+          and(
+            eq(weeklyFocus.dogId, dog.id),
+            eq(weeklyFocus.skillId, c.req.param("skillId")),
+            eq(weeklyFocus.weekStart, weekKey),
+          ),
+        )
+        .returning({ id: weeklyFocus.id });
+      return row;
+    });
+    if (legacy) {
+      await recordEvent("focus.legacy_compat_used", {
+        userId: c.get("userId"),
+        sessionId: c.get("sessionId"),
+        props: { operation: "delete" },
+      });
+    }
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
