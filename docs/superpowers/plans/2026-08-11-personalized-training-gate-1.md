@@ -3855,6 +3855,9 @@ Create `apps/api/src/lib/safety-lock.ts`:
 import { sql } from "drizzle-orm";
 import { db } from "../db";
 
+/** The Drizzle executor handed to a callback running inside a database transaction. */
+export type TransactionType = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export async function lockDogSafety(
   tx: Pick<typeof db, "execute">,
   dogId: string,
@@ -3863,10 +3866,28 @@ export async function lockDogSafety(
     sql`select pg_advisory_xact_lock(hashtext(${`dog-safety:${dogId}`}))`,
   );
 }
+
+/**
+ * Runs `callback` inside a transaction that holds the dog-scoped safety lock
+ * for its entire duration, so every writer of a safety input (signals, journal
+ * entries) is serialized against every safety decision for the same dog.
+ */
+export async function withDogSafetyLock<T>(
+  dogId: string,
+  callback: (tx: TransactionType) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await lockDogSafety(tx, dogId);
+    return await callback(tx);
+  });
+}
 ```
 
 Every safety writer and advancement decision acquires this dog-scoped lock
-before any skill lock.
+before any skill lock. Writers that mutate a safety *input* for a whole
+transaction (journal entry create/update/delete, safety signals) use
+`withDogSafetyLock` so the read, the decision and the write share one
+linearization point.
 
 ```ts
   .post("/:id/concerns", zValidator("json", behaviorConcernSchema), async (c) => {
@@ -4655,8 +4676,9 @@ git commit -m "feat(api): suggestion and advancement audit tables"
 - [ ] **Step 1: Write the failing test** — create `apps/api/src/lib/safety-policy.test.ts`:
 
 ```ts
+import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { type SafetyInputs, decideSafety } from "./safety-policy";
+import { type SafetyInputs, decideSafety, evaluateSafetyWithLock } from "./safety-policy";
 
 const NOW = new Date("2026-08-13T12:00:00.000Z");
 
@@ -4713,9 +4735,7 @@ describe("decideSafety", () => {
     expect(
       decideSafety({
         ...empty,
-        signals: [
-          { type: "injury_or_pain", reportedAt: new Date("2026-01-01T09:00:00.000Z") },
-        ],
+        signals: [{ type: "injury_or_pain", reportedAt: new Date("2026-01-01T09:00:00.000Z") }],
       }),
     ).toBeNull();
   });
@@ -4773,18 +4793,36 @@ describe("decideSafety", () => {
   });
 
   it("suppresses on sustained worsening and refers to a credentialed trainer", () => {
-    expect(
-      decideSafety({ ...empty, highIntensityEntryCount: 2, harderCheckinCount: 2 }),
-    ).toEqual({
+    expect(decideSafety({ ...empty, highIntensityEntryCount: 2, harderCheckinCount: 2 })).toEqual({
       suppressed: true,
       ruleId: "sustained_worsening_intensity",
       referral: "credentialed_trainer",
     });
   });
 
+  describe("evaluateSafetyWithLock", () => {
+    it("runs the guarded callback with an empty decision and propagates its value", async () => {
+      const result = await evaluateSafetyWithLock(
+        crypto.randomUUID(),
+        NOW,
+        async (decision, tx) => {
+          expect(decision).toBeNull();
+          await tx.execute(sql`select 1`);
+          return "guarded-write-complete";
+        },
+      );
+
+      expect(result).toBe("guarded-write-complete");
+    });
+  });
+
   it("does not suppress on partial worsening evidence", () => {
-    expect(decideSafety({ ...empty, highIntensityEntryCount: 2, harderCheckinCount: 1 })).toBeNull();
-    expect(decideSafety({ ...empty, highIntensityEntryCount: 1, harderCheckinCount: 3 })).toBeNull();
+    expect(
+      decideSafety({ ...empty, highIntensityEntryCount: 2, harderCheckinCount: 1 }),
+    ).toBeNull();
+    expect(
+      decideSafety({ ...empty, highIntensityEntryCount: 1, harderCheckinCount: 3 }),
+    ).toBeNull();
   });
 });
 ```
@@ -4801,7 +4839,7 @@ import type { SafetySignalType, SuggestionSafety } from "@turingcare/shared";
 import { and, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { dogSafetySignals, journalEntries } from "../db/schema";
-import { lockDogSafety } from "./safety-lock";
+import { type TransactionType, withDogSafetyLock } from "./safety-lock";
 
 /** Time-bounded medical reports stay in policy for this long. */
 export const SAFETY_SIGNAL_WINDOW_DAYS = 90;
@@ -4812,6 +4850,8 @@ export const WORSENING_MIN_HIGH_INTENSITY_ENTRIES = 2;
 export const WORSENING_MIN_HARDER_CHECKINS = 2;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+export type { TransactionType };
 
 export type SafetyInputs = {
   now: Date;
@@ -4939,23 +4979,22 @@ export async function evaluateSafety(dogId: string, now: Date): Promise<Suggesti
 export async function evaluateSafetyWithLock<T>(
   dogId: string,
   now: Date,
-  callback: (
-    decision: SuggestionSafety | null,
-    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  ) => Promise<T>,
+  callback: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<T>,
 ): Promise<T> {
-  return db.transaction(async (tx) => {
-    await lockDogSafety(tx, dogId);
+  return withDogSafetyLock(dogId, async (tx) => {
     const decision = decideSafety(await loadSafetyInputs(dogId, now, tx));
     return await callback(decision, tx);
   });
 }
 ```
 
+Callers get the decision *and* the same `tx` that holds the lock, so every
+write conditioned on that decision must go through this `tx` — never `db`.
+
 - [ ] **Step 4: Run it, expect PASS**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/safety-policy.test.ts`
-Expected: PASS — 11 tests.
+Expected: PASS — 12 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -6175,15 +6214,39 @@ git commit -m "feat(api): owner-confirmed advancement proposals"
 
 This task has no unit test of its own — it is pure I/O composition over modules that are already unit-tested, and it is covered end-to-end by the route tests in Task 17.
 
-All final suggestion and suppression audit writes must run through
-`evaluateSafetyWithLock`'s callback using its `tx`, so the safety decision and
-audit persistence share one transaction and advisory lock.
+Every path that produces a returned suggestion — the initial already-suppressed
+path, the target-missing path and the exercise path — finishes inside
+`evaluateSafetyWithLock(dogId, now, callback)` and persists its audit rows on
+that callback's `tx`, so the final safety decision and the audit write share one
+transaction and one advisory lock. `recordSuggestion` therefore takes an
+executor instead of reaching for `db`.
+
+Three rules follow from writing audit rows inside a live transaction:
+
+1. **Never swallow a failed statement inside the transaction.** A failed
+   statement has already aborted it, so a `catch` that continued would issue
+   the next statement against a dead transaction. Audit statements are wrapped
+   only to re-throw a recognizable `SuggestionAuditWriteError`.
+2. **Keep the audit best-effort from outside.** The whole locked call is
+   wrapped; on a `SuggestionAuditWriteError` the transaction rolls back and the
+   already-built suggestion is returned with `suggestionId: null`. Everything
+   else re-throws — a safety-input load failure must surface, because a
+   suggestion is never shown when the safety decision is unknown.
+3. **Telemetry runs after a successful commit** and can never abort the
+   transaction; `emitAfterCommit` swallows its own failures.
+
+Lock ordering is preserved: `syncAdvancementProposal` takes the skill lock and
+commits *before* the safety lock is taken on the exercise path, and any
+suppression-driven withdrawal happens *inside* the safety-locked callback, so
+the order is always dog safety → skill, never the reverse. That withdrawal
+commits in its own transaction, which is the conservative direction: an
+audit-write rollback can leave a proposal withdrawn, never revived.
 
 - [ ] **Step 1: Create `apps/api/src/lib/suggestion.ts`**
 
 ```ts
-import type { SuggestionAction, TrainingSuggestion } from "@turingcare/shared";
-import { and, eq, sql } from "drizzle-orm";
+import type { SuggestionAction, SuggestionSafety, TrainingSuggestion } from "@turingcare/shared";
+import { and, eq } from "drizzle-orm";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import {
@@ -6198,7 +6261,9 @@ import { evaluateAdvancement, syncAdvancementProposal } from "./advancement";
 import { resolveCurriculumTarget } from "./curriculum";
 import { claimLegacyFocus } from "./focus";
 import { loadRecentObservation } from "./observations";
+import { isSuggestionSkipped, lockSuggestionAnchor } from "./practice-anchor";
 import { EVIDENCE_WINDOW_DAYS, loadSkillEvidence } from "./practice-evidence";
+import type { TransactionType } from "./safety-lock";
 import { evaluateSafety, evaluateSafetyWithLock } from "./safety-policy";
 import { selectSuggestionRule } from "./suggestion-rules";
 
@@ -6211,6 +6276,17 @@ const EMPTY_EVIDENCE = {
   distinctDayCount: 0,
   lastPracticeAt: null,
 };
+
+/**
+ * Raised only for audit-table statements, so the fail-open wrapper can tell an
+ * audit write failure apart from a safety-input load failure, which must surface.
+ */
+class SuggestionAuditWriteError extends Error {
+  constructor(cause: unknown) {
+    super("suggestion audit write failed", { cause });
+    this.name = "SuggestionAuditWriteError";
+  }
+}
 
 export function currentWeekKey(now: Date, timezoneOffsetMinutes: number): string {
   const local = new Date(now.getTime() - timezoneOffsetMinutes * 60_000);
@@ -6242,32 +6318,35 @@ async function loadPrimaryFocusSkill(dogId: string, weekKey: string) {
 /**
  * Persists the suggestion for review and cohort analysis. Deduped to one row
  * per dog/skill/rule/level/type per owner-local day so repeated page loads do not
- * inflate the audit trail. Persistence is fail-open: if it throws, the owner
- * still sees the suggestion and `suggestionId` is null.
+ * inflate the audit trail. Runs on the caller's executor — the transaction that
+ * holds the safety lock — and never swallows a failed statement: a failure has
+ * already aborted that transaction, so it is re-thrown for the caller to roll back.
  */
-async function recordSuggestion(input: {
-  userId: string;
-  dogId: string;
-  weekKey: string;
-  auditDay: string;
-  suggestion: TrainingSuggestion;
-}): Promise<string | null> {
+async function recordSuggestion(
+  tx: TransactionType,
+  input: {
+    dogId: string;
+    weekKey: string;
+    auditDay: string;
+    suggestion: TrainingSuggestion;
+  },
+): Promise<{ suggestionId: string | null; inserted: boolean }> {
   const { suggestion } = input;
-  try {
-    const dedupeKey = [
-      input.dogId,
-      input.weekKey,
-      suggestion.skill?.id ?? "none",
-      suggestion.type,
-      suggestion.ruleId ?? "none",
-      suggestion.primary?.level ?? 0,
-      suggestion.safety?.ruleId ?? "no-safety-rule",
-      suggestion.safety?.referral ?? "no-referral",
-      CURRICULUM_VERSION,
-      input.auditDay,
-    ].join(":");
+  const dedupeKey = [
+    input.dogId,
+    input.weekKey,
+    suggestion.skill?.id ?? "none",
+    suggestion.type,
+    suggestion.ruleId ?? "none",
+    suggestion.primary?.level ?? 0,
+    suggestion.safety?.ruleId ?? "no-safety-rule",
+    suggestion.safety?.referral ?? "no-referral",
+    CURRICULUM_VERSION,
+    input.auditDay,
+  ].join(":");
 
-    const [row] = await db
+  try {
+    const [row] = await tx
       .insert(trainingSuggestions)
       .values({
         dogId: input.dogId,
@@ -6288,17 +6367,46 @@ async function recordSuggestion(input: {
       })
       .onConflictDoNothing({ target: trainingSuggestions.dedupeKey })
       .returning({ id: trainingSuggestions.id });
-    if (!row) {
-      const [existing] = await db
-        .select({ id: trainingSuggestions.id })
-        .from(trainingSuggestions)
-        .where(eq(trainingSuggestions.dedupeKey, dedupeKey))
-        .limit(1);
-      return existing?.id ?? null;
-    }
+    if (row) return { suggestionId: row.id, inserted: true };
 
+    const [existing] = await tx
+      .select({ id: trainingSuggestions.id })
+      .from(trainingSuggestions)
+      .where(eq(trainingSuggestions.dedupeKey, dedupeKey))
+      .limit(1);
+    return { suggestionId: existing?.id ?? null, inserted: false };
+  } catch (error) {
+    throw new SuggestionAuditWriteError(error);
+  }
+}
+
+/** Audit write plus the dismissal read, both on the locked transaction. */
+async function persistSuggestionAudit(
+  tx: TransactionType,
+  input: {
+    dogId: string;
+    weekKey: string;
+    auditDay: string;
+    suggestion: TrainingSuggestion;
+  },
+): Promise<{ suggestionId: string | null; inserted: boolean; dismissed: boolean }> {
+  const { suggestionId, inserted } = await recordSuggestion(tx, input);
+  try {
+    return {
+      suggestionId,
+      inserted,
+      dismissed: suggestionId ? await isSuggestionSkipped(tx, suggestionId) : false,
+    };
+  } catch (error) {
+    throw new SuggestionAuditWriteError(error);
+  }
+}
+
+/** Side channel only: runs after the audit transaction commits and never throws. */
+async function emitAfterCommit(userId: string, suggestion: TrainingSuggestion): Promise<void> {
+  try {
     await recordEvent("training.suggestion_shown", {
-      userId: input.userId,
+      userId,
       props: {
         suggestionType: suggestion.type,
         ruleId: suggestion.ruleId ?? "none",
@@ -6309,41 +6417,73 @@ async function recordSuggestion(input: {
     });
     if (suggestion.safety) {
       await recordEvent("safety.suppression_shown", {
-        userId: input.userId,
+        userId,
         props: {
           safetyRuleId: suggestion.safety.ruleId,
           referral: suggestion.safety.referral,
         },
       });
     }
-    return row.id;
-  } catch {
-    // Audit is best-effort: never block the owner's suggestion on a write.
-    console.error("[suggestion] audit_write_failed", {
-      suggestionType: suggestion.type,
-      suppressed: suggestion.safety !== null,
-    });
-    return null;
+  } catch (error) {
+    console.error("[suggestion] telemetry_failed", { error });
   }
 }
 
-async function wasSuggestionSkipped(suggestionId: string | null): Promise<boolean> {
-  if (!suggestionId) return false;
+/**
+ * Takes the final safety decision and writes the audit rows in one transaction
+ * holding the dog safety lock. Audit persistence is fail-open from the outside:
+ * a recognized audit-write failure rolls the transaction back and the owner
+ * still gets the built suggestion with `suggestionId: null`. Every other error —
+ * including a safety-input load failure — surfaces.
+ */
+async function finalizeUnderSafetyLock(input: {
+  userId: string;
+  dogId: string;
+  weekKey: string;
+  auditDay: string;
+  now: Date;
+  build: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<TrainingSuggestion>;
+}): Promise<TrainingSuggestion> {
+  // A plain `let` would be narrowed to `null` by control flow; the holder keeps
+  // the value assigned inside the callback readable from `catch`.
+  const state: { built: TrainingSuggestion | null } = { built: null };
   try {
-    const [actionRow] = await db
-      .select({ id: trainingSuggestionActions.id })
-      .from(trainingSuggestionActions)
-      .where(
-        and(
-          eq(trainingSuggestionActions.suggestionId, suggestionId),
-          eq(trainingSuggestionActions.action, "skipped"),
-        ),
-      )
-      .limit(1);
-    return actionRow !== undefined;
-  } catch {
-    console.error("[suggestion] action_read_failed", { suggestionId });
-    return false;
+    const { suggestion, inserted } = await evaluateSafetyWithLock(
+      input.dogId,
+      input.now,
+      async (decision, tx) => {
+        const built = await input.build(decision, tx);
+        state.built = built;
+        const audit = await persistSuggestionAudit(tx, {
+          dogId: input.dogId,
+          weekKey: input.weekKey,
+          auditDay: input.auditDay,
+          suggestion: built,
+        });
+        return {
+          suggestion: {
+            ...built,
+            suggestionId: audit.suggestionId,
+            dismissed: audit.dismissed,
+          },
+          inserted: audit.inserted,
+        };
+      },
+    );
+    // Committed: telemetry is safe here and `emitAfterCommit` never throws.
+    if (inserted) await emitAfterCommit(input.userId, suggestion);
+    return suggestion;
+  } catch (error) {
+    const built = state.built;
+    if (!(error instanceof SuggestionAuditWriteError) || !built) throw error;
+    // Audit is best-effort: never block the owner's suggestion on a write.
+    console.error("[suggestion] audit_write_failed", {
+      dogId: input.dogId,
+      suggestionType: built.type,
+      suppressed: built.safety !== null,
+      error,
+    });
+    return { ...built, suggestionId: null, dismissed: false };
   }
 }
 
@@ -6391,31 +6531,30 @@ export async function loadSuggestion(input: {
     advancementProposal: null,
   } satisfies Omit<TrainingSuggestion, "type" | "ruleId">;
 
-  const finishSuppressed = async (
+  /**
+   * Called from inside the safety-locked callback, so withdrawing an open
+   * proposal takes the skill lock *after* the dog safety lock — never the reverse.
+   */
+  const buildSuppressed = async (
     decision: NonNullable<TrainingSuggestion["safety"]>,
   ): Promise<TrainingSuggestion> => {
     if (focus) await syncAdvancementProposal(focus.id, null, []);
-    const suppressed: TrainingSuggestion = {
-      ...base,
-      type: "safety_suppressed",
-      ruleId: null,
-      safety: decision,
-    };
-    const suggestionId = await recordSuggestion({
-      ...input,
-      auditDay,
-      suggestion: suppressed,
-    });
-    return {
-      ...suppressed,
-      suggestionId,
-      dismissed: await wasSuggestionSkipped(suggestionId),
-    };
+    return { ...base, type: "safety_suppressed", ruleId: null, safety: decision };
   };
 
   // Safety supersedes every suggestion: no exercise is returned at all.
   if (safety) {
-    return finishSuppressed(safety);
+    return finalizeUnderSafetyLock({
+      userId: input.userId,
+      dogId: input.dogId,
+      weekKey: input.weekKey,
+      auditDay,
+      now,
+      // Suppression is never downgraded inside one request: if the locked
+      // re-read comes back clear, the unlocked decision still stands and the
+      // next request produces an exercise.
+      build: (decision) => buildSuppressed(decision ?? safety),
+    });
   }
 
   const evidence = focus
@@ -6447,8 +6586,6 @@ export async function loadSuggestion(input: {
       : resolveCurriculumTarget(focus?.catalogSkillKey ?? null, rule.effectiveLevel);
 
   if (!target) {
-    const finalSafety = await evaluateSafetyWithLock(input.dogId, now);
-    if (finalSafety) return finishSuppressed(finalSafety);
     const unsupported: TrainingSuggestion = {
       ...base,
       type: rule.type === "exercise" ? "custom_skill_unsupported" : rule.type,
@@ -6463,18 +6600,18 @@ export async function loadSuggestion(input: {
         lastPracticeAt: evidence.summary.lastPracticeAt,
       },
     };
-    const suggestionId = await recordSuggestion({
-      ...input,
+    return finalizeUnderSafetyLock({
+      userId: input.userId,
+      dogId: input.dogId,
+      weekKey: input.weekKey,
       auditDay,
-      suggestion: unsupported,
+      now,
+      build: async (decision) => (decision ? buildSuppressed(decision) : unsupported),
     });
-    return {
-      ...unsupported,
-      suggestionId,
-      dismissed: await wasSuggestionSkipped(suggestionId),
-    };
   }
 
+  // Runs before the safety lock is taken and commits its own transaction, so
+  // the skill lock is never held while waiting on the dog safety lock.
   const advancement = focus
     ? await syncAdvancementProposal(
         focus.id,
@@ -6520,14 +6657,14 @@ export async function loadSuggestion(input: {
     advancementProposal: proposal,
   };
 
-  const finalSafety = await evaluateSafetyWithLock(input.dogId, now);
-  if (finalSafety) return finishSuppressed(finalSafety);
-  const suggestionId = await recordSuggestion({ ...input, auditDay, suggestion });
-  return {
-    ...suggestion,
-    suggestionId,
-    dismissed: await wasSuggestionSkipped(suggestionId),
-  };
+  return finalizeUnderSafetyLock({
+    userId: input.userId,
+    dogId: input.dogId,
+    weekKey: input.weekKey,
+    auditDay,
+    now,
+    build: async (decision) => (decision ? buildSuppressed(decision) : suggestion),
+  });
 }
 
 export async function recordSuggestionAction(input: {
@@ -6579,7 +6716,8 @@ export async function recordSuggestionAction(input: {
 }
 ```
 
-Import `isSuggestionSkipped` and `lockSuggestionAnchor` from
+`TransactionType` comes from `../lib/safety-lock` (re-exported by
+`./safety-policy`); `isSuggestionSkipped` and `lockSuggestionAnchor` come from
 `./practice-anchor`.
 
 - [ ] **Step 2: Typecheck**
@@ -10372,6 +10510,6 @@ git commit -m "docs: record the Gate 1 personalized training evidence loop"
 8. Proposal synchronization is serialized per skill and snapshots the three supporting IDs, timestamps, and outcomes. Changed or deleted evidence withdraws the proposal, a stayed/rejected proposal needs newer evidence before it can reappear, and stale confirmation cannot overwrite a level.
 9. Injury/pain reports have a reviewed 90-day window. Aggression/bite risk, severe fear/panic, and the internal severe-concern signal never age out; every owner entry requires explicit confirmation, and restoring exercises requires a future reviewed professional-resolution workflow rather than an owner dismiss button. A two-operator runbook exists only to correct a support-verified input mistake.
 10. Audit rows carry scalar columns only, never jsonb or owner prose.
-11. Suggestion audit writes are fail-open and deduped per curriculum version and owner-local day, so a page refresh does not inflate the cohort data and a DB hiccup does not hide the suggestion.
+11. Suggestion audit writes are fail-open and deduped per curriculum version and owner-local day, so a page refresh does not inflate the cohort data and a DB hiccup does not hide the suggestion. The final decision and its audit row share the safety-locked transaction, so fail-open is implemented *outside* that transaction: a recognized audit-write failure rolls it back and returns the built suggestion with `suggestionId: null`, while a safety-load failure still surfaces.
 12. New endpoints live in `apps/api/src/routes/dogs.ts` to avoid a second `requireUser` pass and to keep RPC types on one app.
 13. Rule identifiers are returned to the client and localized there, so the API never renders owner-facing prose in a locale.

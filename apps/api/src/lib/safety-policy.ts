@@ -2,7 +2,7 @@ import type { SafetySignalType, SuggestionSafety } from "@turingcare/shared";
 import { and, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { dogSafetySignals, journalEntries } from "../db/schema";
-import { lockDogSafety } from "./safety-lock";
+import { type TransactionType, withDogSafetyLock } from "./safety-lock";
 
 /** Time-bounded medical reports stay in policy for this long. */
 export const SAFETY_SIGNAL_WINDOW_DAYS = 90;
@@ -14,7 +14,7 @@ export const WORSENING_MIN_HARDER_CHECKINS = 2;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type TransactionType = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type { TransactionType };
 
 export type SafetyInputs = {
   now: Date;
@@ -144,8 +144,7 @@ export async function evaluateSafetyWithLock<T>(
   now: Date,
   callback: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<T>,
 ): Promise<T> {
-  return db.transaction(async (tx) => {
-    await lockDogSafety(tx, dogId);
+  return withDogSafetyLock(dogId, async (tx) => {
     const decision = decideSafety(await loadSafetyInputs(dogId, now, tx));
     return await callback(decision, tx);
   });
