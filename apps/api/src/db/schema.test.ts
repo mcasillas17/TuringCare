@@ -1,6 +1,8 @@
 import { getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import {
+  advancementProposals,
+  advancementStatusEnum,
   dogSafetySignals,
   journalEntries,
   journalEntryKindEnum,
@@ -16,7 +18,12 @@ import {
   practiceVariantEnum,
   safetySignalSourceEnum,
   safetySignalTypeEnum,
+  suggestionActionEnum,
+  suggestionEvidenceCategoryEnum,
+  suggestionTypeEnum,
   trainingSkills,
+  trainingSuggestionActions,
+  trainingSuggestions,
 } from "./schema";
 
 describe("training progress tables", () => {
@@ -84,5 +91,39 @@ describe("structured practice evidence schema", () => {
     ]);
     expect(safetySignalSourceEnum.enumValues).toEqual(["practice_session", "behavior_concern"]);
     expect(getTableName(dogSafetySignals)).toBe("dog_safety_signals");
+  });
+});
+
+describe("suggestion and advancement audit schema", () => {
+  it("exports the expected audit table names and controlled vocabularies", () => {
+    expect(getTableName(trainingSuggestions)).toBe("training_suggestions");
+    expect(getTableName(trainingSuggestionActions)).toBe("training_suggestion_actions");
+    expect(getTableName(advancementProposals)).toBe("advancement_proposals");
+    expect(suggestionTypeEnum.enumValues).toEqual([
+      "exercise",
+      "safety_suppressed",
+      "needs_focus_skill",
+      "custom_skill_unsupported",
+    ]);
+    expect(suggestionEvidenceCategoryEnum.enumValues).toEqual([
+      "curriculum_only",
+      "recent_practice",
+      "recent_observation",
+    ]);
+    expect(suggestionActionEnum.enumValues).toEqual([
+      "started",
+      "skipped",
+      "rated_useful",
+      "rated_not_useful",
+    ]);
+    expect(advancementStatusEnum.enumValues).toEqual([
+      "proposed",
+      "confirmed",
+      "stayed",
+      "rejected",
+      "regressed",
+      "insufficient_evidence",
+      "withdrawn",
+    ]);
   });
 });

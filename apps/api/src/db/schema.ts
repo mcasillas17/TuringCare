@@ -200,6 +200,120 @@ export const safetySignalSourceEnum = pgEnum("safety_signal_source", [
   "practice_session",
   "behavior_concern",
 ]);
+export const suggestionTypeEnum = pgEnum("suggestion_type", [
+  "exercise",
+  "safety_suppressed",
+  "needs_focus_skill",
+  "custom_skill_unsupported",
+]);
+export const suggestionEvidenceCategoryEnum = pgEnum("suggestion_evidence_category", [
+  "curriculum_only",
+  "recent_practice",
+  "recent_observation",
+]);
+export const suggestionActionEnum = pgEnum("suggestion_action", [
+  "started",
+  "skipped",
+  "rated_useful",
+  "rated_not_useful",
+]);
+export const advancementStatusEnum = pgEnum("advancement_status", [
+  "proposed",
+  "confirmed",
+  "stayed",
+  "rejected",
+  "regressed",
+  "insufficient_evidence",
+  "withdrawn",
+]);
+
+/**
+ * One row per distinct suggestion shown to an owner. Scalar columns only — no
+ * jsonb and no free text — so the audit trail can never carry owner prose.
+ */
+export const trainingSuggestions = pgTable(
+  "training_suggestions",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    dogId: uuid("dog_id")
+      .notNull()
+      .references(() => dogs.id, { onDelete: "cascade" }),
+    skillId: uuid("skill_id").references(() => trainingSkills.id, { onDelete: "set null" }),
+    // Stable authored identity survives skill deletion for audit reconstruction.
+    catalogSkillKey: text("catalog_skill_key"),
+    weekStart: date("week_start").notNull(),
+    curriculumVersion: text("curriculum_version").notNull(),
+    suggestionType: suggestionTypeEnum("suggestion_type").notNull(),
+    // Free-form only in the sense that rule identifiers evolve faster than a pg
+    // enum should; values always come from the shared `suggestionRuleValues`.
+    ruleId: text("rule_id"),
+    level: integer("level"),
+    fallbackLevel: integer("fallback_level"),
+    fallbackDimension: practiceDimensionEnum("fallback_dimension"),
+    // Controlled `easingStrategyValues` identifier, never owner prose.
+    fallbackStrategy: text("fallback_strategy"),
+    evidenceCategory: suggestionEvidenceCategoryEnum("evidence_category"),
+    suppressed: boolean("suppressed").notNull().default(false),
+    safetyRuleId: text("safety_rule_id"),
+    // Server-built from dog/week/skill/type/rule/owner-local day; never owner prose.
+    dedupeKey: text("dedupe_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("training_suggestions_dog_created_idx").on(t.dogId, t.createdAt),
+    unique("training_suggestions_dedupe_key").on(t.dedupeKey),
+  ],
+);
+
+export const trainingSuggestionActions = pgTable(
+  "training_suggestion_actions",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    suggestionId: uuid("suggestion_id")
+      .notNull()
+      .references(() => trainingSuggestions.id, { onDelete: "cascade" }),
+    action: suggestionActionEnum("action").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("training_suggestion_actions_suggestion_idx").on(t.suggestionId),
+    unique("training_suggestion_actions_once").on(t.suggestionId, t.action),
+  ],
+);
+
+/** Advancement is always proposed and owner-decided, never applied automatically. */
+export const advancementProposals = pgTable(
+  "advancement_proposals",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    skillId: uuid("skill_id")
+      .notNull()
+      .references(() => trainingSkills.id, { onDelete: "cascade" }),
+    fromLevel: integer("from_level").notNull(),
+    toLevel: integer("to_level").notNull(),
+    ruleId: text("rule_id").notNull(),
+    evidenceSessionCount: integer("evidence_session_count").notNull(),
+    evidenceDayCount: integer("evidence_day_count").notNull(),
+    evidenceWindowDays: integer("evidence_window_days").notNull(),
+    evidenceSessionIds: uuid("evidence_session_ids").array().notNull(),
+    evidenceOccurredAt: timestamp("evidence_occurred_at", { withTimezone: true }).array().notNull(),
+    evidencePracticeDays: text("evidence_practice_days").array().notNull(),
+    evidenceOutcomes: practiceOutcomeEnum("evidence_outcomes").array().notNull(),
+    // Latest session that supported this proposal. A stayed/rejected proposal
+    // cannot reappear until newer evidence exists.
+    evidenceLastSessionAt: timestamp("evidence_last_session_at", { withTimezone: true }).notNull(),
+    status: advancementStatusEnum("status").notNull().default("proposed"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("advancement_proposals_skill_idx").on(t.skillId),
+    check(
+      "advancement_levels_range",
+      sql`${t.fromLevel} BETWEEN 1 AND 5 AND ${t.toLevel} BETWEEN 1 AND 5`,
+    ),
+  ],
+);
 
 export const practiceSessions = pgTable(
   "practice_sessions",
@@ -227,7 +341,9 @@ export const practiceSessions = pgTable(
     // Exact audited suggestion the owner said they practised. The API validates
     // ownership/currentness before storing this UUID; Task 10 cannot add an FK
     // because the suggestion table is created by the following migration.
-    suggestionId: uuid("suggestion_id"),
+    suggestionId: uuid("suggestion_id").references(() => trainingSuggestions.id, {
+      onDelete: "set null",
+    }),
     // Owner-local calendar date derived once from occurredAt + the offset sent
     // for that specific session. This remains correct across DST boundaries.
     practiceDay: date("practice_day"),
