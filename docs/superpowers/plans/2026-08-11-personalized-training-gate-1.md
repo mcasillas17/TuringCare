@@ -7099,9 +7099,30 @@ git commit -m "feat(api): suggestion orchestrator with audit persistence"
 
 **Files:**
 - Modify: `apps/api/src/routes/dogs.ts`
+- Modify: `apps/api/src/test-helpers.ts`
 - Create: `apps/api/src/routes/suggestion.test.ts`
 
-The endpoints go inside the existing `dogs.ts` chain rather than a new sub-app: `dogsApp` already carries the `requireUser` middleware and its RPC types, and mounting a second app at `/api/dogs` would run session lookup twice per request. The route test file has 45 integration tests. `createTestUser()` supplies each local `app.request()` user with a UUID-derived, collision-resistant TEST-NET `fly-client-ip` header so rate-limit state cannot cross-talk between tests; this test-only header does not change the production Fly edge trust boundary.
+The endpoints go inside the existing `dogs.ts` chain rather than a new sub-app: `dogsApp` already carries the `requireUser` middleware and its RPC types, and mounting a second app at `/api/dogs` would run session lookup twice per request. The route test file has 45 integration tests.
+
+`createTestUser()` in `apps/api/src/test-helpers.ts` changes its rate-limit
+isolation header from `x-forwarded-for` to `fly-client-ip`, the header the API
+actually trusts, and derives the address from the user's own UUID instead of
+`Math.random()`:
+
+```ts
+const id = randomUUID();
+const ipOctet = (start: number) => (Number.parseInt(id.slice(start, start + 2), 16) % 254) + 1;
+const ip = `198.${ipOctet(0)}.${ipOctet(2)}.${ipOctet(4)}`;
+const email = `test-${id}@example.com`;
+const baseHeaders = { "Content-Type": "application/json", "fly-client-ip": ip };
+```
+
+Three independent octets drawn from the UUID make the synthetic, local-only
+IPv4 address collision-resistant across the many users this suite creates,
+where a single random final octet collided often enough to leak rate-limit
+state between tests. The address is never routed — it exists only so the
+in-process limiter buckets each `app.request()` user separately — and this
+test-only header does not change the production Fly edge trust boundary.
 
 - [ ] **Step 1: Write the failing test** — create `apps/api/src/routes/suggestion.test.ts`:
 
@@ -7185,9 +7206,7 @@ async function setup() {
 
   async function logSession(skillId: string, occurredAt: string, body: Record<string, unknown>) {
     const variant = body.variant === "fallback" ? "fallback" : "primary";
-    const evidence = Object.fromEntries(
-      Object.entries(body).filter(([key]) => key !== "variant"),
-    );
+    const evidence = Object.fromEntries(Object.entries(body).filter(([key]) => key !== "variant"));
     const shown = await getSuggestion();
     const practicedTarget =
       shown.suggestionId &&
@@ -7212,7 +7231,7 @@ async function setup() {
     const res = await app.request(
       `/api/dogs/${dog.id}/suggestion?weekKey=${WEEK_KEY}&timezoneOffsetMinutes=0`,
       {
-      headers,
+        headers,
       },
     );
     expect(res.status).toBe(200);
@@ -7631,7 +7650,7 @@ describe("GET /api/dogs/:id/suggestion", () => {
     const res = await app.request(
       `/api/dogs/${ctx.dogId}/suggestion?weekKey=2026-08-11&timezoneOffsetMinutes=0`,
       {
-      headers: ctx.headers,
+        headers: ctx.headers,
       },
     );
     expect(res.status).toBe(400);
@@ -7730,9 +7749,7 @@ describe("GET /api/dogs/:id/suggestion", () => {
       outcome: "too_hard",
       safetySignal: "aggression_or_bite_risk",
     });
-    expect((await ctx.getSuggestion()).safety?.ruleId).toBe(
-      "reported_aggression_or_bite_risk",
-    );
+    expect((await ctx.getSuggestion()).safety?.ruleId).toBe("reported_aggression_or_bite_risk");
     await ctx.logSession(skillId, daysAgo(0), {
       outcome: "too_hard",
       safetySignal: "injury_or_pain",
@@ -7742,10 +7759,7 @@ describe("GET /api/dogs/:id/suggestion", () => {
       .select({ id: trainingSuggestions.id })
       .from(trainingSuggestions)
       .where(
-        and(
-          eq(trainingSuggestions.dogId, ctx.dogId),
-          eq(trainingSuggestions.suppressed, true),
-        ),
+        and(eq(trainingSuggestions.dogId, ctx.dogId), eq(trainingSuggestions.suppressed, true)),
       );
     expect(rows).toHaveLength(2);
   });
@@ -7825,14 +7839,11 @@ describe("suggestion actions and advancement decisions", () => {
     await ctx.focus(skillId);
     const suggestion = await ctx.getSuggestion();
     if (!suggestion.suggestionId) throw new Error("expected audited suggestion");
-    await app.request(
-      `/api/dogs/${ctx.dogId}/suggestions/${suggestion.suggestionId}/actions`,
-      {
-        method: "POST",
-        headers: ctx.headers,
-        body: JSON.stringify({ action: "skipped" }),
-      },
-    );
+    await app.request(`/api/dogs/${ctx.dogId}/suggestions/${suggestion.suggestionId}/actions`, {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({ action: "skipped" }),
+    });
     expect((await ctx.getSuggestion()).dismissed).toBe(true);
   });
 
@@ -7867,34 +7878,26 @@ describe("suggestion actions and advancement decisions", () => {
     await ctx.focus(skillId);
     const suggestion = await ctx.getSuggestion();
     if (!suggestion.suggestionId) throw new Error("expected audited suggestion");
-    await app.request(
-      `/api/dogs/${ctx.dogId}/suggestions/${suggestion.suggestionId}/actions`,
-      {
-        method: "POST",
-        headers: ctx.headers,
-        body: JSON.stringify({ action: "skipped" }),
-      },
-    );
-    const res = await app.request(
-      `/api/dogs/${ctx.dogId}/skills/${skillId}/sessions`,
-      {
-        method: "POST",
-        headers: ctx.headers,
-        body: JSON.stringify({
-          occurredAt: new Date().toISOString(),
-          timezoneOffsetMinutes: 0,
-          outcome: "went_well",
-          practicedTarget: {
-            suggestionId: suggestion.suggestionId,
-            variant: "primary",
-          },
-        }),
-      },
-    );
+    await app.request(`/api/dogs/${ctx.dogId}/suggestions/${suggestion.suggestionId}/actions`, {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({ action: "skipped" }),
+    });
+    const res = await app.request(`/api/dogs/${ctx.dogId}/skills/${skillId}/sessions`, {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({
+        occurredAt: new Date().toISOString(),
+        timezoneOffsetMinutes: 0,
+        outcome: "went_well",
+        practicedTarget: {
+          suggestionId: suggestion.suggestionId,
+          variant: "primary",
+        },
+      }),
+    });
     expect(res.status).toBe(201);
-    expect(await res.json()).toEqual(
-      expect.objectContaining({ anchorRejected: "invalid_anchor" }),
-    );
+    expect(await res.json()).toEqual(expect.objectContaining({ anchorRejected: "invalid_anchor" }));
   });
 
   it("rejects an anchor that waits behind a concurrent skip", async () => {
@@ -7924,19 +7927,16 @@ describe("suggestion actions and advancement decisions", () => {
     });
     await skipLocked;
 
-    const practice = app.request(
-      `/api/dogs/${ctx.dogId}/skills/${skillId}/sessions`,
-      {
-        method: "POST",
-        headers: ctx.headers,
-        body: JSON.stringify({
-          occurredAt: new Date().toISOString(),
-          timezoneOffsetMinutes: 0,
-          outcome: "went_well",
-          practicedTarget: { suggestionId, variant: "primary" },
-        }),
-      },
-    );
+    const practice = app.request(`/api/dogs/${ctx.dogId}/skills/${skillId}/sessions`, {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({
+        occurredAt: new Date().toISOString(),
+        timezoneOffsetMinutes: 0,
+        outcome: "went_well",
+        practicedTarget: { suggestionId, variant: "primary" },
+      }),
+    });
     releaseSkip();
     await skipTx;
 
@@ -7981,6 +7981,22 @@ describe("suggestion actions and advancement decisions", () => {
     expect(res.status).toBe(404);
   });
 
+  it("returns not found for malformed suggestion and proposal IDs", async () => {
+    const ctx = await setup();
+    const action = await app.request(`/api/dogs/${ctx.dogId}/suggestions/not-a-uuid/actions`, {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({ action: "started" }),
+    });
+    expect(action.status).toBe(404);
+
+    const decision = await app.request(
+      `/api/dogs/${ctx.dogId}/advancement-proposals/not-a-uuid/decision`,
+      { method: "POST", headers: ctx.headers, body: JSON.stringify({ decision: "confirmed" }) },
+    );
+    expect(decision.status).toBe(404);
+  });
+
   it("raises the level only when the owner confirms the proposal", async () => {
     const ctx = await setup();
     const skillId = await ctx.addCatalogSkill("basic-manners.sit");
@@ -8020,14 +8036,11 @@ describe("suggestion actions and advancement decisions", () => {
 
     const [, decision] = await Promise.all([
       ctx.getSuggestion(),
-      app.request(
-        `/api/dogs/${ctx.dogId}/advancement-proposals/${proposalId}/decision`,
-        {
-          method: "POST",
-          headers: ctx.headers,
-          body: JSON.stringify({ decision: "confirmed" }),
-        },
-      ),
+      app.request(`/api/dogs/${ctx.dogId}/advancement-proposals/${proposalId}/decision`, {
+        method: "POST",
+        headers: ctx.headers,
+        body: JSON.stringify({ decision: "confirmed" }),
+      }),
     ]);
     expect(decision.status).toBe(200);
     const after = await ctx.getSuggestion();
@@ -8131,16 +8144,16 @@ describe("suggestion actions and advancement decisions", () => {
     await locked;
 
     let completed = false;
-    const manualWrite = app
-      .request(`/api/dogs/${ctx.dogId}/skills/${skillId}/level`, {
+    const manualWrite = Promise.resolve(
+      app.request(`/api/dogs/${ctx.dogId}/skills/${skillId}/level`, {
         method: "PUT",
         headers: ctx.headers,
         body: JSON.stringify({ level: 3 }),
-      })
-      .then((response) => {
-        completed = true;
-        return response;
-      });
+      }),
+    ).then((response) => {
+      completed = true;
+      return response;
+    });
     await waitForAdvisoryLockWaiter();
     expect(completed).toBe(false);
     releaseLock();
@@ -8156,10 +8169,10 @@ describe("suggestion actions and advancement decisions", () => {
     await ctx.logSession(skillId, daysAgo(2), { outcome: "went_well" });
     const latest = await ctx.logSession(skillId, daysAgo(1), { outcome: "went_well" });
     const suggestion = await ctx.getSuggestion();
-    await app.request(
-      `/api/dogs/${ctx.dogId}/skills/${skillId}/sessions/${latest.session.id}`,
-      { method: "DELETE", headers: ctx.headers },
-    );
+    await app.request(`/api/dogs/${ctx.dogId}/skills/${skillId}/sessions/${latest.session.id}`, {
+      method: "DELETE",
+      headers: ctx.headers,
+    });
     const res = await app.request(
       `/api/dogs/${ctx.dogId}/advancement-proposals/${suggestion.advancementProposal?.id}/decision`,
       {
@@ -8302,9 +8315,7 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
         suggestionId,
         action: c.req.valid("json").action,
       });
-      if (result === "not_found") {
-        return c.json({ error: "not_found" } as const, 404);
-      }
+      if (result === "not_found") return c.json({ error: "not_found" } as const, 404);
       if (result === "dismissed") {
         return c.json({ error: "suggestion_dismissed" } as const, 409);
       }
@@ -8330,25 +8341,13 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
         .from(advancementProposals)
         .innerJoin(trainingSkills, eq(advancementProposals.skillId, trainingSkills.id))
         .innerJoin(trainingGoals, eq(trainingSkills.goalId, trainingGoals.id))
-        .where(
-          and(
-            eq(advancementProposals.id, proposalId),
-            eq(trainingGoals.dogId, dog.id),
-          ),
-        )
+        .where(and(eq(advancementProposals.id, proposalId), eq(trainingGoals.dogId, dog.id)))
         .limit(1);
       if (!owned) return c.json({ error: "not_found" } as const, 404);
 
       const { decision } = c.req.valid("json");
-      const result = await decideAdvancementProposal(
-        dog.id,
-        owned.id,
-        owned.skillId,
-        decision,
-      );
-      if (result.status === "not_found") {
-        return c.json({ error: "not_found" } as const, 404);
-      }
+      const result = await decideAdvancementProposal(dog.id, owned.id, owned.skillId, decision);
+      if (result.status === "not_found") return c.json({ error: "not_found" } as const, 404);
       if (result.status === "stale") {
         return c.json({ error: "stale_proposal" } as const, 409);
       }
@@ -8369,19 +8368,32 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
   )
 ```
 
-Add to the imports in `apps/api/src/routes/dogs.ts`: `advancementDecisionSchema`,
-`suggestionActionSchema` and `suggestionQuerySchema` from
-`@turingcare/shared`; `advancementProposals` from `../db/schema`;
-`decideAdvancementProposal` from `../lib/advancement`; and
+Add to the imports in `apps/api/src/routes/dogs.ts`: `z` from `zod`;
+`advancementDecisionSchema`, `suggestionActionSchema` and
+`suggestionQuerySchema` from `@turingcare/shared`; `advancementProposals` from
+`../db/schema`; `decideAdvancementProposal` from `../lib/advancement`; and
 `currentWeekKey`, `loadSuggestion`, and `recordSuggestionAction` from
 `../lib/suggestion`.
+
+The three routes guard malformed path parameters before touching the database,
+so define the shared guard next to the other route-local schemas near the top of
+`apps/api/src/routes/dogs.ts` (after `focusRemoveCompatSchema`), above every use:
+
+```ts
+const uuidSchema = z.string().uuid();
+```
+
+A malformed dog, suggestion or proposal ID returns 404 rather than a 400: an
+unparseable ID is indistinguishable from one the owner does not have, and
+`findOwnedDog` would otherwise send a non-UUID string into a `uuid` column
+comparison and raise a Postgres `invalid input syntax` error.
 
 - [ ] **Step 4: Run it, expect PASS**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/routes/suggestion.test.ts`
 Expected: PASS — all suggestion route tests, including recovery, suppression,
-fallback-only advancement, authorization, malformed dog IDs, audit dedupe, and
-explicit advisory-lock concurrency checks (45 tests).
+fallback-only advancement, authorization, malformed dog/suggestion/proposal IDs,
+audit dedupe, and explicit advisory-lock concurrency checks (45 tests).
 
 - [ ] **Step 5: Run the whole API suite, expect PASS**
 
@@ -8391,9 +8403,9 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-pnpm exec biome check --write apps/api/src/routes/dogs.ts apps/api/src/routes/suggestion.test.ts
+pnpm exec biome check --write apps/api/src/routes/dogs.ts apps/api/src/routes/suggestion.test.ts apps/api/src/test-helpers.ts
 pnpm --filter @turingcare/api exec tsc --noEmit
-git add apps/api/src/routes/dogs.ts apps/api/src/routes/suggestion.test.ts
+git add apps/api/src/routes/dogs.ts apps/api/src/routes/suggestion.test.ts apps/api/src/test-helpers.ts
 git commit -m "feat(api): suggestion, action and advancement decision endpoints"
 ```
 
