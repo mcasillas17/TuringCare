@@ -44,7 +44,7 @@ pnpm --filter @turingcare/web exec tsc --noEmit
 pnpm exec biome check apps packages
 ```
 
-- API integration tests use `app.request()` + `createTestUser()` from `apps/api/src/test-helpers.ts`, and clean users in `afterEach` (cascade deletes their data). Copy the harness shape from `apps/api/src/routes/focus.test.ts`.
+- API integration tests use `app.request()` + `createTestUser()` from `apps/api/src/test-helpers.ts`, and clean users in `afterEach` (cascade deletes their data). Each helper-created account includes a collision-resistant synthetic local-only IPv4 `x-forwarded-for` header so the global rate limiter does not cross-talk between tests. Copy the harness shape from `apps/api/src/routes/focus.test.ts`.
 - Owner isolation: every new route resolves the dog with `findOwnedDog(userId, dogId)` and the skill with `findOwnedSkill(userId, dogId, skillId)` and returns `404` (never `403`) for rows the caller does not own.
 - All user-facing copy goes through `apps/web/src/i18n/en.ts` + `es.ts`. `apps/web/src/i18n/i18n.test.tsx` fails if the key sets differ or if any `es` value equals its `en` value.
 - Biome: 2-space indent, double quotes, semicolons, 100-column width. TypeScript is strict with `noUncheckedIndexedAccess` — index access returns `T | undefined`, so guard it.
@@ -7410,6 +7410,15 @@ describe("suggestion actions and advancement decisions", () => {
     expect(res.status).toBe(404);
   });
 
+  it("returns 404 for a malformed suggestion ID", async () => {
+    const ctx = await setup();
+    const res = await app.request(
+      `/api/dogs/${ctx.dogId}/suggestions/not-a-uuid/actions`,
+      { method: "POST", headers: ctx.headers, body: JSON.stringify({ action: "started" }) },
+    );
+    expect(res.status).toBe(404);
+  });
+
   it("rejects an advancement decision through another owner's dog", async () => {
     const mine = await setup();
     const theirs = await setup();
@@ -7426,6 +7435,19 @@ describe("suggestion actions and advancement decisions", () => {
       {
         method: "POST",
         headers: mine.headers,
+        body: JSON.stringify({ decision: "confirmed" }),
+      },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for a malformed advancement proposal ID", async () => {
+    const ctx = await setup();
+    const res = await app.request(
+      `/api/dogs/${ctx.dogId}/advancement-proposals/not-a-uuid/decision`,
+      {
+        method: "POST",
+        headers: ctx.headers,
         body: JSON.stringify({ decision: "confirmed" }),
       },
     );
@@ -7582,13 +7604,13 @@ describe("suggestion actions and advancement decisions", () => {
     await locked;
 
     let completed = false;
-    const manualWrite = app
-      .request(`/api/dogs/${ctx.dogId}/skills/${skillId}/level`, {
+    const manualWrite = Promise.resolve(
+      app.request(`/api/dogs/${ctx.dogId}/skills/${skillId}/level`, {
         method: "PUT",
         headers: ctx.headers,
         body: JSON.stringify({ level: 3 }),
-      })
-      .then((response) => {
+      }),
+    ).then((response) => {
         completed = true;
         return response;
       });
@@ -7706,7 +7728,9 @@ pnpm --filter @turingcare/api exec vitest run src/routes/suggestion.test.ts
 ```
 Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/actions` and `/advancement-proposals/:id/decision` do not exist.
 
-- [ ] **Step 3: Add the routes** — in `apps/api/src/routes/dogs.ts`, insert after the focus routes:
+- [ ] **Step 3: Add the routes** — add `import { z } from "zod";` with the
+existing imports in `apps/api/src/routes/dogs.ts`, then insert after the focus
+routes:
 
 ```ts
   .get("/:id/suggestion", zValidator("query", suggestionQuerySchema), async (c) => {
@@ -7730,10 +7754,14 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
     async (c) => {
       const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
       if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const suggestionId = c.req.param("suggestionId");
+      if (!z.string().uuid().safeParse(suggestionId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
       const result = await recordSuggestionAction({
         userId: c.get("userId"),
         dogId: dog.id,
-        suggestionId: c.req.param("suggestionId"),
+        suggestionId,
         action: c.req.valid("json").action,
       });
       if (result === "not_found") {
@@ -7751,6 +7779,10 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
     async (c) => {
       const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
       if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const proposalId = c.req.param("proposalId");
+      if (!z.string().uuid().safeParse(proposalId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
       const [owned] = await db
         .select({ id: advancementProposals.id, skillId: advancementProposals.skillId })
         .from(advancementProposals)
@@ -7758,7 +7790,7 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
         .innerJoin(trainingGoals, eq(trainingSkills.goalId, trainingGoals.id))
         .where(
           and(
-            eq(advancementProposals.id, c.req.param("proposalId")),
+            eq(advancementProposals.id, proposalId),
             eq(trainingGoals.dogId, dog.id),
           ),
         )
