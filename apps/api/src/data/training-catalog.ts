@@ -1,6 +1,6 @@
-import type { CatalogTemplate } from "@turingcare/shared";
+import type { AuthoredCatalogTemplate } from "@turingcare/shared";
 
-export const trainingCatalog: CatalogTemplate[] = [
+export const trainingCatalog: AuthoredCatalogTemplate[] = [
   {
     key: "basic-manners",
     name: "Basic Manners",
