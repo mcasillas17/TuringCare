@@ -5695,7 +5695,16 @@ Expected: PASS — 18 tests total.
 - [ ] **Step 11: Commit**
 
 ```bash
-pnpm exec biome check --write apps/api/src/db/schema.ts apps/api/src/db/schema.test.ts apps/api/src/lib/practice-evidence.ts apps/api/src/lib/practice-evidence.test.ts apps/api/src/lib/observations.ts apps/api/src/lib/suggestion-rules.ts apps/api/src/lib/suggestion-rules.test.ts
+pnpm exec biome check --write apps/api/src/lib/practice-evidence.ts apps/api/src/lib/practice-evidence.test.ts apps/api/src/lib/observations.ts apps/api/src/lib/suggestion-rules.ts apps/api/src/lib/suggestion-rules.test.ts
+pnpm --filter @turingcare/api exec tsc --noEmit
+git add apps/api/src/lib/practice-evidence.ts apps/api/src/lib/practice-evidence.test.ts apps/api/src/lib/observations.ts apps/api/src/lib/suggestion-rules.ts apps/api/src/lib/suggestion-rules.test.ts
+git commit -m "feat(api): deterministic suggestion rules over structured evidence"
+```
+
+- [ ] **Step 12: Commit recent-observation index**
+
+```bash
+pnpm exec biome check --write apps/api/src/db/schema.ts apps/api/src/db/schema.test.ts
 pnpm --filter @turingcare/api exec tsc --noEmit
 git add apps/api/src/db/schema.ts apps/api/src/db/schema.test.ts apps/api/drizzle/0016_journal_observation_index.sql apps/api/drizzle/meta/_journal.json apps/api/drizzle/meta/0016_snapshot.json docs/superpowers/plans/2026-08-11-personalized-training-gate-1.md
 git commit -m "perf(api): index recent journal observations"
