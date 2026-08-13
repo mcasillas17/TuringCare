@@ -9,14 +9,33 @@ second operator's approval, and a database backup. Confirm that the ticket
 identifies exactly one signal and that both operators agree the owner made a
 selection mistake.
 
-Run the following transaction with the approved signal and dog IDs:
+Run this with `psql`, replacing only the two UUID placeholders:
+
+```bash
+psql "$DATABASE_URL" \
+  --set=ON_ERROR_STOP=1 \
+  --set=signal_id='approved-signal-uuid' \
+  --set=dog_id='approved-dog-uuid'
+```
+
+Then paste the following transaction. The `\gset`/`\if` guard aborts with a
+non-zero exit if the exact two-key lookup does not lock one row:
 
 ```sql
 BEGIN;
 SELECT "id", "dog_id", "type", "source", "reported_at"
 FROM "dog_safety_signals"
 WHERE "id" = :'signal_id'::uuid AND "dog_id" = :'dog_id'::uuid
-FOR UPDATE;
+FOR UPDATE
+\gset correction_
+
+\if :{?correction_id}
+\echo Locked signal :correction_id for dog :correction_dog_id
+\else
+ROLLBACK;
+\echo No exact signal/dog match; nothing was changed.
+\quit 1
+\endif
 
 DELETE FROM "dog_safety_signals"
 WHERE "id" = :'signal_id'::uuid AND "dog_id" = :'dog_id'::uuid

@@ -10674,12 +10674,15 @@ concurrency:
   cancel-in-progress: false
 ```
 
-Use these complete production jobs:
+Use these complete production jobs. Drain, migration, API deployment, capacity
+restoration, and readiness stay in one bounded job so cancellation or runner
+scheduling cannot strand production between jobs:
 
 ```yaml
-  migrate:
+  deploy-api:
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -10692,23 +10695,30 @@ Use these complete production jobs:
           cache: pnpm
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: pnpm install --frozen-lockfile
-      - name: Drain old API and migrate
+      - name: Drain, migrate, deploy, and verify API
         run: |
           set -Eeuo pipefail
           original_count=$(flyctl machine list --json --app turingcare-api | jq 'length')
+          if [ "$original_count" -lt 1 ]; then
+            echo "Expected at least one running API machine before deployment" >&2
+            exit 1
+          fi
+          migrated=0
           restore_old_release() {
             flyctl scale count "$original_count" --yes --app turingcare-api
-            if [ "$original_count" -gt 0 ]; then
-              curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://api.turingcare.dog/health
-            fi
+            curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://api.turingcare.dog/health
           }
-          restore_on_exit() {
+          recover_on_exit() {
             status=$?
             trap - EXIT INT TERM
-            restore_old_release
+            if [ "$migrated" -eq 0 ]; then
+              restore_old_release
+            else
+              flyctl scale count 0 --yes --app turingcare-api
+            fi
             exit "$status"
           }
-          trap restore_on_exit EXIT
+          trap recover_on_exit EXIT
           trap 'exit 130' INT
           trap 'exit 143' TERM
           flyctl scale count 0 --yes --app turingcare-api
@@ -10725,32 +10735,11 @@ Use these complete production jobs:
             exit 1
           fi
           pnpm --filter @turingcare/api db:migrate
-          trap - EXIT INT TERM
-
-  deploy-api:
-    needs: migrate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy and verify compatible API
-        run: |
-          set -Eeuo pipefail
-          drain_on_exit() {
-            status=$?
-            trap - EXIT INT TERM
-            flyctl scale count 0 --yes --app turingcare-api
-            exit "$status"
-          }
-          trap drain_on_exit EXIT
-          trap 'exit 130' INT
-          trap 'exit 143' TERM
+          migrated=1
           flyctl deploy --remote-only --config apps/api/fly.toml
-          flyctl scale count 1 --yes --app turingcare-api
+          flyctl scale count "$original_count" --yes --app turingcare-api
           curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://api.turingcare.dog/ready
           trap - EXIT INT TERM
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
   # The web uses the expanded focus/session contracts, so publish it only after
   # the migrated API is healthy.
@@ -10791,13 +10780,14 @@ Run this structural workflow check:
 drain_line=$(grep -n 'scale count 0' .github/workflows/deploy.yml | head -1 | cut -d: -f1)
 migrate_line=$(grep -n '@turingcare/api db:migrate' .github/workflows/deploy.yml | tail -1 | cut -d: -f1)
 test -n "$drain_line" -a -n "$migrate_line" -a "$drain_line" -lt "$migrate_line"
-grep -q 'scale count "$original_count" --yes --app turingcare-api' .github/workflows/deploy.yml
-grep -q 'scale count 1 --yes --app turingcare-api' .github/workflows/deploy.yml
+test "$(grep -c 'scale count "$original_count" --yes --app turingcare-api' .github/workflows/deploy.yml)" -ge 2
+grep -A3 '^  deploy-api:' .github/workflows/deploy.yml | grep -q 'timeout-minutes: 20'
 grep -A1 '^  deploy-web:' .github/workflows/deploy.yml | grep -q 'needs: deploy-api'
 ```
 
 Expected: all commands exit 0, proving production migration drains first,
-contains a restore/serve command, and gates the web on the API.
+contains both failure restoration and capacity restoration, runs in one bounded
+API job, and gates the web on the API.
 
 Before editing the workflow, add a DB-backed readiness route. In
 `apps/api/src/app.test.ts`, import `db` from `./db` and `vi` from Vitest, then
@@ -10885,14 +10875,15 @@ and `0015` are present before the web deploy.
 Update `DEPLOY.md`'s opening diagram and parallel-deploy prose to:
 
 ```text
-push main → ci → drain+migrate → deploy-api → deploy-web
+push main → ci → deploy-api (drain+migrate+deploy+ready) → deploy-web
 ```
 
 State that production deploys are serialized, the API has a bounded maintenance
-window for schema-incompatible migrations, migration failure restores the old
-machine after rollback, and deploy/readiness failure leaves the API drained for
-operator intervention rather than serving an incompatible release. Update the
-"First deploy" section to use the same serialized order.
+window in one job for schema-incompatible migrations, migration failure
+restores the old machine count after rollback, and deploy/readiness failure
+leaves the API drained for operator intervention rather than serving an
+incompatible release. Update the "First deploy" section to use the same
+serialized order.
 
 - [ ] **Step 2: Run every gate**
 
@@ -10957,6 +10948,9 @@ Require the operator to abort if the selected row does not exactly match the
 ticket, attach the returned row to the internal ticket, and confirm the next
 suggestion request still evaluates all remaining safety signals. Record this
 runbook and the two-step owner confirmation in the PROJECT-LOG entry.
+Provide a paste-ready `psql` command with `ON_ERROR_STOP` and UUID variables,
+and use `\gset` plus `\if` so a zero-row exact lookup rolls back and exits
+non-zero before the delete.
 
 - [ ] **Step 8: Final commit**
 

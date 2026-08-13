@@ -3,17 +3,18 @@
 End-to-end deploy on every push to `main`:
 
 ```
-push main → ci → drain+migrate → deploy-api → deploy-web
+push main → ci → deploy-api (drain+migrate+deploy+ready) → deploy-web
 ```
 
 - **Frontend** → Cloudflare Pages (`turingcare.dog`, `www.turingcare.dog`)
 - **Backend** → Fly.io (`api.turingcare.dog`)
 - **Database** → Supabase Postgres
 
-Production deploys are serialized. For schema-incompatible migrations, the API
-has a bounded maintenance window while the old machines are drained before the
-migration. If migration fails, the workflow restores the old machine after the
-database rollback; if API deployment or readiness fails, it leaves the API
+Production deploys are serialized. For schema-incompatible migrations, one
+bounded API job drains the old machines, migrates, deploys, restores the prior
+machine count, and verifies readiness without a runner gap between phases. If
+migration fails, the workflow restores the old release after the database
+rollback; if deployment or readiness fails after migration, it leaves the API
 drained for operator intervention rather than serving an incompatible release.
 The web deploys only after the migrated API is healthy.
 
@@ -49,10 +50,10 @@ The API package is `@turingcare/api` (pnpm filter name used everywhere below —
    - **URL-encode** the password if it contains `@ : / ? # [ ] %` (e.g.
      `@`→`%40`). Reset it at Settings → Database → Database password if unknown.
 3. This single value is used as `DATABASE_URL` in **both** the GitHub Actions
-   secret (for the `migrate` job) and the Fly secret (for the running API).
+   secret (for the `deploy-api` migration step) and the Fly secret (for the running API).
    It is **not** committed anywhere — secrets only.
 
-No tables yet — the `migrate` job creates them from
+No tables yet — the `deploy-api` job creates them from
 `apps/api/drizzle/` on the first deploy.
 
 ---
@@ -185,7 +186,7 @@ Repo → Settings → Secrets and variables → Actions → New repository secre
 
 | Secret | Value |
 |---|---|
-| `DATABASE_URL` | Supabase Session-pooler URL (used by the `migrate` job) |
+| `DATABASE_URL` | Supabase Session-pooler URL (used by the `deploy-api` migration step) |
 | `FLY_API_TOKEN` | from `fly tokens create deploy` |
 | `CLOUDFLARE_API_TOKEN` | Pages-edit token |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
@@ -203,9 +204,9 @@ gh secret set CLOUDFLARE_ACCOUNT_ID
 
 ## 6. First deploy
 
-Push to `main`. `ci` → `drain+migrate` → `deploy-api` → `deploy-web`. On
-success: API at the Fly app's `*.fly.dev`, frontend at the Pages `*.pages.dev`.
-Attach the real domains next.
+Push to `main`. `ci` → `deploy-api` (drain, migrate, deploy, readiness) →
+`deploy-web`. On success: API at the Fly app's `*.fly.dev`, frontend at the
+Pages `*.pages.dev`. Attach the real domains next.
 
 ---
 
