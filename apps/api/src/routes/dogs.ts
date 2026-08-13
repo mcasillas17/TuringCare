@@ -438,7 +438,9 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
             anchorRejected = "invalid_anchor";
           } else {
             const level = target.variant === "primary" ? audit.level : audit.fallbackLevel;
-            if (level === null || level > lockedSkill.confidence) {
+            if (level == null) {
+              anchorRejected = "invalid_anchor";
+            } else if (level > lockedSkill.confidence) {
               anchorRejected = "invalid_target";
             } else {
               anchor = {
@@ -566,7 +568,9 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
             anchorRejected = "invalid_anchor";
           } else {
             const level = target.variant === "primary" ? audit.level : audit.fallbackLevel;
-            if (level === null || level > lockedSkill.confidence) {
+            if (level == null) {
+              anchorRejected = "invalid_anchor";
+            } else if (level > lockedSkill.confidence) {
               anchorRejected = "invalid_target";
             } else if (
               existing.curriculumLevel !== null &&
@@ -647,6 +651,13 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!skill) return c.json({ error: "not_found" } as const, 404);
     const deleted = await db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skill.id}))`);
+      const [currentSkill] = await tx
+        .select({ id: trainingSkills.id })
+        .from(trainingSkills)
+        .where(eq(trainingSkills.id, skill.id))
+        .for("update")
+        .limit(1);
+      if (!currentSkill) return null;
       const [session] = await tx
         .select({ id: practiceSessions.id })
         .from(practiceSessions)

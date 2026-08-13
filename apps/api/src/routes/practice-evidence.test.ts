@@ -136,8 +136,16 @@ describe("practice evidence", () => {
   it("3. stamps a valid practiced suggestion anchor", async () => {
     const s = await setup(users);
     const target = await suggestion(s.dogId, s.skillId);
+    const occurredAt = "2026-08-13T02:30:00.000Z";
+    const timezoneOffsetMinutes = 480;
+    const expectedPracticeDay = new Date(
+      new Date(occurredAt).getTime() - timezoneOffsetMinutes * 60_000,
+    )
+      .toISOString()
+      .slice(0, 10);
     const response = await postSession(s, {
-      timezoneOffsetMinutes: 0,
+      occurredAt,
+      timezoneOffsetMinutes,
       practicedTarget: { suggestionId: target.id, variant: "primary" },
     });
     expect(response.status).toBe(201);
@@ -147,7 +155,7 @@ describe("practice evidence", () => {
         curriculumVersion: CURRICULUM_VERSION,
         practiceVariant: "primary",
         suggestionId: target.id,
-        practiceDay: expect.any(String),
+        practiceDay: expectedPracticeDay,
       },
       anchorRejected: null,
     });
@@ -379,7 +387,58 @@ describe("practice evidence", () => {
     });
   });
 
-  it("18. persists safety when another dog's suggestion is invalid", async () => {
+  it("18. rejects null selected anchor levels while saving POST and PATCH evidence", async () => {
+    const s = await setup(users);
+    const target = await suggestion(s.dogId, s.skillId, { fallbackLevel: null });
+    const post = await postSession(s, {
+      outcome: "mixed",
+      safetySignal: "injury_or_pain",
+      timezoneOffsetMinutes: 0,
+      practicedTarget: { suggestionId: target.id, variant: "fallback" },
+    });
+    expect(post.status).toBe(201);
+    expect((await post.json()) as object).toMatchObject({
+      session: {
+        outcome: "mixed",
+        curriculumLevel: null,
+        curriculumVersion: null,
+        practiceVariant: null,
+        suggestionId: null,
+      },
+      anchorRejected: "invalid_anchor",
+    });
+
+    const created = await postSession(s, { timezoneOffsetMinutes: 0 });
+    const { session } = (await created.json()) as { session: { id: string } };
+    const patch = await app.request(
+      `/api/dogs/${s.dogId}/skills/${s.skillId}/sessions/${session.id}/evidence`,
+      {
+        method: "PATCH",
+        headers: s.user.authHeaders,
+        body: JSON.stringify({
+          outcome: "went_well",
+          safetySignal: "injury_or_pain",
+          practicedTarget: { suggestionId: target.id, variant: "fallback" },
+        }),
+      },
+    );
+    expect(patch.status).toBe(200);
+    expect((await patch.json()) as object).toMatchObject({
+      session: {
+        outcome: "went_well",
+        curriculumLevel: null,
+        curriculumVersion: null,
+        practiceVariant: null,
+        suggestionId: null,
+      },
+      anchorRejected: "invalid_anchor",
+    });
+    expect(
+      await db.select().from(dogSafetySignals).where(eq(dogSafetySignals.dogId, s.dogId)),
+    ).toHaveLength(2);
+  });
+
+  it("19. persists safety when another dog's suggestion is invalid", async () => {
     const s = await setup(users);
     const other = await setup(users);
     const target = await suggestion(other.dogId, other.skillId);
@@ -394,7 +453,7 @@ describe("practice evidence", () => {
     ).toHaveLength(1);
   });
 
-  it("19. saves outcome and safety when audit lookup is unavailable", async () => {
+  it("20. saves outcome and safety when audit lookup is unavailable", async () => {
     const s = await setup(users);
     const target = await suggestion(s.dogId, s.skillId);
     practiceAnchorMock.unavailable = true;
@@ -413,7 +472,7 @@ describe("practice evidence", () => {
     ).toHaveLength(1);
   });
 
-  it("20. serializes concurrent first anchors on one session", async () => {
+  it("21. serializes concurrent first anchors on one session", async () => {
     const s = await setup(users);
     const created = await postSession(s, { timezoneOffsetMinutes: 0 });
     const { session } = (await created.json()) as { session: { id: string } };
@@ -437,7 +496,7 @@ describe("practice evidence", () => {
     ).toEqual([null, "target_locked"]);
   });
 
-  it("21. returns 404 when another owner patches a session", async () => {
+  it("22. returns 404 when another owner patches a session", async () => {
     const s = await setup(users);
     const other = await setup(users);
     const created = await postSession(s, {});
@@ -453,7 +512,7 @@ describe("practice evidence", () => {
     expect(response.status).toBe(404);
   });
 
-  it("22. withdraws open advancement proposals when a session is deleted", async () => {
+  it("23. withdraws open advancement proposals when a session is deleted", async () => {
     const s = await setup(users);
     const created = await postSession(s, {});
     const { session } = (await created.json()) as { session: { id: string } };
