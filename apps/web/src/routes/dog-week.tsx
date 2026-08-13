@@ -1,10 +1,18 @@
+import { OutcomeQuickCapture } from "@/components/progress/outcome-quick-capture";
+import { SuggestionCard } from "@/components/training/suggestion-card";
 import { useTuring } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
 import { FocusPicker } from "@/components/week/focus-picker";
 import { WeekGrid } from "@/components/week/week-grid";
 import { WeekNav } from "@/components/week/week-nav";
 import { useI18n } from "@/i18n";
-import { useDeleteSession, useLogSession } from "@/lib/progress";
+import { useDeleteSession, useLogSession, useSetSessionEvidence } from "@/lib/progress";
+import {
+  suggestionKey,
+  useAdvancementDecision,
+  useSuggestion,
+  useSuggestionAction,
+} from "@/lib/suggestion";
 import {
   addDays,
   dayKey,
@@ -12,12 +20,20 @@ import {
   sameWeek,
   shouldCelebrateWeek,
   weekDays,
+  weekKeyAtOffset,
   weekKeyOf,
 } from "@/lib/week";
 import { focusKey, useFocusWeek } from "@/lib/weekly-focus";
 import { useQueryClient } from "@tanstack/react-query";
+import type {
+  AdvancementDecision,
+  PracticeDimension,
+  PracticeEvidenceInput,
+  SuggestionAction,
+} from "@turingcare/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { toast } from "sonner";
 
 export function DogWeek() {
   const { t, locale } = useI18n();
@@ -39,6 +55,24 @@ export function DogWeek() {
   );
   const logSession = useLogSession(id);
   const deleteSession = useDeleteSession(id);
+  const setEvidence = useSetSessionEvidence(id);
+  const currentTimezoneOffsetMinutes = new Date().getTimezoneOffset();
+  const currentWeekKey = weekKeyAtOffset(new Date(), currentTimezoneOffsetMinutes);
+  const { data: suggestion, isError: suggestionError } = useSuggestion(
+    id,
+    weekKey,
+    currentTimezoneOffsetMinutes,
+  );
+  const suggestionAction = useSuggestionAction(id, weekKey);
+  const advancementDecision = useAdvancementDecision(id, weekKey);
+  const [pendingOutcome, setPendingOutcome] = useState<{
+    skillId: string;
+    sessionId: string;
+    suggestionId: string | null;
+    hasPrimary: boolean;
+    hasFallback: boolean;
+    dimensions: PracticeDimension[];
+  } | null>(null);
 
   const skills = focusSkills ?? [];
   const canGoNext = !sameWeek(monday, today);
@@ -73,21 +107,83 @@ export function DogWeek() {
   const onLog = async (skillId: string, day: Date) => {
     const isToday = dayKey(day) === dayKey(today);
     const occurredAt = isToday
-      ? new Date()
-      : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, 0);
-    await logSession.mutateAsync({
+      ? new Date().toISOString()
+      : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, 0).toISOString();
+    const occurrenceTimezoneOffsetMinutes = new Date(occurredAt).getTimezoneOffset();
+    const created = await logSession.mutateAsync({
       skillId,
       body: {
-        occurredAt: occurredAt.toISOString(),
-        timezoneOffsetMinutes: occurredAt.getTimezoneOffset(),
+        occurredAt,
+        timezoneOffsetMinutes: occurrenceTimezoneOffsetMinutes,
       },
     });
     refreshFocus();
+    const matchingSuggestion =
+      !suggestionError &&
+      weekKey === currentWeekKey &&
+      suggestion?.type === "exercise" &&
+      !suggestion.dismissed &&
+      suggestion.weekKey === weekKey &&
+      suggestion.skill?.id === skillId;
+    setPendingOutcome({
+      skillId,
+      sessionId: created.id,
+      suggestionId: matchingSuggestion ? suggestion.suggestionId : null,
+      hasPrimary: matchingSuggestion && suggestion.primary !== null,
+      hasFallback: matchingSuggestion && suggestion.fallback !== null,
+      dimensions: matchingSuggestion ? suggestion.requestedDimensions : [],
+    });
   };
 
   const onRemove = async (skillId: string, sessionId: string) => {
     await deleteSession.mutateAsync({ skillId, sessionId });
     refreshFocus();
+    qc.invalidateQueries({ queryKey: suggestionKey(id, weekKey) });
+  };
+
+  const onSaveOutcome = async (
+    input: PracticeEvidenceInput & { variant: "primary" | "fallback" },
+  ) => {
+    if (!pendingOutcome) return;
+    const target = pendingOutcome;
+    const { variant, ...evidence } = input;
+    try {
+      await setEvidence.mutateAsync({
+        skillId: target.skillId,
+        sessionId: target.sessionId,
+        body: {
+          ...evidence,
+          practicedTarget:
+            target.suggestionId && (variant === "fallback" ? target.hasFallback : target.hasPrimary)
+              ? { suggestionId: target.suggestionId, variant }
+              : undefined,
+        },
+      });
+      setPendingOutcome(null);
+      qc.invalidateQueries({ queryKey: suggestionKey(id, weekKey) });
+      toast.success(t("practice.outcomeSaved"));
+    } catch {
+      toast.error(t("practice.outcomeFailed"));
+    }
+  };
+
+  const onSuggestionAction = async (action: SuggestionAction) => {
+    if (!suggestion?.suggestionId) return;
+    try {
+      await suggestionAction.mutateAsync({ suggestionId: suggestion.suggestionId, action });
+      toast.success(t("suggestion.actionThanks"));
+    } catch {
+      toast.error(t("suggestion.actionFailed"));
+    }
+  };
+
+  const onAdvancementDecision = async (proposalId: string, decision: AdvancementDecision) => {
+    try {
+      await advancementDecision.mutateAsync({ proposalId, decision });
+      toast.success(t("suggestion.advSaved"));
+    } catch {
+      toast.error(t("suggestion.advFailed"));
+    }
   };
 
   const rangeLabel = `${days[0]?.toLocaleDateString(locale, { month: "short", day: "numeric" })} – ${days[6]?.toLocaleDateString(locale, { month: "short", day: "numeric" })}`;
@@ -109,8 +205,32 @@ export function DogWeek() {
         onThisWeek={() => setMonday(mondayOf(new Date()))}
       />
 
+      {!suggestionError && suggestion && (
+        <SuggestionCard
+          suggestion={suggestion}
+          onAction={onSuggestionAction}
+          onDecision={onAdvancementDecision}
+          onPickFocus={() => setPickerOpen(true)}
+          actionPending={suggestionAction.isPending}
+          decisionPending={advancementDecision.isPending}
+        />
+      )}
+      {suggestionError && (
+        <output className="text-sm text-slate-soft">{t("suggestion.loadError")}</output>
+      )}
+
       {skills.length > 0 && (
         <p className="text-sm text-slate-soft">{t("week.summary", { sessions: sessionCount })}</p>
+      )}
+
+      {pendingOutcome && (
+        <OutcomeQuickCapture
+          hasFallback={pendingOutcome.hasFallback}
+          dimensions={pendingOutcome.dimensions}
+          saving={setEvidence.isPending}
+          onSave={onSaveOutcome}
+          onSkip={() => setPendingOutcome(null)}
+        />
       )}
 
       {pickerOpen && (
