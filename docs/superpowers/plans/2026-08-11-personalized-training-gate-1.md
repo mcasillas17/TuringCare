@@ -9603,6 +9603,8 @@ git commit -m "feat(web): suggestion, safety and advancement cards"
 - Modify: `apps/web/src/components/progress/session-form.tsx`
 - Modify: `apps/web/src/components/progress/progress-panel.tsx`
 - Create: `apps/web/src/components/progress/session-form.test.tsx`
+- Create: `apps/web/src/components/progress/outcome-quick-capture.tsx`
+- Create: `apps/web/src/components/progress/outcome-quick-capture.test.tsx`
 - Modify: `apps/web/src/components/dogs/dog-card-body.tsx`
 - Modify: `apps/web/src/components/dogs/dog-card-body.test.tsx`
 
@@ -9965,7 +9967,7 @@ git commit -m "feat(web): optional structured evidence in the session form"
 ## Task 23: Wire the suggestion into the week view
 
 **Files:**
-- Create: `apps/web/src/components/progress/outcome-quick-capture.tsx`
+- Modify: `apps/web/src/components/progress/outcome-quick-capture.tsx`
 - Modify: `apps/web/src/routes/dog-week.tsx`
 - Modify: `apps/web/src/routes/dog-week.test.tsx`
 
@@ -10297,6 +10299,7 @@ export function OutcomeQuickCapture({
   onSkip,
   hasFallback,
   dimensions,
+  saving = false,
 }: {
   onSave: (
     input: PracticeEvidenceInput & { variant: "primary" | "fallback" },
@@ -10304,6 +10307,7 @@ export function OutcomeQuickCapture({
   onSkip: () => void;
   hasFallback: boolean;
   dimensions: PracticeDimension[];
+  saving?: boolean;
 }) {
   const { t } = useI18n();
   const [outcome, setOutcome] = useState<PracticeOutcome | null>(null);
@@ -10406,7 +10410,9 @@ export function OutcomeQuickCapture({
       )}
       <Button
         type="button"
-        disabled={(!outcome && !safetySignal) || Boolean(safetySignal && !safetyConfirmed)}
+        disabled={
+          saving || (!outcome && !safetySignal) || Boolean(safetySignal && !safetyConfirmed)
+        }
         onClick={() =>
           onSave({
             ...context,
@@ -10588,6 +10594,7 @@ Render the card immediately after `<WeekNav …/>` and the quick capture immedia
           dimensions={pendingOutcome.dimensions}
           onSave={onSaveOutcome}
           onSkip={() => setPendingOutcome(null)}
+          saving={setEvidence.isPending}
         />
       )}
 ```

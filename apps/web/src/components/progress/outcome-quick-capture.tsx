@@ -16,11 +16,13 @@ export function OutcomeQuickCapture({
   onSkip,
   hasFallback,
   dimensions,
+  saving = false,
 }: {
   onSave: (input: PracticeEvidenceInput & { variant: "primary" | "fallback" }) => void;
   onSkip: () => void;
   hasFallback: boolean;
   dimensions: PracticeDimension[];
+  saving?: boolean;
 }) {
   const { t } = useI18n();
   const [outcome, setOutcome] = useState<PracticeOutcome | null>(null);
@@ -125,7 +127,9 @@ export function OutcomeQuickCapture({
       )}
       <Button
         type="button"
-        disabled={(!outcome && !safetySignal) || Boolean(safetySignal && !safetyConfirmed)}
+        disabled={
+          saving || (!outcome && !safetySignal) || Boolean(safetySignal && !safetyConfirmed)
+        }
         onClick={() =>
           onSave({
             ...context,

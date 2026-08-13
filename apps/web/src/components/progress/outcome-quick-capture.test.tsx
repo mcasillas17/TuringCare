@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { OutcomeQuickCapture } from "./outcome-quick-capture";
 
-function setup() {
+function setup(saving = false) {
   const onSave = vi.fn();
   render(
     <LocaleProvider>
@@ -12,6 +12,7 @@ function setup() {
         hasFallback
         onSave={onSave}
         onSkip={vi.fn()}
+        saving={saving}
       />
     </LocaleProvider>,
   );
@@ -50,5 +51,11 @@ describe("OutcomeQuickCapture", () => {
       safetySignal: "injury_or_pain",
       variant: "primary",
     });
+  });
+
+  it("disables saving while evidence is being persisted", () => {
+    setup(true);
+    fireEvent.click(screen.getByRole("button", { name: "Too hard" }));
+    expect(screen.getByRole("button", { name: "Save response" })).toBeDisabled();
   });
 });
