@@ -58,11 +58,11 @@ export function DogWeek() {
   const setEvidence = useSetSessionEvidence(id);
   const currentTimezoneOffsetMinutes = new Date().getTimezoneOffset();
   const currentWeekKey = weekKeyAtOffset(new Date(), currentTimezoneOffsetMinutes);
-  const { data: suggestion, isError: suggestionError } = useSuggestion(
-    id,
-    weekKey,
-    currentTimezoneOffsetMinutes,
-  );
+  const {
+    data: suggestion,
+    isError: suggestionError,
+    isLoading: suggestionLoading,
+  } = useSuggestion(id, weekKey, currentTimezoneOffsetMinutes);
   const suggestionAction = useSuggestionAction(id, weekKey);
   const advancementDecision = useAdvancementDecision(id, weekKey);
   const [pendingOutcome, setPendingOutcome] = useState<{
@@ -73,6 +73,7 @@ export function DogWeek() {
     hasFallback: boolean;
     dimensions: PracticeDimension[];
   } | null>(null);
+  const logDisabled = logSession.isPending || (weekKey === currentWeekKey && suggestionLoading);
 
   const skills = focusSkills ?? [];
   const canGoNext = !sameWeek(monday, today);
@@ -85,6 +86,8 @@ export function DogWeek() {
   const weekComplete = skills.length > 0 && doneCount === skills.length;
   const prevComplete = useRef<boolean | undefined>(undefined);
   const prevWeekKey = useRef(weekKey);
+  const pendingScope = `${id}:${weekKey}`;
+  const previousPendingScope = useRef(pendingScope);
   // Derived-state trigger: week completion comes from the refetched focus query
   // (not the log-session mutation response), so we watch it here and hop once on
   // a real false->true transition for the current week (refs keep it idempotent).
@@ -101,6 +104,12 @@ export function DogWeek() {
     }
     prevComplete.current = weekComplete;
   }, [focusSkills, weekKey, weekComplete, isCurrentWeek, celebrate]);
+
+  useEffect(() => {
+    if (previousPendingScope.current === pendingScope) return;
+    previousPendingScope.current = pendingScope;
+    setPendingOutcome(null);
+  }, [pendingScope]);
 
   const refreshFocus = () => qc.invalidateQueries({ queryKey: focusKey(id, weekKey) });
 
@@ -168,7 +177,9 @@ export function DogWeek() {
   };
 
   const onSuggestionAction = async (action: SuggestionAction) => {
-    if (!suggestion?.suggestionId) return;
+    if (weekKey !== currentWeekKey || suggestion?.weekKey !== weekKey || !suggestion.suggestionId) {
+      return;
+    }
     try {
       await suggestionAction.mutateAsync({ suggestionId: suggestion.suggestionId, action });
       toast.success(t("suggestion.actionThanks"));
@@ -205,17 +216,20 @@ export function DogWeek() {
         onThisWeek={() => setMonday(mondayOf(new Date()))}
       />
 
-      {!suggestionError && suggestion && (
-        <SuggestionCard
-          suggestion={suggestion}
-          onAction={onSuggestionAction}
-          onDecision={onAdvancementDecision}
-          onPickFocus={() => setPickerOpen(true)}
-          actionPending={suggestionAction.isPending}
-          decisionPending={advancementDecision.isPending}
-        />
-      )}
-      {suggestionError && (
+      {weekKey === currentWeekKey &&
+        !suggestionError &&
+        suggestion &&
+        suggestion.weekKey === weekKey && (
+          <SuggestionCard
+            suggestion={suggestion}
+            onAction={onSuggestionAction}
+            onDecision={onAdvancementDecision}
+            onPickFocus={() => setPickerOpen(true)}
+            actionPending={suggestionAction.isPending}
+            decisionPending={advancementDecision.isPending}
+          />
+        )}
+      {weekKey === currentWeekKey && suggestionError && (
         <output className="text-sm text-slate-soft">{t("suggestion.loadError")}</output>
       )}
 
@@ -225,6 +239,7 @@ export function DogWeek() {
 
       {pendingOutcome && (
         <OutcomeQuickCapture
+          key={pendingOutcome.sessionId}
           hasFallback={pendingOutcome.hasFallback}
           dimensions={pendingOutcome.dimensions}
           saving={setEvidence.isPending}
@@ -261,6 +276,7 @@ export function DogWeek() {
           today={today}
           onLog={onLog}
           onRemove={onRemove}
+          logDisabled={logDisabled}
         />
       )}
     </div>

@@ -211,6 +211,15 @@ describe("DogWeek", () => {
     expect(screen.getAllByText("Lure into a sit.")).toHaveLength(2);
   });
 
+  it("does not render cached suggestions on historical weeks", () => {
+    setup([sitFocus]);
+    renderWeek();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous week" }));
+
+    expect(screen.queryByText("This week's suggestion")).not.toBeInTheDocument();
+  });
+
   it("queries only the current week using the current timezone offset", () => {
     setup([sitFocus]);
     renderWeek();
@@ -264,6 +273,49 @@ describe("DogWeek", () => {
         },
       }),
     );
+  });
+
+  it("resets quick-capture answers when a different session is logged", async () => {
+    const { logMutate } = setup([sitFocus]);
+    logMutate.mockResolvedValueOnce({ id: "session-1" }).mockResolvedValueOnce({ id: "session-2" });
+    renderWeek();
+
+    const logButtons = screen.getAllByRole("button", { name: /Log Sit on/i });
+    fireEvent.click(logButtons[0] as HTMLElement);
+    const tooHard = await screen.findByRole("button", { name: "Too hard" });
+    fireEvent.click(tooHard);
+    expect(tooHard).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(logButtons[1] as HTMLElement);
+
+    await waitFor(() => expect(logMutate).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("button", { name: "Too hard" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: "Save response" })).toBeDisabled();
+  });
+
+  it("disables logging while a session or required suggestion is loading", () => {
+    setup([sitFocus]);
+    vi.mocked(progressLib.useLogSession).mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: true,
+    } as unknown as ReturnType<typeof progressLib.useLogSession>);
+    const { unmount } = renderWeek();
+
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeDisabled();
+    unmount();
+
+    setup([sitFocus], undefined);
+    vi.mocked(suggestionLib.useSuggestion).mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    } as unknown as ReturnType<typeof suggestionLib.useSuggestion>);
+    renderWeek();
+
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeDisabled();
   });
 
   it("keeps a saved session and the confirmed safety report available after an evidence failure", async () => {

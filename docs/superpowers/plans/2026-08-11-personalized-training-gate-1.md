@@ -9968,6 +9968,7 @@ git commit -m "feat(web): optional structured evidence in the session form"
 
 **Files:**
 - Modify: `apps/web/src/components/progress/outcome-quick-capture.tsx`
+- Modify: `apps/web/src/components/week/week-grid.tsx`
 - Modify: `apps/web/src/routes/dog-week.tsx`
 - Modify: `apps/web/src/routes/dog-week.test.tsx`
 
@@ -10438,7 +10439,13 @@ export function OutcomeQuickCapture({
 import { OutcomeQuickCapture } from "@/components/progress/outcome-quick-capture";
 import { SuggestionCard } from "@/components/training/suggestion-card";
 import { useDeleteSession, useLogSession, useSetSessionEvidence } from "@/lib/progress";
-import { useAdvancementDecision, useSuggestion, useSuggestionAction } from "@/lib/suggestion";
+import {
+  suggestionKey,
+  useAdvancementDecision,
+  useSuggestion,
+  useSuggestionAction,
+} from "@/lib/suggestion";
+import { weekKeyAtOffset } from "@/lib/week";
 import type {
   AdvancementDecision,
   PracticeDimension,
@@ -10450,11 +10457,12 @@ import { toast } from "sonner";
 
 ```tsx
   const currentTimezoneOffsetMinutes = new Date().getTimezoneOffset();
-  const { data: suggestion, isError: suggestionError } = useSuggestion(
-    id,
-    weekKey,
-    currentTimezoneOffsetMinutes,
-  );
+  const currentWeekKey = weekKeyAtOffset(new Date(), currentTimezoneOffsetMinutes);
+  const {
+    data: suggestion,
+    isError: suggestionError,
+    isLoading: suggestionLoading,
+  } = useSuggestion(id, weekKey, currentTimezoneOffsetMinutes);
   const suggestionAction = useSuggestionAction(id, weekKey);
   const advancementDecision = useAdvancementDecision(id, weekKey);
   const setEvidence = useSetSessionEvidence(id);
@@ -10466,7 +10474,13 @@ import { toast } from "sonner";
     hasFallback: boolean;
     dimensions: PracticeDimension[];
   } | null>(null);
+  const logDisabled = logSession.isPending || (weekKey === currentWeekKey && suggestionLoading);
 ```
+
+Clear `pendingOutcome` whenever the dog or selected week changes. Pass
+`logDisabled` into `WeekGrid`; empty-cell and "log another" controls must be
+disabled while a session mutation is pending or while the required current-week
+suggestion is still loading.
 
 ```tsx
   const onLog = async (skillId: string, day: Date) => {
@@ -10572,7 +10586,10 @@ Import `suggestionKey` alongside the suggestion hooks. No change is needed in `u
 Render the card immediately after `<WeekNav …/>` and the quick capture immediately after the summary paragraph:
 
 ```tsx
-      {!suggestionError && suggestion && (
+      {weekKey === currentWeekKey &&
+        !suggestionError &&
+        suggestion &&
+        suggestion.weekKey === weekKey && (
         <SuggestionCard
           suggestion={suggestion}
           onAction={onSuggestionAction}
@@ -10582,7 +10599,7 @@ Render the card immediately after `<WeekNav …/>` and the quick capture immedia
           decisionPending={advancementDecision.isPending}
         />
       )}
-      {suggestionError && (
+      {weekKey === currentWeekKey && suggestionError && (
         <p role="status" className="text-sm text-slate-soft">
           {t("suggestion.loadError")}
         </p>
@@ -10590,6 +10607,7 @@ Render the card immediately after `<WeekNav …/>` and the quick capture immedia
 
       {pendingOutcome && (
         <OutcomeQuickCapture
+          key={pendingOutcome.sessionId}
           hasFallback={pendingOutcome.hasFallback}
           dimensions={pendingOutcome.dimensions}
           onSave={onSaveOutcome}
