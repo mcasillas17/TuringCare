@@ -5747,15 +5747,31 @@ multiple non-proposed rows for one skill.
 - Modify: `apps/api/src/lib/skill-level.ts`
 - Modify: `apps/api/src/routes/dogs.ts`
 
-- [ ] **Step 1: Write the failing test** — create `apps/api/src/lib/advancement.test.ts`:
+- [ ] **Step 1: Write the failing tests** — create
+  `apps/api/src/lib/advancement.test.ts` with the following nine tests: the
+  advancement threshold; practice-day/UTC-day counting; same-day, newest-failure,
+  insufficient-session, rule, and maximum-level (including `level: 99`) guards;
+  evidence `lastSessionId`; and the DB-backed tied-terminal-decision regression.
 
 ```ts
-import { describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { afterEach, describe, expect, it } from "vitest";
+import { db } from "../db";
+import {
+  advancementProposals,
+  dogs,
+  practiceSessions,
+  trainingGoals,
+  trainingSkills,
+} from "../db/schema";
+import { type TestUser, createTestUser } from "../test-helpers";
 import {
   ADVANCEMENT_MIN_DAYS,
   ADVANCEMENT_MIN_SESSIONS,
   type AdvancementInputs,
   evaluateAdvancement,
+  syncAdvancementProposal,
 } from "./advancement";
 
 const day = (iso: string) => new Date(iso);
@@ -5766,19 +5782,48 @@ const base: AdvancementInputs = {
   outcomes: [],
 };
 
+async function createSkill(user: TestUser) {
+  const [dog] = await db
+    .insert(dogs)
+    .values({
+      ownerId: user.userId,
+      name: "Biscuit",
+      size: "medium",
+      sex: "female",
+      source: "rescue",
+      vaccineStage: "in_progress",
+      spayedNeutered: true,
+    })
+    .returning();
+  if (!dog) throw new Error("expected dog");
+  const [goal] = await db
+    .insert(trainingGoals)
+    .values({ dogId: dog.id, goal: "Recall" })
+    .returning();
+  if (!goal) throw new Error("expected goal");
+  const [skill] = await db
+    .insert(trainingSkills)
+    .values({ goalId: goal.id, name: "Sit", confidence: 2 })
+    .returning();
+  if (!skill) throw new Error("expected skill");
+  return skill;
+}
+
 describe("evaluateAdvancement", () => {
   it("requires three consecutive good sessions across two days", () => {
     expect(ADVANCEMENT_MIN_SESSIONS).toBe(3);
     expect(ADVANCEMENT_MIN_DAYS).toBe(2);
-    const result = evaluateAdvancement({
-      ...base,
-      outcomes: [
-        { outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
-        { outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
-        { outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
-      ],
-    });
-    expect(result).toEqual({
+
+    expect(
+      evaluateAdvancement({
+        ...base,
+        outcomes: [
+          { outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
+          { outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
+          { outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
+        ],
+      }),
+    ).toEqual({
       fromLevel: 3,
       toLevel: 4,
       sessionCount: 3,
@@ -5786,6 +5831,132 @@ describe("evaluateAdvancement", () => {
       lastSessionAt: day("2026-08-13T09:00:00.000Z"),
       lastSessionId: null,
     });
+  });
+
+  describe("syncAdvancementProposal", () => {
+    const users: TestUser[] = [];
+    afterEach(async () => {
+      for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
+    });
+
+    it("suppresses a reproposal when an older tied terminal decision covers current evidence", async () => {
+      const user = await createTestUser();
+      users.push(user);
+      const skill = await createSkill(user);
+      const newestAt = day("2026-08-13T09:00:00.000Z");
+      const evidenceRows = [
+        {
+          id: randomUUID(),
+          outcome: "went_well" as const,
+          occurredAt: newestAt,
+          practiceDay: "2026-08-13",
+        },
+        {
+          id: randomUUID(),
+          outcome: "went_well" as const,
+          occurredAt: day("2026-08-12T09:00:00.000Z"),
+          practiceDay: "2026-08-12",
+        },
+        {
+          id: randomUUID(),
+          outcome: "went_well" as const,
+          occurredAt: day("2026-08-11T09:00:00.000Z"),
+          practiceDay: "2026-08-11",
+        },
+      ];
+      const [newestEvidence, middleEvidence, oldestEvidence] = evidenceRows;
+      if (!newestEvidence || !middleEvidence || !oldestEvidence) {
+        throw new Error("expected qualifying evidence");
+      }
+      const tiedEvidenceId = randomUUID();
+      await db.insert(practiceSessions).values([
+        ...evidenceRows.map((row) => ({
+          ...row,
+          skillId: skill.id,
+          curriculumLevel: 2,
+          practiceVariant: "primary" as const,
+        })),
+        {
+          id: tiedEvidenceId,
+          skillId: skill.id,
+          outcome: "went_well",
+          occurredAt: newestAt,
+          practiceDay: "2026-08-13",
+          curriculumLevel: 2,
+          practiceVariant: "primary",
+        },
+      ]);
+
+      const decision = {
+        skillId: skill.id,
+        fromLevel: 2,
+        toLevel: 3,
+        ruleId: "maintain_current_level",
+        evidenceSessionCount: 3,
+        evidenceDayCount: 3,
+        evidenceWindowDays: 14,
+        evidenceOccurredAt: evidenceRows.map((row) => row.occurredAt),
+        evidencePracticeDays: evidenceRows.map((row) => row.practiceDay),
+        evidenceOutcomes: evidenceRows.map((row) => row.outcome),
+        evidenceLastSessionAt: newestAt,
+      };
+      await db.insert(advancementProposals).values([
+        {
+          ...decision,
+          evidenceSessionIds: evidenceRows.map((row) => row.id),
+          status: "rejected",
+          createdAt: day("2026-08-13T10:00:00.000Z"),
+        },
+        {
+          ...decision,
+          evidenceSessionIds: [tiedEvidenceId, middleEvidence.id, oldestEvidence.id],
+          status: "stayed",
+          createdAt: day("2026-08-13T11:00:00.000Z"),
+        },
+      ]);
+
+      const result = await syncAdvancementProposal(
+        skill.id,
+        {
+          fromLevel: 2,
+          toLevel: 3,
+          sessionCount: 3,
+          dayCount: 3,
+          lastSessionAt: newestAt,
+          lastSessionId: newestEvidence.id,
+        },
+        evidenceRows,
+      );
+
+      expect(result).toEqual({ proposal: null, created: false });
+      expect(
+        await db
+          .select()
+          .from(advancementProposals)
+          .where(eq(advancementProposals.skillId, skill.id)),
+      ).toHaveLength(2);
+    });
+  });
+
+  it("uses practice days or UTC dates to count distinct days", () => {
+    const result = evaluateAdvancement({
+      ...base,
+      outcomes: [
+        {
+          outcome: "went_well",
+          occurredAt: day("2026-08-13T01:00:00.000Z"),
+          practiceDay: "2026-08-12",
+        },
+        {
+          outcome: "went_well",
+          occurredAt: day("2026-08-13T02:00:00.000Z"),
+          practiceDay: "2026-08-13",
+        },
+        { outcome: "went_well", occurredAt: day("2026-08-11T23:00:00.000Z") },
+      ],
+    });
+
+    expect(result?.dayCount).toBe(3);
   });
 
   it("does not propose when the good sessions all happened on one day", () => {
@@ -5801,7 +5972,7 @@ describe("evaluateAdvancement", () => {
     ).toBeNull();
   });
 
-  it("does not propose when a recent session was not a success", () => {
+  it("does not propose when a newest session was not a success", () => {
     expect(
       evaluateAdvancement({
         ...base,
@@ -5826,21 +5997,12 @@ describe("evaluateAdvancement", () => {
     ).toBeNull();
   });
 
-  it("does not propose past level 5", () => {
-    expect(
-      evaluateAdvancement({
-        ...base,
-        level: 5,
-        outcomes: [
-          { outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
-          { outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
-          { outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
-        ],
-      }),
-    ).toBeNull();
-  });
-
   it("does not propose unless the rule is maintain_current_level", () => {
+    const outcomes = [
+      { outcome: "went_well" as const, occurredAt: day("2026-08-13T09:00:00.000Z") },
+      { outcome: "went_well" as const, occurredAt: day("2026-08-12T09:00:00.000Z") },
+      { outcome: "went_well" as const, occurredAt: day("2026-08-11T09:00:00.000Z") },
+    ];
     for (const ruleId of [
       "hold_after_mixed",
       "step_back_after_too_hard",
@@ -5848,32 +6010,36 @@ describe("evaluateAdvancement", () => {
       "ease_after_hard_context",
       "cold_start_curriculum_level",
     ] as const) {
-      expect(
-        evaluateAdvancement({
-          ...base,
-          ruleId,
-          outcomes: [
-            { outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
-            { outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
-            { outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
-          ],
-        }),
-      ).toBeNull();
+      expect(evaluateAdvancement({ ...base, ruleId, outcomes })).toBeNull();
     }
   });
 
-  it("reports only the three qualifying recent successes as proposal evidence", () => {
+  it("does not propose past level five", () => {
+    const outcomes = [
+      { outcome: "went_well" as const, occurredAt: day("2026-08-13T09:00:00.000Z") },
+      { outcome: "went_well" as const, occurredAt: day("2026-08-12T09:00:00.000Z") },
+      { outcome: "went_well" as const, occurredAt: day("2026-08-11T09:00:00.000Z") },
+    ];
+    expect(evaluateAdvancement({ ...base, level: 5, outcomes })).toBeNull();
+    expect(evaluateAdvancement({ ...base, level: 99, outcomes })).toBeNull();
+  });
+
+  it("reports only the three newest qualifying successes as proposal evidence", () => {
     const result = evaluateAdvancement({
       ...base,
       outcomes: [
-        { outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
-        { outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
-        { outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
-        { outcome: "mixed", occurredAt: day("2026-08-10T09:00:00.000Z") },
+        { id: "newest", outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
+        { id: "middle", outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
+        { id: "oldest", outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
+        { id: "ignored", outcome: "mixed", occurredAt: day("2026-08-10T09:00:00.000Z") },
       ],
     });
-    expect(result?.sessionCount).toBe(3);
-    expect(result?.dayCount).toBe(3);
+
+    expect(result).toMatchObject({
+      sessionCount: 3,
+      dayCount: 3,
+      lastSessionId: "newest",
+    });
   });
 });
 ```
@@ -5883,22 +6049,23 @@ describe("evaluateAdvancement", () => {
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/advancement.test.ts`
 Expected: FAIL — `Failed to resolve import "./advancement"`.
 
-- [ ] **Step 2a: Add the terminal-decision regression test** — add a DB-backed
-  `syncAdvancementProposal` test that persists current qualifying sessions and
-  two terminal decisions with the same `evidenceLastSessionAt`. The older
-  `rejected` decision must include the current `lastSessionId`; the
-  newer-created tied `stayed` decision must use different evidence IDs and omit
-  it. Syncing the current evidence must return `{ proposal: null, created: false }`
-  and leave the two historical rows as the only proposals.
-
-- [ ] **Step 3: Allow skill-level updates to participate in a transaction** — in
-  `apps/api/src/lib/skill-level.ts`, import `type DB` alongside `db`, add this
-  database interface, add the optional parameter, and replace the three direct
-  `db` calls inside the function with `database`:
+- [ ] **Step 3: Allow skill-level updates to participate in a transaction** —
+  update `apps/api/src/lib/skill-level.ts` so callers may provide the current
+  transaction, then take the matching skill advisory lock in the manual-level
+  route before delegating to it.
 
 ```ts
+import { eq } from "drizzle-orm";
+import { type DB, db } from "../db";
+import { skillMilestones, trainingSkills } from "../db/schema";
+
 type SkillLevelDatabase = Pick<DB, "update" | "select" | "insert">;
 
+/**
+ * Set a skill's current level (1–5) and record `reachedAt` for any newly-reached
+ * levels (2..level). Lowering the level records/deletes nothing — earned dates
+ * are kept. Returns the updated skill row.
+ */
 export async function setSkillLevel(
   skillId: string,
   level: number,
@@ -5918,19 +6085,19 @@ export async function setSkillLevel(
       .where(eq(skillMilestones.skillId, skillId));
     const have = new Set(existing.map((row) => row.level));
     const toInsert = [];
-    for (let next = 2; next <= level; next++) {
-      if (!have.has(next)) toInsert.push({ skillId, level: next });
+    for (let lvl = 2; lvl <= level; lvl++) {
+      if (!have.has(lvl)) toInsert.push({ skillId, level: lvl });
     }
-    if (toInsert.length > 0) {
+    // onConflictDoNothing guards against a concurrent double-tap inserting the
+    // same (skillId, level) and tripping the unique constraint.
+    if (toInsert.length > 0)
       await database.insert(skillMilestones).values(toInsert).onConflictDoNothing();
-    }
   }
   return updated;
 }
 ```
 
-In `apps/api/src/routes/dogs.ts`, make the existing manual level endpoint share
-the same skill advisory lock as advancement decisions:
+In `apps/api/src/routes/dogs.ts`, use this level endpoint implementation:
 
 ```ts
   .put("/:id/skills/:skillId/level", zValidator("json", skillLevelSchema), async (c) => {
@@ -5949,13 +6116,25 @@ the same skill advisory lock as advancement decisions:
     });
     return c.json({ skill: updated });
   })
+  .delete("/:id/skills/:skillId", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+    if (!skill) return c.json({ error: "not_found" } as const, 404);
+    const [deleted] = await db
+      .delete(trainingSkills)
 ```
 
 Task 17 adds the route-level lock regression after it creates
 `apps/api/src/routes/suggestion.test.ts`. The existing stale-proposal test there
 proves a decision cannot overwrite a manual change that linearizes first.
 
-- [ ] **Step 4: Create `apps/api/src/lib/advancement.ts`**
+- [ ] **Step 4: Create `apps/api/src/lib/advancement.ts`** — use a three-row
+  `EvidenceRow` snapshot. Require exactly three qualifying persisted rows,
+  validate that each remains `went_well`, and compare IDs, outcomes,
+  `occurredAt`, and `practiceDay` both while reusing a proposal and while making
+  a decision. The terminal-decision query must consider every matching decision,
+  so an older tied decision covering `lastSessionId` also suppresses a reproposal.
 
 ```ts
 import type {
@@ -5969,7 +6148,7 @@ import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import { advancementProposals, practiceSessions, trainingSkills } from "../db/schema";
-import { clampLevel, MAX_LEVEL } from "./curriculum";
+import { MAX_LEVEL, clampLevel } from "./curriculum";
 import { EVIDENCE_WINDOW_DAYS } from "./practice-evidence";
 import { type TransactionType, lockDogSafety } from "./safety-lock";
 import { decideSafety, loadSafetyInputs } from "./safety-policy";
@@ -5999,15 +6178,10 @@ export type AdvancementEvidence = {
   lastSessionId: string | null;
 };
 
-/**
- * Pure check for "ready to try the next step". Advancement is only ever a
- * proposal the owner confirms; nothing here changes a skill level.
- */
 export function evaluateAdvancement(inputs: AdvancementInputs): AdvancementEvidence | null {
   if (inputs.ruleId !== "maintain_current_level") return null;
   const level = clampLevel(inputs.level);
-  if (level >= MAX_LEVEL) return null;
-  if (inputs.outcomes.length < ADVANCEMENT_MIN_SESSIONS) return null;
+  if (level >= MAX_LEVEL || inputs.outcomes.length < ADVANCEMENT_MIN_SESSIONS) return null;
 
   const recent = inputs.outcomes.slice(0, ADVANCEMENT_MIN_SESSIONS);
   if (!recent.every((row) => row.outcome === "went_well")) return null;
@@ -6017,9 +6191,7 @@ export function evaluateAdvancement(inputs: AdvancementInputs): AdvancementEvide
   const days = new Set(
     recent.map((row) => row.practiceDay ?? row.occurredAt.toISOString().slice(0, 10)),
   );
-  if (days.size < ADVANCEMENT_MIN_DAYS) {
-    return null;
-  }
+  if (days.size < ADVANCEMENT_MIN_DAYS) return null;
 
   return {
     fromLevel: level,
@@ -6032,13 +6204,16 @@ export function evaluateAdvancement(inputs: AdvancementInputs): AdvancementEvide
 }
 
 function toDto(row: typeof advancementProposals.$inferSelect): AdvancementProposalDto {
-  if (
-    row.evidenceSessionIds.length !== row.evidenceOccurredAt.length ||
-    row.evidenceSessionIds.length !== row.evidencePracticeDays.length ||
-    row.evidenceSessionIds.length !== row.evidenceOutcomes.length
-  ) {
+  const arrays = [
+    row.evidenceSessionIds,
+    row.evidenceOccurredAt,
+    row.evidencePracticeDays,
+    row.evidenceOutcomes,
+  ];
+  if (!arrays.every((array) => array.length === row.evidenceSessionIds.length)) {
     throw new Error("advancement proposal evidence snapshot is inconsistent");
   }
+
   const supportingSessions: AdvancementProposalDto["supportingSessions"] = [];
   for (let index = 0; index < row.evidenceSessionIds.length; index++) {
     const id = row.evidenceSessionIds[index];
@@ -6048,13 +6223,9 @@ function toDto(row: typeof advancementProposals.$inferSelect): AdvancementPropos
     if (!id || !occurredAt || !practiceDay || !outcome) {
       throw new Error("advancement proposal evidence snapshot is incomplete");
     }
-    supportingSessions.push({
-      id,
-      occurredAt: occurredAt.toISOString(),
-      practiceDay,
-      outcome,
-    });
+    supportingSessions.push({ id, occurredAt: occurredAt.toISOString(), practiceDay, outcome });
   }
+
   return {
     id: row.id,
     skillId: row.skillId,
@@ -6067,40 +6238,49 @@ function toDto(row: typeof advancementProposals.$inferSelect): AdvancementPropos
     windowDays: row.evidenceWindowDays,
     supportingSessions,
     createdAt: row.createdAt.toISOString(),
-    decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
+    decidedAt: row.decidedAt?.toISOString() ?? null,
   };
 }
 
+type EvidenceRow = {
+  id: string;
+  outcome: PracticeOutcome;
+  occurredAt: Date;
+  practiceDay: string;
+};
+
+async function withdrawOpenProposal(
+  tx: TransactionType,
+  open: typeof advancementProposals.$inferSelect | undefined,
+): Promise<void> {
+  if (!open) return;
+  await tx
+    .update(advancementProposals)
+    .set({ status: "withdrawn", decidedAt: new Date() })
+    .where(eq(advancementProposals.id, open.id));
+}
+
 /**
- * Keeps at most one open proposal per skill in step with the evidence:
- * creates one when earned, leaves a matching one untouched, and withdraws a
- * stale one when the evidence no longer supports it.
- *
- * Runs on the caller's transaction so a caller that already holds a lock (the
- * safety-locked suggestion path) never opens a nested transaction and never
- * takes a second pooled connection while holding the first.
+ * Keeps at most one open proposal per skill in step with the evidence.
+ * Callers that already hold a transaction use this to avoid a nested
+ * transaction taking a second pooled connection while holding the first.
  */
 export async function syncAdvancementProposalInTx(
   tx: TransactionType,
   skillId: string,
   evidence: AdvancementEvidence | null,
-  evidenceRows: Array<{
-    id: string;
-    outcome: PracticeOutcome;
-    occurredAt: Date;
-    practiceDay: string;
-  }>,
+  evidenceRows: EvidenceRow[],
 ): Promise<{ proposal: AdvancementProposalDto | null; created: boolean }> {
-  // Every proposal sync and owner decision takes this lock first. The shared
-  // lock order is advisory lock -> skill row -> proposal/evidence rows.
+  // Shared lock order: advisory skill lock -> skill row -> proposal/evidence rows.
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skillId}))`);
-  const [currentSkill] = await tx
+  const [skill] = await tx
     .select({ confidence: trainingSkills.confidence })
     .from(trainingSkills)
     .where(eq(trainingSkills.id, skillId))
     .for("update")
     .limit(1);
-  if (!currentSkill) return { proposal: null, created: false };
+  if (!skill) return { proposal: null, created: false };
+
   const [open] = await tx
     .select()
     .from(advancementProposals)
@@ -6109,67 +6289,60 @@ export async function syncAdvancementProposalInTx(
     )
     .limit(1);
 
-  if (!evidence) {
-    if (open) {
-      await tx
-        .update(advancementProposals)
-        .set({ status: "withdrawn", decidedAt: new Date() })
-        .where(eq(advancementProposals.id, open.id));
-    }
-    return { proposal: null, created: false };
-  }
-  if (currentSkill.confidence !== evidence.fromLevel) {
-    if (open) {
-      await tx
-        .update(advancementProposals)
-        .set({ status: "withdrawn", decidedAt: new Date() })
-        .where(eq(advancementProposals.id, open.id));
-    }
+  if (!evidence || skill.confidence !== evidence.fromLevel) {
+    await withdrawOpenProposal(tx, open);
     return { proposal: null, created: false };
   }
 
   const qualifying = evidenceRows.slice(0, ADVANCEMENT_MIN_SESSIONS);
-  const persisted = await tx
-    .select({
-      id: practiceSessions.id,
-      outcome: practiceSessions.outcome,
-      occurredAt: practiceSessions.occurredAt,
-      practiceDay: practiceSessions.practiceDay,
-      curriculumLevel: practiceSessions.curriculumLevel,
-      practiceVariant: practiceSessions.practiceVariant,
-    })
-    .from(practiceSessions)
-    .where(
-      inArray(
-        practiceSessions.id,
-        qualifying.map((row) => row.id),
-      ),
-    );
+  const persisted =
+    qualifying.length === ADVANCEMENT_MIN_SESSIONS
+      ? await tx
+          .select({
+            id: practiceSessions.id,
+            outcome: practiceSessions.outcome,
+            occurredAt: practiceSessions.occurredAt,
+            practiceDay: practiceSessions.practiceDay,
+            curriculumLevel: practiceSessions.curriculumLevel,
+            practiceVariant: practiceSessions.practiceVariant,
+          })
+          .from(practiceSessions)
+          .where(
+            inArray(
+              practiceSessions.id,
+              qualifying.map((row) => row.id),
+            ),
+          )
+      : [];
   const persistedById = new Map(persisted.map((row) => [row.id, row]));
-  const snapshotStillValid = qualifying.every((row) => {
-    const saved = persistedById.get(row.id);
-    if (!saved) return false;
-    return (
-      saved.outcome === row.outcome &&
-      saved.occurredAt.getTime() === row.occurredAt.getTime() &&
-      saved.practiceDay === row.practiceDay &&
-      saved.curriculumLevel === evidence.fromLevel &&
-      saved.practiceVariant === "primary"
-    );
-  });
+  const snapshotStillValid =
+    qualifying.length === ADVANCEMENT_MIN_SESSIONS &&
+    qualifying.every((row) => {
+      const saved = persistedById.get(row.id);
+      return (
+        saved?.outcome === "went_well" &&
+        saved.outcome === row.outcome &&
+        saved.occurredAt.getTime() === row.occurredAt.getTime() &&
+        saved.practiceDay === row.practiceDay &&
+        saved.curriculumLevel === evidence.fromLevel &&
+        saved.practiceVariant === "primary"
+      );
+    });
   if (!snapshotStillValid) {
-    if (open) {
-      await tx
-        .update(advancementProposals)
-        .set({ status: "withdrawn", decidedAt: new Date() })
-        .where(eq(advancementProposals.id, open.id));
-    }
+    await withdrawOpenProposal(tx, open);
     return { proposal: null, created: false };
   }
+
   const sameSnapshot =
     open &&
     open.evidenceSessionIds.length === qualifying.length &&
     open.evidenceSessionIds.every((id, index) => id === qualifying[index]?.id) &&
+    open.evidenceOccurredAt.every(
+      (occurredAt, index) => occurredAt.getTime() === qualifying[index]?.occurredAt.getTime(),
+    ) &&
+    open.evidencePracticeDays.every(
+      (practiceDay, index) => practiceDay === qualifying[index]?.practiceDay,
+    ) &&
     open.evidenceOutcomes.every((outcome, index) => outcome === qualifying[index]?.outcome);
   if (
     open &&
@@ -6180,12 +6353,7 @@ export async function syncAdvancementProposalInTx(
     return { proposal: toDto(open), created: false };
   }
 
-  if (open) {
-    await tx
-      .update(advancementProposals)
-      .set({ status: "withdrawn", decidedAt: new Date() })
-      .where(eq(advancementProposals.id, open.id));
-  }
+  await withdrawOpenProposal(tx, open);
 
   const terminalDecisions = await tx
     .select()
@@ -6204,7 +6372,10 @@ export async function syncAdvancementProposalInTx(
         ]),
       ),
     )
-    .orderBy(desc(advancementProposals.evidenceLastSessionAt), desc(advancementProposals.createdAt))
+    .orderBy(
+      desc(advancementProposals.evidenceLastSessionAt),
+      desc(advancementProposals.createdAt),
+    );
   const terminalDecisionCoversEvidence = terminalDecisions.some(
     (decision) =>
       decision.evidenceLastSessionAt.getTime() > evidence.lastSessionAt.getTime() ||
@@ -6224,43 +6395,25 @@ export async function syncAdvancementProposalInTx(
       evidenceSessionCount: evidence.sessionCount,
       evidenceDayCount: evidence.dayCount,
       evidenceWindowDays: EVIDENCE_WINDOW_DAYS,
+      evidenceSessionIds: qualifying.map((row) => row.id),
+      evidenceOccurredAt: qualifying.map((row) => row.occurredAt),
+      evidencePracticeDays: qualifying.map((row) => row.practiceDay),
+      evidenceOutcomes: qualifying.map((row) => row.outcome),
       evidenceLastSessionAt: evidence.lastSessionAt,
-      evidenceSessionIds: evidenceRows.slice(0, ADVANCEMENT_MIN_SESSIONS).map((row) => row.id),
-      evidenceOccurredAt: evidenceRows
-        .slice(0, ADVANCEMENT_MIN_SESSIONS)
-        .map((row) => row.occurredAt),
-      evidencePracticeDays: evidenceRows
-        .slice(0, ADVANCEMENT_MIN_SESSIONS)
-        .map((row) => row.practiceDay),
-      evidenceOutcomes: evidenceRows.slice(0, ADVANCEMENT_MIN_SESSIONS).map((row) => row.outcome),
     })
     .returning();
-  if (!created) return { proposal: null, created: false };
-  return { proposal: toDto(created), created: true };
+  return created ? { proposal: toDto(created), created: true } : { proposal: null, created: false };
 }
 
-/**
- * Default entry point for callers that are not already inside a transaction:
- * opens one so the advisory lock, the `FOR UPDATE` reads and the proposal write
- * share a single linearization point.
- */
 export async function syncAdvancementProposal(
   skillId: string,
   evidence: AdvancementEvidence | null,
-  evidenceRows: Array<{
-    id: string;
-    outcome: PracticeOutcome;
-    occurredAt: Date;
-    practiceDay: string;
-  }>,
+  evidenceRows: EvidenceRow[],
 ): Promise<{ proposal: AdvancementProposalDto | null; created: boolean }> {
   return db.transaction((tx) => syncAdvancementProposalInTx(tx, skillId, evidence, evidenceRows));
 }
 
-/**
- * Applies an owner's decision. Only `confirmed` and `regressed` change the
- * skill level, and only because the owner asked for it.
- */
+/** Only owner decisions `confirmed` and `regressed` change the skill level. */
 export async function decideAdvancementProposal(
   dogId: string,
   proposalId: string,
@@ -6277,6 +6430,7 @@ export async function decideAdvancementProposal(
     if (decideSafety(await loadSafetyInputs(dogId, new Date(), tx))) {
       return { status: "safety_suppressed" as const };
     }
+
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skillId}))`);
     const [skill] = await tx
       .select({ confidence: trainingSkills.confidence })
@@ -6298,10 +6452,7 @@ export async function decideAdvancementProposal(
     if (proposal.status === "withdrawn") return { status: "stale" as const };
     if (proposal.status !== "proposed") return { status: "not_found" as const };
     if (skill.confidence !== proposal.fromLevel) {
-      await tx
-        .update(advancementProposals)
-        .set({ status: "withdrawn", decidedAt: new Date() })
-        .where(eq(advancementProposals.id, proposal.id));
+      await withdrawOpenProposal(tx, proposal);
       return { status: "stale" as const };
     }
 
@@ -6309,6 +6460,7 @@ export async function decideAdvancementProposal(
       .select({
         id: practiceSessions.id,
         outcome: practiceSessions.outcome,
+        occurredAt: practiceSessions.occurredAt,
         practiceDay: practiceSessions.practiceDay,
         curriculumLevel: practiceSessions.curriculumLevel,
         curriculumVersion: practiceSessions.curriculumVersion,
@@ -6318,22 +6470,19 @@ export async function decideAdvancementProposal(
       .where(inArray(practiceSessions.id, proposal.evidenceSessionIds));
     const byId = new Map(supporting.map((row) => [row.id, row]));
     const evidenceStillValid = proposal.evidenceSessionIds.every((id, index) => {
-      const row = byId.get(id);
-      if (!row) return false;
+      const session = byId.get(id);
       return (
-        row.outcome === proposal.evidenceOutcomes[index] &&
-        row.outcome === "went_well" &&
-        row.practiceDay === proposal.evidencePracticeDays[index] &&
-        row.curriculumLevel === proposal.fromLevel &&
-        row.curriculumVersion === CURRICULUM_VERSION &&
-        row.practiceVariant === "primary"
+        session?.outcome === "went_well" &&
+        session.outcome === proposal.evidenceOutcomes[index] &&
+        session.occurredAt.getTime() === proposal.evidenceOccurredAt[index]?.getTime() &&
+        session.practiceDay === proposal.evidencePracticeDays[index] &&
+        session.curriculumLevel === proposal.fromLevel &&
+        session.curriculumVersion === CURRICULUM_VERSION &&
+        session.practiceVariant === "primary"
       );
     });
     if (!evidenceStillValid) {
-      await tx
-        .update(advancementProposals)
-        .set({ status: "withdrawn", decidedAt: new Date() })
-        .where(eq(advancementProposals.id, proposal.id));
+      await withdrawOpenProposal(tx, proposal);
       return { status: "stale" as const };
     }
 
@@ -6357,7 +6506,8 @@ export async function decideAdvancementProposal(
 - [ ] **Step 5: Run it, expect PASS**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/advancement.test.ts`
-Expected: PASS — 9 tests, including the DB-backed tied-terminal-decision regression.
+Expected: PASS — 9 tests, including practice-day/UTC, `level: 99`,
+`lastSessionId`, and the DB-backed tied-terminal-decision regression.
 
 - [ ] **Step 6: Commit**
 
