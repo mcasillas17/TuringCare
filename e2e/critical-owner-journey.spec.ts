@@ -122,9 +122,9 @@ test("full owner journey: register → verify → dog → moment → training �
   const suggestionCard = page
     .locator("section")
     .filter({ has: page.getByRole("heading", { name: "This week's suggestion" }) });
-  await expect(
-    suggestionCard.getByText("Lures into a sit with food in a quiet room"),
-  ).toHaveCount(2);
+  await expect(suggestionCard.getByText("Lures into a sit with food in a quiet room")).toHaveCount(
+    2,
+  );
   await expect(suggestionCard.getByText("If that looks like too much")).toBeVisible();
   await expect(suggestionCard.getByText(/give more help/i)).toBeVisible();
 
