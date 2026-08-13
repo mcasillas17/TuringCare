@@ -12,6 +12,14 @@ function keyPaths(o: Record<string, unknown>, prefix = ""): string[] {
   );
 }
 
+const task18Sections = ["suggestion", "practice", "safety"] as const;
+
+function placeholders(value: string): string[] {
+  return [...value.matchAll(/\{([^}]+)\}/g)]
+    .flatMap((match) => (match[1] ? [match[1]] : []))
+    .sort();
+}
+
 afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -150,6 +158,21 @@ describe("i18n catalogs", () => {
 
     for (const [section, keys] of Object.entries(task18Keys)) {
       expect(Object.keys(catalog[section] ?? {}).sort()).toEqual(keys.sort());
+    }
+  });
+  it("has non-empty Task 18 translations with matching placeholders", () => {
+    const enCatalog = en as Record<string, Record<string, string>>;
+    const esCatalog = es as Record<string, Record<string, string>>;
+
+    for (const section of task18Sections) {
+      for (const key of Object.keys(enCatalog[section] ?? {})) {
+        const english = enCatalog[section]?.[key] ?? "";
+        const spanish = esCatalog[section]?.[key] ?? "";
+
+        expect(english.trim(), `en.${section}.${key}`).not.toBe("");
+        expect(spanish.trim(), `es.${section}.${key}`).not.toBe("");
+        expect(placeholders(spanish), `es.${section}.${key}`).toEqual(placeholders(english));
+      }
     }
   });
   it("no es value is left equal to its en value (untranslated)", () => {
