@@ -88,6 +88,8 @@ export function DogWeek() {
   const prevWeekKey = useRef(weekKey);
   const pendingScope = `${id}:${weekKey}`;
   const previousPendingScope = useRef(pendingScope);
+  const activeScope = useRef(pendingScope);
+  activeScope.current = pendingScope;
   // Derived-state trigger: week completion comes from the refetched focus query
   // (not the log-session mutation response), so we watch it here and hop once on
   // a real false->true transition for the current week (refs keep it idempotent).
@@ -114,6 +116,7 @@ export function DogWeek() {
   const refreshFocus = () => qc.invalidateQueries({ queryKey: focusKey(id, weekKey) });
 
   const onLog = async (skillId: string, day: Date) => {
+    const scopeAtStart = pendingScope;
     const isToday = dayKey(day) === dayKey(today);
     const occurredAt = isToday
       ? new Date().toISOString()
@@ -127,6 +130,7 @@ export function DogWeek() {
       },
     });
     refreshFocus();
+    if (activeScope.current !== scopeAtStart) return;
     const matchingSuggestion =
       !suggestionError &&
       weekKey === currentWeekKey &&
@@ -168,7 +172,7 @@ export function DogWeek() {
               : undefined,
         },
       });
-      setPendingOutcome(null);
+      setPendingOutcome((current) => (current?.sessionId === target.sessionId ? null : current));
       qc.invalidateQueries({ queryKey: suggestionKey(id, weekKey) });
       toast.success(t("practice.outcomeSaved"));
     } catch {

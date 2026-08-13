@@ -10480,7 +10480,11 @@ import { toast } from "sonner";
 Clear `pendingOutcome` whenever the dog or selected week changes. Pass
 `logDisabled` into `WeekGrid`; empty-cell and "log another" controls must be
 disabled while a session mutation is pending or while the required current-week
-suggestion is still loading.
+suggestion is still loading. Capture the dog/week scope before awaiting a
+session mutation and do not show its quick capture if that scope changed before
+the request completed. After an evidence save, clear the quick capture only
+when its session ID still matches the saved target so an older request cannot
+remove a newer capture.
 
 ```tsx
   const onLog = async (skillId: string, day: Date) => {

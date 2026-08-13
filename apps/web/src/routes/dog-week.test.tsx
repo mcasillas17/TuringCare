@@ -152,6 +152,14 @@ const sitFocus: focusLib.FocusSkill = {
   sessions: [],
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 afterEach(() => {
   vi.useRealTimers();
   vi.resetAllMocks();
@@ -293,6 +301,40 @@ describe("DogWeek", () => {
       "aria-pressed",
       "false",
     );
+    expect(screen.getByRole("button", { name: "Save response" })).toBeDisabled();
+  });
+
+  it("does not show a late session capture after the selected week changes", async () => {
+    const pendingLog = deferred<{ id: string }>();
+    const { logMutate } = setup([sitFocus]);
+    logMutate.mockReturnValueOnce(pendingLog.promise);
+    renderWeek();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "Previous week" }));
+    await act(async () => pendingLog.resolve({ id: "session-1" }));
+
+    expect(screen.queryByText("How did it go?")).not.toBeInTheDocument();
+  });
+
+  it("does not clear a newer capture when an older evidence save finishes", async () => {
+    const pendingEvidence = deferred<object>();
+    const { evidenceMutate, logMutate } = setup([sitFocus]);
+    evidenceMutate.mockReturnValueOnce(pendingEvidence.promise);
+    logMutate.mockResolvedValueOnce({ id: "session-1" }).mockResolvedValueOnce({ id: "session-2" });
+    renderWeek();
+
+    const logButtons = screen.getAllByRole("button", { name: /Log Sit on/i });
+    fireEvent.click(logButtons[0] as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    fireEvent.click(logButtons[1] as HTMLElement);
+    await waitFor(() => expect(logMutate).toHaveBeenCalledTimes(2));
+
+    await act(async () => pendingEvidence.resolve({}));
+
+    expect(screen.getByText("How did it go?")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save response" })).toBeDisabled();
   });
 
