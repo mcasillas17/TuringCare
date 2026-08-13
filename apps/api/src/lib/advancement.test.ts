@@ -23,9 +23,9 @@ describe("evaluateAdvancement", () => {
       evaluateAdvancement({
         ...base,
         outcomes: [
-          { id: "newest", outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
-          { id: "middle", outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
-          { id: "oldest", outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
+          { outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
+          { outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
+          { outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
         ],
       }),
     ).toEqual({
@@ -34,7 +34,7 @@ describe("evaluateAdvancement", () => {
       sessionCount: 3,
       dayCount: 3,
       lastSessionAt: day("2026-08-13T09:00:00.000Z"),
-      lastSessionId: "newest",
+      lastSessionId: null,
     });
   });
 
@@ -97,13 +97,29 @@ describe("evaluateAdvancement", () => {
     ).toBeNull();
   });
 
-  it("only proposes from maintain-current and never past level five", () => {
+  it("does not propose unless the rule is maintain_current_level", () => {
     const outcomes = [
       { outcome: "went_well" as const, occurredAt: day("2026-08-13T09:00:00.000Z") },
       { outcome: "went_well" as const, occurredAt: day("2026-08-12T09:00:00.000Z") },
       { outcome: "went_well" as const, occurredAt: day("2026-08-11T09:00:00.000Z") },
     ];
-    expect(evaluateAdvancement({ ...base, ruleId: "hold_after_mixed", outcomes })).toBeNull();
+    for (const ruleId of [
+      "hold_after_mixed",
+      "step_back_after_too_hard",
+      "ease_after_harder_checkin",
+      "ease_after_hard_context",
+      "cold_start_curriculum_level",
+    ] as const) {
+      expect(evaluateAdvancement({ ...base, ruleId, outcomes })).toBeNull();
+    }
+  });
+
+  it("does not propose past level five", () => {
+    const outcomes = [
+      { outcome: "went_well" as const, occurredAt: day("2026-08-13T09:00:00.000Z") },
+      { outcome: "went_well" as const, occurredAt: day("2026-08-12T09:00:00.000Z") },
+      { outcome: "went_well" as const, occurredAt: day("2026-08-11T09:00:00.000Z") },
+    ];
     expect(evaluateAdvancement({ ...base, level: 5, outcomes })).toBeNull();
     expect(evaluateAdvancement({ ...base, level: 99, outcomes })).toBeNull();
   });

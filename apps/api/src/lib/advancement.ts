@@ -122,8 +122,9 @@ async function withdrawOpenProposal(
 }
 
 /**
- * Synchronizes a proposal using the caller's transaction. Callers that already
- * hold the dog safety lock must use this instead of opening a nested transaction.
+ * Keeps at most one open proposal per skill in step with the evidence.
+ * Callers that already hold a transaction use this to avoid a nested
+ * transaction taking a second pooled connection while holding the first.
  */
 export async function syncAdvancementProposalInTx(
   tx: TransactionType,
@@ -131,6 +132,7 @@ export async function syncAdvancementProposalInTx(
   evidence: AdvancementEvidence | null,
   evidenceRows: EvidenceRow[],
 ): Promise<{ proposal: AdvancementProposalDto | null; created: boolean }> {
+  // Shared lock order: advisory skill lock -> skill row -> proposal/evidence rows.
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skillId}))`);
   const [skill] = await tx
     .select({ confidence: trainingSkills.confidence })
@@ -268,6 +270,7 @@ export async function syncAdvancementProposal(
   return db.transaction((tx) => syncAdvancementProposalInTx(tx, skillId, evidence, evidenceRows));
 }
 
+/** Only owner decisions `confirmed` and `regressed` change the skill level. */
 export async function decideAdvancementProposal(
   dogId: string,
   proposalId: string,
