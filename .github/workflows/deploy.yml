@@ -96,18 +96,20 @@ jobs:
           trap recover_on_exit EXIT
           trap 'exit 130' INT
           trap 'exit 143' TERM
-          flyctl scale count 0 --yes --app turingcare-api
-          for attempt in $(seq 1 12); do
-            count=$(flyctl machine list --json --app turingcare-api | jq 'length')
-            if [ "$count" -eq 0 ]; then
-              break
+          if [ "$original_count" -gt 0 ]; then
+            flyctl scale count 0 --yes --app turingcare-api
+            for attempt in $(seq 1 12); do
+              count=$(flyctl machine list --json --app turingcare-api | jq 'length')
+              if [ "$count" -eq 0 ]; then
+                break
+              fi
+              sleep 5
+            done
+            remaining=$(flyctl machine list --json --app turingcare-api | jq 'length')
+            if [ "$remaining" -ne 0 ]; then
+              echo "API machines did not drain" >&2
+              exit 1
             fi
-            sleep 5
-          done
-          remaining=$(flyctl machine list --json --app turingcare-api | jq 'length')
-          if [ "$remaining" -ne 0 ]; then
-            echo "API machines did not drain" >&2
-            exit 1
           fi
           pnpm --filter @turingcare/api db:migrate
           migrated=1
