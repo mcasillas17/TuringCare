@@ -75,6 +75,7 @@ pnpm exec biome check apps packages
 - `apps/api/src/lib/advancement.ts` — pure `evaluateAdvancement` + proposal persistence/decision.
 - `apps/api/src/lib/advancement.test.ts`
 - `apps/api/src/lib/suggestion.ts` — orchestrator: reads, rules, persistence, telemetry.
+- `apps/api/src/lib/suggestion.test.ts` — DB-backed orchestrator persistence and locking tests.
 - `apps/api/src/routes/suggestion.test.ts` — route-level integration tests.
 - `apps/api/src/routes/practice-evidence.test.ts` — practice evidence + safety-signal capture tests.
 - `apps/api/src/routes/journal-safety-lock.test.ts` — journal writes serialize through the dog safety lock.
@@ -6524,8 +6525,13 @@ git commit -m "feat(api): owner-confirmed advancement proposals"
 
 **Files:**
 - Create: `apps/api/src/lib/suggestion.ts`
+- Create: `apps/api/src/lib/suggestion.test.ts`
 
-This task has no unit test of its own — it is pure I/O composition over modules that are already unit-tested, and it is covered end-to-end by the route tests in Task 17.
+The orchestrator has seven DB-backed tests of its own: owner-local Monday
+calculation; no-focus audit deduplication; reviewed exercise/fallback audit;
+persisted-safety suppression and proposal withdrawal; idempotent concurrent
+skip/dismissal behavior under the suggestion lock; owner isolation; and
+fail-open audit persistence with a console-error spy.
 
 Every path that produces a returned suggestion — the initial already-suppressed
 path, the target-missing path and the exercise path — finishes inside
@@ -6566,7 +6572,14 @@ the withdrawal back: the proposal stays open and the next request re-evaluates
 it under the same lock, and no suppressed request can ever leave a proposal
 confirmable, because confirmation itself re-checks safety under the same lock.
 
-- [ ] **Step 1: Create `apps/api/src/lib/suggestion.ts`**
+- [ ] **Step 1: Write `apps/api/src/lib/suggestion.test.ts`**
+
+Cover the seven DB-backed behaviors listed above using `createTestUser()` and
+real Postgres rows. Run
+`pnpm --filter @turingcare/api exec vitest run src/lib/suggestion.test.ts`
+and observe the import fail before creating the orchestrator.
+
+- [ ] **Step 2: Create `apps/api/src/lib/suggestion.ts`**
 
 ```ts
 import type { SuggestionAction, SuggestionSafety, TrainingSuggestion } from "@turingcare/shared";
@@ -6574,6 +6587,7 @@ import { and, eq } from "drizzle-orm";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import {
+  dogs,
   trainingGoals,
   trainingSkills,
   trainingSuggestionActions,
@@ -7010,10 +7024,12 @@ export async function recordSuggestionAction(input: {
     const [owned] = await tx
       .select({ id: trainingSuggestions.id, ruleId: trainingSuggestions.ruleId })
       .from(trainingSuggestions)
+      .innerJoin(dogs, eq(trainingSuggestions.dogId, dogs.id))
       .where(
         and(
           eq(trainingSuggestions.id, input.suggestionId),
           eq(trainingSuggestions.dogId, input.dogId),
+          eq(dogs.ownerId, input.userId),
         ),
       )
       .limit(1);
@@ -7054,19 +7070,23 @@ export async function recordSuggestionAction(input: {
 entry point added in Task 15; the plain `syncAdvancementProposal` wrapper is
 used only on the pre-lock exercise path.
 
-- [ ] **Step 2: Typecheck**
+- [ ] **Step 3: Run focused tests and typecheck**
 
-Run: `pnpm --filter @turingcare/api exec tsc --noEmit`
-Expected: PASS with no errors. If `satisfies Omit<TrainingSuggestion, "type" | "ruleId">` reports a mismatch, fix the offending field on the object rather than widening the type.
+Run:
+`pnpm --filter @turingcare/api exec vitest run src/lib/suggestion.test.ts`
+then `pnpm --filter @turingcare/api exec tsc --noEmit`.
+Expected: seven passing tests and no type errors. If
+`satisfies Omit<TrainingSuggestion, "type" | "ruleId">` reports a mismatch,
+fix the offending field on the object rather than widening the type.
 
 Also grep the finished file: `rg "db\.transaction|syncAdvancementProposal\(" apps/api/src/lib/suggestion.ts`
 must show no `db.transaction` inside `loadSuggestion` and exactly one
 `syncAdvancementProposal(` call — the pre-lock exercise path.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add apps/api/src/lib/suggestion.ts
+git add apps/api/src/lib/suggestion.ts apps/api/src/lib/suggestion.test.ts
 git commit -m "feat(api): suggestion orchestrator with audit persistence"
 ```
 
