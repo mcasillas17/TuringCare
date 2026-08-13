@@ -382,10 +382,14 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
     if (!skill) return c.json({ error: "not_found" } as const, 404);
-    const updated = await setSkillLevel(skill.id, c.req.valid("json").level);
+    const level = c.req.valid("json").level;
+    const updated = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skill.id}))`);
+      return setSkillLevel(skill.id, level, tx);
+    });
     await recordEvent("training.level_set", {
       userId: c.get("userId"),
-      props: { level: c.req.valid("json").level },
+      props: { level },
     });
     return c.json({ skill: updated });
   })
