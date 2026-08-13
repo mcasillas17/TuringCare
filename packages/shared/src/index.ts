@@ -4,6 +4,7 @@ export * from "./course";
 export * from "./dog";
 export * from "./focus";
 export * from "./journal";
+export * from "./practice-evidence";
 export * from "./progress";
 export * from "./profile";
 export * from "./trainer";

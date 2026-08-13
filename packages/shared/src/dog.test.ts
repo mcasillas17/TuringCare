@@ -37,10 +37,26 @@ describe("dogProfileSchema", () => {
 });
 
 describe("behaviorConcernSchema", () => {
-  it("accepts a valid concern", () => {
+  it("accepts a valid concern with a structured safety signal", () => {
+    expect(
+      behaviorConcernSchema.safeParse({
+        concern: "Leash reactivity",
+        severity: "moderate",
+        safetySignal: "injury_or_pain",
+      }).success,
+    ).toBe(true);
+  });
+  it("allows an omitted or null safety signal", () => {
     expect(
       behaviorConcernSchema.safeParse({ concern: "Leash reactivity", severity: "moderate" })
         .success,
+    ).toBe(true);
+    expect(
+      behaviorConcernSchema.safeParse({
+        concern: "Leash reactivity",
+        severity: "moderate",
+        safetySignal: null,
+      }).success,
     ).toBe(true);
   });
   it("rejects an empty concern", () => {
@@ -49,6 +65,15 @@ describe("behaviorConcernSchema", () => {
   it("rejects a bad severity", () => {
     expect(
       behaviorConcernSchema.safeParse({ concern: "Barking", severity: "extreme" }).success,
+    ).toBe(false);
+  });
+  it("rejects a free-form safety signal", () => {
+    expect(
+      behaviorConcernSchema.safeParse({
+        concern: "Barking",
+        severity: "moderate",
+        safetySignal: "seems scary",
+      }).success,
     ).toBe(false);
   });
 });
