@@ -8896,7 +8896,7 @@ export const REFERRAL_DIRECTORIES: {
     referrals: ["credentialed_trainer"],
   },
   {
-    href: "https://fearfreepets.com/fear-free-directory/",
+    href: "https://directory.fearfree.com/",
     labelKey: "safety.directoryFearFree",
     referrals: ["credentialed_trainer"],
   },

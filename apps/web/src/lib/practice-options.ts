@@ -30,14 +30,30 @@ export const EASING_STRATEGY_KEYS: Record<EasingStrategy, MessageKey> = {
   reduce_distractions: "practice.easeReduceDistractions",
 };
 
-type OptionGroup = {
-  /** The field name on PracticeEvidenceInput this group writes to. */
-  field: "cueSupport" | "environment" | "distance" | "durationBand" | "distraction";
-  labelKey: MessageKey;
-  options: { value: string; labelKey: MessageKey }[];
+type DimensionField = {
+  cue_support: "cueSupport";
+  environment: "environment";
+  distance: "distance";
+  duration: "durationBand";
+  distraction: "distraction";
 };
 
-export const DIMENSION_CONFIG: Record<PracticeDimension, OptionGroup> = {
+type DimensionValue = {
+  cue_support: CueSupport;
+  environment: PracticeEnvironment;
+  distance: PracticeDistance;
+  duration: PracticeDurationBand;
+  distraction: PracticeDistraction;
+};
+
+type OptionGroup<D extends PracticeDimension> = {
+  /** The field name on PracticeEvidenceInput this group writes to. */
+  field: DimensionField[D];
+  labelKey: MessageKey;
+  options: { value: DimensionValue[D]; labelKey: MessageKey }[];
+};
+
+export const DIMENSION_CONFIG = {
   cue_support: {
     field: "cueSupport",
     labelKey: "practice.cueSupportLabel",
@@ -121,7 +137,7 @@ export const DIMENSION_CONFIG: Record<PracticeDimension, OptionGroup> = {
       { value: "strong" satisfies PracticeDistraction, labelKey: "practice.distractionStrong" },
     ],
   },
-};
+} satisfies { [D in PracticeDimension]: OptionGroup<D> };
 
 export const SAFETY_SIGNAL_KEYS: Record<SafetySignalType, MessageKey> = {
   aggression_or_bite_risk: "practice.safetyAggression",
@@ -176,7 +192,7 @@ export const REFERRAL_DIRECTORIES: {
     referrals: ["credentialed_trainer"],
   },
   {
-    href: "https://fearfreepets.com/fear-free-directory/",
+    href: "https://directory.fearfree.com/",
     labelKey: "safety.directoryFearFree",
     referrals: ["credentialed_trainer"],
   },
