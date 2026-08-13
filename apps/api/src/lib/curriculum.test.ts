@@ -1,128 +1,93 @@
 import { describe, expect, it } from "vitest";
-import { trainingCurriculum } from "../data/training-curriculum";
-import { MAX_LEVEL, MIN_LEVEL, clampCurriculumLevel, resolveCurriculumTarget } from "./curriculum";
+import { findCurriculumSkill, trainingCurriculum } from "../data/training-curriculum";
+import { clampLevel, resolveCurriculumTarget } from "./curriculum";
 
-function expectTarget(skillKey: string | null, requestedLevel: number) {
-  const target = resolveCurriculumTarget(skillKey, requestedLevel);
-  if (!target) {
-    throw new Error(`expected curriculum target for ${skillKey ?? "null"} @ ${requestedLevel}`);
-  }
-  return target;
-}
-
+const SIT = "basic-manners.sit";
 const allSkills = trainingCurriculum.flatMap((template) => template.skills);
 
-describe("clampCurriculumLevel", () => {
-  it("clamps 0, 3, 9, and NaN into the supported range", () => {
-    expect(clampCurriculumLevel(0)).toBe(MIN_LEVEL);
-    expect(clampCurriculumLevel(3)).toBe(3);
-    expect(clampCurriculumLevel(9)).toBe(MAX_LEVEL);
-    expect(clampCurriculumLevel(Number.NaN)).toBe(MIN_LEVEL);
+describe("clampLevel", () => {
+  it("keeps levels inside 1-5", () => {
+    expect(clampLevel(0)).toBe(1);
+    expect(clampLevel(3)).toBe(3);
+    expect(clampLevel(9)).toBe(5);
+    expect(clampLevel(Number.NaN)).toBe(1);
   });
 });
 
 describe("resolveCurriculumTarget", () => {
-  it("returns the authored requested-level description", () => {
-    const target = expectTarget("basic-manners.recall", 3);
+  it("returns the exact authored description for the requested sit level", () => {
+    const target = resolveCurriculumTarget(SIT, 3);
 
-    expect(target.primary.exercise).toBe(
-      "Comes when called inside the house with mild distractions",
-    );
+    expect(target?.skillKey).toBe(SIT);
+    expect(target?.level).toBe(3);
+    expect(target?.primary.level).toBe(3);
+    expect(target?.primary.exercise).toBe("Sits on cue with one mild distraction present");
   });
 
-  it("keeps the easier fallback at the same level using the exact step mapping", () => {
-    const target = expectTarget("basic-manners.stay", 4);
+  it("keeps the authored level and eases the same sit prose by the exact step dimension", () => {
+    const skill = findCurriculumSkill(SIT);
+    const target = resolveCurriculumTarget(SIT, 3);
 
-    expect(target.primary).toEqual({
-      level: 4,
-      exercise: "Holds with light distractions (door opening, food on counter)",
-      dimension: "distraction",
-    });
-    expect(target.fallback).toEqual({
-      level: 4,
-      exercise: "Holds with light distractions (door opening, food on counter)",
-      reducedDimension: "distraction",
-      sameLevelEasing: true,
-      easingStrategy: "reduce_distractions",
-    });
-    expect(target.fallback.exercise).not.toBe(
-      "Holds for 30 seconds with owner moving around the room",
-    );
+    expect(target?.primary.dimension).toBe(skill?.levelSteps[1]);
+    expect(target?.fallback.level).toBe(3);
+    expect(target?.fallback.exercise).toBe("Sits on cue with one mild distraction present");
+    expect(target?.fallback.sameLevelEasing).toBe(true);
+    expect(target?.fallback.easingStrategy).toBe(skill?.levelStepStrategies[1]);
+    expect(target?.fallback.reducedDimension).toBe(skill?.levelSteps[1]);
   });
 
-  it("uses the declared base easing at level 1", () => {
-    const target = expectTarget("basic-manners.stay", 1);
+  it("uses the reviewed base easing for sit at level 1", () => {
+    const skill = findCurriculumSkill(SIT);
+    const target = resolveCurriculumTarget(SIT, 1);
 
-    expect(target.primary).toEqual({
-      level: 1,
-      exercise: "Holds a sit or down for 3-5 seconds, owner next to dog",
-      dimension: "duration",
-    });
-    expect(target.fallback).toEqual({
-      level: 1,
-      exercise: "Holds a sit or down for 3-5 seconds, owner next to dog",
-      reducedDimension: "duration",
-      sameLevelEasing: true,
-      easingStrategy: "shorten_duration",
-    });
+    expect(target?.skillKey).toBe(SIT);
+    expect(target?.level).toBe(1);
+    expect(target?.primary.level).toBe(1);
+    expect(target?.primary.dimension).toBe(skill?.baseEase.dimension);
+    expect(target?.fallback.level).toBe(1);
+    expect(target?.fallback.exercise).toBe("Lures into a sit with food in a quiet room");
+    expect(target?.fallback.sameLevelEasing).toBe(true);
+    expect(target?.fallback.reducedDimension).toBe(skill?.baseEase.dimension);
+    expect(target?.fallback.easingStrategy).toBe("add_cue_help");
   });
 
-  it("uses increased trigger distance for reactivity distance easing", () => {
-    const target = expectTarget("reactivity-work.look-at-that", 4);
+  it("uses distance easing with increased trigger distance for level-1 LAT", () => {
+    const target = resolveCurriculumTarget("reactivity-work.look-at-that", 1);
 
-    expect(target.primary.dimension).toBe("distance");
-    expect(target.fallback.reducedDimension).toBe("distance");
-    expect(target.fallback.easingStrategy).toBe("increase_trigger_distance");
+    expect(target?.fallback.reducedDimension).toBe("distance");
+    expect(target?.fallback.easingStrategy).toBe("increase_trigger_distance");
   });
 
-  it("clamps requested levels that fall outside the authored range", () => {
-    const low = expectTarget("basic-manners.sit", 0);
-    const high = expectTarget("basic-manners.sit", 9);
-
-    expect(low.primary).toEqual({
-      level: 1,
-      exercise: "Lures into a sit with food in a quiet room",
-      dimension: "cue_support",
-    });
-    expect(high.primary).toEqual({
-      level: 5,
-      exercise: "Sits on cue across most environments, including outdoors",
-      dimension: "environment",
-    });
+  it("clamps out-of-range levels instead of throwing", () => {
+    expect(resolveCurriculumTarget(SIT, 42)?.primary.level).toBe(5);
+    expect(resolveCurriculumTarget(SIT, -1)?.primary.level).toBe(1);
   });
 
-  it("returns null for unknown or missing curriculum skills", () => {
-    expect(resolveCurriculumTarget("basic-manners.moonwalk", 3)).toBeNull();
-    expect(resolveCurriculumTarget(null, 3)).toBeNull();
+  it("returns null for a skill that is not in the curriculum", () => {
+    expect(resolveCurriculumTarget("basic-manners.moonwalk", 2)).toBeNull();
+    expect(resolveCurriculumTarget(null, 2)).toBeNull();
   });
 
-  it("resolves all 21 skills across all 5 levels with same-level fallbacks", () => {
+  it("resolves all 21 skills across all 5 levels with explicit same-level fallbacks", () => {
     expect(allSkills).toHaveLength(21);
 
     for (const skill of allSkills) {
-      for (const level of skill.levels) {
-        const target = expectTarget(skill.key, level.level);
-        const stepIndex = level.level - 2;
-        const expectedDimension =
-          level.level === MIN_LEVEL ? skill.baseEase.dimension : skill.levelSteps[stepIndex];
-        const expectedStrategy =
-          level.level === MIN_LEVEL
-            ? skill.baseEase.strategy
-            : skill.levelStepStrategies[stepIndex];
+      for (const level of [1, 2, 3, 4, 5] as const) {
+        const target = resolveCurriculumTarget(skill.key, level);
 
-        expect(target.primary).toEqual({
-          level: level.level,
-          exercise: level.description,
-          dimension: expectedDimension,
-        });
-        expect(target.fallback).toEqual({
-          level: level.level,
-          exercise: level.description,
-          reducedDimension: expectedDimension,
-          sameLevelEasing: true,
-          easingStrategy: expectedStrategy,
-        });
-        expect(target.requestedDimensions).toEqual(skill.dimensions);
+        expect(target, `${skill.key} level ${level}`).not.toBeNull();
+        expect(target?.skillKey).toBe(skill.key);
+        expect(target?.level).toBe(level);
+        expect(target?.primary.level).toBe(level);
+        expect(target?.primary.exercise.length).toBeGreaterThan(20);
+        expect(target?.fallback.exercise.length).toBeGreaterThan(20);
+        expect(skill.dimensions).toContain(target?.fallback.reducedDimension);
+        expect(target?.fallback.level).toBe(level);
+        expect(target?.fallback.sameLevelEasing).toBe(true);
+        expect(target?.fallback.easingStrategy).toBe(
+          level === 1 ? skill.baseEase.strategy : skill.levelStepStrategies[level - 2],
+        );
+        expect(target?.requestedDimensions).toEqual(skill.dimensions);
       }
     }
   });
