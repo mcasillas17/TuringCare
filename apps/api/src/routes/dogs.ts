@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
 import {
+  advancementDecisionSchema,
   behaviorConcernSchema,
   briefGenerateSchema,
   briefSendSchema,
@@ -14,6 +15,8 @@ import {
   practiceEvidenceSchema,
   practiceSessionApiSchema,
   skillLevelSchema,
+  suggestionActionSchema,
+  suggestionQuerySchema,
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
@@ -43,6 +46,7 @@ import {
 import { renderBriefEmail } from "../email/brief-email";
 import { sendEmail } from "../email/send-email";
 import { env } from "../env";
+import { decideAdvancementProposal } from "../lib/advancement";
 import { composeBrief } from "../lib/brief";
 import { loadDogsOverview } from "../lib/dogs-overview";
 import {
@@ -61,6 +65,7 @@ import {
 import { loadProgress } from "../lib/progress";
 import { lockDogSafety, withDogSafetyLock } from "../lib/safety-lock";
 import { setSkillLevel } from "../lib/skill-level";
+import { currentWeekKey, loadSuggestion, recordSuggestionAction } from "../lib/suggestion";
 import { type Vars, requireUser } from "../middleware/require-user";
 import { recordEvent } from "../telemetry/record-event";
 
@@ -89,6 +94,7 @@ const focusRemoveCompatSchema = z.union([
   newFocusRemoveQuerySchema.strict(),
   legacyFocusRemoveQuerySchema,
 ]);
+const uuidSchema = z.string().uuid();
 
 export const MAX_FUTURE_CLOCK_SKEW_MS = 5 * 60_000;
 export const MAX_LEGACY_FUTURE_SKEW_MS = 15 * 60 * 60_000;
@@ -830,6 +836,84 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
+  .get("/:id/suggestion", zValidator("query", suggestionQuerySchema), async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const { weekKey, timezoneOffsetMinutes } = c.req.valid("query");
+    if (weekKey !== currentWeekKey(new Date(), timezoneOffsetMinutes)) {
+      return c.json({ error: "historical_suggestion_unavailable" } as const, 409);
+    }
+    const suggestion = await loadSuggestion({
+      userId: c.get("userId"),
+      dogId: dog.id,
+      weekKey,
+      timezoneOffsetMinutes,
+    });
+    return c.json({ suggestion });
+  })
+  .post(
+    "/:id/suggestions/:suggestionId/actions",
+    zValidator("json", suggestionActionSchema),
+    async (c) => {
+      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const suggestionId = c.req.param("suggestionId");
+      if (!uuidSchema.safeParse(suggestionId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
+      const result = await recordSuggestionAction({
+        userId: c.get("userId"),
+        dogId: dog.id,
+        suggestionId,
+        action: c.req.valid("json").action,
+      });
+      if (result === "not_found") return c.json({ error: "not_found" } as const, 404);
+      if (result === "dismissed") {
+        return c.json({ error: "suggestion_dismissed" } as const, 409);
+      }
+      return c.json({ ok: true } as const, 201);
+    },
+  )
+  .post(
+    "/:id/advancement-proposals/:proposalId/decision",
+    zValidator("json", advancementDecisionSchema),
+    async (c) => {
+      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const proposalId = c.req.param("proposalId");
+      if (!uuidSchema.safeParse(proposalId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
+      const [owned] = await db
+        .select({ id: advancementProposals.id, skillId: advancementProposals.skillId })
+        .from(advancementProposals)
+        .innerJoin(trainingSkills, eq(advancementProposals.skillId, trainingSkills.id))
+        .innerJoin(trainingGoals, eq(trainingSkills.goalId, trainingGoals.id))
+        .where(and(eq(advancementProposals.id, proposalId), eq(trainingGoals.dogId, dog.id)))
+        .limit(1);
+      if (!owned) return c.json({ error: "not_found" } as const, 404);
+
+      const { decision } = c.req.valid("json");
+      const result = await decideAdvancementProposal(dog.id, owned.id, owned.skillId, decision);
+      if (result.status === "not_found") return c.json({ error: "not_found" } as const, 404);
+      if (result.status === "stale") {
+        return c.json({ error: "stale_proposal" } as const, 409);
+      }
+      if (result.status === "safety_suppressed") {
+        return c.json({ error: "safety_suppressed" } as const, 409);
+      }
+      const { proposal } = result;
+      await recordEvent("training.advancement_decided", {
+        userId: c.get("userId"),
+        props: {
+          decision,
+          fromLevel: proposal.fromLevel,
+          toLevel: proposal.toLevel,
+        },
+      });
+      return c.json({ proposal });
+    },
+  )
   .get("/:id/journal", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);

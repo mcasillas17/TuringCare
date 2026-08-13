@@ -8241,10 +8241,14 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
     async (c) => {
       const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
       if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const suggestionId = c.req.param("suggestionId");
+      if (!z.string().uuid().safeParse(suggestionId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
       const result = await recordSuggestionAction({
         userId: c.get("userId"),
         dogId: dog.id,
-        suggestionId: c.req.param("suggestionId"),
+        suggestionId,
         action: c.req.valid("json").action,
       });
       if (result === "not_found") {
@@ -8262,6 +8266,10 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
     async (c) => {
       const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
       if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const proposalId = c.req.param("proposalId");
+      if (!z.string().uuid().safeParse(proposalId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
       const [owned] = await db
         .select({ id: advancementProposals.id, skillId: advancementProposals.skillId })
         .from(advancementProposals)
@@ -8269,7 +8277,7 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
         .innerJoin(trainingGoals, eq(trainingSkills.goalId, trainingGoals.id))
         .where(
           and(
-            eq(advancementProposals.id, c.req.param("proposalId")),
+            eq(advancementProposals.id, proposalId),
             eq(trainingGoals.dogId, dog.id),
           ),
         )
