@@ -91,7 +91,7 @@ pnpm exec biome check apps packages
 
 **Modify:**
 - `packages/shared/src/progress.ts` (practice session schema gains evidence), `packages/shared/src/focus.ts` (week key), `packages/shared/src/training-catalog.ts` (catalog skill gains dimension metadata), `packages/shared/src/index.ts`.
-- `apps/api/src/db/schema.ts`, `apps/api/drizzle/*` (three migrations), `apps/api/src/data/training-catalog.ts` (type annotation only), `apps/api/src/lib/focus.ts`, `apps/api/src/routes/dogs.ts`, `apps/api/src/routes/training.ts`, `apps/api/src/telemetry/events.ts`, `apps/api/src/routes/focus.test.ts`, `apps/api/src/routes/telemetry.test.ts`.
+- `apps/api/src/db/schema.ts`, `apps/api/src/db/schema.test.ts`, `apps/api/drizzle/*` (four migrations, through `0016_journal_observation_index`), `apps/api/src/data/training-catalog.ts` (type annotation only), `apps/api/src/lib/focus.ts`, `apps/api/src/routes/dogs.ts`, `apps/api/src/routes/training.ts`, `apps/api/src/telemetry/events.ts`, `apps/api/src/routes/focus.test.ts`, `apps/api/src/routes/telemetry.test.ts`.
 - `apps/web/src/lib/weekly-focus.ts`, `apps/web/src/lib/progress.ts`, `apps/web/src/components/week/focus-picker.tsx`, `apps/web/src/components/progress/session-form.tsx`, `apps/web/src/components/progress/progress-panel.tsx`, `apps/web/src/routes/dog-week.tsx`, `apps/web/src/routes/dog-week.test.tsx`, `apps/web/src/i18n/en.ts`, `apps/web/src/i18n/es.ts`.
 - `docs/PROJECT-LOG.md`, `README.md`.
 
@@ -5097,6 +5097,21 @@ columns as equivalent difficulty scales across all 21 skills.
 - Create: `apps/api/src/lib/observations.ts`
 - Create: `apps/api/src/lib/suggestion-rules.ts`
 - Create: `apps/api/src/lib/suggestion-rules.test.ts`
+- Create: `apps/api/drizzle/0016_journal_observation_index.sql`
+- Modify: `apps/api/drizzle/meta/_journal.json`
+- Create: `apps/api/drizzle/meta/0016_snapshot.json`
+- Modify: `apps/api/src/db/schema.ts`
+- Modify: `apps/api/src/db/schema.test.ts`
+
+`loadRecentObservation` filters `journal_entries` by `dog_id` and
+`kind`, restricts `occurred_at` to its observation window, and requests the
+latest row ordered by `occurred_at DESC, id DESC`. Add
+`journal_entries_dog_kind_occurred_idx` on `(dog_id, kind, occurred_at, id)`
+so PostgreSQL can use the equality prefix and backward-scan the standard ASC
+B-tree for that descending order without a sort. It follows
+`0015_training_suggestions`, so this generated migration is `0016`; rename
+the generated SQL and journal tag, but do not regenerate or renumber earlier
+migrations.
 
 - [ ] **Step 1: Write the failing evidence test** — create `apps/api/src/lib/practice-evidence.test.ts`:
 
@@ -5358,7 +5373,30 @@ export async function loadSkillEvidence(
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/practice-evidence.test.ts`
 Expected: PASS — 6 tests.
 
-- [ ] **Step 5: Create `apps/api/src/lib/observations.ts`** (no separate test — it is one query, covered by the route tests in Task 17):
+- [ ] **Step 5: Add and test the recent-observation index** — in
+  `apps/api/src/db/schema.ts`, add this table extra-config entry:
+
+```ts
+index("journal_entries_dog_kind_occurred_idx").on(t.dogId, t.kind, t.occurredAt, t.id),
+```
+
+In `apps/api/src/db/schema.test.ts`, use `getTableConfig(journalEntries)` to
+assert that the named index's columns are `dog_id`, `kind`, `occurred_at`, and
+`id`. Generate the migration, rename the generated file, and update only the
+new journal entry tag:
+
+```bash
+pnpm --filter @turingcare/api db:generate
+mv apps/api/drizzle/0016_*.sql apps/api/drizzle/0016_journal_observation_index.sql
+# Set only idx 16's tag to 0016_journal_observation_index in _journal.json.
+pnpm --filter @turingcare/api exec vitest run src/db/schema.test.ts
+```
+
+The default ASC B-tree supports `ORDER BY occurred_at DESC, id DESC` by a
+backward scan after the `dog_id` and `kind` equality prefixes; explicit DESC
+storage is unnecessary.
+
+- [ ] **Step 6: Create `apps/api/src/lib/observations.ts`** (no separate test — it is one query, covered by the route tests in Task 17):
 
 ```ts
 import { and, desc, eq, gte, lte } from "drizzle-orm";
@@ -5396,7 +5434,7 @@ export async function loadRecentObservation(dogId: string, now: Date): Promise<R
 }
 ```
 
-- [ ] **Step 6: Write the failing rules test** — create `apps/api/src/lib/suggestion-rules.test.ts`:
+- [ ] **Step 7: Write the failing rules test** — create `apps/api/src/lib/suggestion-rules.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -5524,12 +5562,12 @@ describe("selectSuggestionRule", () => {
 });
 ```
 
-- [ ] **Step 7: Run it, expect FAIL**
+- [ ] **Step 8: Run it, expect FAIL**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/suggestion-rules.test.ts`
 Expected: FAIL — `Failed to resolve import "./suggestion-rules"`.
 
-- [ ] **Step 8: Create `apps/api/src/lib/suggestion-rules.ts`**
+- [ ] **Step 9: Create `apps/api/src/lib/suggestion-rules.ts`**
 
 ```ts
 import type {
@@ -5649,18 +5687,18 @@ export function selectSuggestionRule(inputs: RuleInputs): RuleResult {
 }
 ```
 
-- [ ] **Step 9: Run both, expect PASS**
+- [ ] **Step 10: Run both, expect PASS**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/suggestion-rules.test.ts src/lib/practice-evidence.test.ts`
 Expected: PASS — 18 tests total.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-pnpm exec biome check --write apps/api/src/lib/practice-evidence.ts apps/api/src/lib/practice-evidence.test.ts apps/api/src/lib/observations.ts apps/api/src/lib/suggestion-rules.ts apps/api/src/lib/suggestion-rules.test.ts
+pnpm exec biome check --write apps/api/src/db/schema.ts apps/api/src/db/schema.test.ts apps/api/src/lib/practice-evidence.ts apps/api/src/lib/practice-evidence.test.ts apps/api/src/lib/observations.ts apps/api/src/lib/suggestion-rules.ts apps/api/src/lib/suggestion-rules.test.ts
 pnpm --filter @turingcare/api exec tsc --noEmit
-git add apps/api/src/lib/practice-evidence.ts apps/api/src/lib/practice-evidence.test.ts apps/api/src/lib/observations.ts apps/api/src/lib/suggestion-rules.ts apps/api/src/lib/suggestion-rules.test.ts
-git commit -m "feat(api): deterministic suggestion rules over structured evidence"
+git add apps/api/src/db/schema.ts apps/api/src/db/schema.test.ts apps/api/drizzle/0016_journal_observation_index.sql apps/api/drizzle/meta/_journal.json apps/api/drizzle/meta/0016_snapshot.json docs/superpowers/plans/2026-08-11-personalized-training-gate-1.md
+git commit -m "perf(api): index recent journal observations"
 ```
 
 ---

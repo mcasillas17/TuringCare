@@ -1,4 +1,5 @@
 import { getTableName } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import {
   advancementProposals,
@@ -38,6 +39,20 @@ describe("journal schema", () => {
     expect(getTableName(journalEntries)).toBe("journal_entries");
     expect(journalEntryKindEnum.enumValues).toEqual(["moment", "daily_checkin"]);
     expect(journalTrendEnum.enumValues).toEqual(["better", "same", "harder"]);
+  });
+
+  it("indexes recent daily-checkin lookups in descending recency order", () => {
+    const index = getTableConfig(journalEntries).indexes.find(
+      ({ config }) => config.name === "journal_entries_dog_kind_occurred_idx",
+    );
+
+    expect(index).toBeDefined();
+    expect(index?.config.columns.map((column) => ("name" in column ? column.name : null))).toEqual([
+      "dog_id",
+      "kind",
+      "occurred_at",
+      "id",
+    ]);
   });
 });
 

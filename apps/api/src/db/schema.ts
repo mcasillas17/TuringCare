@@ -472,6 +472,7 @@ export const journalEntries = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    index("journal_entries_dog_kind_occurred_idx").on(t.dogId, t.kind, t.occurredAt, t.id),
     check("journal_intensity_range", sql`${t.intensity} IS NULL OR ${t.intensity} BETWEEN 1 AND 5`),
     check(
       "journal_daily_checkin_trend",
