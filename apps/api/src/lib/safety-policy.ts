@@ -14,6 +14,8 @@ export const WORSENING_MIN_HARDER_CHECKINS = 2;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export type TransactionType = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export type SafetyInputs = {
   now: Date;
   signals: {
@@ -133,13 +135,18 @@ export async function evaluateSafety(dogId: string, now: Date): Promise<Suggesti
   return decideSafety(await loadSafetyInputs(dogId, now));
 }
 
-/** Linearization point shared with every safety writer. */
-export async function evaluateSafetyWithLock(
+/**
+ * Holds the shared safety lock through the guarded write, making this decision
+ * and action a single linearization point.
+ */
+export async function evaluateSafetyWithLock<T>(
   dogId: string,
   now: Date,
-): Promise<SuggestionSafety | null> {
+  callback: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<T>,
+): Promise<T> {
   return db.transaction(async (tx) => {
     await lockDogSafety(tx, dogId);
-    return decideSafety(await loadSafetyInputs(dogId, now, tx));
+    const decision = decideSafety(await loadSafetyInputs(dogId, now, tx));
+    return await callback(decision, tx);
   });
 }

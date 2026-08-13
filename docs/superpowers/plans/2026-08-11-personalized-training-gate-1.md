@@ -4932,14 +4932,22 @@ export async function evaluateSafety(dogId: string, now: Date): Promise<Suggesti
   return decideSafety(await loadSafetyInputs(dogId, now));
 }
 
-/** Linearization point shared with every safety writer. */
-export async function evaluateSafetyWithLock(
+/**
+ * Holds the shared safety lock through the guarded write, making this decision
+ * and action a single linearization point.
+ */
+export async function evaluateSafetyWithLock<T>(
   dogId: string,
   now: Date,
-): Promise<SuggestionSafety | null> {
+  callback: (
+    decision: SuggestionSafety | null,
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  ) => Promise<T>,
+): Promise<T> {
   return db.transaction(async (tx) => {
     await lockDogSafety(tx, dogId);
-    return decideSafety(await loadSafetyInputs(dogId, now, tx));
+    const decision = decideSafety(await loadSafetyInputs(dogId, now, tx));
+    return await callback(decision, tx);
   });
 }
 ```
@@ -6166,6 +6174,10 @@ git commit -m "feat(api): owner-confirmed advancement proposals"
 - Create: `apps/api/src/lib/suggestion.ts`
 
 This task has no unit test of its own — it is pure I/O composition over modules that are already unit-tested, and it is covered end-to-end by the route tests in Task 17.
+
+All final suggestion and suppression audit writes must run through
+`evaluateSafetyWithLock`'s callback using its `tx`, so the safety decision and
+audit persistence share one transaction and advisory lock.
 
 - [ ] **Step 1: Create `apps/api/src/lib/suggestion.ts`**
 

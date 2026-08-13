@@ -1,5 +1,6 @@
+import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { type SafetyInputs, decideSafety } from "./safety-policy";
+import { type SafetyInputs, decideSafety, evaluateSafetyWithLock } from "./safety-policy";
 
 const NOW = new Date("2026-08-13T12:00:00.000Z");
 
@@ -118,6 +119,22 @@ describe("decideSafety", () => {
       suppressed: true,
       ruleId: "sustained_worsening_intensity",
       referral: "credentialed_trainer",
+    });
+  });
+
+  describe("evaluateSafetyWithLock", () => {
+    it("runs the guarded callback with an empty decision and propagates its value", async () => {
+      const result = await evaluateSafetyWithLock(
+        crypto.randomUUID(),
+        NOW,
+        async (decision, tx) => {
+          expect(decision).toBeNull();
+          await tx.execute(sql`select 1`);
+          return "guarded-write-complete";
+        },
+      );
+
+      expect(result).toBe("guarded-write-complete");
     });
   });
 
