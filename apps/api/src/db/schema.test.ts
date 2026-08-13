@@ -141,4 +141,13 @@ describe("suggestion and advancement audit schema", () => {
       "withdrawn",
     ]);
   });
+
+  it("declares a unique partial index for open proposals", () => {
+    const index = getTableConfig(advancementProposals).indexes.find(
+      ({ config }) => config.name === "advancement_proposals_open_skill_idx",
+    );
+
+    expect(index?.config.unique).toBe(true);
+    expect(index?.config.where).toBeDefined();
+  });
 });

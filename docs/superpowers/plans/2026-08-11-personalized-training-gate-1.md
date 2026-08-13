@@ -4695,9 +4695,8 @@ Set the `"idx": 15` entry's `tag` in `apps/api/drizzle/meta/_journal.json` to `"
 
 ```sql
 --> statement-breakpoint
--- At most one open proposal per skill. Expressed as a partial index in raw SQL
--- because it is enforced only for `proposed` rows; the drizzle schema keeps the
--- plain index and this migration adds the constraint.
+-- At most one open proposal per skill. This is the historical raw index; the
+-- schema-declared Drizzle index and its 0017 reconciliation follow Task 14.
 CREATE UNIQUE INDEX "advancement_proposals_open_skill_idx" ON "advancement_proposals" USING btree ("skill_id") WHERE "status" = 'proposed';--> statement-breakpoint
 ALTER TABLE "training_suggestions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "training_suggestion_actions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -5709,6 +5708,34 @@ pnpm --filter @turingcare/api exec tsc --noEmit
 git add apps/api/src/db/schema.ts apps/api/src/db/schema.test.ts apps/api/drizzle/0016_journal_observation_index.sql apps/api/drizzle/meta/_journal.json apps/api/drizzle/meta/0016_snapshot.json docs/superpowers/plans/2026-08-11-personalized-training-gate-1.md
 git commit -m "perf(api): index recent journal observations"
 ```
+
+### Follow-up to Tasks 12 and 14: Reconcile the open-proposal schema index
+
+After Task 14's `0016` commit, preserve the existing commit sequence and add
+`0017_advancement_open_index_schema`. Drizzle expresses the unique partial
+index directly, so schema generation and `db:push` use the same declaration:
+
+```ts
+uniqueIndex("advancement_proposals_open_skill_idx")
+  .on(t.skillId)
+  .where(sql`${t.status} = 'proposed'`);
+```
+
+Generate the migration from that schema, rename its SQL file and journal tag,
+and prepend this reconciliation before the generated `CREATE UNIQUE INDEX`:
+
+```sql
+DROP INDEX IF EXISTS "advancement_proposals_open_skill_idx";
+CREATE UNIQUE INDEX "advancement_proposals_open_skill_idx" ON "advancement_proposals" USING btree ("skill_id") WHERE "advancement_proposals"."status" = 'proposed';
+```
+
+The drop and create remain in the same migration transaction. Do not rewrite
+`0015`: a fresh `0000`–`0017` migration first receives its historical index
+then replaces it with the schema-declared form, while an upgraded database
+reconciles the old index idempotently. Validate `db:migrate` on a fresh
+database and `db:push` against an upgraded database; both must leave the exact
+unique partial index, rejecting duplicate `proposed` rows while allowing
+multiple non-proposed rows for one skill.
 
 ---
 

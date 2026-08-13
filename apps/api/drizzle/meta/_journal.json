@@ -120,6 +120,13 @@
       "when": 1786613173739,
       "tag": "0016_journal_observation_index",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786614513769,
+      "tag": "0017_advancement_open_index_schema",
+      "breakpoints": true
     }
   ]
 }

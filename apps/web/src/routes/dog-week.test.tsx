@@ -62,7 +62,10 @@ function renderWeek() {
   );
 }
 
-afterEach(() => vi.resetAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.resetAllMocks();
+});
 
 describe("DogWeek", () => {
   it("shows the pick-focus empty state when there are no focus skills", () => {
@@ -87,7 +90,7 @@ describe("DogWeek", () => {
     expect(screen.getByText("Reliability")).toBeInTheDocument();
   });
 
-  it("logs a session when an empty cell is tapped", () => {
+  it("logs a session with the selected day's instant and timezone offset", () => {
     const { logMutate } = setup([
       {
         skillId: "s1",
@@ -98,9 +101,20 @@ describe("DogWeek", () => {
         sessions: [],
       },
     ]);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-13T16:30:00.000Z"));
     renderWeek();
-    const cell = screen.getAllByRole("button", { name: /Log Recall on/i })[0] as HTMLElement;
+    const cell = screen.getByRole("button", {
+      name: "Log Recall on 2026-08-10",
+    });
     fireEvent.click(cell);
-    expect(logMutate).toHaveBeenCalledTimes(1);
+    const occurredAt = new Date(2026, 7, 10, 12, 0, 0);
+    expect(logMutate).toHaveBeenCalledWith({
+      skillId: "s1",
+      body: {
+        occurredAt: occurredAt.toISOString(),
+        timezoneOffsetMinutes: occurredAt.getTimezoneOffset(),
+      },
+    });
   });
 });

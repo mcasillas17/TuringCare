@@ -13,6 +13,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -308,6 +309,9 @@ export const advancementProposals = pgTable(
   },
   (t) => [
     index("advancement_proposals_skill_idx").on(t.skillId),
+    uniqueIndex("advancement_proposals_open_skill_idx")
+      .on(t.skillId)
+      .where(sql`${t.status} = 'proposed'`),
     check(
       "advancement_levels_range",
       sql`${t.fromLevel} BETWEEN 1 AND 5 AND ${t.toLevel} BETWEEN 1 AND 5`,

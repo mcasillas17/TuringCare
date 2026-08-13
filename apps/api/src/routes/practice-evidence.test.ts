@@ -552,4 +552,33 @@ describe("practice evidence", () => {
         .where(eq(advancementProposals.id, proposal?.id ?? "")),
     ).toMatchObject([{ status: "withdrawn", decidedAt: expect.any(Date) }]);
   });
+
+  it("25. permits historical proposals but rejects a duplicate open proposal", async () => {
+    const s = await setup(users);
+    const values: Omit<typeof advancementProposals.$inferInsert, "status"> = {
+      skillId: s.skillId,
+      fromLevel: 2,
+      toLevel: 3,
+      ruleId: "test",
+      evidenceSessionCount: 1,
+      evidenceDayCount: 1,
+      evidenceWindowDays: 7,
+      evidenceSessionIds: [randomUUID()],
+      evidenceOccurredAt: [new Date()],
+      evidencePracticeDays: ["2026-08-12"],
+      evidenceOutcomes: ["went_well"],
+      evidenceLastSessionAt: new Date(),
+    };
+
+    const proposals: (typeof advancementProposals.$inferInsert)[] = [
+      { ...values, status: "confirmed" },
+      { ...values, status: "rejected" },
+      { ...values, status: "proposed" },
+    ];
+    await db.insert(advancementProposals).values(proposals);
+
+    await expect(
+      db.insert(advancementProposals).values({ ...values, status: "proposed" }),
+    ).rejects.toThrow();
+  });
 });

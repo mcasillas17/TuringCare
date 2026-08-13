@@ -73,9 +73,15 @@ export function DogWeek() {
   const onLog = async (skillId: string, day: Date) => {
     const isToday = dayKey(day) === dayKey(today);
     const occurredAt = isToday
-      ? new Date().toISOString()
-      : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, 0).toISOString();
-    await logSession.mutateAsync({ skillId, body: { occurredAt } });
+      ? new Date()
+      : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, 0);
+    await logSession.mutateAsync({
+      skillId,
+      body: {
+        occurredAt: occurredAt.toISOString(),
+        timezoneOffsetMinutes: occurredAt.getTimezoneOffset(),
+      },
+    });
     refreshFocus();
   };
 
