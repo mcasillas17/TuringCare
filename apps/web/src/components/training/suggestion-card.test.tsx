@@ -2,6 +2,7 @@ import { LocaleProvider } from "@/i18n";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { TrainingSuggestion } from "@turingcare/shared";
 import { describe, expect, it, vi } from "vitest";
+import { SafetyNotice } from "./safety-notice";
 import { SuggestionCard } from "./suggestion-card";
 
 const baseSuggestion: TrainingSuggestion = {
@@ -43,7 +44,50 @@ const baseSuggestion: TrainingSuggestion = {
   advancementProposal: null,
 };
 
-function renderCard(suggestion: TrainingSuggestion, onAction = vi.fn(), onDecision = vi.fn()) {
+const advancementSuggestion: TrainingSuggestion = {
+  ...baseSuggestion,
+  ruleId: "maintain_current_level",
+  advancementProposal: {
+    id: "p1",
+    skillId: "s1",
+    fromLevel: 1,
+    toLevel: 2,
+    ruleId: "recent_success_at_level",
+    status: "proposed",
+    sessionCount: 3,
+    dayCount: 3,
+    windowDays: 21,
+    supportingSessions: [
+      {
+        id: "ps1",
+        occurredAt: "2026-08-11T09:00:00.000Z",
+        practiceDay: "2026-08-11",
+        outcome: "went_well",
+      },
+      {
+        id: "ps2",
+        occurredAt: "2026-08-12T09:00:00.000Z",
+        practiceDay: "2026-08-12",
+        outcome: "went_well",
+      },
+      {
+        id: "ps3",
+        occurredAt: "2026-08-13T09:00:00.000Z",
+        practiceDay: "2026-08-13",
+        outcome: "went_well",
+      },
+    ],
+    createdAt: "2026-08-13T00:00:00.000Z",
+    decidedAt: null,
+  },
+};
+
+function renderCard(
+  suggestion: TrainingSuggestion,
+  onAction = vi.fn(),
+  onDecision = vi.fn(),
+  pending: { action?: boolean; decision?: boolean } = {},
+) {
   render(
     <LocaleProvider>
       <SuggestionCard
@@ -51,6 +95,8 @@ function renderCard(suggestion: TrainingSuggestion, onAction = vi.fn(), onDecisi
         onAction={onAction}
         onDecision={onDecision}
         onPickFocus={vi.fn()}
+        actionPending={pending.action}
+        decisionPending={pending.decision}
       />
     </LocaleProvider>,
   );
@@ -135,6 +181,29 @@ describe("SuggestionCard", () => {
     expect(screen.queryByText("CCPDT — certified trainers")).not.toBeInTheDocument();
   });
 
+  it("uses a unique accessible title id for each safety notice", () => {
+    const safety = {
+      suppressed: true as const,
+      ruleId: "reported_injury_or_pain" as const,
+      referral: "veterinarian" as const,
+    };
+    render(
+      <LocaleProvider>
+        <SafetyNotice safety={safety} />
+        <SafetyNotice safety={safety} />
+      </LocaleProvider>,
+    );
+
+    const titleIds = screen
+      .getAllByRole("alert")
+      .map((notice) => notice.getAttribute("aria-labelledby"));
+    expect(new Set(titleIds).size).toBe(2);
+    for (const titleId of titleIds) {
+      expect(titleId).not.toBeNull();
+      expect(document.getElementById(titleId ?? "")).not.toBeNull();
+    }
+  });
+
   it("explains that custom skills are not covered", () => {
     renderCard({
       ...baseSuggestion,
@@ -163,45 +232,17 @@ describe("SuggestionCard", () => {
   });
 
   it("asks the owner to confirm an advancement proposal", () => {
-    const { onDecision } = renderCard({
-      ...baseSuggestion,
-      ruleId: "maintain_current_level",
-      advancementProposal: {
-        id: "p1",
-        skillId: "s1",
-        fromLevel: 1,
-        toLevel: 2,
-        ruleId: "recent_success_at_level",
-        status: "proposed",
-        sessionCount: 3,
-        dayCount: 3,
-        windowDays: 21,
-        supportingSessions: [
-          {
-            id: "ps1",
-            occurredAt: "2026-08-11T09:00:00.000Z",
-            practiceDay: "2026-08-11",
-            outcome: "went_well",
-          },
-          {
-            id: "ps2",
-            occurredAt: "2026-08-12T09:00:00.000Z",
-            practiceDay: "2026-08-12",
-            outcome: "went_well",
-          },
-          {
-            id: "ps3",
-            occurredAt: "2026-08-13T09:00:00.000Z",
-            practiceDay: "2026-08-13",
-            outcome: "went_well",
-          },
-        ],
-        createdAt: "2026-08-13T00:00:00.000Z",
-        decidedAt: null,
-      },
-    });
+    const { onDecision } = renderCard(advancementSuggestion);
     expect(screen.getByText("Ready for the next step?")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Yes, move up"));
     expect(onDecision).toHaveBeenCalledWith("p1", "confirmed");
+  });
+
+  it("disables owner actions while their mutations are pending", () => {
+    renderCard(advancementSuggestion, vi.fn(), vi.fn(), { action: true, decision: true });
+
+    expect(screen.getByText("We did this")).toBeDisabled();
+    expect(screen.getByText("Yes, move up")).toBeDisabled();
+    expect(screen.getByText("Stay at this step")).toBeDisabled();
   });
 });

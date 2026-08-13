@@ -15,10 +15,12 @@ export function AdvancementProposalCard({
   proposal,
   skillName,
   onDecision,
+  pending = false,
 }: {
   proposal: AdvancementProposalDto;
   skillName: string;
   onDecision: (proposalId: string, decision: AdvancementDecision) => void;
+  pending?: boolean;
 }) {
   const { t, locale } = useI18n();
   return (
@@ -52,6 +54,7 @@ export function AdvancementProposalCard({
             key={entry.decision}
             type="button"
             variant={entry.decision === "confirmed" ? "default" : "outline"}
+            disabled={pending}
             onClick={() => onDecision(proposal.id, entry.decision)}
           >
             {t(entry.labelKey)}

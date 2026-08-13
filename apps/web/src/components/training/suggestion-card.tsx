@@ -18,11 +18,15 @@ export function SuggestionCard({
   onAction,
   onDecision,
   onPickFocus,
+  actionPending = false,
+  decisionPending = false,
 }: {
   suggestion: TrainingSuggestion;
   onAction: (action: SuggestionAction) => void;
   onDecision: (proposalId: string, decision: AdvancementDecision) => void;
   onPickFocus: () => void;
+  actionPending?: boolean;
+  decisionPending?: boolean;
 }) {
   const { t } = useI18n();
 
@@ -119,7 +123,7 @@ export function SuggestionCard({
             key={entry.action}
             type="button"
             variant={entry.action === "started" ? "default" : "outline"}
-            disabled={!suggestion.suggestionId}
+            disabled={!suggestion.suggestionId || actionPending}
             onClick={() => onAction(entry.action)}
           >
             {t(entry.labelKey)}
@@ -135,6 +139,7 @@ export function SuggestionCard({
           proposal={suggestion.advancementProposal}
           skillName={skill.name}
           onDecision={onDecision}
+          pending={decisionPending}
         />
       )}
     </section>

@@ -9306,6 +9306,7 @@ Expected: FAIL — `Failed to resolve import "./suggestion-card"`.
 import { useI18n } from "@/i18n";
 import { REFERRAL_DIRECTORIES, REFERRAL_KEYS, SAFETY_BODY_KEYS } from "@/lib/practice-options";
 import type { SuggestionSafety } from "@turingcare/shared";
+import { useId } from "react";
 
 /**
  * Deliberately has no dismiss control: suppression must not be something an
@@ -9313,6 +9314,7 @@ import type { SuggestionSafety } from "@turingcare/shared";
  */
 export function SafetyNotice({ safety }: { safety: SuggestionSafety }) {
   const { t } = useI18n();
+  const titleId = useId();
   const directories = REFERRAL_DIRECTORIES.filter((entry) =>
     entry.referrals.includes(safety.referral),
   );
@@ -9320,9 +9322,9 @@ export function SafetyNotice({ safety }: { safety: SuggestionSafety }) {
     <section
       className="space-y-3 rounded border border-copper bg-cream p-4"
       role="alert"
-      aria-labelledby="safety-notice-title"
+      aria-labelledby={titleId}
     >
-      <h2 id="safety-notice-title" className="font-semibold text-slate">
+      <h2 id={titleId} className="font-semibold text-slate">
         {t("safety.title")}
       </h2>
       <p className="text-sm text-slate">{t(SAFETY_BODY_KEYS[safety.ruleId])}</p>
@@ -9372,10 +9374,12 @@ export function AdvancementProposalCard({
   proposal,
   skillName,
   onDecision,
+  pending = false,
 }: {
   proposal: AdvancementProposalDto;
   skillName: string;
   onDecision: (proposalId: string, decision: AdvancementDecision) => void;
+  pending?: boolean;
 }) {
   const { t, locale } = useI18n();
   return (
@@ -9409,6 +9413,7 @@ export function AdvancementProposalCard({
             key={entry.decision}
             type="button"
             variant={entry.decision === "confirmed" ? "default" : "outline"}
+            disabled={pending}
             onClick={() => onDecision(proposal.id, entry.decision)}
           >
             {t(entry.labelKey)}
@@ -9447,11 +9452,15 @@ export function SuggestionCard({
   onAction,
   onDecision,
   onPickFocus,
+  actionPending = false,
+  decisionPending = false,
 }: {
   suggestion: TrainingSuggestion;
   onAction: (action: SuggestionAction) => void;
   onDecision: (proposalId: string, decision: AdvancementDecision) => void;
   onPickFocus: () => void;
+  actionPending?: boolean;
+  decisionPending?: boolean;
 }) {
   const { t } = useI18n();
 
@@ -9548,7 +9557,7 @@ export function SuggestionCard({
             key={entry.action}
             type="button"
             variant={entry.action === "started" ? "default" : "outline"}
-            disabled={!suggestion.suggestionId}
+            disabled={!suggestion.suggestionId || actionPending}
             onClick={() => onAction(entry.action)}
           >
             {t(entry.labelKey)}
@@ -9564,6 +9573,7 @@ export function SuggestionCard({
           proposal={suggestion.advancementProposal}
           skillName={skill.name}
           onDecision={onDecision}
+          pending={decisionPending}
         />
       )}
     </section>
@@ -9574,7 +9584,7 @@ export function SuggestionCard({
 - [ ] **Step 6: Run it, expect PASS**
 
 Run: `pnpm --filter @turingcare/web exec vitest run src/components/training/suggestion-card.test.tsx`
-Expected: PASS — 9 tests.
+Expected: PASS — 11 tests, including unique safety-notice IDs and pending-action guards.
 
 - [ ] **Step 7: Commit**
 
@@ -10562,6 +10572,8 @@ Render the card immediately after `<WeekNav …/>` and the quick capture immedia
           onAction={onSuggestionAction}
           onDecision={onAdvancementDecision}
           onPickFocus={() => setPickerOpen(true)}
+          actionPending={suggestionAction.isPending}
+          decisionPending={advancementDecision.isPending}
         />
       )}
       {suggestionError && (

@@ -1,6 +1,7 @@
 import { useI18n } from "@/i18n";
 import { REFERRAL_DIRECTORIES, REFERRAL_KEYS, SAFETY_BODY_KEYS } from "@/lib/practice-options";
 import type { SuggestionSafety } from "@turingcare/shared";
+import { useId } from "react";
 
 /**
  * Deliberately has no dismiss control: suppression must not be something an
@@ -8,6 +9,7 @@ import type { SuggestionSafety } from "@turingcare/shared";
  */
 export function SafetyNotice({ safety }: { safety: SuggestionSafety }) {
   const { t } = useI18n();
+  const titleId = useId();
   const directories = REFERRAL_DIRECTORIES.filter((entry) =>
     entry.referrals.includes(safety.referral),
   );
@@ -15,9 +17,9 @@ export function SafetyNotice({ safety }: { safety: SuggestionSafety }) {
     <section
       className="space-y-3 rounded border border-copper bg-cream p-4"
       role="alert"
-      aria-labelledby="safety-notice-title"
+      aria-labelledby={titleId}
     >
-      <h2 id="safety-notice-title" className="font-semibold text-slate">
+      <h2 id={titleId} className="font-semibold text-slate">
         {t("safety.title")}
       </h2>
       <p className="text-sm text-slate">{t(SAFETY_BODY_KEYS[safety.ruleId])}</p>
