@@ -66,6 +66,8 @@ pnpm exec biome check apps packages
 - `apps/api/src/lib/practice-evidence.ts` — level-anchored evidence loader + summariser.
 - `apps/api/src/lib/practice-evidence.test.ts`
 - `apps/api/src/lib/observations.ts` — recent structured daily check-in observation.
+- `apps/api/src/lib/safety-lock.ts` — `TransactionType`, `lockDogSafety`, `withDogSafetyLock`.
+- `apps/api/src/lib/safety-lock.test.ts`
 - `apps/api/src/lib/safety-policy.ts` — pure `decideSafety` + DB `evaluateSafety`.
 - `apps/api/src/lib/safety-policy.test.ts`
 - `apps/api/src/lib/suggestion-rules.ts` — pure deterministic rule selection.
@@ -75,6 +77,7 @@ pnpm exec biome check apps packages
 - `apps/api/src/lib/suggestion.ts` — orchestrator: reads, rules, persistence, telemetry.
 - `apps/api/src/routes/suggestion.test.ts` — route-level integration tests.
 - `apps/api/src/routes/practice-evidence.test.ts` — practice evidence + safety-signal capture tests.
+- `apps/api/src/routes/journal-safety-lock.test.ts` — journal writes serialize through the dog safety lock.
 
 **Create (web):**
 - `apps/web/src/lib/practice-options.ts` — enum → i18n key maps for dimensions/outcomes/rules/safety.
@@ -3216,7 +3219,9 @@ git commit -m "feat(api): structured practice evidence columns and safety signal
 - Modify: `apps/api/src/routes/dogs.ts`
 - Create: `apps/api/src/lib/practice-anchor.ts`
 - Create: `apps/api/src/lib/safety-lock.ts`
+- Create: `apps/api/src/lib/safety-lock.test.ts`
 - Create: `apps/api/src/routes/practice-evidence.test.ts`
+- Create: `apps/api/src/routes/journal-safety-lock.test.ts`
 - Modify: `apps/web/src/components/progress/session-form.tsx`
 - Modify: `apps/web/src/components/progress/session-form.test.tsx`
 
@@ -3858,13 +3863,9 @@ import { db } from "../db";
 /** The Drizzle executor handed to a callback running inside a database transaction. */
 export type TransactionType = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-export async function lockDogSafety(
-  tx: Pick<typeof db, "execute">,
-  dogId: string,
-): Promise<void> {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${`dog-safety:${dogId}`}))`,
-  );
+/** Serializes safety writes before any more granular training locks are acquired. */
+export async function lockDogSafety(tx: Pick<typeof db, "execute">, dogId: string): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`dog-safety:${dogId}`}))`);
 }
 
 /**
@@ -3888,6 +3889,15 @@ before any skill lock. Writers that mutate a safety *input* for a whole
 transaction (journal entry create/update/delete, safety signals) use
 `withDogSafetyLock` so the read, the decision and the write share one
 linearization point.
+
+Cover the helper with `apps/api/src/lib/safety-lock.test.ts` — 3 tests, each
+proving the lock state from an independent `pool.connect()` probe that runs
+`select pg_try_advisory_xact_lock(hashtext($1))` with `dog-safety:<dogId>` (a
+`false` result proves another transaction holds it, so no sleeps are needed):
+
+1. the lock is held for the whole callback and released on commit;
+2. a different dog id is never blocked;
+3. a throwing callback rolls the guarded write back and still releases the lock.
 
 ```ts
   .post("/:id/concerns", zValidator("json", behaviorConcernSchema), async (c) => {
@@ -3932,7 +3942,61 @@ internal `severe_behavior_concern` safety row remains active indefinitely. Gate
 1 deliberately has no owner-controlled resolution path; restoring exercises
 requires a future reviewed professional-resolution workflow.
 
-- [ ] **Step 5: Write the session routes** — in `apps/api/src/routes/dogs.ts`, replace the `POST /:id/skills/:skillId/sessions` handler and add the evidence route directly after it:
+- [ ] **Step 5: Serialize journal writes through the dog safety lock** — journal
+  entries are a safety input (`daily_checkin` trend and `moment` intensity feed
+  `loadSafetyInputs`), so every journal mutation must linearize against safety
+  decisions for the same dog. In `apps/api/src/routes/dogs.ts`, import
+  `withDogSafetyLock` from `../lib/safety-lock` and rewrite the three journal
+  mutation handlers without changing any status code or response body:
+
+  - `POST /:id/journal` — keep `findOwnedDog` (404) and the `occurredAt`
+    `Number.isNaN` check returning `invalidJournalField("occurredAt", "Invalid
+    date")` with 400 *before* the lock. Then change only the executor of the
+    existing insert: replace `db` with the locked `tx` by wrapping the current
+    `.insert(journalEntries).values(…).returning()` chain unchanged in
+    `const [entry] = await withDogSafetyLock(dog.id, (tx) => …);`. The value
+    mapping and telemetry (`journal.entry_created`, emitted after the lock is
+    released) are untouched, and the route still returns `{ entry }` with 201.
+  - `PUT /:id/journal/:entryId` — wrap the whole read-modify-write in
+    `const result = await withDogSafetyLock(dog.id, async (tx) => …);`. Inside
+    the lock, re-read the exact row with
+    `and(eq(journalEntries.id, entryId), eq(journalEntries.dogId, dog.id))`
+    plus `.limit(1).for("update")`, so the row the changes are computed from is
+    the row that is written. Compute `changes` from that fresh row (kind
+    switching, `occurredAt` validity, `daily_checkin` trend requirement,
+    moment-field clearing) exactly as today, but return a discriminated result —
+    `{ kind: "not_found" }`, `{ kind: "invalid_occurred_at" }`,
+    `{ kind: "missing_trend" }` or `{ kind: "updated", entry: updated }` —
+    instead of building the response inside the callback, because a response
+    must never be produced while the lock is held by an aborted branch. Map the
+    result outside the lock to the unchanged behavior: 400
+    `invalidJournalField("occurredAt", "Invalid date")`, 400
+    `invalidJournalField("trend", "Trend is required for daily check-ins")`,
+    404 `{ error: "not_found" }`, and 200 `{ entry: result.entry }`.
+  - `DELETE /:id/journal/:entryId` — wrap the existing delete, with its current
+    `and(eq(journalEntries.id, entryId), eq(journalEntries.dogId, dog.id))`
+    predicate, in `await withDogSafetyLock(dog.id, (tx) => …);` and keep the
+    unconditional 200 `{ ok: true }`.
+
+  `GET /:id/journal` and the read-only brief/export queries stay on `db` and
+  take no lock.
+
+  Create `apps/api/src/routes/journal-safety-lock.test.ts` — 4 tests. It
+  `vi.mock`s `../lib/safety-lock` with `importOriginal`, keeping the real
+  `withDogSafetyLock` but recording, for each call, whether the lock was already
+  held when the callback started (same independent `pool.connect()` +
+  `pg_try_advisory_xact_lock` probe as the unit test). The tests assert:
+
+  1. create, update and delete each run their write with the lock held for that
+     dog (`guardedWrites` has one entry per mutation, all `lockHeldDuringWrite`);
+  2. an invalid create date is rejected with 400 *before* the lock is taken (no
+     recorded guarded write);
+  3. update validation and ownership semantics are unchanged under the lock —
+     the 400 paths leave the stored row untouched and a valid update persists;
+  4. a mutation for a dog the caller does not own returns 404 and never takes
+     the lock.
+
+- [ ] **Step 6: Write the session routes** — in `apps/api/src/routes/dogs.ts`, replace the `POST /:id/skills/:skillId/sessions` handler and add the evidence route directly after it:
 
 Create `apps/api/src/lib/practice-anchor.ts` first:
 
@@ -4412,7 +4476,7 @@ import block, and `resolvePracticeTargetAudit` from
 Replace the route's old
 `practiceSessionSchema` import with `practiceSessionApiSchema`.
 
-- [ ] **Step 6: Cut the web timestamp payload over in the same checkpoint**
+- [ ] **Step 7: Cut the web timestamp payload over in the same checkpoint**
 
 In `apps/web/src/components/progress/session-form.tsx`, convert the
 `datetime-local` wall clock before calling the mutation:
@@ -4444,24 +4508,33 @@ ISO-round-trippable `occurredAt` plus a numeric `timezoneOffsetMinutes`. This
 keeps UI practice logging compatible in the same commit that makes the API
 offset-strict.
 
-- [ ] **Step 7: Run it, expect PASS**
+- [ ] **Step 8: Run it, expect PASS**
 
-Run: `pnpm --filter @turingcare/api exec vitest run src/routes/practice-evidence.test.ts`
-Expected: PASS — 19 tests.
+Run:
+```bash
+pnpm --filter @turingcare/api exec vitest run src/routes/practice-evidence.test.ts
+pnpm --filter @turingcare/api exec vitest run src/lib/safety-lock.test.ts
+pnpm --filter @turingcare/api exec vitest run src/routes/journal-safety-lock.test.ts
+```
+Expected: PASS — 19 practice-evidence tests, 3 safety-lock tests, 4 journal
+safety-lock tests.
 
-- [ ] **Step 8: Keep the telemetry test honest**
+- [ ] **Step 9: Keep the telemetry test honest**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/routes/telemetry.test.ts`
 Expected: PASS — the new names are server-only, so the client ingest allowlist assertions are unaffected.
 
-- [ ] **Step 9: Commit**
+Also re-run `pnpm --filter @turingcare/api exec vitest run src/routes/journal.test.ts`
+to prove the journal 400/404/200 contract is unchanged by the lock.
+
+- [ ] **Step 10: Commit**
 
 ```bash
-pnpm exec biome check --write apps/api/src/telemetry/events.ts apps/api/src/lib/practice-anchor.ts apps/api/src/lib/safety-lock.ts apps/api/src/routes/dogs.ts apps/api/src/routes/practice-evidence.test.ts apps/web/src/components/progress/session-form.tsx apps/web/src/components/progress/session-form.test.tsx
+pnpm exec biome check --write apps/api/src/telemetry/events.ts apps/api/src/lib/practice-anchor.ts apps/api/src/lib/safety-lock.ts apps/api/src/lib/safety-lock.test.ts apps/api/src/routes/dogs.ts apps/api/src/routes/practice-evidence.test.ts apps/api/src/routes/journal-safety-lock.test.ts apps/web/src/components/progress/session-form.tsx apps/web/src/components/progress/session-form.test.tsx
 pnpm --filter @turingcare/api exec tsc --noEmit
 pnpm --filter @turingcare/web exec vitest run src/components/progress/session-form.test.tsx
 pnpm --filter @turingcare/web exec tsc --noEmit
-git add apps/api/src/telemetry/events.ts apps/api/src/lib/practice-anchor.ts apps/api/src/lib/safety-lock.ts apps/api/src/routes/dogs.ts apps/api/src/routes/practice-evidence.test.ts apps/web/src/components/progress/session-form.tsx apps/web/src/components/progress/session-form.test.tsx
+git add apps/api/src/telemetry/events.ts apps/api/src/lib/practice-anchor.ts apps/api/src/lib/safety-lock.ts apps/api/src/lib/safety-lock.test.ts apps/api/src/routes/dogs.ts apps/api/src/routes/practice-evidence.test.ts apps/api/src/routes/journal-safety-lock.test.ts apps/web/src/components/progress/session-form.tsx apps/web/src/components/progress/session-form.test.tsx
 git commit -m "feat(api): capture structured practice evidence and safety signals"
 ```
 
@@ -5816,8 +5889,8 @@ import { db } from "../db";
 import { advancementProposals, practiceSessions, trainingSkills } from "../db/schema";
 import { clampLevel, MAX_LEVEL } from "./curriculum";
 import { EVIDENCE_WINDOW_DAYS } from "./practice-evidence";
+import { type TransactionType, lockDogSafety } from "./safety-lock";
 import { decideSafety, loadSafetyInputs } from "./safety-policy";
-import { lockDogSafety } from "./safety-lock";
 import { setSkillLevel } from "./skill-level";
 
 export const ADVANCEMENT_MIN_SESSIONS = 3;
@@ -5920,6 +5993,175 @@ function toDto(row: typeof advancementProposals.$inferSelect): AdvancementPropos
  * Keeps at most one open proposal per skill in step with the evidence:
  * creates one when earned, leaves a matching one untouched, and withdraws a
  * stale one when the evidence no longer supports it.
+ *
+ * Runs on the caller's transaction so a caller that already holds a lock (the
+ * safety-locked suggestion path) never opens a nested transaction and never
+ * takes a second pooled connection while holding the first.
+ */
+export async function syncAdvancementProposalInTx(
+  tx: TransactionType,
+  skillId: string,
+  evidence: AdvancementEvidence | null,
+  evidenceRows: Array<{
+    id: string;
+    outcome: PracticeOutcome;
+    occurredAt: Date;
+    practiceDay: string;
+  }>,
+): Promise<{ proposal: AdvancementProposalDto | null; created: boolean }> {
+  // Every proposal sync and owner decision takes this lock first. The shared
+  // lock order is advisory lock -> skill row -> proposal/evidence rows.
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skillId}))`);
+  const [currentSkill] = await tx
+    .select({ confidence: trainingSkills.confidence })
+    .from(trainingSkills)
+    .where(eq(trainingSkills.id, skillId))
+    .for("update")
+    .limit(1);
+  if (!currentSkill) return { proposal: null, created: false };
+  const [open] = await tx
+    .select()
+    .from(advancementProposals)
+    .where(
+      and(eq(advancementProposals.skillId, skillId), eq(advancementProposals.status, "proposed")),
+    )
+    .limit(1);
+
+  if (!evidence) {
+    if (open) {
+      await tx
+        .update(advancementProposals)
+        .set({ status: "withdrawn", decidedAt: new Date() })
+        .where(eq(advancementProposals.id, open.id));
+    }
+    return { proposal: null, created: false };
+  }
+  if (currentSkill.confidence !== evidence.fromLevel) {
+    if (open) {
+      await tx
+        .update(advancementProposals)
+        .set({ status: "withdrawn", decidedAt: new Date() })
+        .where(eq(advancementProposals.id, open.id));
+    }
+    return { proposal: null, created: false };
+  }
+
+  const qualifying = evidenceRows.slice(0, ADVANCEMENT_MIN_SESSIONS);
+  const persisted = await tx
+    .select({
+      id: practiceSessions.id,
+      outcome: practiceSessions.outcome,
+      occurredAt: practiceSessions.occurredAt,
+      practiceDay: practiceSessions.practiceDay,
+      curriculumLevel: practiceSessions.curriculumLevel,
+      practiceVariant: practiceSessions.practiceVariant,
+    })
+    .from(practiceSessions)
+    .where(
+      inArray(
+        practiceSessions.id,
+        qualifying.map((row) => row.id),
+      ),
+    );
+  const persistedById = new Map(persisted.map((row) => [row.id, row]));
+  const snapshotStillValid = qualifying.every((row) => {
+    const saved = persistedById.get(row.id);
+    if (!saved) return false;
+    return (
+      saved.outcome === row.outcome &&
+      saved.occurredAt.getTime() === row.occurredAt.getTime() &&
+      saved.practiceDay === row.practiceDay &&
+      saved.curriculumLevel === evidence.fromLevel &&
+      saved.practiceVariant === "primary"
+    );
+  });
+  if (!snapshotStillValid) {
+    if (open) {
+      await tx
+        .update(advancementProposals)
+        .set({ status: "withdrawn", decidedAt: new Date() })
+        .where(eq(advancementProposals.id, open.id));
+    }
+    return { proposal: null, created: false };
+  }
+  const sameSnapshot =
+    open &&
+    open.evidenceSessionIds.length === qualifying.length &&
+    open.evidenceSessionIds.every((id, index) => id === qualifying[index]?.id) &&
+    open.evidenceOutcomes.every((outcome, index) => outcome === qualifying[index]?.outcome);
+  if (
+    open &&
+    open.fromLevel === evidence.fromLevel &&
+    open.toLevel === evidence.toLevel &&
+    sameSnapshot
+  ) {
+    return { proposal: toDto(open), created: false };
+  }
+
+  if (open) {
+    await tx
+      .update(advancementProposals)
+      .set({ status: "withdrawn", decidedAt: new Date() })
+      .where(eq(advancementProposals.id, open.id));
+  }
+
+  const [latestDecision] = await tx
+    .select()
+    .from(advancementProposals)
+    .where(
+      and(
+        eq(advancementProposals.skillId, skillId),
+        eq(advancementProposals.fromLevel, evidence.fromLevel),
+        eq(advancementProposals.toLevel, evidence.toLevel),
+        inArray(advancementProposals.status, [
+          "stayed",
+          "rejected",
+          "regressed",
+          "insufficient_evidence",
+        ]),
+      ),
+    )
+    .orderBy(desc(advancementProposals.evidenceLastSessionAt), desc(advancementProposals.createdAt))
+    .limit(1);
+  const latestDecisionCoversEvidence =
+    latestDecision &&
+    (latestDecision.evidenceLastSessionAt.getTime() > evidence.lastSessionAt.getTime() ||
+      (latestDecision.evidenceLastSessionAt.getTime() === evidence.lastSessionAt.getTime() &&
+        (evidence.lastSessionId === null ||
+          latestDecision.evidenceSessionIds.includes(evidence.lastSessionId))));
+  if (latestDecision && latestDecision.status !== "proposed" && latestDecisionCoversEvidence) {
+    return { proposal: null, created: false };
+  }
+
+  const [created] = await tx
+    .insert(advancementProposals)
+    .values({
+      skillId,
+      fromLevel: evidence.fromLevel,
+      toLevel: evidence.toLevel,
+      ruleId: advancementRuleId,
+      evidenceSessionCount: evidence.sessionCount,
+      evidenceDayCount: evidence.dayCount,
+      evidenceWindowDays: EVIDENCE_WINDOW_DAYS,
+      evidenceLastSessionAt: evidence.lastSessionAt,
+      evidenceSessionIds: evidenceRows.slice(0, ADVANCEMENT_MIN_SESSIONS).map((row) => row.id),
+      evidenceOccurredAt: evidenceRows
+        .slice(0, ADVANCEMENT_MIN_SESSIONS)
+        .map((row) => row.occurredAt),
+      evidencePracticeDays: evidenceRows
+        .slice(0, ADVANCEMENT_MIN_SESSIONS)
+        .map((row) => row.practiceDay),
+      evidenceOutcomes: evidenceRows.slice(0, ADVANCEMENT_MIN_SESSIONS).map((row) => row.outcome),
+    })
+    .returning();
+  if (!created) return { proposal: null, created: false };
+  return { proposal: toDto(created), created: true };
+}
+
+/**
+ * Default entry point for callers that are not already inside a transaction:
+ * opens one so the advisory lock, the `FOR UPDATE` reads and the proposal write
+ * share a single linearization point.
  */
 export async function syncAdvancementProposal(
   skillId: string,
@@ -5931,164 +6173,7 @@ export async function syncAdvancementProposal(
     practiceDay: string;
   }>,
 ): Promise<{ proposal: AdvancementProposalDto | null; created: boolean }> {
-  return db.transaction(async (tx) => {
-    // Every proposal sync and owner decision takes this lock first. The shared
-    // lock order is advisory lock -> skill row -> proposal/evidence rows.
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skillId}))`);
-    const [currentSkill] = await tx
-      .select({ confidence: trainingSkills.confidence })
-      .from(trainingSkills)
-      .where(eq(trainingSkills.id, skillId))
-      .for("update")
-      .limit(1);
-    if (!currentSkill) return { proposal: null, created: false };
-    const [open] = await tx
-      .select()
-      .from(advancementProposals)
-      .where(
-        and(eq(advancementProposals.skillId, skillId), eq(advancementProposals.status, "proposed")),
-      )
-      .limit(1);
-
-    if (!evidence) {
-      if (open) {
-        await tx
-          .update(advancementProposals)
-          .set({ status: "withdrawn", decidedAt: new Date() })
-          .where(eq(advancementProposals.id, open.id));
-      }
-      return { proposal: null, created: false };
-    }
-    if (currentSkill.confidence !== evidence.fromLevel) {
-      if (open) {
-        await tx
-          .update(advancementProposals)
-          .set({ status: "withdrawn", decidedAt: new Date() })
-          .where(eq(advancementProposals.id, open.id));
-      }
-      return { proposal: null, created: false };
-    }
-
-    const qualifying = evidenceRows.slice(0, ADVANCEMENT_MIN_SESSIONS);
-    const persisted = await tx
-      .select({
-        id: practiceSessions.id,
-        outcome: practiceSessions.outcome,
-        occurredAt: practiceSessions.occurredAt,
-        practiceDay: practiceSessions.practiceDay,
-        curriculumLevel: practiceSessions.curriculumLevel,
-        practiceVariant: practiceSessions.practiceVariant,
-      })
-      .from(practiceSessions)
-      .where(inArray(practiceSessions.id, qualifying.map((row) => row.id)));
-    const persistedById = new Map(persisted.map((row) => [row.id, row]));
-    const snapshotStillValid = qualifying.every((row) => {
-      const saved = persistedById.get(row.id);
-      if (!saved) return false;
-      return (
-        saved.outcome === row.outcome &&
-        saved.occurredAt.getTime() === row.occurredAt.getTime() &&
-        saved.practiceDay === row.practiceDay &&
-        saved.curriculumLevel === evidence.fromLevel &&
-        saved.practiceVariant === "primary"
-      );
-    });
-    if (!snapshotStillValid) {
-      if (open) {
-        await tx
-          .update(advancementProposals)
-          .set({ status: "withdrawn", decidedAt: new Date() })
-          .where(eq(advancementProposals.id, open.id));
-      }
-      return { proposal: null, created: false };
-    }
-    const sameSnapshot =
-      open &&
-      open.evidenceSessionIds.length === qualifying.length &&
-      open.evidenceSessionIds.every((id, index) => id === qualifying[index]?.id) &&
-      open.evidenceOutcomes.every(
-        (outcome, index) => outcome === qualifying[index]?.outcome,
-      );
-    if (
-      open &&
-      open.fromLevel === evidence.fromLevel &&
-      open.toLevel === evidence.toLevel &&
-      sameSnapshot
-    ) {
-      return { proposal: toDto(open), created: false };
-    }
-
-    if (open) {
-      await tx
-        .update(advancementProposals)
-        .set({ status: "withdrawn", decidedAt: new Date() })
-        .where(eq(advancementProposals.id, open.id));
-    }
-
-    const [latestDecision] = await tx
-      .select()
-      .from(advancementProposals)
-      .where(
-        and(
-          eq(advancementProposals.skillId, skillId),
-          eq(advancementProposals.fromLevel, evidence.fromLevel),
-          eq(advancementProposals.toLevel, evidence.toLevel),
-          inArray(advancementProposals.status, [
-            "stayed",
-            "rejected",
-            "regressed",
-            "insufficient_evidence",
-          ]),
-        ),
-      )
-      .orderBy(
-        desc(advancementProposals.evidenceLastSessionAt),
-        desc(advancementProposals.createdAt),
-      )
-      .limit(1);
-    const latestDecisionCoversEvidence =
-      latestDecision &&
-      (latestDecision.evidenceLastSessionAt.getTime() > evidence.lastSessionAt.getTime() ||
-        (latestDecision.evidenceLastSessionAt.getTime() ===
-          evidence.lastSessionAt.getTime() &&
-          (evidence.lastSessionId === null ||
-            latestDecision.evidenceSessionIds.includes(evidence.lastSessionId))));
-    if (
-      latestDecision &&
-      latestDecision.status !== "proposed" &&
-      latestDecisionCoversEvidence
-    ) {
-      return { proposal: null, created: false };
-    }
-
-    const [created] = await tx
-      .insert(advancementProposals)
-      .values({
-        skillId,
-        fromLevel: evidence.fromLevel,
-        toLevel: evidence.toLevel,
-        ruleId: advancementRuleId,
-        evidenceSessionCount: evidence.sessionCount,
-        evidenceDayCount: evidence.dayCount,
-        evidenceWindowDays: EVIDENCE_WINDOW_DAYS,
-        evidenceLastSessionAt: evidence.lastSessionAt,
-        evidenceSessionIds: evidenceRows
-          .slice(0, ADVANCEMENT_MIN_SESSIONS)
-          .map((row) => row.id),
-        evidenceOccurredAt: evidenceRows
-          .slice(0, ADVANCEMENT_MIN_SESSIONS)
-          .map((row) => row.occurredAt),
-        evidencePracticeDays: evidenceRows
-          .slice(0, ADVANCEMENT_MIN_SESSIONS)
-          .map((row) => row.practiceDay),
-        evidenceOutcomes: evidenceRows
-          .slice(0, ADVANCEMENT_MIN_SESSIONS)
-          .map((row) => row.outcome),
-      })
-      .returning();
-    if (!created) return { proposal: null, created: false };
-    return { proposal: toDto(created), created: true };
-  });
+  return db.transaction((tx) => syncAdvancementProposalInTx(tx, skillId, evidence, evidenceRows));
 }
 
 /**
@@ -6124,10 +6209,7 @@ export async function decideAdvancementProposal(
       .select()
       .from(advancementProposals)
       .where(
-        and(
-          eq(advancementProposals.id, proposalId),
-          eq(advancementProposals.skillId, skillId),
-        ),
+        and(eq(advancementProposals.id, proposalId), eq(advancementProposals.skillId, skillId)),
       )
       .for("update")
       .limit(1);
@@ -6235,12 +6317,23 @@ Three rules follow from writing audit rows inside a live transaction:
 3. **Telemetry runs after a successful commit** and can never abort the
    transaction; `emitAfterCommit` swallows its own failures.
 
-Lock ordering is preserved: `syncAdvancementProposal` takes the skill lock and
-commits *before* the safety lock is taken on the exercise path, and any
-suppression-driven withdrawal happens *inside* the safety-locked callback, so
-the order is always dog safety → skill, never the reverse. That withdrawal
-commits in its own transaction, which is the conservative direction: an
-audit-write rollback can leave a proposal withdrawn, never revived.
+Nothing inside the locked callback may open a second transaction or reach for
+the global `db`: the pool connection is already checked out by the safety lock,
+so a nested `db.transaction` would wait for a connection it can never get while
+also writing outside the lock. Every decision-conditioned write therefore runs
+on the callback's `tx` — which is why `build` receives `tx` and
+`buildSuppressed(decision, tx)` calls `syncAdvancementProposalInTx(tx, focus.id, null, [])`
+rather than the default `syncAdvancementProposal` wrapper.
+
+Lock ordering is preserved: on the exercise path the default
+`syncAdvancementProposal` wrapper takes the skill lock and commits its own
+transaction *before* the safety lock is taken, and any suppression-driven
+withdrawal runs *inside* the safety-locked callback on that callback's `tx`, so
+the order is always dog safety → skill, never the reverse. Because the
+withdrawal now shares the audit transaction, an audit-write rollback also rolls
+the withdrawal back: the proposal stays open and the next request re-evaluates
+it under the same lock, and no suppressed request can ever leave a proposal
+confirmable, because confirmation itself re-checks safety under the same lock.
 
 - [ ] **Step 1: Create `apps/api/src/lib/suggestion.ts`**
 
@@ -6257,7 +6350,11 @@ import {
   weeklyFocus,
 } from "../db/schema";
 import { recordEvent } from "../telemetry/record-event";
-import { evaluateAdvancement, syncAdvancementProposal } from "./advancement";
+import {
+  evaluateAdvancement,
+  syncAdvancementProposal,
+  syncAdvancementProposalInTx,
+} from "./advancement";
 import { resolveCurriculumTarget } from "./curriculum";
 import { claimLegacyFocus } from "./focus";
 import { loadRecentObservation } from "./observations";
@@ -6532,13 +6629,16 @@ export async function loadSuggestion(input: {
   } satisfies Omit<TrainingSuggestion, "type" | "ruleId">;
 
   /**
-   * Called from inside the safety-locked callback, so withdrawing an open
-   * proposal takes the skill lock *after* the dog safety lock — never the reverse.
+   * Called from inside the safety-locked callback and runs on that callback's
+   * transaction, so withdrawing an open proposal takes the skill lock *after*
+   * the dog safety lock — never the reverse — and never opens a nested
+   * transaction against the already-checked-out connection.
    */
   const buildSuppressed = async (
     decision: NonNullable<TrainingSuggestion["safety"]>,
+    tx: TransactionType,
   ): Promise<TrainingSuggestion> => {
-    if (focus) await syncAdvancementProposal(focus.id, null, []);
+    if (focus) await syncAdvancementProposalInTx(tx, focus.id, null, []);
     return { ...base, type: "safety_suppressed", ruleId: null, safety: decision };
   };
 
@@ -6553,7 +6653,7 @@ export async function loadSuggestion(input: {
       // Suppression is never downgraded inside one request: if the locked
       // re-read comes back clear, the unlocked decision still stands and the
       // next request produces an exercise.
-      build: (decision) => buildSuppressed(decision ?? safety),
+      build: (decision, tx) => buildSuppressed(decision ?? safety, tx),
     });
   }
 
@@ -6606,12 +6706,13 @@ export async function loadSuggestion(input: {
       weekKey: input.weekKey,
       auditDay,
       now,
-      build: async (decision) => (decision ? buildSuppressed(decision) : unsupported),
+      build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : unsupported),
     });
   }
 
-  // Runs before the safety lock is taken and commits its own transaction, so
-  // the skill lock is never held while waiting on the dog safety lock.
+  // Uses the default wrapper on purpose: it runs before the safety lock is
+  // taken and commits its own transaction, so the skill lock is never held
+  // while waiting on the dog safety lock.
   const advancement = focus
     ? await syncAdvancementProposal(
         focus.id,
@@ -6663,7 +6764,7 @@ export async function loadSuggestion(input: {
     weekKey: input.weekKey,
     auditDay,
     now,
-    build: async (decision) => (decision ? buildSuppressed(decision) : suggestion),
+    build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : suggestion),
   });
 }
 
@@ -6718,12 +6819,18 @@ export async function recordSuggestionAction(input: {
 
 `TransactionType` comes from `../lib/safety-lock` (re-exported by
 `./safety-policy`); `isSuggestionSkipped` and `lockSuggestionAnchor` come from
-`./practice-anchor`.
+`./practice-anchor`. `syncAdvancementProposalInTx` is the transaction-aware
+entry point added in Task 15; the plain `syncAdvancementProposal` wrapper is
+used only on the pre-lock exercise path.
 
 - [ ] **Step 2: Typecheck**
 
 Run: `pnpm --filter @turingcare/api exec tsc --noEmit`
 Expected: PASS with no errors. If `satisfies Omit<TrainingSuggestion, "type" | "ruleId">` reports a mismatch, fix the offending field on the object rather than widening the type.
+
+Also grep the finished file: `rg "db\.transaction|syncAdvancementProposal\(" apps/api/src/lib/suggestion.ts`
+must show no `db.transaction` inside `loadSuggestion` and exactly one
+`syncAdvancementProposal(` call — the pre-lock exercise path.
 
 - [ ] **Step 3: Commit**
 
@@ -10478,7 +10585,7 @@ git commit -m "docs: record the Gate 1 personalized training evidence loop"
 | Deterministic, explainable, no free-text inspection | 14 (pure `selectSuggestionRule`), 16 |
 | Works at cold start | 14 (`cold_start_curriculum_level`), 17 |
 | Advancement proposed only, owner-confirmed, never automatic | 3, 15, 17, 21 |
-| Structured safety inputs from concern and practice capture, not free-text scanning | 1 (`safetySignalValues`), 11, 13, 22 |
+| Structured safety inputs from concern and practice capture, not free-text scanning | 1 (`safetySignalValues`), 11 (concern, signal and journal writes all serialize through `withDogSafetyLock`), 13, 22 |
 | Safety suppression supersedes suggestions | 13, 16 (safety is evaluated before any exercise path), 17, 21 |
 | Referral guidance by category with directories | 13, 18, 21 |
 | Suggestion and advancement persistence + audit | 12, 16 |
@@ -10495,7 +10602,7 @@ git commit -m "docs: record the Gate 1 personalized training evidence loop"
 
 **Type consistency across tasks** — every identifier is defined once and referenced with the same name and shape afterwards:
 - Shared: `weekKeySchema`, `focusAddSchema`, `focusWeekQuerySchema`, `focusRemoveQuerySchema`, `practiceEvidenceSchema`, `practiceSessionSchema`, `practiceSessionApiSchema`, `PracticeDimension`, `EasingStrategy`, `SkillDimensionMetadata`, `AuthoredCatalogTemplate`, `CatalogSkill`, `CatalogTemplate`, `suggestionQuerySchema`, `suggestionActionSchema`, `advancementDecisionSchema`, `TrainingSuggestion`, `CurriculumExercise`, `CurriculumFallback`, `SuggestionEvidence`, `SuggestionSafety`, `AdvancementProposalDto`, `advancementRuleId`.
-- API: `CURRICULUM_VERSION`, `skillDimensionMetadata`, `trainingCurriculum`, `findCurriculumSkill`, `clampLevel`, `MAX_LEVEL`, `resolveCurriculumTarget`, `loadFocusWeek(dogId, weekKey, timezoneOffsetMinutes, weekEndTimezoneOffsetMinutes)`, `summarizeEvidence`, `loadSkillEvidence` (returns `{ summary, rows }`, consumed that way in Task 16), `loadRecentObservation`, `selectSuggestionRule`, `evaluateAdvancement`, `syncAdvancementProposal`, `decideAdvancementProposal`, `decideSafety`, `loadSafetyInputs`, `evaluateSafety`, `currentWeekKey`, `loadSuggestion`, `recordSuggestionAction`.
+- API: `CURRICULUM_VERSION`, `skillDimensionMetadata`, `trainingCurriculum`, `findCurriculumSkill`, `clampLevel`, `MAX_LEVEL`, `resolveCurriculumTarget`, `loadFocusWeek(dogId, weekKey, timezoneOffsetMinutes, weekEndTimezoneOffsetMinutes)`, `summarizeEvidence`, `loadSkillEvidence` (returns `{ summary, rows, advancementRows, latestMixedHadChallengingContext }`, consumed that way in Task 16), `loadRecentObservation`, `selectSuggestionRule`, `evaluateAdvancement`, `syncAdvancementProposalInTx(tx, skillId, evidence, evidenceRows)`, `syncAdvancementProposal(skillId, evidence, evidenceRows)` (default wrapper that opens its own transaction), `decideAdvancementProposal`, `decideSafety`, `loadSafetyInputs`, `evaluateSafety`, `evaluateSafetyWithLock(dogId, now, (decision, tx) => …)`, `TransactionType`, `lockDogSafety`, `withDogSafetyLock`, `currentWeekKey`, `loadSuggestion`, `recordSuggestionAction`.
 - Web: `weekKeyOf`, `focusKey(dogId, weekKey)`, `useFocusWeek(dogId, weekKey, timezoneOffsetMinutes, weekEndTimezoneOffsetMinutes)`, `useAddFocus(dogId, weekKey)`, `useRemoveFocus(dogId, weekKey)`, `suggestionKey`, `useSuggestion(dogId, weekKey, timezoneOffsetMinutes)`, `useSuggestionAction`, `useAdvancementDecision`, `useSetSessionEvidence`, `OUTCOME_KEYS`, `EASING_STRATEGY_KEYS`, `DIMENSION_CONFIG`, `SAFETY_SIGNAL_KEYS`, `RULE_REASON_KEYS`, `SAFETY_BODY_KEYS`, `REFERRAL_KEYS`, `REFERRAL_DIRECTORIES`, `SuggestionCard`, `SafetyNotice`, `AdvancementProposalCard`, `OutcomeQuickCapture`.
 - Owner-input enum values are declared once in `packages/shared` and mirrored by the pg enums in Tasks 10 and 12. The safety pg enum additionally contains the internal `severe_behavior_concern` rule, which is derived only from structured concern severity and never offered as an owner option. `suggestionRuleValues` and `safetyRuleValues` are stored as `text` because rule identifiers evolve faster than a pg enum should.
 
@@ -10510,6 +10617,6 @@ git commit -m "docs: record the Gate 1 personalized training evidence loop"
 8. Proposal synchronization is serialized per skill and snapshots the three supporting IDs, timestamps, and outcomes. Changed or deleted evidence withdraws the proposal, a stayed/rejected proposal needs newer evidence before it can reappear, and stale confirmation cannot overwrite a level.
 9. Injury/pain reports have a reviewed 90-day window. Aggression/bite risk, severe fear/panic, and the internal severe-concern signal never age out; every owner entry requires explicit confirmation, and restoring exercises requires a future reviewed professional-resolution workflow rather than an owner dismiss button. A two-operator runbook exists only to correct a support-verified input mistake.
 10. Audit rows carry scalar columns only, never jsonb or owner prose.
-11. Suggestion audit writes are fail-open and deduped per curriculum version and owner-local day, so a page refresh does not inflate the cohort data and a DB hiccup does not hide the suggestion. The final decision and its audit row share the safety-locked transaction, so fail-open is implemented *outside* that transaction: a recognized audit-write failure rolls it back and returns the built suggestion with `suggestionId: null`, while a safety-load failure still surfaces.
+11. Suggestion audit writes are fail-open and deduped per curriculum version and owner-local day, so a page refresh does not inflate the cohort data and a DB hiccup does not hide the suggestion. The final decision, any suppression-driven proposal withdrawal and the audit row all share the safety-locked transaction — nothing inside that callback opens a nested transaction or writes through the global `db`, so the checked-out connection can never deadlock against itself. Fail-open is therefore implemented *outside* that transaction: a recognized audit-write failure rolls it back (leaving the proposal open for the next request to re-evaluate under the same lock) and returns the built suggestion with `suggestionId: null`, while a safety-load failure still surfaces.
 12. New endpoints live in `apps/api/src/routes/dogs.ts` to avoid a second `requireUser` pass and to keep RPC types on one app.
 13. Rule identifiers are returned to the client and localized there, so the API never renders owner-facing prose in a locale.
