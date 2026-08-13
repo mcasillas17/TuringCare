@@ -96,10 +96,17 @@ describe("DogCardBody", () => {
     fireEvent.change(screen.getByRole("combobox", { name: /severity/i }), {
       target: { value: "severe" },
     });
+    fireEvent.change(screen.getByRole("combobox", { name: /unsafe/i }), {
+      target: { value: "aggression_or_bite_risk" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /add concern/i }));
+    expect(addConcern.mutateAsync).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /confirm/i }));
     fireEvent.click(screen.getByRole("button", { name: /add concern/i }));
     expect(addConcern.mutateAsync).toHaveBeenCalledWith({
       concern: "Counter surfing",
       severity: "severe",
+      safetySignal: "aggression_or_bite_risk",
     });
     await waitFor(() => expect(input.value).toBe(""));
   });

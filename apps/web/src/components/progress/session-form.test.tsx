@@ -6,28 +6,71 @@ import { SessionForm } from "./session-form";
 
 vi.mock("@/lib/progress", () => ({ useLogSession: vi.fn() }));
 
-describe("SessionForm", () => {
-  it("submits an ISO instant and numeric timezone offset", async () => {
-    const mutateAsync = vi.fn().mockResolvedValue({});
-    vi.mocked(progressLib.useLogSession).mockReturnValue({
-      mutateAsync,
-      isPending: false,
-    } as unknown as ReturnType<typeof progressLib.useLogSession>);
-    render(
-      <LocaleProvider>
-        <SessionForm dogId="dog-1" skillId="skill-1" onCancel={vi.fn()} />
-      </LocaleProvider>,
-    );
+function setup(dimensions: Parameters<typeof SessionForm>[0]["dimensions"]) {
+  const mutateAsync = vi.fn().mockResolvedValue({});
+  vi.mocked(progressLib.useLogSession).mockReturnValue({
+    mutateAsync,
+    isPending: false,
+  } as unknown as ReturnType<typeof progressLib.useLogSession>);
+  render(
+    <LocaleProvider>
+      <SessionForm
+        dogId="d1"
+        skillId="s1"
+        dimensions={dimensions}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    </LocaleProvider>,
+  );
+  return { mutateAsync };
+}
 
-    const occurredAt = document.querySelector<HTMLInputElement>('input[type="datetime-local"]');
-    if (!occurredAt) throw new Error("missing datetime-local input");
-    fireEvent.change(occurredAt, { target: { value: "2026-08-12T10:30" } });
-    fireEvent.submit(occurredAt.closest("form") as HTMLFormElement);
+function submitSession() {
+  const form = screen.getByText("Save session").closest("form");
+  if (!form) throw new Error("missing session form");
+  fireEvent.submit(form);
+}
 
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce());
-    const args = mutateAsync.mock.calls[0]?.[0] as { body: Record<string, unknown> };
-    expect(args.body.occurredAt).toEqual(expect.any(String));
-    expect(new Date(args.body.occurredAt as string).toISOString()).toBe(args.body.occurredAt);
-    expect(args.body.timezoneOffsetMinutes).toEqual(expect.any(Number));
+describe("SessionForm evidence capture", () => {
+  it("saves with no evidence answered at all", async () => {
+    const { mutateAsync } = setup(["cue_support"]);
+    submitSession();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    const body = mutateAsync.mock.calls[0]?.[0]?.body as Record<string, unknown>;
+    expect(screen.getByLabelText("When")).toHaveAttribute("max");
+    expect(body.outcome).toBeUndefined();
+    expect(body.cueSupport).toBeUndefined();
+    expect(body.practicedTarget).toBeUndefined();
+    expect(new Date(String(body.occurredAt)).toISOString()).toBe(body.occurredAt);
+  });
+
+  it("only renders the dimensions the suggestion asked about", () => {
+    setup(["distraction"]);
+    expect(screen.getByText("What else was going on?")).toBeInTheDocument();
+    expect(screen.queryByText("How much help did you give?")).not.toBeInTheDocument();
+  });
+
+  it("submits the chosen outcome, context and safety signal", async () => {
+    const { mutateAsync } = setup(["distraction"]);
+    fireEvent.change(screen.getByLabelText("How did it go?"), {
+      target: { value: "too_hard" },
+    });
+    fireEvent.change(screen.getByLabelText("What else was going on?"), {
+      target: { value: "strong" },
+    });
+    fireEvent.change(screen.getByLabelText("Did anything unsafe happen?"), {
+      target: { value: "injury_or_pain" },
+    });
+    submitSession();
+    await waitFor(() => expect(screen.getByText("Save session")).toBeEnabled());
+    expect(mutateAsync).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /confirm/i }));
+    submitSession();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    const body = mutateAsync.mock.calls[0]?.[0]?.body as Record<string, unknown>;
+    expect(body.outcome).toBe("too_hard");
+    expect(body.distraction).toBe("strong");
+    expect(body.safetySignal).toBe("injury_or_pain");
   });
 });
