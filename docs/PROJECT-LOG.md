@@ -992,3 +992,37 @@ no new findings on changed files (pre-existing/adjudicated only).
 - Spec/plan: `docs/superpowers/specs/2026-06-21-turing-quiet-setting-design.md`,
   `docs/superpowers/plans/2026-06-21-turing-quiet-setting.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-quiet-setting`.
+
+## 2026-08-12 — Weekly focus week-start versioning — MIGRATION VERIFICATION
+Gate 1 Task 7 versions `weekly_focus` by owner-local Monday `week_start`, adds
+compatibility/claim tables, and preserves legacy rows as `week_start = NULL` so
+Task 8 can claim at most one preserved row per dog into the owner's real local
+week without guessing from the database timezone. The current push-created
+local `turingcare` database had **0** `weekly_focus` rows when inventoried and
+was not used for `db:migrate` because its Drizzle migration journal is empty.
+Migration `0013` was instead applied with `db:migrate` to a dedicated throwaway
+database seeded with a legacy focus row after migrations `0000`–`0012`; the row
+was preserved with `week_start = NULL`, and the constraints, RLS, direct-delete
+guard, authorized deletion, and FK cascade behavior were verified there.
+
+## 2026-08-13 — Personalized training Gate 1 — launch evidence
+Weekly focus is versioned by local week; practice sessions now retain structured
+outcome/context and the curriculum level. A bounded per-skill dimension metadata
+table turns the authored catalog into deterministic targets. Rule-based weekly
+suggestions offer one primary exercise plus one easier fallback, while advancement
+is proposed and then requires the owner's confirmation. Structured safety inputs
+suppress exercises and refer owners out. Suggestion/advancement audit rows and
+eight new telemetry names cover focus, practice outcome, suggestion,
+advancement, and safety decisions, including legacy focus compatibility use.
+- The owner confirmation is intentionally two-step (a proposal followed by an
+  explicit decision); `operations/safety-signal-correction.md` records the
+  support-confirmed input-mistake correction runbook and its exact two-key
+  transaction.
+- Launch follow-up: after rollout telemetry confirms `focus.legacy_compat_used`
+  is unused, remove the legacy focus and legacy `datetime-local` session
+  compatibility branches.
+- Out of scope for Gate 1: Gate 2 dashboards, custom-skill suggestions, and
+  Behavior Brief integration.
+- Spec/plan: `specs/2026-08-11-personalized-training-progress-design.md`,
+  `plans/2026-08-11-personalized-training-gate-1.md`.
+- Commits: `9095ed4..HEAD` on `feat/personalized-training-gate-1`.

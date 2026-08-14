@@ -232,6 +232,7 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
             <SessionForm
               dogId={dogId}
               skillId={displaySkill.id}
+              dimensions={catalogSkill?.dimensions ?? []}
               onCancel={() => setMode("view")}
               onSaved={() => setMode("view")}
             />

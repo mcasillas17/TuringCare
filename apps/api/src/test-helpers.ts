@@ -13,15 +13,16 @@ export type TestUser = {
 
 /**
  * Sign a throwaway user up via Better Auth and return its session cookie.
- * Each user gets a unique x-forwarded-for so the global rate-limiter never
+ * Each user gets a unique Fly client IP so the global rate-limiter never
  * cross-talks between tests. cleanup() deletes the user (cascade removes
  * dogs/concerns/goals/session/account).
  */
 export async function createTestUser(): Promise<TestUser> {
   const id = randomUUID();
-  const ip = `198.51.100.${Math.floor(Math.random() * 254) + 1}`;
+  const ipOctet = (start: number) => (Number.parseInt(id.slice(start, start + 2), 16) % 254) + 1;
+  const ip = `198.${ipOctet(0)}.${ipOctet(2)}.${ipOctet(4)}`;
   const email = `test-${id}@example.com`;
-  const baseHeaders = { "Content-Type": "application/json", "x-forwarded-for": ip };
+  const baseHeaders = { "Content-Type": "application/json", "fly-client-ip": ip };
 
   const res = await app.request("/api/auth/sign-up/email", {
     method: "POST",

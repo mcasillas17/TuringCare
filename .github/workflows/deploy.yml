@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   # Same gate as ci.yml (inlined). Must pass before anything deploys.
   ci:
@@ -47,12 +51,13 @@ jobs:
       - name: Build
         run: pnpm -r build
 
-  # Run the real migrations against production Supabase.
-  migrate:
+  deploy-api:
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -60,27 +65,63 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Migrate production database
-        run: pnpm --filter @turingcare/api db:migrate
-
-  # Deploy the API to Fly only after migrations succeed.
-  # --remote-only builds the image on Fly's builders, not the GitHub runner.
-  deploy-api:
-    needs: migrate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy to Fly
-        run: flyctl deploy --remote-only --config apps/api/fly.toml
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - run: pnpm install --frozen-lockfile
+      - name: Drain, migrate, deploy, and verify API
+        run: |
+          set -Eeuo pipefail
+          original_count=$(flyctl machine list --json --app turingcare-api | jq 'length')
+          target_count=$original_count
+          if [ "$target_count" -lt 1 ]; then
+            target_count=1
+          fi
+          migrated=0
+          restore_old_release() {
+            if [ "$original_count" -lt 1 ]; then
+              return
+            fi
+            flyctl scale count "$original_count" --yes --app turingcare-api
+            curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/health
+          }
+          recover_on_exit() {
+            status=$?
+            trap - EXIT INT TERM
+            if [ "$migrated" -eq 0 ]; then
+              restore_old_release
+            else
+              flyctl scale count 0 --yes --app turingcare-api
+            fi
+            exit "$status"
+          }
+          trap recover_on_exit EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          if [ "$original_count" -gt 0 ]; then
+            flyctl scale count 0 --yes --app turingcare-api
+            for attempt in $(seq 1 12); do
+              count=$(flyctl machine list --json --app turingcare-api | jq 'length')
+              if [ "$count" -eq 0 ]; then
+                break
+              fi
+              sleep 5
+            done
+            remaining=$(flyctl machine list --json --app turingcare-api | jq 'length')
+            if [ "$remaining" -ne 0 ]; then
+              echo "API machines did not drain" >&2
+              exit 1
+            fi
+          fi
+          pnpm --filter @turingcare/api db:migrate
+          migrated=1
+          flyctl deploy --remote-only --config apps/api/fly.toml
+          flyctl scale count "$target_count" --yes --app turingcare-api
+          curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/ready
+          trap - EXIT INT TERM
 
-  # Frontend is independent of the API path — runs in parallel with
-  # migrate/deploy-api, gated only on ci.
+  # The web uses the expanded focus/session contracts, so publish it only after
+  # the migrated API is healthy.
   deploy-web:
-    needs: ci
+    needs: deploy-api
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

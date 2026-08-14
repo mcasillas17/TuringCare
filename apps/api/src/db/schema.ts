@@ -13,6 +13,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -144,16 +145,245 @@ export const trainingSkills = pgTable(
   (t) => [check("confidence_range", sql`${t.confidence} BETWEEN 1 AND 5`)],
 );
 
-export const practiceSessions = pgTable("practice_sessions", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  skillId: uuid("skill_id")
-    .notNull()
-    .references(() => trainingSkills.id, { onDelete: "cascade" }),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-  durationMinutes: integer("duration_minutes"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const practiceOutcomeEnum = pgEnum("practice_outcome", ["went_well", "mixed", "too_hard"]);
+export const practiceCueSupportEnum = pgEnum("practice_cue_support", [
+  "food_lure",
+  "hand_signal",
+  "verbal_cue",
+  "no_extra_help",
+]);
+export const practiceEnvironmentEnum = pgEnum("practice_environment", [
+  "home_quiet",
+  "home_busy",
+  "yard",
+  "quiet_outdoor",
+  "busy_outdoor",
+]);
+export const practiceDistanceEnum = pgEnum("practice_distance", [
+  "at_side",
+  "few_steps",
+  "across_room",
+  "across_yard",
+  "far_away",
+]);
+export const practiceDurationBandEnum = pgEnum("practice_duration_band", [
+  "under_5_seconds",
+  "about_15_seconds",
+  "about_30_seconds",
+  "one_to_two_minutes",
+  "five_to_fifteen_minutes",
+  "about_30_minutes",
+  "one_to_two_hours",
+  "half_day_or_more",
+]);
+export const practiceVariantEnum = pgEnum("practice_variant", ["primary", "fallback"]);
+export const practiceDistractionEnum = pgEnum("practice_distraction", [
+  "none",
+  "mild",
+  "moderate",
+  "strong",
+]);
+export const practiceDimensionEnum = pgEnum("practice_dimension", [
+  "cue_support",
+  "environment",
+  "distance",
+  "duration",
+  "distraction",
+]);
+export const safetySignalTypeEnum = pgEnum("safety_signal_type", [
+  "aggression_or_bite_risk",
+  "injury_or_pain",
+  "severe_fear_or_panic",
+  // Internal structured rule derived from severity, never shown as an owner option.
+  "severe_behavior_concern",
+]);
+export const safetySignalSourceEnum = pgEnum("safety_signal_source", [
+  "practice_session",
+  "behavior_concern",
+]);
+export const suggestionTypeEnum = pgEnum("suggestion_type", [
+  "exercise",
+  "safety_suppressed",
+  "needs_focus_skill",
+  "custom_skill_unsupported",
+]);
+export const suggestionEvidenceCategoryEnum = pgEnum("suggestion_evidence_category", [
+  "curriculum_only",
+  "recent_practice",
+  "recent_observation",
+]);
+export const suggestionActionEnum = pgEnum("suggestion_action", [
+  "started",
+  "skipped",
+  "rated_useful",
+  "rated_not_useful",
+]);
+export const advancementStatusEnum = pgEnum("advancement_status", [
+  "proposed",
+  "confirmed",
+  "stayed",
+  "rejected",
+  "regressed",
+  "insufficient_evidence",
+  "withdrawn",
+]);
+
+/**
+ * One row per distinct suggestion shown to an owner. Scalar columns only — no
+ * jsonb and no free text — so the audit trail can never carry owner prose.
+ */
+export const trainingSuggestions = pgTable(
+  "training_suggestions",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    dogId: uuid("dog_id")
+      .notNull()
+      .references(() => dogs.id, { onDelete: "cascade" }),
+    skillId: uuid("skill_id").references(() => trainingSkills.id, { onDelete: "set null" }),
+    // Stable authored identity survives skill deletion for audit reconstruction.
+    catalogSkillKey: text("catalog_skill_key"),
+    weekStart: date("week_start").notNull(),
+    curriculumVersion: text("curriculum_version").notNull(),
+    suggestionType: suggestionTypeEnum("suggestion_type").notNull(),
+    // Free-form only in the sense that rule identifiers evolve faster than a pg
+    // enum should; values always come from the shared `suggestionRuleValues`.
+    ruleId: text("rule_id"),
+    level: integer("level"),
+    fallbackLevel: integer("fallback_level"),
+    fallbackDimension: practiceDimensionEnum("fallback_dimension"),
+    // Controlled `easingStrategyValues` identifier, never owner prose.
+    fallbackStrategy: text("fallback_strategy"),
+    evidenceCategory: suggestionEvidenceCategoryEnum("evidence_category"),
+    suppressed: boolean("suppressed").notNull().default(false),
+    safetyRuleId: text("safety_rule_id"),
+    // Server-built from dog/week/skill/type/rule/owner-local day; never owner prose.
+    dedupeKey: text("dedupe_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("training_suggestions_dog_created_idx").on(t.dogId, t.createdAt),
+    unique("training_suggestions_dedupe_key").on(t.dedupeKey),
+  ],
+);
+
+export const trainingSuggestionActions = pgTable(
+  "training_suggestion_actions",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    suggestionId: uuid("suggestion_id")
+      .notNull()
+      .references(() => trainingSuggestions.id, { onDelete: "cascade" }),
+    action: suggestionActionEnum("action").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("training_suggestion_actions_suggestion_idx").on(t.suggestionId),
+    unique("training_suggestion_actions_once").on(t.suggestionId, t.action),
+  ],
+);
+
+/** Advancement is always proposed and owner-decided, never applied automatically. */
+export const advancementProposals = pgTable(
+  "advancement_proposals",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    skillId: uuid("skill_id")
+      .notNull()
+      .references(() => trainingSkills.id, { onDelete: "cascade" }),
+    fromLevel: integer("from_level").notNull(),
+    toLevel: integer("to_level").notNull(),
+    ruleId: text("rule_id").notNull(),
+    evidenceSessionCount: integer("evidence_session_count").notNull(),
+    evidenceDayCount: integer("evidence_day_count").notNull(),
+    evidenceWindowDays: integer("evidence_window_days").notNull(),
+    evidenceSessionIds: uuid("evidence_session_ids").array().notNull(),
+    evidenceOccurredAt: timestamp("evidence_occurred_at", { withTimezone: true }).array().notNull(),
+    evidencePracticeDays: text("evidence_practice_days").array().notNull(),
+    evidenceOutcomes: practiceOutcomeEnum("evidence_outcomes").array().notNull(),
+    // Latest session that supported this proposal. A stayed/rejected proposal
+    // cannot reappear until newer evidence exists.
+    evidenceLastSessionAt: timestamp("evidence_last_session_at", { withTimezone: true }).notNull(),
+    status: advancementStatusEnum("status").notNull().default("proposed"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("advancement_proposals_skill_idx").on(t.skillId),
+    uniqueIndex("advancement_proposals_open_skill_idx")
+      .on(t.skillId)
+      .where(sql`${t.status} = 'proposed'`),
+    check(
+      "advancement_levels_range",
+      sql`${t.fromLevel} BETWEEN 1 AND 5 AND ${t.toLevel} BETWEEN 1 AND 5`,
+    ),
+  ],
+);
+
+export const practiceSessions = pgTable(
+  "practice_sessions",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    skillId: uuid("skill_id")
+      .notNull()
+      .references(() => trainingSkills.id, { onDelete: "cascade" }),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    durationMinutes: integer("duration_minutes"),
+    notes: text("notes"),
+    // Structured evidence. All nullable: capture is always optional and must
+    // never block a practice save.
+    outcome: practiceOutcomeEnum("outcome"),
+    cueSupport: practiceCueSupportEnum("cue_support"),
+    environment: practiceEnvironmentEnum("environment"),
+    distance: practiceDistanceEnum("distance"),
+    durationBand: practiceDurationBandEnum("duration_band"),
+    distraction: practiceDistractionEnum("distraction"),
+    // The curriculum level the dog was practising at when this was logged, so
+    // advancement evidence is level-anchored and resets after a level change.
+    curriculumLevel: integer("curriculum_level"),
+    curriculumVersion: text("curriculum_version"),
+    practiceVariant: practiceVariantEnum("practice_variant"),
+    // Exact audited suggestion the owner said they practised. The API validates
+    // ownership/currentness before storing this UUID; Task 10 cannot add an FK
+    // because the suggestion table is created by the following migration.
+    suggestionId: uuid("suggestion_id").references(() => trainingSuggestions.id, {
+      onDelete: "set null",
+    }),
+    // Owner-local calendar date derived once from occurredAt + the offset sent
+    // for that specific session. This remains correct across DST boundaries.
+    practiceDay: date("practice_day"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("practice_sessions_skill_occurred_idx").on(t.skillId, t.occurredAt),
+    check(
+      "practice_curriculum_level_range",
+      sql`${t.curriculumLevel} IS NULL OR ${t.curriculumLevel} BETWEEN 1 AND 5`,
+    ),
+  ],
+);
+
+/**
+ * Explicit, owner-answered safety reports. Written only from structured inputs
+ * (never from free text) and deliberately not deletable through the API: the
+ * suppression they cause must not be dismissible by the owner. Injury/pain is
+ * time-bounded; aggression/bite risk, severe fear/panic, and the internal
+ * severe-concern signal persist until a future reviewed
+ * professional-resolution workflow exists.
+ */
+export const dogSafetySignals = pgTable(
+  "dog_safety_signals",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    dogId: uuid("dog_id")
+      .notNull()
+      .references(() => dogs.id, { onDelete: "cascade" }),
+    type: safetySignalTypeEnum("type").notNull(),
+    source: safetySignalSourceEnum("source").notNull(),
+    reportedAt: timestamp("reported_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("dog_safety_signals_dog_reported_idx").on(t.dogId, t.reportedAt)],
+);
 
 export const skillMilestones = pgTable(
   "skill_milestones",
@@ -182,11 +412,45 @@ export const weeklyFocus = pgTable(
     skillId: uuid("skill_id")
       .notNull()
       .references(() => trainingSkills.id, { onDelete: "cascade" }),
+    // Local Monday of the focus week. Focus is versioned per week so past weeks
+    // keep the selection that was actually active then.
+    // Nullable only for preserved pre-migration rows whose owner-local week is
+    // unknowable. Every Gate 1 write supplies a non-null Monday.
+    weekStart: date("week_start"),
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique("weekly_focus_dog_skill").on(t.dogId, t.skillId)],
+  (t) => [
+    unique("weekly_focus_dog_week").on(t.dogId, t.weekStart),
+    check(
+      "weekly_focus_week_start_monday",
+      sql`${t.weekStart} is null or extract(isodow from ${t.weekStart}) = 1`,
+    ),
+  ],
 );
+
+/** Short-lived owner-local context scoped to one authenticated legacy client. */
+export const focusCompatibilityWeeks = pgTable(
+  "focus_compatibility_weeks",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    dogId: uuid("dog_id")
+      .notNull()
+      .references(() => dogs.id, { onDelete: "cascade" }),
+    sessionId: text("session_id").notNull(),
+    weekStart: date("week_start").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [unique("focus_compatibility_dog_session").on(t.dogId, t.sessionId)],
+);
+
+/** Durable marker ensuring preserved undated focus seeds at most one week. */
+export const legacyFocusClaims = pgTable("legacy_focus_claims", {
+  dogId: uuid("dog_id")
+    .primaryKey()
+    .references(() => dogs.id, { onDelete: "cascade" }),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull(),
+});
 
 export const journalEntries = pgTable(
   "journal_entries",
@@ -212,6 +476,7 @@ export const journalEntries = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    index("journal_entries_dog_kind_occurred_idx").on(t.dogId, t.kind, t.occurredAt, t.id),
     check("journal_intensity_range", sql`${t.intensity} IS NULL OR ${t.intensity} BETWEEN 1 AND 5`),
     check(
       "journal_daily_checkin_trend",

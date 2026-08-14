@@ -92,6 +92,41 @@
       "when": 1782068961870,
       "tag": "0012_absent_hercules",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786598549064,
+      "tag": "0013_weekly_focus_week_start",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786604056494,
+      "tag": "0014_practice_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786604923686,
+      "tag": "0015_training_suggestions",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786613173739,
+      "tag": "0016_journal_observation_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786614513769,
+      "tag": "0017_advancement_open_index_schema",
+      "breakpoints": true
     }
   ]
 }

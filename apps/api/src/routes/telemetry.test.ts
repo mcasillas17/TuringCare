@@ -57,7 +57,7 @@ describe("server-side telemetry emission", () => {
     expect(await countEvents(u.userId, "journal.entry_created")).toBe(1);
   });
 
-  it("records training.goal_added, practice_logged, focus.week_set and level_set", async () => {
+  it("records training.goal_added, practice_logged, focus telemetry and level_set", async () => {
     const u = await createTestUser();
     users.push(u);
     const dogId = await createDog(u);
@@ -81,8 +81,17 @@ describe("server-side telemetry emission", () => {
     await app.request(`/api/dogs/${dogId}/focus`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ skillId: skill.id }),
+      body: JSON.stringify({ skillId: skill.id, weekKey: "2026-08-10" }),
     });
+    const start = new Date();
+    start.setUTCHours(0, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 7);
+    await app.request(
+      `/api/dogs/${dogId}/focus?weekStart=${encodeURIComponent(start.toISOString())}&weekEnd=${encodeURIComponent(end.toISOString())}`,
+      { headers: u.authHeaders },
+    );
     await app.request(`/api/dogs/${dogId}/skills/${skill.id}/level`, {
       method: "PUT",
       headers: u.authHeaders,
@@ -91,7 +100,41 @@ describe("server-side telemetry emission", () => {
     expect(await countEvents(u.userId, "training.goal_added")).toBe(1);
     expect(await countEvents(u.userId, "training.practice_logged")).toBe(1);
     expect(await countEvents(u.userId, "focus.week_set")).toBe(1);
+    expect(await countEvents(u.userId, "focus.legacy_compat_used")).toBe(1);
     expect(await countEvents(u.userId, "training.level_set")).toBe(1);
+  });
+
+  it("requires legacy POST context before emitting compatibility telemetry", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dogId = await createDog(u);
+    const writeWithoutContext = await app.request(`/api/dogs/${dogId}/focus`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ skillId: "00000000-0000-4000-8000-000000000001" }),
+    });
+    expect(writeWithoutContext.status).toBe(409);
+    expect(await countEvents(u.userId, "focus.legacy_compat_used")).toBe(0);
+
+    const start = new Date();
+    start.setUTCHours(0, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 7);
+    const read = await app.request(
+      `/api/dogs/${dogId}/focus?weekStart=${encodeURIComponent(start.toISOString())}&weekEnd=${encodeURIComponent(end.toISOString())}`,
+      { headers: u.authHeaders },
+    );
+    expect(read.status).toBe(200);
+
+    const write = await app.request(`/api/dogs/${dogId}/focus`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ skillId: "00000000-0000-4000-8000-000000000001" }),
+    });
+
+    expect(write.status).toBe(404);
+    expect(await countEvents(u.userId, "focus.legacy_compat_used")).toBe(2);
   });
 
   it("records the brief lifecycle (generated, finalized, shared)", async () => {

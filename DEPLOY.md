@@ -3,16 +3,23 @@
 End-to-end deploy on every push to `main`:
 
 ```
-push main → ci → migrate ─→ deploy-api (Fly,  api.turingcare.dog)
-                └─────────→ deploy-web (Pages, turingcare.dog + www)
+push main → ci → deploy-api (drain+migrate+deploy+ready) → deploy-web
 ```
 
 - **Frontend** → Cloudflare Pages (`turingcare.dog`, `www.turingcare.dog`)
 - **Backend** → Fly.io (`api.turingcare.dog`)
 - **Database** → Supabase Postgres
 
-`deploy-web` runs in parallel with `migrate`/`deploy-api` (independent). The API
-never deploys until production migrations succeed.
+Production deploys are serialized. For schema-incompatible migrations, one
+bounded API job drains the old machines, migrates, deploys, restores the prior
+machine count, and verifies readiness without a runner gap between phases. If
+migration fails, the workflow restores the old release after the database
+rollback; if deployment or readiness fails after migration, it leaves the API
+drained for operator intervention rather than serving an incompatible release.
+The first deploy bootstraps one API machine when no prior machine exists. Health
+checks use the stable `turingcare-api.fly.dev` hostname, so custom-domain
+provisioning cannot block recovery. The web deploys only after the migrated API
+is healthy.
 
 > Nothing here is automated by the repo. Do every step below **once**, by hand,
 > before the first push to `main`. The workflows (`.github/workflows/ci.yml`,
@@ -46,10 +53,10 @@ The API package is `@turingcare/api` (pnpm filter name used everywhere below —
    - **URL-encode** the password if it contains `@ : / ? # [ ] %` (e.g.
      `@`→`%40`). Reset it at Settings → Database → Database password if unknown.
 3. This single value is used as `DATABASE_URL` in **both** the GitHub Actions
-   secret (for the `migrate` job) and the Fly secret (for the running API).
+   secret (for the `deploy-api` migration step) and the Fly secret (for the running API).
    It is **not** committed anywhere — secrets only.
 
-No tables yet — the `migrate` job creates them from
+No tables yet — the `deploy-api` job creates them from
 `apps/api/drizzle/` on the first deploy.
 
 ---
@@ -182,7 +189,7 @@ Repo → Settings → Secrets and variables → Actions → New repository secre
 
 | Secret | Value |
 |---|---|
-| `DATABASE_URL` | Supabase Session-pooler URL (used by the `migrate` job) |
+| `DATABASE_URL` | Supabase Session-pooler URL (used by the `deploy-api` migration step) |
 | `FLY_API_TOKEN` | from `fly tokens create deploy` |
 | `CLOUDFLARE_API_TOKEN` | Pages-edit token |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
@@ -200,9 +207,9 @@ gh secret set CLOUDFLARE_ACCOUNT_ID
 
 ## 6. First deploy
 
-Push to `main`. `ci` → `migrate` → `deploy-api`, and `deploy-web` in parallel.
-On success: API at the Fly app's `*.fly.dev`, frontend at the Pages
-`*.pages.dev`. Attach the real domains next.
+Push to `main`. `ci` → `deploy-api` (drain, migrate, deploy, readiness) →
+`deploy-web`. On success: API at the Fly app's `*.fly.dev`, frontend at the
+Pages `*.pages.dev`. Attach the real domains next.
 
 ---
 

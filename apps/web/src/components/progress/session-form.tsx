@@ -1,8 +1,16 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { DIMENSION_CONFIG, OUTCOME_KEYS, SAFETY_SIGNAL_KEYS } from "@/lib/practice-options";
 import { useLogSession } from "@/lib/progress";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type PracticeSessionInput, practiceSessionSchema } from "@turingcare/shared";
+import {
+  type PracticeDimension,
+  type PracticeSessionInput,
+  practiceOutcomeValues,
+  practiceSessionSchema,
+  safetySignalValues,
+} from "@turingcare/shared";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -17,11 +25,13 @@ function localDateTime() {
 export function SessionForm({
   dogId,
   skillId,
+  dimensions,
   onCancel,
   onSaved,
 }: {
   dogId: string;
   skillId: string;
+  dimensions: PracticeDimension[];
   onCancel: () => void;
   onSaved?: () => void;
 }) {
@@ -30,19 +40,38 @@ export function SessionForm({
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<PracticeSessionInput>({
     resolver: zodResolver(practiceSessionSchema),
     defaultValues: { occurredAt: localDateTime() },
   });
+  const selectedSafetySignal = watch("safetySignal");
+  const [safetyConfirmed, setSafetyConfirmed] = useState(false);
 
   const onSubmit = handleSubmit(async (body) => {
+    if (body.safetySignal && !safetyConfirmed) {
+      toast.error(t("practice.safetyConfirm"));
+      return;
+    }
     try {
-      await logSession.mutateAsync({ skillId, body });
+      const occurredAt = new Date(body.occurredAt);
+      await logSession.mutateAsync({
+        skillId,
+        body: {
+          ...body,
+          occurredAt: occurredAt.toISOString(),
+          timezoneOffsetMinutes: occurredAt.getTimezoneOffset(),
+        },
+      });
       toast.success(t("progress.saved"));
       onSaved?.();
-    } catch {
-      toast.error(t("progress.saveFailed"));
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message === "future_practice_session"
+          ? t("practice.futureSession")
+          : t("progress.saveFailed"),
+      );
     }
   });
 
@@ -56,7 +85,12 @@ export function SessionForm({
     >
       <label className="block">
         <span className="text-sm">{t("progress.occurredAt")}</span>
-        <input type="datetime-local" className={input} {...register("occurredAt")} />
+        <input
+          type="datetime-local"
+          max={localDateTime()}
+          className={input}
+          {...register("occurredAt")}
+        />
         {errors.occurredAt && (
           <span className="text-xs text-red-600">{errors.occurredAt.message}</span>
         )}
@@ -83,6 +117,69 @@ export function SessionForm({
           {...register("notes", { setValueAs: (v) => v || undefined })}
         />
       </label>
+      <label className="block">
+        <span className="text-sm">{t("practice.outcomeQuestion")}</span>
+        <select
+          className={input}
+          aria-label={t("practice.outcomeQuestion")}
+          {...register("outcome", { setValueAs: (v) => v || undefined })}
+        >
+          <option value="">{t("practice.outcomeSkip")}</option>
+          {practiceOutcomeValues.map((value) => (
+            <option key={value} value={value}>
+              {t(OUTCOME_KEYS[value])}
+            </option>
+          ))}
+        </select>
+      </label>
+      {dimensions.map((dimension) => {
+        const group = DIMENSION_CONFIG[dimension];
+        return (
+          <label className="block" key={dimension}>
+            <span className="text-sm">{t(group.labelKey)}</span>
+            <select
+              className={input}
+              aria-label={t(group.labelKey)}
+              {...register(group.field, { setValueAs: (v) => v || undefined })}
+            >
+              <option value="">{t("practice.contextOptional")}</option>
+              {group.options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {t(option.labelKey)}
+                </option>
+              ))}
+            </select>
+          </label>
+        );
+      })}
+      <label className="block">
+        <span className="text-sm">{t("practice.safetyLabel")}</span>
+        <select
+          className={input}
+          aria-label={t("practice.safetyLabel")}
+          {...register("safetySignal", {
+            setValueAs: (v) => v || undefined,
+            onChange: () => setSafetyConfirmed(false),
+          })}
+        >
+          <option value="">{t("practice.safetyNone")}</option>
+          {safetySignalValues.map((value) => (
+            <option key={value} value={value}>
+              {t(SAFETY_SIGNAL_KEYS[value])}
+            </option>
+          ))}
+        </select>
+      </label>
+      {selectedSafetySignal && (
+        <label className="block text-sm">
+          <input
+            type="checkbox"
+            checked={safetyConfirmed}
+            onChange={(event) => setSafetyConfirmed(event.target.checked)}
+          />
+          {t("practice.safetyConfirm")}
+        </label>
+      )}
       <div className="flex gap-2">
         <Button type="submit" disabled={isSubmitting || logSession.isPending}>
           {isSubmitting || logSession.isPending ? t("progress.saving") : t("progress.save")}

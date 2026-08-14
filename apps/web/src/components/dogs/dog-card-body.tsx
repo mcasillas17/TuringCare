@@ -4,11 +4,16 @@ import { Sheet } from "@/components/ui/sheet";
 import { useI18n } from "@/i18n";
 import { type DogOverview, useAddConcern, useDog, useRemoveConcern } from "@/lib/dogs";
 import { useJournal } from "@/lib/journal";
+import { SAFETY_SIGNAL_KEYS } from "@/lib/practice-options";
 import { useProgress } from "@/lib/progress";
 import { timeAgo } from "@/lib/time-ago";
 import { humanTime } from "@/lib/when";
 import { useQueryClient } from "@tanstack/react-query";
-import type { BehaviorConcernInput } from "@turingcare/shared";
+import {
+  type BehaviorConcernInput,
+  type SafetySignalType,
+  safetySignalValues,
+} from "@turingcare/shared";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -28,6 +33,8 @@ export function DogCardBody({ dog }: { dog: DogOverview }) {
   const [sheet, setSheet] = useState<"moment" | "daily_checkin" | null>(null);
   const [concern, setConcern] = useState("");
   const [severity, setSeverity] = useState<BehaviorConcernInput["severity"]>("mild");
+  const [concernSafetySignal, setConcernSafetySignal] = useState<"" | SafetySignalType>("");
+  const [concernSafetyConfirmed, setConcernSafetyConfirmed] = useState(false);
 
   const closeSheet = () => {
     setSheet(null);
@@ -149,20 +156,59 @@ export function DogCardBody({ dog }: { dog: DogOverview }) {
             className="rounded border border-silver bg-white px-2 text-sm"
             aria-label={t("dogs.severityLabel")}
             value={severity}
-            onChange={(e) => setSeverity(e.target.value as BehaviorConcernInput["severity"])}
+            onChange={(e) => {
+              setSeverity(e.target.value as BehaviorConcernInput["severity"]);
+              setConcernSafetyConfirmed(false);
+            }}
           >
             <option value="mild">{t("dogs.severityMild")}</option>
             <option value="moderate">{t("dogs.severityModerate")}</option>
             <option value="severe">{t("dogs.severitySevere")}</option>
           </select>
+          <select
+            className="rounded border border-silver bg-white px-2 text-sm"
+            aria-label={t("practice.safetyLabel")}
+            value={concernSafetySignal}
+            onChange={(event) => {
+              setConcernSafetySignal(event.target.value as "" | SafetySignalType);
+              setConcernSafetyConfirmed(false);
+            }}
+          >
+            <option value="">{t("practice.safetyNone")}</option>
+            {safetySignalValues.map((value) => (
+              <option key={value} value={value}>
+                {t(SAFETY_SIGNAL_KEYS[value])}
+              </option>
+            ))}
+          </select>
+          {(concernSafetySignal || severity === "severe") && (
+            <label className="text-sm">
+              <input
+                type="checkbox"
+                checked={concernSafetyConfirmed}
+                onChange={(event) => setConcernSafetyConfirmed(event.target.checked)}
+              />
+              {t("practice.safetyConfirm")}
+            </label>
+          )}
           <button
             type="button"
             disabled={!concern.trim() || addConcern.isPending}
             className="rounded-lg border border-silver bg-white px-3 py-1.5 text-sm font-bold text-slate disabled:opacity-50"
             onClick={async () => {
               try {
-                await addConcern.mutateAsync({ concern, severity });
+                if ((concernSafetySignal || severity === "severe") && !concernSafetyConfirmed) {
+                  toast.error(t("practice.safetyConfirm"));
+                  return;
+                }
+                await addConcern.mutateAsync({
+                  concern,
+                  severity,
+                  safetySignal: concernSafetySignal || undefined,
+                });
                 setConcern("");
+                setConcernSafetySignal("");
+                setConcernSafetyConfirmed(false);
               } catch {
                 toast.error(t("journal.saveFailed"));
               }

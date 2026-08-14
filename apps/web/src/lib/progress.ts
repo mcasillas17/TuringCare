@@ -1,6 +1,10 @@
 import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PracticeSessionInput, TrainingSkillInput } from "@turingcare/shared";
+import type {
+  PracticeEvidenceInput,
+  PracticeSessionInput,
+  TrainingSkillInput,
+} from "@turingcare/shared";
 import { CONFIDENCE_MAX } from "@turingcare/shared";
 import { api } from "./api";
 
@@ -51,6 +55,7 @@ const dogSkills = api.api.dogs[":id"].skills;
 
 function invalidateProgress(qc: ReturnType<typeof useQueryClient>, dogId: string) {
   qc.invalidateQueries({ queryKey: ["progress", dogId] });
+  qc.invalidateQueries({ queryKey: ["suggestion", dogId] });
 }
 
 export function useProgress(dogId: string) {
@@ -139,7 +144,10 @@ export function useLogSession(dogId: string) {
         param: { id: dogId, skillId: args.skillId },
         json: args.body,
       });
-      if (!res.ok) throw new Error("save_failed");
+      if (!res.ok) {
+        const failed = await res.json();
+        throw new Error("error" in failed ? failed.error : "save_failed");
+      }
       return (await res.json()).session;
     },
     onSuccess: () => {
@@ -158,6 +166,25 @@ export function useDeleteSession(dogId: string) {
       });
       if (!res.ok) throw new Error("delete_failed");
       return res.json();
+    },
+    onSuccess: () => invalidateProgress(qc, dogId),
+  });
+}
+
+export function useSetSessionEvidence(dogId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      skillId: string;
+      sessionId: string;
+      body: PracticeEvidenceInput;
+    }) => {
+      const res = await dogSkills[":skillId"].sessions[":sessionId"].evidence.$patch({
+        param: { id: dogId, skillId: args.skillId, sessionId: args.sessionId },
+        json: args.body,
+      });
+      if (!res.ok) throw new Error("evidence_failed");
+      return (await res.json()).session;
     },
     onSuccess: () => invalidateProgress(qc, dogId),
   });

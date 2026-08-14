@@ -84,6 +84,9 @@ Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highligh
   on this week and see a Mon–Sun grid of which days you practiced each one, with
   tap-to-log. Page back through prior weeks; the grid is computed from your dated
   practice sessions.
+- **Weekly personalized suggestions** — one primary exercise and an easier
+  fallback are based on the focused skill and structured practice evidence;
+  safety signals pause exercises and refer owners to appropriate support.
 - **i18n** — typed en/es catalogs with compile-time parity.
 - **Telemetry + admin dashboard** with rate-limited event ingestion.
 
