@@ -1,5 +1,5 @@
 import type { DogProfile } from "@turingcare/shared";
-import { db } from "../db";
+import type { db } from "../db";
 import { dogs } from "../db/schema";
 import type { TransactionType } from "./safety-lock";
 
