@@ -714,7 +714,9 @@ describe("guided setup lifecycle", () => {
     const body = (await created.json()) as {
       setup: GuidedSetupRecord;
       concern: { id: string; dogId: string; concern: string; severity: string };
+      actionDeleted: boolean;
     };
+    expect(body.actionDeleted).toBe(false);
     expect(body.concern).toMatchObject({
       dogId: setup.dogId,
       concern: "Snapped when approached",
@@ -788,6 +790,9 @@ describe("guided setup lifecycle", () => {
       safetyConfirmed: true,
     });
     expect(created.status).toBe(201);
+    expect((await created.json()) as { actionDeleted: boolean }).toMatchObject({
+      actionDeleted: false,
+    });
 
     expect(
       await db
@@ -809,6 +814,61 @@ describe("guided setup lifecycle", () => {
     });
   });
 
+  it("replays a deleted behavior action as a tombstone without recreating the concern or telemetry", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "understand_behavior")).status).toBe(200);
+
+    const created = await createBehaviorAction(user, {
+      setupId: setup.id,
+      concern: "Barked at a visitor",
+      severity: "mild",
+      safetyConfirmed: false,
+    });
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      setup: GuidedSetupRecord;
+      concern: { id: string; dogId: string };
+      actionDeleted: false;
+    };
+    expect(createdBody.actionDeleted).toBe(false);
+    const beforeReplayEvents = await actionEvents(user.userId);
+
+    const deleted = await app.request(
+      `/api/dogs/${setup.dogId}/concerns/${createdBody.concern.id}`,
+      {
+        method: "DELETE",
+        headers: user.authHeaders,
+      },
+    );
+    expect(deleted.status).toBe(200);
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      concerns: 0,
+      journals: 0,
+    });
+
+    const replay = await createBehaviorAction(user, {
+      setupId: setup.id,
+      concern: "Replacement prose must be ignored",
+      severity: "severe",
+      safetyConfirmed: true,
+    });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({
+      setup: createdBody.setup,
+      concern: null,
+      actionDeleted: true,
+    });
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      concerns: 0,
+      journals: 0,
+    });
+    expect(await actionEvents(user.userId)).toEqual(beforeReplayEvents);
+  });
+
   it("creates one daily check-in and replays the exact existing result on duplicate progress submit", async () => {
     const user = await createTestUser();
     users.push(user);
@@ -827,7 +887,9 @@ describe("guided setup lifecycle", () => {
     const firstBody = (await created.json()) as {
       setup: GuidedSetupRecord;
       entry: { id: string; dogId: string; kind: string; trend: string; note: string };
+      actionDeleted: false;
     };
+    expect(firstBody.actionDeleted).toBe(false);
     expect(firstBody.entry).toMatchObject({
       dogId: setup.dogId,
       kind: "daily_checkin",
@@ -854,6 +916,122 @@ describe("guided setup lifecycle", () => {
       1,
     );
     expect(rows.filter(({ name }) => name === "guided_setup.completed")).toHaveLength(1);
+  });
+
+  it("replays a deleted journal action as a tombstone without recreating the entry or telemetry", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "track_progress")).status).toBe(200);
+
+    const created = await createProgressAction(user, {
+      setupId: setup.id,
+      trend: "same",
+      note: "Settled after the walk.",
+    });
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      setup: GuidedSetupRecord;
+      entry: { id: string; dogId: string };
+      actionDeleted: false;
+    };
+    expect(createdBody.actionDeleted).toBe(false);
+    const beforeReplayEvents = await actionEvents(user.userId);
+
+    const deleted = await app.request(`/api/dogs/${setup.dogId}/journal/${createdBody.entry.id}`, {
+      method: "DELETE",
+      headers: user.authHeaders,
+    });
+    expect(deleted.status).toBe(200);
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      concerns: 0,
+      journals: 0,
+    });
+
+    const replay = await createProgressAction(user, {
+      setupId: setup.id,
+      trend: "harder",
+      note: "Replacement prose must be ignored.",
+    });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({
+      setup: createdBody.setup,
+      entry: null,
+      actionDeleted: true,
+    });
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      concerns: 0,
+      journals: 0,
+    });
+    expect(await actionEvents(user.userId)).toEqual(beforeReplayEvents);
+  });
+
+  it("replays a cascaded journal action as a tombstone while preserving completed history with null dog fields", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "track_progress")).status).toBe(200);
+
+    const created = await createProgressAction(user, {
+      setupId: setup.id,
+      trend: "better",
+      note: "Recovered after a quiet morning.",
+    });
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      setup: GuidedSetupRecord;
+      entry: { id: string; dogId: string };
+      actionDeleted: false;
+    };
+    expect(createdBody.actionDeleted).toBe(false);
+    const beforeReplayEvents = await actionEvents(user.userId);
+
+    const deleted = await app.request(`/api/dogs/${setup.dogId}`, {
+      method: "DELETE",
+      headers: user.authHeaders,
+    });
+    expect(deleted.status).toBe(200);
+    expect(await countActionRows(setup.dogId as string)).toEqual({
+      concerns: 0,
+      journals: 0,
+      goals: 0,
+      skills: 0,
+      focus: 0,
+      practices: 0,
+    });
+
+    const status = await readStatus(user);
+    expect(status.latest).toMatchObject({
+      id: setup.id,
+      dogId: null,
+      dogName: null,
+      completionReason: "first_action_completed",
+      firstActionType: "progress",
+      firstActionId: createdBody.entry.id,
+    });
+    const history = status.latest;
+    if (!history) throw new Error("missing completed guided setup history");
+
+    const replay = await createProgressAction(user, {
+      setupId: setup.id,
+      trend: "harder",
+      note: "Replacement prose must be ignored.",
+    });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({
+      setup: history,
+      entry: null,
+      actionDeleted: true,
+    });
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      concerns: 0,
+      journals: 0,
+    });
+    expect(await actionEvents(user.userId)).toEqual(beforeReplayEvents);
   });
 
   it("rejects action intent mismatches without completing the setup", async () => {
@@ -932,7 +1110,9 @@ describe("guided setup lifecycle", () => {
     const firstBody = (await firstAction.json()) as {
       setup: GuidedSetupRecord;
       concern: { id: string };
+      actionDeleted: false;
     };
+    expect(firstBody.actionDeleted).toBe(false);
 
     const secondStart = await startSetup(user, { ...validDog, name: "Second Biscuit" });
     const second = ((await secondStart.json()) as SetupBody).setup;
@@ -1007,6 +1187,9 @@ describe("guided setup lifecycle", () => {
       note,
     });
     expect(created.status).toBe(201);
+    expect((await created.json()) as { actionDeleted: boolean }).toMatchObject({
+      actionDeleted: false,
+    });
 
     const rows = await actionEvents(user.userId);
     expect(rows).toEqual([

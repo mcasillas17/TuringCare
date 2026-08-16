@@ -30,6 +30,29 @@ type ActiveSetupWithDogRow = {
   setup: SetupRow & { dogId: string };
   dogName: string;
 };
+type GuidedBehaviorActionResponse =
+  | {
+      setup: GuidedSetupRecord;
+      concern: typeof behaviorConcerns.$inferSelect;
+      actionDeleted: false;
+    }
+  | {
+      setup: GuidedSetupRecord;
+      concern: null;
+      actionDeleted: true;
+    };
+type GuidedProgressActionResponse =
+  | {
+      setup: GuidedSetupRecord;
+      entry: typeof journalEntries.$inferSelect;
+      actionDeleted: false;
+    }
+  | {
+      setup: GuidedSetupRecord;
+      entry: null;
+      actionDeleted: true;
+    };
+type CompletedActionReplay<T> = { kind: "already_completed" } | { kind: "idempotent"; response: T };
 
 function toSetupDto(row: SetupDogJoinRow): GuidedSetupRecord {
   if (row.setup.completedAt === null && (row.setup.dogId === null || row.dogName === null)) {
@@ -133,8 +156,18 @@ function resolveCompletedSetupReplay(setup: SetupDogJoinRow, reason: GuidedSetup
 async function resolveCompletedActionReplay(
   tx: TransactionType,
   row: SetupDogJoinRow,
+  actionType: "behavior",
+): Promise<CompletedActionReplay<GuidedBehaviorActionResponse>>;
+async function resolveCompletedActionReplay(
+  tx: TransactionType,
+  row: SetupDogJoinRow,
+  actionType: "progress",
+): Promise<CompletedActionReplay<GuidedProgressActionResponse>>;
+async function resolveCompletedActionReplay(
+  tx: TransactionType,
+  row: SetupDogJoinRow,
   actionType: "behavior" | "progress",
-) {
+): Promise<CompletedActionReplay<GuidedBehaviorActionResponse | GuidedProgressActionResponse>> {
   const setup = toSetupDto(row);
   const actionId = row.setup.firstActionId;
   if (
@@ -151,8 +184,20 @@ async function resolveCompletedActionReplay(
       .from(behaviorConcerns)
       .where(eq(behaviorConcerns.id, actionId))
       .limit(1);
-    if (!concern) return { kind: "already_completed" } as const;
-    return { kind: "idempotent", setup, concern } as const;
+    if (!concern) {
+      return {
+        kind: "idempotent",
+        response: {
+          setup,
+          concern: null,
+          actionDeleted: true,
+        } satisfies GuidedBehaviorActionResponse,
+      } as const;
+    }
+    return {
+      kind: "idempotent",
+      response: { setup, concern, actionDeleted: false } satisfies GuidedBehaviorActionResponse,
+    } as const;
   }
 
   const [entry] = await tx
@@ -160,8 +205,16 @@ async function resolveCompletedActionReplay(
     .from(journalEntries)
     .where(eq(journalEntries.id, actionId))
     .limit(1);
-  if (!entry) return { kind: "already_completed" } as const;
-  return { kind: "idempotent", setup, entry } as const;
+  if (!entry) {
+    return {
+      kind: "idempotent",
+      response: { setup, entry: null, actionDeleted: true } satisfies GuidedProgressActionResponse,
+    } as const;
+  }
+  return {
+    kind: "idempotent",
+    response: { setup, entry, actionDeleted: false } satisfies GuidedProgressActionResponse,
+  } as const;
 }
 
 type SetupCompletion =
@@ -416,7 +469,7 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       return c.json({ error: "setup_already_completed" } as const, 409);
     }
     if (result.kind === "idempotent") {
-      return c.json({ setup: result.setup, concern: result.concern });
+      return c.json(result.response);
     }
 
     for (const signal of result.reportedSignals) {
@@ -440,7 +493,14 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
         completionReason: "first_action_completed",
       },
     });
-    return c.json({ setup: result.setup, concern: result.concern }, 201);
+    return c.json(
+      {
+        setup: result.setup,
+        concern: result.concern,
+        actionDeleted: false,
+      } satisfies GuidedBehaviorActionResponse,
+      201,
+    );
   })
   .post("/action/progress", zValidator("json", guidedSetupProgressActionSchema), async (c) => {
     const userId = c.get("userId");
@@ -482,7 +542,7 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       return c.json({ error: "setup_already_completed" } as const, 409);
     }
     if (result.kind === "idempotent") {
-      return c.json({ setup: result.setup, entry: result.entry });
+      return c.json(result.response);
     }
 
     await recordEvent("journal.entry_created", {
@@ -504,5 +564,12 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
         completionReason: "first_action_completed",
       },
     });
-    return c.json({ setup: result.setup, entry: result.entry }, 201);
+    return c.json(
+      {
+        setup: result.setup,
+        entry: result.entry,
+        actionDeleted: false,
+      } satisfies GuidedProgressActionResponse,
+      201,
+    );
   });

@@ -846,6 +846,15 @@ Also assert:
 - safety signal insertion and suppression invariants match concern routes;
 - transaction rollback leaves setup active when the domain writer throws;
 - telemetry props contain action type and intent but no prose.
+- a deleted concern replay returns `200` with `{ concern: null, actionDeleted: true }`
+  after the normal owner concern-delete route, without a duplicate concern or
+  replay telemetry;
+- a deleted journal replay returns `200` with `{ entry: null, actionDeleted: true }`
+  after the normal owner journal-delete route, without a duplicate entry or
+  replay telemetry;
+- deleting a completed action's dog cascades its domain row, preserves completed
+  setup history with `dogId` and `dogName` set to `null`, and returns the same
+  tombstone contract on replay without telemetry.
 
 - [ ] **Step 2: Run the action tests**
 
@@ -891,6 +900,26 @@ For first actions, persist `firstActionType` and `firstActionId`; for skip/aband
 both fields null. Existing lifecycle callers pass `{ reason: "skipped" }` or
 `{ reason: "abandoned" }`.
 
+Every successful behavior and progress action response, including a `200` replay,
+uses a discriminated shape:
+
+```ts
+// behavior
+{ setup, concern, actionDeleted: false }
+{ setup, concern: null, actionDeleted: true }
+
+// progress
+{ setup, entry, actionDeleted: false }
+{ setup, entry: null, actionDeleted: true }
+```
+
+When a completed setup's `firstActionType` and completion reason match the
+endpoint but the referenced concern or journal row is gone, return the deleted
+tombstone with `200`. Do not snapshot or recreate the deleted row, include its
+prose, or emit telemetry on replay. Skipped, abandoned, and different-action
+replays remain `409`. Future hooks and UI must check `actionDeleted` before
+rendering `concern` or `entry`.
+
 - [ ] **Step 4: Implement both action routes**
 
 Add:
@@ -917,6 +946,11 @@ Inside one transaction:
 4. call the widened `completeSetup` with the active setup and
    `{ reason: "first_action_completed", actionType, actionId }`;
 5. return the domain row and setup DTO.
+
+For a completed setup, resolve the saved action row before deciding the replay
+status. A present row returns `actionDeleted: false`; a missing row returns the
+matching `actionDeleted: true` tombstone and no telemetry. Keep the existing
+owner-scoped setup lookup and advisory-lock ordering unchanged.
 
 For progress, call:
 

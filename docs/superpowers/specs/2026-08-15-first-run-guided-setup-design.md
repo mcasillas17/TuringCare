@@ -205,6 +205,23 @@ Submitting a completed setup by its `setupId` returns the already-created result
 repeating the domain write. This idempotency is enforced by the setup row's
 completion state inside the transaction, not by client timing.
 
+Behavior and progress action creates and replays use the same typed,
+discriminated response contract:
+
+- available behavior: `{ setup, concern, actionDeleted: false }`;
+- deleted behavior: `{ setup, concern: null, actionDeleted: true }`;
+- available progress: `{ setup, entry, actionDeleted: false }`;
+- deleted progress: `{ setup, entry: null, actionDeleted: true }`.
+
+If a completed setup still matches the endpoint's completion reason and action
+type but its referenced concern or journal row is missing, the endpoint returns
+the corresponding deleted tombstone with HTTP `200`. It does not persist a
+snapshot, expose deleted prose, recreate the domain row, or emit replay
+telemetry. Skipped, abandoned, and different-action replays remain `409`.
+Future web hooks and UI must branch on `actionDeleted` before rendering a
+concern or journal entry and must show only the setup completion state for a
+deleted result.
+
 ### Web
 
 Add a dedicated authenticated guided-setup route with a mobile-first step shell:
@@ -232,6 +249,8 @@ focus, and suggestion queries affected by the selected path.
 - Duplicate submission controls are disabled while mutations are pending.
 - Refreshing after a successful save resumes the next step.
 - Domain data creation and setup completion commit or roll back together.
+- A replay after deletion is a successful `200` tombstone; consumers must not
+  display deleted concern or journal prose.
 - Training setup never displays an exercise while the suggestion query is
   loading, failed, historical, dismissed, or safety-suppressed.
 - Safety referral notices have no dismiss control that restores exercises.
