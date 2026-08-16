@@ -193,6 +193,8 @@ async function finalizeUnderSafetyLock(input: {
   weekKey: string;
   auditDay: string;
   now: Date;
+  emitTelemetry?: boolean;
+  forceTelemetry?: boolean;
   build: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<TrainingSuggestion>;
 }): Promise<TrainingSuggestion> {
   // A plain `let` would be narrowed to `null`; the holder remains readable from `catch`.
@@ -221,7 +223,10 @@ async function finalizeUnderSafetyLock(input: {
       },
     );
     // The audit transaction committed, so telemetry cannot affect it.
-    if (inserted) await emitAfterCommit(input.userId, suggestion);
+    // The initial action still emits once if a concurrent replay inserted the audit first.
+    if ((inserted || input.forceTelemetry === true) && input.emitTelemetry !== false) {
+      await emitAfterCommit(input.userId, suggestion);
+    }
     return suggestion;
   } catch (error) {
     const built = state.built;
@@ -242,6 +247,8 @@ export async function loadSuggestion(input: {
   weekKey: string;
   timezoneOffsetMinutes: number;
   now?: Date;
+  emitTelemetry?: boolean;
+  forceTelemetry?: boolean;
 }): Promise<TrainingSuggestion> {
   const now = input.now ?? new Date();
   const auditDay = new Date(now.getTime() - input.timezoneOffsetMinutes * 60_000)
@@ -296,6 +303,8 @@ export async function loadSuggestion(input: {
       weekKey: input.weekKey,
       auditDay,
       now,
+      emitTelemetry: input.emitTelemetry,
+      forceTelemetry: input.forceTelemetry,
       build: (decision, tx) => buildSuppressed(decision ?? safety, tx),
     });
   }
@@ -346,6 +355,8 @@ export async function loadSuggestion(input: {
       weekKey: input.weekKey,
       auditDay,
       now,
+      emitTelemetry: input.emitTelemetry,
+      forceTelemetry: input.forceTelemetry,
       build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : unsupported),
     });
   }
@@ -362,7 +373,7 @@ export async function loadSuggestion(input: {
         evidence.advancementRows,
       )
     : { proposal: null, created: false };
-  if (advancement.proposal && advancement.created) {
+  if (advancement.proposal && advancement.created && input.emitTelemetry !== false) {
     await recordEvent("training.advancement_proposed", {
       userId: input.userId,
       props: {
@@ -398,6 +409,8 @@ export async function loadSuggestion(input: {
     weekKey: input.weekKey,
     auditDay,
     now,
+    emitTelemetry: input.emitTelemetry,
+    forceTelemetry: input.forceTelemetry,
     build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : suggestion),
   });
 }

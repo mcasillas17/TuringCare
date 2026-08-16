@@ -615,6 +615,8 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       dogId: result.dogId,
       weekKey: input.weekKey,
       timezoneOffsetMinutes: input.timezoneOffsetMinutes,
+      emitTelemetry: created,
+      forceTelemetry: created,
     });
     return c.json(
       {

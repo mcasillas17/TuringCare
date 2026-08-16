@@ -1617,6 +1617,83 @@ describe("guided setup lifecycle", () => {
     });
   });
 
+  it("replays a live training goal after an owned skill is deleted and another is renamed", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    expect(started.status).toBe(201);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const input = {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+    const created = await createTrainingAction(user, input);
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      setup: GuidedSetupRecord;
+      goal: { id: string };
+      skills: Array<{ id: string; name: string; position: number; confidence: number }>;
+    };
+    const focusedSkill = createdBody.skills[0];
+    const renamedSkill = createdBody.skills[1];
+    if (!focusedSkill || !renamedSkill) throw new Error("training template created too few skills");
+    const beforeReplayEvents = await trainingActionEvents(user.userId);
+
+    const deleted = await app.request(`/api/dogs/${setup.dogId}/skills/${focusedSkill.id}`, {
+      method: "DELETE",
+      headers: user.authHeaders,
+    });
+    expect(deleted.status).toBe(200);
+
+    const renamedName = "Wait at the doorway";
+    const renamed = await app.request(`/api/dogs/${setup.dogId}/skills/${renamedSkill.id}`, {
+      method: "PUT",
+      headers: user.authHeaders,
+      body: JSON.stringify({ name: renamedName, confidence: renamedSkill.confidence }),
+    });
+    expect(renamed.status).toBe(200);
+    expect(await trainingActionEvents(user.userId)).toEqual(beforeReplayEvents);
+
+    const replay = await createTrainingAction(user, {
+      ...input,
+      templateKey: "basic-manners",
+    });
+    expect(replay.status).toBe(200);
+    const replayBody = (await replay.json()) as {
+      setup: GuidedSetupRecord;
+      goal: { id: string } | null;
+      skills: Array<{ id: string; name: string; position: number }>;
+      focus: { skillId: string } | null;
+      suggestion: { skill: { id: string } | null } | null;
+      actionDeleted: boolean;
+    };
+    expect(replayBody).toMatchObject({
+      setup: createdBody.setup,
+      goal: { id: createdBody.goal.id },
+      focus: null,
+      suggestion: { skill: null },
+      actionDeleted: false,
+    });
+    expect(replayBody.skills.map(({ id, name, position }) => ({ id, name, position }))).toEqual(
+      createdBody.skills.slice(1).map(({ id, name, position }) => ({
+        id,
+        name: id === renamedSkill.id ? renamedName : name,
+        position,
+      })),
+    );
+    expect(replayBody.skills.some(({ id }) => id === focusedSkill.id)).toBe(false);
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 1,
+      skills: createdBody.skills.length - 1,
+      focus: 0,
+    });
+    expect(await trainingActionEvents(user.userId)).toEqual(beforeReplayEvents);
+  });
+
   it("returns not found for unknown or cross-owner training setup ids without changing active setups", async () => {
     const owner = await createTestUser();
     const other = await createTestUser();
