@@ -1,5 +1,8 @@
+import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
+import { db } from "../db";
+import { events } from "../db/schema";
 import { type TestUser, createTestUser } from "../test-helpers";
 
 describe("profile", () => {
@@ -24,6 +27,11 @@ describe("profile", () => {
     });
     expect(put.status).toBe(200);
     expect(((await put.json()) as { user: { name: string } }).user.name).toBe("Renamed");
+    const profileEvents = await db
+      .select()
+      .from(events)
+      .where(and(eq(events.userId, u.userId), eq(events.name, "profile.updated")));
+    expect(profileEvents).toHaveLength(1);
     expect(
       (
         await app.request("/api/profile", {

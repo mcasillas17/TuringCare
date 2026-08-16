@@ -762,7 +762,8 @@ export const en = {
     activeUsers: "Active owners",
     signups: "New owners over time",
     funnel: "Owner activation funnel",
-    funnelHelp: "Owners who signed up in the selected range; each step must follow its prerequisite.",
+    funnelHelp:
+      "Owners who signed up in the selected range; each step must follow its prerequisite.",
     step_signup: "Signed up",
     step_first_dog: "Added a dog",
     step_first_journal: "Logged a moment",

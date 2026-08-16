@@ -1,5 +1,14 @@
 import { useI18n } from "@/i18n";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import type { Metrics } from "../use-metrics";
 
 const COLORS: Record<string, string> = {

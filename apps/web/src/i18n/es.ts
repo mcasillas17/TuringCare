@@ -777,8 +777,7 @@ export const es = {
     step_brief_finalized: "Finalizó un resumen",
     step_brief_shared: "Compartió un resumen",
     completionTimes: "Tiempo de finalización del recorrido",
-    completionTimesHelp:
-      "Mediana, cola lenta y finalización en siete días para recorridos clave.",
+    completionTimesHelp: "Mediana, cola lenta y finalización en siete días para recorridos clave.",
     noCompletedJourneys: "Aún no hay recorridos completados en esta cohorte.",
     journey: "Recorrido",
     completed: "Completados",

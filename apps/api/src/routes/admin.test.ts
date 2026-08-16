@@ -32,14 +32,18 @@ describe("/api/admin", () => {
     expect(body).toHaveProperty("kpis");
     expect(body).toHaveProperty("signups");
     expect(body).toHaveProperty("active");
-    expect(body).toHaveProperty("eventVolume");
+    expect(body).toHaveProperty("featureAdoption");
     expect(body).toHaveProperty("topPages");
-    expect(body).toHaveProperty("eventsByDay");
-    expect(Array.isArray((body as { eventsByDay: unknown[] }).eventsByDay)).toBe(true);
+    expect(body).toHaveProperty("activityByDay");
+    expect(Array.isArray((body as { activityByDay: unknown[] }).activityByDay)).toBe(true);
     expect(Array.isArray((body as { topPages: unknown[] }).topPages)).toBe(true);
     expect(body).toHaveProperty("funnel");
+    expect(body).toHaveProperty("journeyTimes");
     expect(typeof (body as { kpis: { totalUsers: number } }).kpis.totalUsers).toBe("number");
     expect((body as { kpis: { totalUsers: number } }).kpis.totalUsers).toBeGreaterThanOrEqual(1);
-    expect((body as { funnel: unknown[] }).funnel).toHaveLength(4);
+    expect((body as { funnel: unknown[] }).funnel).toHaveLength(7);
+    expect(typeof (body as { kpis: { activationRate: number } }).kpis.activationRate).toBe(
+      "number",
+    );
   });
 });

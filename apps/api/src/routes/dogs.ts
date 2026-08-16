@@ -283,7 +283,9 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const [deleted] = await db
       .delete(behaviorConcerns)
-      .where(and(eq(behaviorConcerns.id, c.req.param("concernId")), eq(behaviorConcerns.dogId, dog.id)))
+      .where(
+        and(eq(behaviorConcerns.id, c.req.param("concernId")), eq(behaviorConcerns.dogId, dog.id)),
+      )
       .returning({ id: behaviorConcerns.id });
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     await recordEvent("concern.removed", { userId: c.get("userId") });

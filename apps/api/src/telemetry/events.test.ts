@@ -16,6 +16,12 @@ describe("telemetry events allowlist", () => {
     expect(isKnownEvent("training.level_set")).toBe(true);
     expect(isKnownEvent("trainer.viewed")).toBe(true);
     expect(isKnownEvent("course.viewed")).toBe(true);
+    expect(isKnownEvent("dog.updated")).toBe(true);
+    expect(isKnownEvent("journal.entry_deleted")).toBe(true);
+    expect(isKnownEvent("training.skill_added")).toBe(true);
+    expect(isKnownEvent("directory.trainers_searched")).toBe(true);
+    expect(isKnownEvent("share.brief_viewed")).toBe(true);
+    expect(isKnownEvent("profile.updated")).toBe(true);
   });
 
   it("accepts the two client view events through the ingest schema", () => {

@@ -45,6 +45,25 @@ describe("server-side telemetry emission", () => {
     expect(await countEvents(u.userId, "dog.created")).toBe(1);
   });
 
+  it("records successful dog update and delete actions", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dogId = await createDog(u);
+    const update = await app.request(`/api/dogs/${dogId}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ ...validDog, name: "Updated Biscuit" }),
+    });
+    expect(update.status).toBe(200);
+    const remove = await app.request(`/api/dogs/${dogId}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+    expect(remove.status).toBe(200);
+    expect(await countEvents(u.userId, "dog.updated")).toBe(1);
+    expect(await countEvents(u.userId, "dog.deleted")).toBe(1);
+  });
+
   it("records journal.entry_created", async () => {
     const u = await createTestUser();
     users.push(u);

@@ -9,7 +9,12 @@ const CARDS = [
   { key: "returningRate", label: "admin.returningRate", percent: true },
 ] as const satisfies {
   key: keyof Metrics["kpis"];
-  label: "admin.totalUsers" | "admin.newUsers" | "admin.wau" | "admin.activationRate" | "admin.returningRate";
+  label:
+    | "admin.totalUsers"
+    | "admin.newUsers"
+    | "admin.wau"
+    | "admin.activationRate"
+    | "admin.returningRate";
   percent?: boolean;
 }[];
 
@@ -25,7 +30,8 @@ export function KpiStrip({ kpis }: { kpis: Metrics["kpis"] }) {
         <div key={c.key} className="rounded-lg border border-silver bg-white p-4">
           <div className="text-xs uppercase text-slate-soft">{t(c.label)}</div>
           <div className="mt-1 text-2xl font-bold text-slate">
-            {format(kpis[c.key], c.percent)}
+            {" "}
+            {format(kpis[c.key], "percent" in c && c.percent)}
           </div>
         </div>
       ))}
