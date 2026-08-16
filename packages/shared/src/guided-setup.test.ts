@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { behaviorConcernSchema, dogProfileSchema } from "./dog";
+import { journalDailyCheckInCreateSchema } from "./journal";
 import {
   guidedSetupBehaviorActionSchema,
   guidedSetupIntentInputSchema,
@@ -16,6 +18,85 @@ describe("guided setup contracts", () => {
     ] as const) {
       expect(guidedSetupIntentInputSchema.safeParse({ intent }).success).toBe(true);
     }
+  });
+
+  it("reuses the dog profile contract for setup start", () => {
+    const invalidDogProfile = {
+      name: "Biscuit",
+    };
+    const validDogProfile = {
+      name: "Biscuit",
+      size: "medium",
+      sex: "female",
+      source: "rescue",
+      vaccineStage: "in_progress",
+    } as const;
+
+    expect(dogProfileSchema.safeParse(invalidDogProfile).success).toBe(false);
+    expect(guidedSetupStartSchema.safeParse(invalidDogProfile).success).toBe(false);
+    expect(dogProfileSchema.safeParse(validDogProfile).success).toBe(true);
+    expect(guidedSetupStartSchema.safeParse(validDogProfile).success).toBe(true);
+  });
+
+  it("keeps behavior concern constraints and confirmation refinement", () => {
+    const tooLongConcern = {
+      concern: "x".repeat(501),
+      severity: "moderate",
+      safetyConfirmed: true,
+    } as const;
+    const invalidSeverity = {
+      concern: "Barking",
+      severity: "extreme",
+      safetyConfirmed: true,
+    } as const;
+    const invalidSafetySignal = {
+      concern: "Barking",
+      severity: "moderate",
+      safetySignal: "seems scary",
+      safetyConfirmed: true,
+    } as const;
+
+    expect(behaviorConcernSchema.safeParse(tooLongConcern).success).toBe(false);
+    expect(guidedSetupBehaviorActionSchema.safeParse(tooLongConcern).success).toBe(false);
+    expect(behaviorConcernSchema.safeParse(invalidSeverity).success).toBe(false);
+    expect(guidedSetupBehaviorActionSchema.safeParse(invalidSeverity).success).toBe(false);
+    expect(behaviorConcernSchema.safeParse(invalidSafetySignal).success).toBe(false);
+    expect(guidedSetupBehaviorActionSchema.safeParse(invalidSafetySignal).success).toBe(false);
+    expect(
+      guidedSetupBehaviorActionSchema.safeParse({
+        concern: "Snapped when approached",
+        severity: "severe",
+        safetyConfirmed: false,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("reuses daily check-in semantics for progress actions", () => {
+    const blankNote = { note: "   ", trend: "better" } as const;
+    const missingTrend = { note: "Settled faster after dinner." } as const;
+
+    expect(
+      journalDailyCheckInCreateSchema.safeParse({
+        kind: "daily_checkin",
+        ...blankNote,
+      }).success,
+    ).toBe(false);
+    expect(
+      guidedSetupProgressActionSchema.safeParse(blankNote).success,
+    ).toBe(false);
+    expect(
+      journalDailyCheckInCreateSchema.safeParse({
+        kind: "daily_checkin",
+        ...missingTrend,
+      }).success,
+    ).toBe(false);
+    expect(guidedSetupProgressActionSchema.safeParse(missingTrend).success).toBe(false);
+    expect(
+      guidedSetupProgressActionSchema.safeParse({
+        note: "Settled faster after dinner.",
+        trend: "better",
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects identity fields on strict request payloads", () => {
@@ -106,14 +187,5 @@ describe("guided setup contracts", () => {
         timezoneOffsetMinutes: 841,
       }).success,
     ).toBe(false);
-  });
-
-  it("accepts a daily check-in progress action", () => {
-    expect(
-      guidedSetupProgressActionSchema.safeParse({
-        trend: "better",
-        note: "Settled faster after dinner.",
-      }).success,
-    ).toBe(true);
   });
 });

@@ -61,24 +61,18 @@ export type GuidedSetupActionType = (typeof guidedSetupActionTypeValues)[number]
 export type GuidedSetupBehaviorAction = z.infer<typeof guidedSetupBehaviorActionSchema>;
 export type GuidedSetupTrainingAction = z.infer<typeof guidedSetupTrainingActionSchema>;
 export type GuidedSetupProgressAction = z.infer<typeof guidedSetupProgressActionSchema>;
-export type GuidedSetupActionData =
-  | GuidedSetupBehaviorAction
-  | GuidedSetupTrainingAction
-  | GuidedSetupProgressAction;
 
 export type GuidedSetupRecord = {
   id: string;
-  userId: string;
   dogId: string | null;
   dogName: string | null;
   currentStep: GuidedSetupStep;
   intent: GuidedSetupIntent | null;
   startedAt: string;
-  updatedAt: string;
   completedAt: string | null;
   completionReason: GuidedSetupCompletionReason | null;
-  actionType: GuidedSetupActionType | null;
-  actionData: GuidedSetupActionData | null;
+  firstActionType: GuidedSetupActionType | null;
+  firstActionId: string | null;
 };
 
 export type GuidedSetupStatus = {
