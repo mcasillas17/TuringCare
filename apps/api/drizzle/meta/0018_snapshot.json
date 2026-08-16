@@ -1,5 +1,5 @@
 {
-  "id": "71e36ecc-e63a-4eb1-8977-82a5392cd774",
+  "id": "e636cd8c-d16f-4e00-8330-19c9fe45a232",
   "prevId": "565fb38e-678c-4d53-948b-32eca8d13fa8",
   "version": "7",
   "dialect": "postgresql",
@@ -1169,8 +1169,8 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "guided_setups_dog_id_unique": {
-          "name": "guided_setups_dog_id_unique",
+        "guided_setups_dog_unique": {
+          "name": "guided_setups_dog_unique",
           "nullsNotDistinct": false,
           "columns": [
             "dog_id"
@@ -1179,12 +1179,12 @@
       },
       "policies": {},
       "checkConstraints": {
-        "guided_setups_completion_fields_match": {
-          "name": "guided_setups_completion_fields_match",
+        "guided_setups_completion_consistent": {
+          "name": "guided_setups_completion_consistent",
           "value": "(\"guided_setups\".\"completed_at\" IS NULL AND \"guided_setups\".\"completion_reason\" IS NULL) OR (\"guided_setups\".\"completed_at\" IS NOT NULL AND \"guided_setups\".\"completion_reason\" IS NOT NULL)"
         },
-        "guided_setups_active_requires_dog": {
-          "name": "guided_setups_active_requires_dog",
+        "guided_setups_active_dog_required": {
+          "name": "guided_setups_active_dog_required",
           "value": "\"guided_setups\".\"completed_at\" IS NOT NULL OR \"guided_setups\".\"dog_id\" IS NOT NULL"
         }
       },

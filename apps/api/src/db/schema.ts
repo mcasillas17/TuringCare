@@ -143,17 +143,17 @@ export const guidedSetups = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    unique("guided_setups_dog_id_unique").on(t.dogId),
+    unique("guided_setups_dog_unique").on(t.dogId),
     uniqueIndex("guided_setups_one_active_owner")
       .on(t.userId)
       .where(sql`${t.completedAt} IS NULL`),
     index("guided_setups_user_started_idx").on(t.userId, t.startedAt),
     check(
-      "guided_setups_completion_fields_match",
+      "guided_setups_completion_consistent",
       sql`(${t.completedAt} IS NULL AND ${t.completionReason} IS NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} IS NOT NULL)`,
     ),
     check(
-      "guided_setups_active_requires_dog",
+      "guided_setups_active_dog_required",
       sql`${t.completedAt} IS NOT NULL OR ${t.dogId} IS NOT NULL`,
     ),
   ],

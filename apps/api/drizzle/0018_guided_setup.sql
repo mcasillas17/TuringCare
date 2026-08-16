@@ -14,9 +14,9 @@ CREATE TABLE "guided_setups" (
 	"first_action_id" uuid,
 	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "guided_setups_dog_id_unique" UNIQUE("dog_id"),
-	CONSTRAINT "guided_setups_completion_fields_match" CHECK (("guided_setups"."completed_at" IS NULL AND "guided_setups"."completion_reason" IS NULL) OR ("guided_setups"."completed_at" IS NOT NULL AND "guided_setups"."completion_reason" IS NOT NULL)),
-	CONSTRAINT "guided_setups_active_requires_dog" CHECK ("guided_setups"."completed_at" IS NOT NULL OR "guided_setups"."dog_id" IS NOT NULL)
+	CONSTRAINT "guided_setups_dog_unique" UNIQUE("dog_id"),
+	CONSTRAINT "guided_setups_completion_consistent" CHECK (("guided_setups"."completed_at" IS NULL AND "guided_setups"."completion_reason" IS NULL) OR ("guided_setups"."completed_at" IS NOT NULL AND "guided_setups"."completion_reason" IS NOT NULL)),
+	CONSTRAINT "guided_setups_active_dog_required" CHECK ("guided_setups"."completed_at" IS NOT NULL OR "guided_setups"."dog_id" IS NOT NULL)
 );
 --> statement-breakpoint
 ALTER TABLE "guided_setups" ADD CONSTRAINT "guided_setups_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

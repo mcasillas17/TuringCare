@@ -154,12 +154,25 @@ describe("suggestion and advancement audit schema", () => {
 });
 
 describe("guided setup schema", () => {
-  it("declares a unique partial index for one active owner setup", () => {
-    const index = getTableConfig(guidedSetups).indexes.find(
+  it("declares the guided setup guardrails with exact names", () => {
+    const config = getTableConfig(guidedSetups);
+    const index = config.indexes.find(
       ({ config }) => config.name === "guided_setups_one_active_owner",
+    );
+    const dogUnique = config.uniqueConstraints.find(
+      ({ name }) => name === "guided_setups_dog_unique",
+    );
+    const completionCheck = config.checks.find(
+      ({ name }) => name === "guided_setups_completion_consistent",
+    );
+    const activeDogCheck = config.checks.find(
+      ({ name }) => name === "guided_setups_active_dog_required",
     );
 
     expect(index?.config.unique).toBe(true);
     expect(index?.config.where).toBeDefined();
+    expect(dogUnique).toBeDefined();
+    expect(completionCheck).toBeDefined();
+    expect(activeDogCheck).toBeDefined();
   });
 });
