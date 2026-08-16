@@ -11,6 +11,42 @@ import { env } from "./env";
 import { globalRateLimit } from "./middleware/rate-limit";
 import { createMonitoringAuthHandler } from "./monitoring/auth-handler";
 import { createMonitoringErrorHandler } from "./monitoring/error-handler";
+
+const STATIC_TELEMETRY_PATHS = new Set([
+  "/",
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/privacy",
+  "/terms",
+  "/trainers",
+  "/courses",
+  "/my",
+  "/my/dogs",
+  "/my/dogs/new",
+  "/my/journal",
+  "/my/brief",
+  "/my/profile",
+  "/my/settings",
+  "/admin",
+  "/admin/trainers",
+  "/admin/courses",
+]);
+
+function normalizeTelemetryPath(path: string): string {
+  if (path.startsWith("/b/")) return "/b/:token";
+  const normalized = path.replace(
+    /\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi,
+    "/:id",
+  );
+  if (STATIC_TELEMETRY_PATHS.has(normalized)) return normalized;
+  if (/^\/(trainers|courses)\/:id$/.test(normalized)) return normalized;
+  if (/^\/my\/dogs\/:id(\/(journal|training|brief|week|edit))?$/.test(normalized)) {
+    return normalized;
+  }
+  return "/other";
+}
 import { type ApiEnv, requestIdMiddleware } from "./monitoring/request-id";
 import { adminApp } from "./routes/admin";
 import { adminCoursesApp } from "./routes/admin-courses";
@@ -101,10 +137,7 @@ const app = new Hono<ApiEnv>()
     // Identity is resolved server-side from the auth cookie — never trusted
     // from the client. Anonymous (pre-auth, e.g. landing) is allowed.
     const session = await auth.api.getSession({ headers: c.req.raw.headers });
-    const safeProps =
-      name === "page.viewed" && typeof props.path === "string" && props.path.startsWith("/b/")
-        ? { ...props, path: "/b/:token" }
-        : props;
+    const safeProps = name === "page.viewed" ? { path: normalizeTelemetryPath(props.path) } : props;
     await recordEvent(name, {
       userId: session?.user.id ?? null,
       sessionId: session?.session.id ?? null,

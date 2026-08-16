@@ -800,7 +800,7 @@ export const es = {
     feature_discovery: "Descubrimiento",
     feature_dog_care: "Cuidado",
     feature_journal: "Diario",
-    feature_navigation: "Navegación",
+    feature_other: "Otros",
     feature_training: "Entrenamiento",
     topPages: "Destinos principales",
     topPagesHelp: "Vistas / dueños únicos conectados. Los identificadores se agrupan.",

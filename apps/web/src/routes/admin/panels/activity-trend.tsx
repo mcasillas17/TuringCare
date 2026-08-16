@@ -17,7 +17,7 @@ const COLORS: Record<string, string> = {
   discovery: "#9bbf9b",
   dog_care: "#28323d",
   journal: "#6f8ca6",
-  navigation: "#c8893b",
+  other: "#c8893b",
   training: "#7fb8d6",
 };
 const CATEGORY_ORDER = [
@@ -27,7 +27,7 @@ const CATEGORY_ORDER = [
   "dog_care",
   "discovery",
   "account",
-  "navigation",
+  "other",
 ];
 
 export function ActivityTrend({ activityByDay }: { activityByDay: Metrics["activityByDay"] }) {

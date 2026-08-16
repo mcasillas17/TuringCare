@@ -14,12 +14,14 @@ import { PDFDownloadLink } from "@react-pdf/renderer";
 export function BriefDownloadButton({
   brief,
   dog,
+  surface = "owner",
 }: {
   // Structural subset of what `buildBriefPdfModel` actually reads. `generatedAt`
   // is optional so the public shared-brief page can pass a minimal brief that
   // omits it; the model tolerates a missing/empty value.
   brief: Omit<BriefForPdf, "generatedAt"> & { generatedAt?: string };
   dog: DogForPdf | undefined;
+  surface?: "owner" | "shared_link";
 }) {
   const { t, locale } = useI18n();
   const model = buildBriefPdfModel({
@@ -32,7 +34,11 @@ export function BriefDownloadButton({
       document={<BriefPdfDocument model={model} />}
       fileName={model.fileName}
       className={buttonVariants({ variant: "outline" })}
-      onClick={() => track("brief.downloaded")}
+      onClick={(_event, instance?: { loading: boolean; url: string | null }) => {
+        if (instance && !instance.loading && instance.url) {
+          track("brief.downloaded", { surface });
+        }
+      }}
     >
       {({ loading }) => (loading ? t("brief.preparingPdf") : t("brief.downloadPdf"))}
     </PDFDownloadLink>

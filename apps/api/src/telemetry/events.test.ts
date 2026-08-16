@@ -26,12 +26,23 @@ describe("telemetry events allowlist", () => {
 
   it("accepts the two client view events through the ingest schema", () => {
     expect(
-      eventIngestSchema.safeParse({ name: "trainer.viewed", props: { id: "abc" } }).success,
+      eventIngestSchema.safeParse({
+        name: "trainer.viewed",
+        props: { id: "00000000-0000-4000-8000-000000000001" },
+      }).success,
     ).toBe(true);
     expect(
-      eventIngestSchema.safeParse({ name: "course.viewed", props: { id: "abc" } }).success,
+      eventIngestSchema.safeParse({
+        name: "course.viewed",
+        props: { id: "00000000-0000-4000-8000-000000000001" },
+      }).success,
     ).toBe(true);
-    expect(eventIngestSchema.safeParse({ name: "brief.downloaded", props: {} }).success).toBe(true);
+    expect(
+      eventIngestSchema.safeParse({
+        name: "brief.downloaded",
+        props: { surface: "owner" },
+      }).success,
+    ).toBe(true);
   });
 
   it("still rejects server-only events from the client ingest", () => {
@@ -39,6 +50,18 @@ describe("telemetry events allowlist", () => {
     expect(eventIngestSchema.safeParse({ name: "safety.signal_reported", props: {} }).success).toBe(
       false,
     );
+  });
+
+  it("rejects extra or non-canonical browser properties", () => {
+    expect(
+      eventIngestSchema.safeParse({
+        name: "page.viewed",
+        props: { path: "/my", email: "owner@example.com" },
+      }).success,
+    ).toBe(false);
+    expect(
+      eventIngestSchema.safeParse({ name: "trainer.viewed", props: { id: "owner name" } }).success,
+    ).toBe(false);
   });
 
   it("exposes the two new client events", () => {

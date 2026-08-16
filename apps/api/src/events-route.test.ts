@@ -30,7 +30,7 @@ describe("POST /api/events", () => {
       .where(eq(events.name, "page.viewed"))
       .orderBy(desc(events.createdAt))
       .limit(1);
-    expect(row?.props).toMatchObject({ path });
+    expect(row?.props).toMatchObject({ path: "/other" });
     expect(row?.userId).toBeNull();
   });
 

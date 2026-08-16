@@ -22,7 +22,8 @@ const categorySql = sql`
     when e.name like 'dog.%' or e.name like 'concern.%' then 'dog_care'
     when e.name like 'directory.%' or e.name in ('trainer.viewed', 'course.viewed') then 'discovery'
     when e.name like 'user.%' or e.name = 'profile.updated' then 'account'
-    else 'navigation'
+    when e.name like 'safety.%' then 'training'
+    else 'other'
   end
 `;
 
@@ -120,6 +121,7 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
             left join lateral (
               select min(created_at) as journal_at from events
               where user_id = c.id and name = 'journal.entry_created'
+                and props->>'kind' = 'moment'
                 and created_at >= dog.dog_at
             ) journal on true
             left join lateral (
@@ -138,9 +140,20 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
                 and created_at >= practice.practice_at
             ) brief on true
             left join lateral (
-              select min(created_at) as shared_at from events
-              where user_id = c.id and name in ('brief.shared', 'brief.emailed', 'brief.downloaded')
-                and created_at >= brief.brief_at
+              select min(created_at) as shared_at from (
+                select min(created_at) as created_at from events
+                  where user_id = c.id and name = 'brief.shared'
+                    and created_at >= brief.brief_at
+                union all
+                select min(created_at) from events
+                  where user_id = c.id and name = 'brief.emailed'
+                    and created_at >= brief.brief_at
+                union all
+                select min(created_at) from events
+                  where user_id = c.id and name = 'brief.downloaded'
+                    and props->>'surface' = 'owner'
+                    and created_at >= brief.brief_at
+              ) terminal_events
             ) shared on true
           ), funnel_rows as (
             select 1 as position, 'signup' as step, count(*)::int as users from cohort
@@ -169,12 +182,16 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
             ) transition(step, started_at, finished_at)
             where started_at is not null
           ), timing_rows as (
-            select step, count(*) filter (where finished_at is not null)::int as completed,
+            select step, count(*) filter (
+                where finished_at is not null and started_at <= now() - interval '7 days'
+              )::int as completed,
               round(percentile_cont(0.5) within group (order by minutes)
-                filter (where finished_at is not null))::int
+                filter (where finished_at is not null
+                  and started_at <= now() - interval '7 days'))::int
                 as "medianMinutes",
               round(percentile_cont(0.9) within group (order by minutes)
-                filter (where finished_at is not null))::int as "p90Minutes",
+                filter (where finished_at is not null
+                  and started_at <= now() - interval '7 days'))::int as "p90Minutes",
               round(100.0 * count(*) filter (
                 where finished_at <= started_at + interval '7 days'
                   and started_at <= now() - interval '7 days'
@@ -204,7 +221,7 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
                  count(*)::int as events
           from events e left join "user" u on u.id = e.user_id
           where e.created_at >= ${since} and (u.role = 'user' or e.user_id is null)
-            and e.name <> 'page.viewed'
+            and e.name not in ('page.viewed', 'user.signed_in', 'user.signed_up', 'user.deleted')
           group by 1 order by users desc, events desc
         `)
         .then((r) => r.rows),
@@ -233,7 +250,7 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
                  ${categorySql} as category, count(*)::int as count
           from events e left join "user" u on u.id = e.user_id
           where e.created_at >= ${since} and (u.role = 'user' or e.user_id is null)
-            and e.name <> 'page.viewed'
+            and e.name not in ('page.viewed', 'user.signed_in', 'user.signed_up', 'user.deleted')
           group by 1, 2 order by 1
         `)
         .then((r) => r.rows),
@@ -254,7 +271,8 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       db
         .execute<{ value: number }>(
           sql`select count(*)::int as value from events
-              where name = 'user.deleted' and created_at >= ${since}`,
+              where name = 'user.deleted' and props->>'role' = 'user'
+                and created_at >= ${since}`,
         )
         .then((r) => scalarRow(r.rows).value),
     ]);

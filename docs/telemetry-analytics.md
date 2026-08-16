@@ -25,7 +25,7 @@ The admin dashboard excludes admin accounts and uses the selected 7, 30, or 90-d
   days. A cohort is mature once its seven-day opportunity window has elapsed.
 - **Returning:** owners with a successful product action on at least two distinct days in the
   selected activity range. Sign-ins and page views do not count as product actions.
-- **Completion time:** median and P90 among completed journeys. “Within 7d” uses all mature,
+- **Completion time:** median and P90 among mature completed journeys. “Within 7d” uses all mature,
   eligible journey starters as its denominator, including owners who did not complete.
 - **Feature adoption:** unique signed-in owners and successful action volume grouped into account,
   briefs, discovery, dog care, journal, and training. Raw event names are not displayed.

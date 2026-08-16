@@ -72,8 +72,8 @@ export const auth = betterAuth({
         },
       },
       delete: {
-        before: async (deletedUser) => {
-          await recordEvent("user.deleted", { userId: deletedUser.id });
+        after: async (deletedUser) => {
+          await recordEvent("user.deleted", { props: { role: deletedUser.role } });
         },
       },
     },

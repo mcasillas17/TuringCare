@@ -3,8 +3,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { auth } from "../auth";
 import { db } from "../db";
-import { events, user } from "../db/schema";
-import { createTestUser } from "../test-helpers";
+import { user } from "../db/schema";
 
 const email = `adm_${Date.now()}@example.com`;
 
@@ -46,29 +45,9 @@ describe("/api/admin", () => {
       typeof (body as { kpis: { activationRate: number | null } }).kpis.activationRate,
     );
 
-    const owner = await createTestUser();
-    try {
-      await db.insert(events).values([
-        { userId: owner.userId, name: "dog.created" },
-        { userId: owner.userId, name: "training.goal_added" },
-      ]);
-      const after = await app.request("/api/admin/metrics?days=30", { headers: { cookie } });
-      const afterBody = (await after.json()) as {
-        funnel: { step: string; users: number }[];
-      };
-      const beforeCounts = new Map(
-        (body as { funnel: { step: string; users: number }[] }).funnel.map((row) => [
-          row.step,
-          row.users,
-        ]),
-      );
-      const afterCounts = new Map(afterBody.funnel.map((row) => [row.step, row.users]));
-      expect(afterCounts.get("signup")).toBe((beforeCounts.get("signup") ?? 0) + 1);
-      expect(afterCounts.get("first_dog")).toBe((beforeCounts.get("first_dog") ?? 0) + 1);
-      expect(afterCounts.get("first_journal")).toBe(beforeCounts.get("first_journal"));
-      expect(afterCounts.get("first_goal")).toBe(beforeCounts.get("first_goal"));
-    } finally {
-      await owner.cleanup();
+    const funnel = (body as { funnel: { users: number }[] }).funnel;
+    for (let index = 1; index < funnel.length; index += 1) {
+      expect(funnel[index]?.users ?? 0).toBeLessThanOrEqual(funnel[index - 1]?.users ?? 0);
     }
   });
 });

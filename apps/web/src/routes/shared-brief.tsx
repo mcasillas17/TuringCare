@@ -40,6 +40,7 @@ export function SharedBrief() {
                   generatedAt: data.generatedAt,
                 }}
                 dog={{ name: data.dogName }}
+                surface="shared_link"
               />
             </Suspense>
           </div>

@@ -795,7 +795,7 @@ export const en = {
     feature_discovery: "Discovery",
     feature_dog_care: "Dog care",
     feature_journal: "Journal",
-    feature_navigation: "Navigation",
+    feature_other: "Other",
     feature_training: "Training",
     topPages: "Top destinations",
     topPagesHelp: "Views / unique signed-in owners. Dynamic IDs are grouped.",

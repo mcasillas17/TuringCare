@@ -62,15 +62,26 @@ export const CLIENT_EVENTS = [
   "brief.downloaded",
 ] as const;
 
-const scalar = z.union([z.string(), z.number(), z.boolean()]);
-
-/** Validated, privacy-safe ingest payload: scalar-only props, size-capped. */
-export const eventIngestSchema = z.object({
-  name: z.enum(CLIENT_EVENTS),
-  props: z
-    .record(scalar)
-    .default({})
-    .refine((p) => Buffer.byteLength(JSON.stringify(p), "utf8") <= 1024, "props too large"),
+const pageViewed = z.object({
+  name: z.literal("page.viewed"),
+  props: z.object({ path: z.string().max(200) }).strict(),
 });
+const entityViewed = (name: "trainer.viewed" | "course.viewed") =>
+  z.object({
+    name: z.literal(name),
+    props: z.object({ id: z.string().uuid() }).strict(),
+  });
+const briefDownloaded = z.object({
+  name: z.literal("brief.downloaded"),
+  props: z.object({ surface: z.enum(["owner", "shared_link"]) }).strict(),
+});
+
+/** Event-specific browser payloads. Extra keys and non-canonical IDs are rejected. */
+export const eventIngestSchema = z.discriminatedUnion("name", [
+  pageViewed,
+  entityViewed("trainer.viewed"),
+  entityViewed("course.viewed"),
+  briefDownloaded,
+]);
 
 export type EventIngest = z.infer<typeof eventIngestSchema>;

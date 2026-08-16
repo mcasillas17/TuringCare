@@ -691,7 +691,8 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       if (result.updated) {
         await recordEvent("training.practice_updated", { userId: c.get("userId") });
       }
-      return c.json(result);
+      const { updated: _, ...response } = result;
+      return c.json(response);
     },
   )
   .delete("/:id/skills/:skillId/sessions/:sessionId", async (c) => {

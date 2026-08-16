@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { app } from "./app";
 import { db } from "./db";
@@ -34,5 +34,33 @@ describe("auth lifecycle telemetry", () => {
 
     const signedIn = evts.find((e) => e.name === "user.signed_in");
     expect(signedIn?.sessionId).toBeTruthy();
+  });
+
+  it("emits owner churn only after account deletion succeeds", async () => {
+    const deleteEmail = `del_${Date.now()}@example.com`;
+    const signUp = await app.request("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Delete", email: deleteEmail, password: "password-123" }),
+    });
+    const cookie = signUp.headers.get("set-cookie") ?? "";
+    const [before] = await db
+      .select({ value: count() })
+      .from(events)
+      .where(eq(events.name, "user.deleted"));
+    const deleted = await app.request("/api/auth/delete-user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({}),
+    });
+    expect(deleted.status).toBe(200);
+    expect(await db.select().from(user).where(eq(user.email, deleteEmail))).toHaveLength(0);
+    const [after] = await db
+      .select({ value: count() })
+      .from(events)
+      .where(eq(events.name, "user.deleted"));
+    expect(Number(after?.value ?? 0)).toBe(Number(before?.value ?? 0) + 1);
+    const rows = await db.select().from(events).where(eq(events.name, "user.deleted"));
+    expect(rows.at(-1)?.props).toMatchObject({ role: "user" });
   });
 });
