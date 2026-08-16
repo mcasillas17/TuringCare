@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -234,6 +235,23 @@ describe("guided setup schema", () => {
         { kind: "column", name: "intent" },
         { kind: "string", value: " IS NOT NULL)" },
       ],
+      guided_setups_action_matches_intent: [
+        { kind: "string", value: "" },
+        { kind: "column", name: "first_action_type" },
+        { kind: "string", value: " IS NULL OR (" },
+        { kind: "column", name: "intent" },
+        { kind: "string", value: " = 'understand_behavior' AND " },
+        { kind: "column", name: "first_action_type" },
+        { kind: "string", value: " = 'behavior') OR (" },
+        { kind: "column", name: "intent" },
+        { kind: "string", value: " = 'train_skill' AND " },
+        { kind: "column", name: "first_action_type" },
+        { kind: "string", value: " = 'training') OR (" },
+        { kind: "column", name: "intent" },
+        { kind: "string", value: " = 'track_progress' AND " },
+        { kind: "column", name: "first_action_type" },
+        { kind: "string", value: " = 'progress')" },
+      ],
       guided_setups_action_completion_consistent: [
         { kind: "string", value: "(" },
         { kind: "column", name: "completed_at" },
@@ -276,5 +294,19 @@ describe("guided setup schema", () => {
         { kind: "string", value: " IS NULL)" },
       ],
     });
+  });
+
+  it("keeps the committed guided setup migration custom protections", () => {
+    const migrationSql = readFileSync(
+      new URL("../../drizzle/0018_guided_setup.sql", import.meta.url),
+      "utf8",
+    );
+
+    expect(migrationSql).toMatch(/CREATE FUNCTION "enforce_guided_setup_dog_owner"\(\)/);
+    expect(migrationSql).toMatch(/CREATE TRIGGER "guided_setups_dog_owner_match_guard"/);
+    expect(migrationSql).toMatch(/ALTER TABLE "guided_setups" ENABLE ROW LEVEL SECURITY;/);
+    expect(migrationSql).toMatch(/ARRAY\['anon', 'authenticated'\]/);
+    expect(migrationSql).toMatch(/ARRAY\['guided_setups'\]/);
+    expect(migrationSql).toMatch(/REVOKE ALL ON TABLE public\.%I FROM %I/);
   });
 });

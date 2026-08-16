@@ -1,5 +1,5 @@
 {
-  "id": "5fa24f6d-d294-49be-84e7-b17375ebe358",
+  "id": "54e088fe-18a1-4784-88a0-505e929c7cc1",
   "prevId": "565fb38e-678c-4d53-948b-32eca8d13fa8",
   "version": "7",
   "dialect": "postgresql",
@@ -1186,6 +1186,10 @@
         "guided_setups_step_intent_consistent": {
           "name": "guided_setups_step_intent_consistent",
           "value": "(\"guided_setups\".\"current_step\" = 'intent' AND \"guided_setups\".\"intent\" IS NULL) OR (\"guided_setups\".\"current_step\" = 'action' AND \"guided_setups\".\"intent\" IS NOT NULL)"
+        },
+        "guided_setups_action_matches_intent": {
+          "name": "guided_setups_action_matches_intent",
+          "value": "\"guided_setups\".\"first_action_type\" IS NULL OR (\"guided_setups\".\"intent\" = 'understand_behavior' AND \"guided_setups\".\"first_action_type\" = 'behavior') OR (\"guided_setups\".\"intent\" = 'train_skill' AND \"guided_setups\".\"first_action_type\" = 'training') OR (\"guided_setups\".\"intent\" = 'track_progress' AND \"guided_setups\".\"first_action_type\" = 'progress')"
         },
         "guided_setups_action_completion_consistent": {
           "name": "guided_setups_action_completion_consistent",
