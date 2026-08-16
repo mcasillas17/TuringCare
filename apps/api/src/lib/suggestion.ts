@@ -194,7 +194,6 @@ async function finalizeUnderSafetyLock(input: {
   auditDay: string;
   now: Date;
   emitTelemetry?: boolean;
-  forceTelemetry?: boolean;
   build: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<TrainingSuggestion>;
 }): Promise<TrainingSuggestion> {
   // A plain `let` would be narrowed to `null`; the holder remains readable from `catch`.
@@ -223,8 +222,7 @@ async function finalizeUnderSafetyLock(input: {
       },
     );
     // The audit transaction committed, so telemetry cannot affect it.
-    // The initial action still emits once if a concurrent replay inserted the audit first.
-    if ((inserted || input.forceTelemetry === true) && input.emitTelemetry !== false) {
+    if (inserted && input.emitTelemetry !== false) {
       await emitAfterCommit(input.userId, suggestion);
     }
     return suggestion;
@@ -248,7 +246,6 @@ export async function loadSuggestion(input: {
   timezoneOffsetMinutes: number;
   now?: Date;
   emitTelemetry?: boolean;
-  forceTelemetry?: boolean;
 }): Promise<TrainingSuggestion> {
   const now = input.now ?? new Date();
   const auditDay = new Date(now.getTime() - input.timezoneOffsetMinutes * 60_000)
@@ -304,7 +301,6 @@ export async function loadSuggestion(input: {
       auditDay,
       now,
       emitTelemetry: input.emitTelemetry,
-      forceTelemetry: input.forceTelemetry,
       build: (decision, tx) => buildSuppressed(decision ?? safety, tx),
     });
   }
@@ -356,7 +352,6 @@ export async function loadSuggestion(input: {
       auditDay,
       now,
       emitTelemetry: input.emitTelemetry,
-      forceTelemetry: input.forceTelemetry,
       build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : unsupported),
     });
   }
@@ -410,7 +405,6 @@ export async function loadSuggestion(input: {
     auditDay,
     now,
     emitTelemetry: input.emitTelemetry,
-    forceTelemetry: input.forceTelemetry,
     build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : suggestion),
   });
 }

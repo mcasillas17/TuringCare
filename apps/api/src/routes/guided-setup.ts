@@ -278,6 +278,7 @@ async function resolveCompletedTrainingReplay(
     .select()
     .from(trainingGoals)
     .where(and(eq(trainingGoals.id, actionId), eq(trainingGoals.dogId, row.setup.dogId)))
+    .for("update")
     .limit(1);
   if (!goal) return { kind: "tombstone", setup };
 
@@ -616,7 +617,6 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       weekKey: input.weekKey,
       timezoneOffsetMinutes: input.timezoneOffsetMinutes,
       emitTelemetry: created,
-      forceTelemetry: created,
     });
     return c.json(
       {

@@ -3,6 +3,12 @@ import { and, asc, count, eq, inArray } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const behaviorConcernWriteControl = vi.hoisted(() => ({ fail: false }));
+const suggestionLoadControl = vi.hoisted(() => ({
+  pauseGuidedLoad: false,
+  guidedLoadHold: Promise.resolve(),
+  markGuidedLoadStarted: undefined as (() => void) | undefined,
+  releaseGuidedLoad: undefined as (() => void) | undefined,
+}));
 
 vi.mock("../lib/behavior-concern-writes", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/behavior-concern-writes")>();
@@ -20,8 +26,25 @@ vi.mock("../lib/behavior-concern-writes", async (importOriginal) => {
   };
 });
 
+vi.mock("../lib/suggestion", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/suggestion")>();
+  return {
+    ...actual,
+    loadSuggestion: async (
+      input: Parameters<typeof actual.loadSuggestion>[0],
+    ): ReturnType<typeof actual.loadSuggestion> => {
+      if (suggestionLoadControl.pauseGuidedLoad && input.emitTelemetry === true) {
+        suggestionLoadControl.pauseGuidedLoad = false;
+        suggestionLoadControl.markGuidedLoadStarted?.();
+        await suggestionLoadControl.guidedLoadHold;
+      }
+      return actual.loadSuggestion(input);
+    },
+  };
+});
+
 import { app } from "../app";
-import { db } from "../db";
+import { db, pool } from "../db";
 import {
   events,
   behaviorConcerns,
@@ -243,11 +266,65 @@ async function trainingActionEvents(userId: string) {
     .orderBy(asc(events.createdAt));
 }
 
+async function suggestionTelemetryEvents(userId: string) {
+  return db
+    .select({ name: events.name })
+    .from(events)
+    .where(
+      and(
+        eq(events.userId, userId),
+        inArray(events.name, ["training.suggestion_shown", "safety.suppression_shown"]),
+      ),
+    )
+    .orderBy(asc(events.createdAt));
+}
+
+function pauseGuidedSuggestionLoad() {
+  let releaseHold: () => void = () => {};
+  suggestionLoadControl.guidedLoadHold = new Promise<void>((resolve) => {
+    releaseHold = resolve;
+  });
+  const guidedLoadStarted = new Promise<void>((resolve) => {
+    suggestionLoadControl.markGuidedLoadStarted = resolve;
+  });
+  suggestionLoadControl.pauseGuidedLoad = true;
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    suggestionLoadControl.markGuidedLoadStarted = undefined;
+    suggestionLoadControl.releaseGuidedLoad = undefined;
+    releaseHold();
+  };
+  suggestionLoadControl.releaseGuidedLoad = release;
+  return { guidedLoadStarted, release };
+}
+
+async function waitForTrainingGoalLockWaiter() {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const result = await pool.query<{ waiting: boolean }>(
+      "select exists (" +
+        "select 1 from pg_locks l " +
+        "join pg_stat_activity a on a.pid = l.pid " +
+        "where not l.granted " +
+        "and a.wait_event_type = 'Lock' " +
+        "and a.wait_event = 'transactionid' " +
+        "and a.query ilike '%training_goals%'" +
+        ") as waiting",
+    );
+    if (result.rows[0]?.waiting) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error("timed out waiting for a training goal lock waiter");
+}
+
 describe("guided setup lifecycle", () => {
   const users: TestUser[] = [];
 
   afterEach(async () => {
     behaviorConcernWriteControl.fail = false;
+    suggestionLoadControl.pauseGuidedLoad = false;
+    suggestionLoadControl.releaseGuidedLoad?.();
     for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
   });
 
@@ -1467,6 +1544,57 @@ describe("guided setup lifecycle", () => {
     expect(rows.filter(({ name }) => name === "guided_setup.completed")).toHaveLength(1);
   });
 
+  it("does not duplicate suggestion telemetry when normal loading wins the audit before guided loading", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    await db.insert(dogSafetySignals).values({
+      dogId: setup.dogId as string,
+      type: "injury_or_pain",
+      source: "behavior_concern",
+    });
+    const input = {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+    const guidedLoad = pauseGuidedSuggestionLoad();
+    const guidedCreate = createTrainingAction(user, input);
+
+    try {
+      await guidedLoad.guidedLoadStarted;
+      const normalSuggestion = await app.request(
+        `/api/dogs/${setup.dogId}/suggestion?weekKey=${input.weekKey}&timezoneOffsetMinutes=0`,
+        { headers: user.authHeaders },
+      );
+      expect(normalSuggestion.status).toBe(200);
+      expect(
+        ((await normalSuggestion.json()) as { suggestion: { type: string } }).suggestion,
+      ).toMatchObject({
+        type: "safety_suppressed",
+      });
+      expect(await suggestionTelemetryEvents(user.userId)).toEqual([
+        { name: "training.suggestion_shown" },
+        { name: "safety.suppression_shown" },
+      ]);
+
+      guidedLoad.release();
+      const guidedResponse = await guidedCreate;
+      expect(guidedResponse.status).toBe(201);
+      expect(await suggestionTelemetryEvents(user.userId)).toEqual([
+        { name: "training.suggestion_shown" },
+        { name: "safety.suppression_shown" },
+      ]);
+    } finally {
+      guidedLoad.release();
+      await guidedCreate.catch(() => undefined);
+    }
+  });
+
   it("rejects training actions before intent selection and for a different intent without writes", async () => {
     const user = await createTestUser();
     users.push(user);
@@ -1852,6 +1980,70 @@ describe("guided setup lifecycle", () => {
       focus: 0,
     });
     expect(await trainingActionEvents(user.userId)).toEqual(beforeReplayEvents);
+  });
+
+  it("holds the referenced training goal lock across replay graph reads", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const input = {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+    const created = await createTrainingAction(user, input);
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      goal: { id: string };
+      skills: Array<{ id: string }>;
+    };
+
+    const holder = await pool.connect();
+    let holderInTransaction = false;
+    let deleteCompleted = false;
+    try {
+      await holder.query("begin");
+      holderInTransaction = true;
+      await holder.query("select id from training_goals where id = $1 for update", [
+        createdBody.goal.id,
+      ]);
+
+      const replayPromise = createTrainingAction(user, {
+        ...input,
+        templateKey: "basic-manners",
+      });
+      await waitForTrainingGoalLockWaiter();
+
+      const deletePromise = Promise.resolve(
+        app.request(`/api/dogs/${setup.dogId}/goals/${createdBody.goal.id}`, {
+          method: "DELETE",
+          headers: user.authHeaders,
+        }),
+      ).then((response) => {
+        deleteCompleted = true;
+        return response;
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(deleteCompleted).toBe(false);
+
+      await holder.query("commit");
+      holderInTransaction = false;
+      const [replay, deleted] = await Promise.all([replayPromise, deletePromise]);
+      expect(replay.status).toBe(200);
+      expect(await replay.json()).toMatchObject({
+        goal: { id: createdBody.goal.id },
+        skills: createdBody.skills,
+        actionDeleted: false,
+      });
+      expect(deleted.status).toBe(200);
+    } finally {
+      if (holderInTransaction) await holder.query("rollback");
+      holder.release();
+    }
   });
 });
 
