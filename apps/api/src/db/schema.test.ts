@@ -5,6 +5,7 @@ import {
   advancementProposals,
   advancementStatusEnum,
   dogSafetySignals,
+  guidedSetups,
   journalEntries,
   journalEntryKindEnum,
   journalTrendEnum,
@@ -145,6 +146,17 @@ describe("suggestion and advancement audit schema", () => {
   it("declares a unique partial index for open proposals", () => {
     const index = getTableConfig(advancementProposals).indexes.find(
       ({ config }) => config.name === "advancement_proposals_open_skill_idx",
+    );
+
+    expect(index?.config.unique).toBe(true);
+    expect(index?.config.where).toBeDefined();
+  });
+});
+
+describe("guided setup schema", () => {
+  it("declares a unique partial index for one active owner setup", () => {
+    const index = getTableConfig(guidedSetups).indexes.find(
+      ({ config }) => config.name === "guided_setups_one_active_owner",
     );
 
     expect(index?.config.unique).toBe(true);
