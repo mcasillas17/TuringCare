@@ -18,6 +18,10 @@ vi.mock("../lib/safety-lock", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/safety-lock")>();
   return {
     ...actual,
+    lockDogSafety: async (tx: TransactionType, dogId: string): Promise<void> => {
+      await actual.lockDogSafety(tx, dogId);
+      guardedWrites.push({ dogId, lockHeldDuringWrite: !(await dogSafetyLockIsFree(dogId)) });
+    },
     withDogSafetyLock: async <T>(
       dogId: string,
       callback: (tx: TransactionType) => Promise<T>,
