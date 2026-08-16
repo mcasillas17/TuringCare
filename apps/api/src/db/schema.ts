@@ -144,9 +144,7 @@ export const guidedSetups = pgTable(
   },
   (t) => [
     unique("guided_setups_dog_unique").on(t.dogId),
-    uniqueIndex("guided_setups_one_active_owner")
-      .on(t.userId)
-      .where(sql`${t.completedAt} IS NULL`),
+    uniqueIndex("guided_setups_one_active_owner").on(t.userId).where(sql`${t.completedAt} IS NULL`),
     index("guided_setups_user_started_idx").on(t.userId, t.startedAt),
     check(
       "guided_setups_completion_consistent",

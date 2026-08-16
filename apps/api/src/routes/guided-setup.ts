@@ -4,6 +4,7 @@ import {
   type GuidedSetupRecord,
   type GuidedSetupStatus,
   guidedSetupIntentInputSchema,
+  guidedSetupMutationSchema,
   guidedSetupStartSchema,
 } from "@turingcare/shared";
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
@@ -78,16 +79,28 @@ async function loadActiveSetup(
   };
 }
 
-async function loadLatestSetup(
+async function loadOwnedSetup(
   tx: TransactionType,
   userId: string,
+  setupId: string,
 ): Promise<SetupDogJoinRow | null> {
-  const [row] = await selectSetupRows(tx, userId);
-  if (!row) return null;
-  if (row.setup.completedAt === null && (row.setup.dogId === null || row.dogName === null)) {
-    throw new Error("active guided setup has no dog");
+  const [row] = await selectSetupRows(
+    tx,
+    userId,
+    and(eq(guidedSetups.id, setupId), eq(guidedSetups.userId, userId)),
+  );
+  return row ?? null;
+}
+
+function requireActiveSetupDog(row: SetupDogJoinRow): ActiveSetupWithDogRow {
+  if (row.setup.completedAt !== null) {
+    throw new Error("completed guided setup cannot be used as active");
   }
-  return row;
+  if (!row.setup.dogId || !row.dogName) throw new Error("active guided setup has no dog");
+  return {
+    setup: { ...row.setup, dogId: row.setup.dogId },
+    dogName: row.dogName,
+  };
 }
 
 async function loadStatus(userId: string): Promise<GuidedSetupStatus> {
@@ -174,18 +187,22 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
   })
   .put("/intent", zValidator("json", guidedSetupIntentInputSchema), async (c) => {
     const userId = c.get("userId");
-    const intent = c.req.valid("json").intent;
+    const { setupId, intent } = c.req.valid("json");
     const result = await db.transaction(async (tx) => {
       await lockSetupFlow(tx, userId);
 
-      const active = await loadActiveSetup(tx, userId);
-      if (!active) {
-        const latest = await loadLatestSetup(tx, userId);
-        if (latest && latest.setup.completedAt !== null) {
-          return { kind: "already_completed" } as const;
-        }
-        return { kind: "not_active" } as const;
+      const row = await loadOwnedSetup(tx, userId, setupId);
+      if (!row) return { kind: "not_found" } as const;
+      if (row.setup.completedAt !== null) {
+        return { kind: "already_completed" } as const;
       }
+      if (row.setup.currentStep === "action" && row.setup.intent === intent) {
+        return {
+          kind: "unchanged",
+          setup: toSetupDto(row),
+        } as const;
+      }
+      const active = requireActiveSetupDog(row);
 
       const [setup] = await tx
         .update(guidedSetups)
@@ -204,11 +221,14 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       } as const;
     });
 
-    if (result.kind === "not_active") {
-      return c.json({ error: "setup_not_active" } as const, 409);
+    if (result.kind === "not_found") {
+      return c.json({ error: "not_found" } as const, 404);
     }
     if (result.kind === "already_completed") {
       return c.json({ error: "setup_already_completed" } as const, 409);
+    }
+    if (result.kind === "unchanged") {
+      return c.json({ setup: result.setup });
     }
 
     await recordEvent("guided_setup.intent_selected", {
@@ -217,17 +237,16 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
     });
     return c.json({ setup: result.setup });
   })
-  .post("/skip", async (c) => {
+  .post("/skip", zValidator("json", guidedSetupMutationSchema), async (c) => {
     const userId = c.get("userId");
+    const { setupId } = c.req.valid("json");
     const result = await db.transaction(async (tx) => {
       await lockSetupFlow(tx, userId);
 
-      const active = await loadActiveSetup(tx, userId);
-      if (!active) {
-        const latest = await loadLatestSetup(tx, userId);
-        if (!latest || latest.setup.completedAt === null) return { kind: "not_active" } as const;
-        return resolveCompletedSetupReplay(latest, "skipped");
-      }
+      const row = await loadOwnedSetup(tx, userId, setupId);
+      if (!row) return { kind: "not_found" } as const;
+      if (row.setup.completedAt !== null) return resolveCompletedSetupReplay(row, "skipped");
+      const active = requireActiveSetupDog(row);
       if (active.setup.currentStep !== "action" || active.setup.intent === null) {
         return { kind: "not_ready" } as const;
       }
@@ -239,8 +258,8 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       } as const;
     });
 
-    if (result.kind === "not_active") {
-      return c.json({ error: "setup_not_active" } as const, 409);
+    if (result.kind === "not_found") {
+      return c.json({ error: "not_found" } as const, 404);
     }
     if (result.kind === "already_completed") {
       return c.json({ error: "setup_already_completed" } as const, 409);
@@ -266,17 +285,18 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
     });
     return c.json({ setup: result.setup });
   })
-  .post("/abandon", async (c) => {
+  .post("/abandon", zValidator("json", guidedSetupMutationSchema), async (c) => {
     const userId = c.get("userId");
+    const { setupId } = c.req.valid("json");
     const result = await db.transaction(async (tx) => {
       await lockSetupFlow(tx, userId);
 
-      const active = await loadActiveSetup(tx, userId);
-      if (!active) {
-        const latest = await loadLatestSetup(tx, userId);
-        if (!latest || latest.setup.completedAt === null) return { kind: "not_active" } as const;
-        return resolveCompletedSetupReplay(latest, "abandoned");
+      const row = await loadOwnedSetup(tx, userId, setupId);
+      if (!row) return { kind: "not_found" } as const;
+      if (row.setup.completedAt !== null) {
+        return resolveCompletedSetupReplay(row, "abandoned");
       }
+      const active = requireActiveSetupDog(row);
 
       return {
         kind: "completed",
@@ -284,8 +304,8 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       } as const;
     });
 
-    if (result.kind === "not_active") {
-      return c.json({ error: "setup_not_active" } as const, 409);
+    if (result.kind === "not_found") {
+      return c.json({ error: "not_found" } as const, 404);
     }
     if (result.kind === "already_completed") {
       return c.json({ error: "setup_already_completed" } as const, 409);

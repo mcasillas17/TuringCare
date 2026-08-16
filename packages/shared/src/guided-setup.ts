@@ -17,14 +17,22 @@ export const guidedSetupActionTypeValues = ["behavior", "training", "progress"] 
 
 export const guidedSetupStartSchema = dogProfileSchema.strict();
 
+export const guidedSetupMutationSchema = z
+  .object({
+    setupId: z.string().uuid(),
+  })
+  .strict();
+
 export const guidedSetupIntentInputSchema = z
   .object({
+    setupId: z.string().uuid(),
     intent: z.enum(guidedSetupIntentValues),
   })
   .strict();
 
 export const guidedSetupBehaviorActionSchema = behaviorConcernSchema
   .extend({
+    setupId: z.string().uuid(),
     safetyConfirmed: z.boolean(),
   })
   .strict()
@@ -40,6 +48,7 @@ export const guidedSetupBehaviorActionSchema = behaviorConcernSchema
 
 export const guidedSetupTrainingActionSchema = z
   .object({
+    setupId: z.string().uuid(),
     templateKey: z.string().min(1).max(200),
     weekKey: z.string().date(),
     timezoneOffsetMinutes: z.number().int().min(-840).max(840),
@@ -51,12 +60,14 @@ export const guidedSetupProgressActionSchema = journalDailyCheckInCreateSchema
     kind: true,
     occurredAt: true,
   })
+  .extend({
+    setupId: z.string().uuid(),
+  })
   .strict();
 
 export type GuidedSetupIntent = (typeof guidedSetupIntentValues)[number];
 export type GuidedSetupStep = (typeof guidedSetupStepValues)[number];
-export type GuidedSetupCompletionReason =
-  (typeof guidedSetupCompletionReasonValues)[number];
+export type GuidedSetupCompletionReason = (typeof guidedSetupCompletionReasonValues)[number];
 export type GuidedSetupActionType = (typeof guidedSetupActionTypeValues)[number];
 export type GuidedSetupBehaviorAction = z.infer<typeof guidedSetupBehaviorActionSchema>;
 export type GuidedSetupTrainingAction = z.infer<typeof guidedSetupTrainingActionSchema>;

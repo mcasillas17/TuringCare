@@ -1,22 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { behaviorConcernSchema, dogProfileSchema } from "./dog";
-import { journalDailyCheckInCreateSchema } from "./journal";
 import {
   guidedSetupBehaviorActionSchema,
   guidedSetupIntentInputSchema,
+  guidedSetupMutationSchema,
   guidedSetupProgressActionSchema,
   guidedSetupStartSchema,
   guidedSetupTrainingActionSchema,
 } from "./guided-setup";
+import { journalDailyCheckInCreateSchema } from "./journal";
 
 describe("guided setup contracts", () => {
+  const setupId = "00000000-0000-4000-8000-000000000001";
+
   it("accepts the launch intents", () => {
-    for (const intent of [
-      "understand_behavior",
-      "train_skill",
-      "track_progress",
-    ] as const) {
-      expect(guidedSetupIntentInputSchema.safeParse({ intent }).success).toBe(true);
+    for (const intent of ["understand_behavior", "train_skill", "track_progress"] as const) {
+      expect(guidedSetupIntentInputSchema.safeParse({ setupId, intent }).success).toBe(true);
     }
   });
 
@@ -40,16 +39,19 @@ describe("guided setup contracts", () => {
 
   it("keeps behavior concern constraints and confirmation refinement", () => {
     const tooLongConcern = {
+      setupId,
       concern: "x".repeat(501),
       severity: "moderate",
       safetyConfirmed: true,
     } as const;
     const invalidSeverity = {
+      setupId,
       concern: "Barking",
       severity: "extreme",
       safetyConfirmed: true,
     } as const;
     const invalidSafetySignal = {
+      setupId,
       concern: "Barking",
       severity: "moderate",
       safetySignal: "seems scary",
@@ -64,6 +66,7 @@ describe("guided setup contracts", () => {
     expect(guidedSetupBehaviorActionSchema.safeParse(invalidSafetySignal).success).toBe(false);
     expect(
       guidedSetupBehaviorActionSchema.safeParse({
+        setupId,
         concern: "Snapped when approached",
         severity: "severe",
         safetyConfirmed: false,
@@ -72,27 +75,27 @@ describe("guided setup contracts", () => {
   });
 
   it("reuses daily check-in semantics for progress actions", () => {
-    const blankNote = { note: "   ", trend: "better" } as const;
-    const missingTrend = { note: "Settled faster after dinner." } as const;
+    const blankNote = { setupId, note: "   ", trend: "better" } as const;
+    const missingTrend = { setupId, note: "Settled faster after dinner." } as const;
 
     expect(
       journalDailyCheckInCreateSchema.safeParse({
         kind: "daily_checkin",
-        ...blankNote,
+        note: blankNote.note,
+        trend: blankNote.trend,
       }).success,
     ).toBe(false);
-    expect(
-      guidedSetupProgressActionSchema.safeParse(blankNote).success,
-    ).toBe(false);
+    expect(guidedSetupProgressActionSchema.safeParse(blankNote).success).toBe(false);
     expect(
       journalDailyCheckInCreateSchema.safeParse({
         kind: "daily_checkin",
-        ...missingTrend,
+        note: missingTrend.note,
       }).success,
     ).toBe(false);
     expect(guidedSetupProgressActionSchema.safeParse(missingTrend).success).toBe(false);
     expect(
       guidedSetupProgressActionSchema.safeParse({
+        setupId,
         note: "Settled faster after dinner.",
         trend: "better",
       }).success,
@@ -102,6 +105,7 @@ describe("guided setup contracts", () => {
   it("rejects identity fields on strict request payloads", () => {
     expect(
       guidedSetupBehaviorActionSchema.safeParse({
+        setupId,
         concern: "Pulled away from loud noises",
         severity: "mild",
         safetyConfirmed: true,
@@ -110,6 +114,7 @@ describe("guided setup contracts", () => {
     ).toBe(false);
     expect(
       guidedSetupBehaviorActionSchema.safeParse({
+        setupId,
         concern: "Pulled away from loud noises",
         severity: "mild",
         safetyConfirmed: true,
@@ -117,7 +122,8 @@ describe("guided setup contracts", () => {
       }).success,
     ).toBe(false);
     expect(
-      guidedSetupIntentInputSchema.safeParse({ intent: "train_skill", userId: "x" }).success,
+      guidedSetupIntentInputSchema.safeParse({ setupId, intent: "train_skill", userId: "x" })
+        .success,
     ).toBe(false);
     expect(
       guidedSetupStartSchema.safeParse({
@@ -131,6 +137,7 @@ describe("guided setup contracts", () => {
     ).toBe(false);
     expect(
       guidedSetupTrainingActionSchema.safeParse({
+        setupId,
         templateKey: "puppy-fundamentals",
         weekKey: "2026-08-10",
         timezoneOffsetMinutes: 420,
@@ -139,6 +146,7 @@ describe("guided setup contracts", () => {
     ).toBe(false);
     expect(
       guidedSetupProgressActionSchema.safeParse({
+        setupId,
         trend: "better",
         note: "Settled faster after dinner.",
         userId: "x",
@@ -149,6 +157,7 @@ describe("guided setup contracts", () => {
   it("requires safety confirmation for severe concerns and structured safety signals", () => {
     expect(
       guidedSetupBehaviorActionSchema.safeParse({
+        setupId,
         concern: "Snapped when approached",
         severity: "severe",
         safetyConfirmed: false,
@@ -156,6 +165,7 @@ describe("guided setup contracts", () => {
     ).toBe(false);
     expect(
       guidedSetupBehaviorActionSchema.safeParse({
+        setupId,
         concern: "Barked at the window",
         severity: "moderate",
         safetySignal: "injury_or_pain",
@@ -164,6 +174,7 @@ describe("guided setup contracts", () => {
     ).toBe(false);
     expect(
       guidedSetupBehaviorActionSchema.safeParse({
+        setupId,
         concern: "Barked at the window",
         severity: "mild",
         safetyConfirmed: false,
@@ -171,6 +182,7 @@ describe("guided setup contracts", () => {
     ).toBe(true);
     expect(
       guidedSetupBehaviorActionSchema.safeParse({
+        setupId,
         concern: "Sniffed the food bowl",
         severity: "moderate",
         safetyConfirmed: false,
@@ -181,6 +193,7 @@ describe("guided setup contracts", () => {
   it("accepts a valid training action", () => {
     expect(
       guidedSetupTrainingActionSchema.safeParse({
+        setupId,
         templateKey: "puppy-fundamentals",
         weekKey: "2026-08-10",
         timezoneOffsetMinutes: 420,
@@ -191,6 +204,7 @@ describe("guided setup contracts", () => {
   it("rejects invalid training dates and offsets", () => {
     expect(
       guidedSetupTrainingActionSchema.safeParse({
+        setupId,
         templateKey: "puppy-fundamentals",
         weekKey: "2026-8-10",
         timezoneOffsetMinutes: 420,
@@ -198,9 +212,44 @@ describe("guided setup contracts", () => {
     ).toBe(false);
     expect(
       guidedSetupTrainingActionSchema.safeParse({
+        setupId,
         templateKey: "puppy-fundamentals",
         weekKey: "2026-08-10",
         timezoneOffsetMinutes: 841,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires a valid setup id on every setup mutation", () => {
+    expect(guidedSetupMutationSchema.safeParse({ setupId }).success).toBe(true);
+    expect(guidedSetupMutationSchema.safeParse({}).success).toBe(false);
+    expect(guidedSetupMutationSchema.safeParse({ setupId: "not-a-uuid" }).success).toBe(false);
+    expect(guidedSetupMutationSchema.safeParse({ setupId, userId: "x" }).success).toBe(false);
+    expect(guidedSetupIntentInputSchema.safeParse({ intent: "train_skill" }).success).toBe(false);
+    expect(
+      guidedSetupIntentInputSchema.safeParse({
+        setupId: "not-a-uuid",
+        intent: "train_skill",
+      }).success,
+    ).toBe(false);
+    expect(
+      guidedSetupBehaviorActionSchema.safeParse({
+        concern: "Barking",
+        severity: "mild",
+        safetyConfirmed: true,
+      }).success,
+    ).toBe(false);
+    expect(
+      guidedSetupTrainingActionSchema.safeParse({
+        templateKey: "puppy-fundamentals",
+        weekKey: "2026-08-10",
+        timezoneOffsetMinutes: 420,
+      }).success,
+    ).toBe(false);
+    expect(
+      guidedSetupProgressActionSchema.safeParse({
+        trend: "better",
+        note: "Settled faster after dinner.",
       }).success,
     ).toBe(false);
   });

@@ -45,26 +45,29 @@ async function startSetup(user: TestUser, body: unknown = validDog) {
 
 async function saveIntent(
   user: TestUser,
+  setupId: string,
   intent: "understand_behavior" | "train_skill" | "track_progress",
 ) {
   return app.request("/api/guided-setup/intent", {
     method: "PUT",
     headers: user.authHeaders,
-    body: JSON.stringify({ intent }),
+    body: JSON.stringify({ setupId, intent }),
   });
 }
 
-async function skipSetup(user: TestUser) {
+async function skipSetup(user: TestUser, setupId: string) {
   return app.request("/api/guided-setup/skip", {
     method: "POST",
     headers: user.authHeaders,
+    body: JSON.stringify({ setupId }),
   });
 }
 
-async function abandonSetup(user: TestUser) {
+async function abandonSetup(user: TestUser, setupId: string) {
   return app.request("/api/guided-setup/abandon", {
     method: "POST",
     headers: user.authHeaders,
+    body: JSON.stringify({ setupId }),
   });
 }
 
@@ -247,9 +250,13 @@ describe("guided setup lifecycle", () => {
     const other = await createTestUser();
     users.push(owner, other);
 
-    const beforeStart = await saveIntent(owner, "train_skill");
-    expect(beforeStart.status).toBe(409);
-    expect(await beforeStart.json()).toEqual({ error: "setup_not_active" });
+    const beforeStart = await saveIntent(
+      owner,
+      "00000000-0000-4000-8000-000000000001",
+      "train_skill",
+    );
+    expect(beforeStart.status).toBe(404);
+    expect(await beforeStart.json()).toEqual({ error: "not_found" });
 
     const strictIntent = await app.request("/api/guided-setup/intent", {
       method: "PUT",
@@ -265,8 +272,9 @@ describe("guided setup lifecycle", () => {
 
     const started = await startSetup(owner);
     expect(started.status).toBe(201);
+    const startedSetup = ((await started.json()) as SetupBody).setup;
 
-    const firstIntent = await saveIntent(owner, "understand_behavior");
+    const firstIntent = await saveIntent(owner, startedSetup.id, "understand_behavior");
     expect(firstIntent.status).toBe(200);
     const firstSetup = (await firstIntent.json()) as SetupBody;
     expect(firstSetup.setup).toEqual(
@@ -277,7 +285,7 @@ describe("guided setup lifecycle", () => {
       }),
     );
 
-    const secondIntent = await saveIntent(owner, "track_progress");
+    const secondIntent = await saveIntent(owner, startedSetup.id, "track_progress");
     expect(secondIntent.status).toBe(200);
     const secondSetup = (await secondIntent.json()) as SetupBody;
     expect(secondSetup.setup).toEqual(
@@ -303,17 +311,17 @@ describe("guided setup lifecycle", () => {
     const started = await startSetup(user);
     expect(started.status).toBe(201);
     const {
-      setup: { dogId },
+      setup: { id: setupId, dogId },
     } = (await started.json()) as SetupBody;
     if (!dogId) throw new Error("missing dogId");
 
-    const tooEarly = await skipSetup(user);
+    const tooEarly = await skipSetup(user, setupId);
     expect(tooEarly.status).toBe(409);
 
-    const intent = await saveIntent(user, "track_progress");
+    const intent = await saveIntent(user, setupId, "track_progress");
     expect(intent.status).toBe(200);
 
-    const skipped = await skipSetup(user);
+    const skipped = await skipSetup(user, setupId);
     expect(skipped.status).toBe(200);
     const skippedBody = (await skipped.json()) as SetupBody;
     expect(skippedBody.setup).toEqual(
@@ -337,11 +345,11 @@ describe("guided setup lifecycle", () => {
       practices: 0,
     });
 
-    const replay = await skipSetup(user);
+    const replay = await skipSetup(user, setupId);
     expect(replay.status).toBe(200);
     expect(await replay.json()).toEqual(skippedBody);
 
-    const wrongCompletion = await abandonSetup(user);
+    const wrongCompletion = await abandonSetup(user, setupId);
     expect(wrongCompletion.status).toBe(409);
     expect(await wrongCompletion.json()).toEqual({ error: "setup_already_completed" });
   });
@@ -363,11 +371,11 @@ describe("guided setup lifecycle", () => {
       if (!dogId) throw new Error("missing dogId");
 
       if (setIntent) {
-        const intent = await saveIntent(user, "train_skill");
+        const intent = await saveIntent(user, id, "train_skill");
         expect(intent.status).toBe(200);
       }
 
-      const abandoned = await abandonSetup(user);
+      const abandoned = await abandonSetup(user, id);
       expect(abandoned.status).toBe(200);
       const abandonedBody = (await abandoned.json()) as SetupBody;
       expect(abandonedBody.setup).toEqual(
@@ -393,15 +401,15 @@ describe("guided setup lifecycle", () => {
         practices: 0,
       });
 
-      const replay = await abandonSetup(user);
+      const replay = await abandonSetup(user, id);
       expect(replay.status).toBe(200);
       expect(await replay.json()).toEqual(abandonedBody);
 
-      const wrongCompletion = await skipSetup(user);
+      const wrongCompletion = await skipSetup(user, id);
       expect(wrongCompletion.status).toBe(409);
       expect(await wrongCompletion.json()).toEqual({ error: "setup_already_completed" });
 
-      const postCompleteIntent = await saveIntent(user, "track_progress");
+      const postCompleteIntent = await saveIntent(user, id, "track_progress");
       expect(postCompleteIntent.status).toBe(409);
       expect(await postCompleteIntent.json()).toEqual({ error: "setup_already_completed" });
     },
@@ -414,7 +422,7 @@ describe("guided setup lifecycle", () => {
     const started = await startSetup(user);
     expect(started.status).toBe(201);
     const { setup } = (await started.json()) as SetupBody;
-    expect((await abandonSetup(user)).status).toBe(200);
+    expect((await abandonSetup(user, setup.id)).status).toBe(200);
 
     const deleted = await app.request(`/api/dogs/${setup.dogId}`, {
       method: "DELETE",
@@ -467,8 +475,9 @@ describe("guided setup lifecycle", () => {
 
     const started = await startSetup(user);
     expect(started.status).toBe(201);
-    expect((await saveIntent(user, "track_progress")).status).toBe(200);
-    expect((await skipSetup(user)).status).toBe(200);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "track_progress")).status).toBe(200);
+    expect((await skipSetup(user, setup.id)).status).toBe(200);
 
     const rows = await setupEvents(user.userId);
     expect(rows).toEqual([
@@ -497,5 +506,112 @@ describe("guided setup lifecycle", () => {
     expect(serialized).not.toContain(validDog.name);
     expect(serialized).not.toContain(validDog.breed);
     expect(serialized).not.toContain(validDog.notes);
+  });
+
+  it("binds retries to the original setup instead of mutating a newer active setup", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const firstStart = await startSetup(user);
+    const first = ((await firstStart.json()) as SetupBody).setup;
+    expect((await saveIntent(user, first.id, "track_progress")).status).toBe(200);
+    const firstSkip = await skipSetup(user, first.id);
+    expect(firstSkip.status).toBe(200);
+    const firstCompleted = (await firstSkip.json()) as SetupBody;
+
+    const secondStart = await startSetup(user, { ...validDog, name: "Second Biscuit" });
+    const second = ((await secondStart.json()) as SetupBody).setup;
+
+    const staleIntent = await saveIntent(user, first.id, "train_skill");
+    expect(staleIntent.status).toBe(409);
+    expect(await staleIntent.json()).toEqual({ error: "setup_already_completed" });
+
+    const staleSkip = await skipSetup(user, first.id);
+    expect(staleSkip.status).toBe(200);
+    expect(await staleSkip.json()).toEqual(firstCompleted);
+
+    const staleAbandon = await abandonSetup(user, first.id);
+    expect(staleAbandon.status).toBe(409);
+    expect(await staleAbandon.json()).toEqual({ error: "setup_already_completed" });
+
+    expect((await readStatus(user)).active).toEqual(second);
+  });
+
+  it("returns not found for setup ids owned by another user", async () => {
+    const owner = await createTestUser();
+    const other = await createTestUser();
+    users.push(owner, other);
+
+    const started = await startSetup(owner);
+    const setup = ((await started.json()) as SetupBody).setup;
+    const otherStarted = await startSetup(other, { ...validDog, name: "Other Biscuit" });
+    const otherSetup = ((await otherStarted.json()) as SetupBody).setup;
+
+    const intent = await saveIntent(other, setup.id, "track_progress");
+    expect(intent.status).toBe(404);
+    expect(await intent.json()).toEqual({ error: "not_found" });
+
+    const skip = await skipSetup(other, setup.id);
+    expect(skip.status).toBe(404);
+    expect(await skip.json()).toEqual({ error: "not_found" });
+
+    const abandon = await abandonSetup(other, setup.id);
+    expect(abandon.status).toBe(404);
+    expect(await abandon.json()).toEqual({ error: "not_found" });
+
+    expect((await readStatus(owner)).active).toEqual(setup);
+    expect((await readStatus(other)).active).toEqual(otherSetup);
+  });
+
+  it("rejects missing, malformed, or identity-injected completion bindings", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+
+    for (const body of [
+      {},
+      { setupId: "not-a-uuid" },
+      { setupId: setup.id, userId: user.userId },
+      { setupId: setup.id, dogId: setup.dogId },
+    ]) {
+      const response = await app.request("/api/guided-setup/skip", {
+        method: "POST",
+        headers: user.authHeaders,
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBe(400);
+    }
+
+    expect((await readStatus(user)).active).toEqual(setup);
+  });
+
+  it("does not write or emit telemetry when the saved intent is unchanged", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    const first = await saveIntent(user, setup.id, "track_progress");
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as SetupBody;
+    const [beforeRepeat] = await db
+      .select({ updatedAt: guidedSetups.updatedAt })
+      .from(guidedSetups)
+      .where(eq(guidedSetups.id, setup.id));
+    if (!beforeRepeat) throw new Error("missing guided setup");
+
+    const repeated = await saveIntent(user, setup.id, "track_progress");
+    expect(repeated.status).toBe(200);
+    expect(await repeated.json()).toEqual(firstBody);
+    const [afterRepeat] = await db
+      .select({ updatedAt: guidedSetups.updatedAt })
+      .from(guidedSetups)
+      .where(eq(guidedSetups.id, setup.id));
+    expect(afterRepeat?.updatedAt).toEqual(beforeRepeat.updatedAt);
+
+    const rows = await setupEvents(user.userId);
+    expect(rows.filter(({ name }) => name === "guided_setup.intent_selected")).toHaveLength(1);
   });
 });

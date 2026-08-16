@@ -29,9 +29,7 @@ import {
   trainingSuggestions,
 } from "./schema";
 
-type SqlChunkSummary =
-  | { kind: "string"; value: string }
-  | { kind: "column"; name: string };
+type SqlChunkSummary = { kind: "string"; value: string } | { kind: "column"; name: string };
 
 function summarizeSql(sqlValue: unknown): SqlChunkSummary[] {
   if (

@@ -186,6 +186,11 @@ existing application:
 All dog and setup lookups are scoped by the signed-in user. Cross-owner dog or
 setup identifiers return `404`.
 
+Every mutation after setup creation includes the opaque `setupId` returned by the
+status/start response. The server scopes that identifier to the signed-in owner before
+reading or writing. This binds retries to the original setup, so a delayed request cannot
+mutate a newer active setup.
+
 Extract reusable domain services from existing route handlers where needed.
 Normal domain routes and guided setup call those same services, so setup does
 not duplicate journal, training, focus, suggestion, or safety business rules.
@@ -196,7 +201,7 @@ catalog template, selects its first suitable skill as the current owner-local
 week's focus, and completes setup atomically. The deterministic suggestion is
 loaded after commit through the normal read path.
 
-Submitting a completed setup returns the already-created result instead of
+Submitting a completed setup by its `setupId` returns the already-created result instead of
 repeating the domain write. This idempotency is enforced by the setup row's
 completion state inside the transaction, not by client timing.
 

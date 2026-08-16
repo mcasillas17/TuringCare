@@ -17,8 +17,9 @@
 - Work only in the `feat/first-run-guided-setup` worktree created from `origin/main`.
 - API integration tests use `app.request()`, `createTestUser()`, and real Postgres. Clean
   users in `afterEach`; cascading deletes remove setup and owned domain rows.
-- Every owned lookup returns `404`, never `403`. No route accepts `userId`, `dogId`, or
-  setup identity from owner prose or telemetry.
+- Every owned lookup returns `404`, never `403`. Setup mutations accept only the opaque
+  `setupId` returned by setup status/start and scope it to the signed-in owner. No route
+  accepts `userId`, `dogId`, or setup identity from owner prose or telemetry.
 - Acquire the owner-scoped setup advisory lock before setup mutations. For behavior and
   journal writes, acquire the dog-safety advisory lock before domain rows; never lock a
   setup row and then wait for dog safety.
@@ -112,15 +113,18 @@ import {
 } from "./guided-setup";
 
 describe("guided setup contracts", () => {
+  const setupId = "00000000-0000-4000-8000-000000000001";
+
   it("accepts the three launch intents", () => {
     for (const intent of ["understand_behavior", "train_skill", "track_progress"]) {
-      expect(guidedSetupIntentInputSchema.safeParse({ intent }).success).toBe(true);
+      expect(guidedSetupIntentInputSchema.safeParse({ setupId, intent }).success).toBe(true);
     }
   });
 
   it("requires explicit confirmation for severe or signaled concerns", () => {
     expect(
       guidedSetupBehaviorActionSchema.safeParse({
+        setupId,
         concern: "Snapped when approached",
         severity: "severe",
         safetySignal: null,
@@ -129,6 +133,7 @@ describe("guided setup contracts", () => {
     ).toBe(false);
     expect(
       guidedSetupBehaviorActionSchema.safeParse({
+        setupId,
         concern: "Barked at the window",
         severity: "mild",
         safetySignal: null,
@@ -140,6 +145,7 @@ describe("guided setup contracts", () => {
   it("uses the existing training and daily-check-in value shapes", () => {
     expect(
       guidedSetupTrainingActionSchema.safeParse({
+        setupId,
         templateKey: "puppy-fundamentals",
         weekKey: "2026-08-10",
         timezoneOffsetMinutes: 420,
@@ -147,6 +153,7 @@ describe("guided setup contracts", () => {
     ).toBe(true);
     expect(
       guidedSetupProgressActionSchema.safeParse({
+        setupId,
         trend: "better",
         note: "Settled faster after dinner.",
       }).success,
@@ -188,12 +195,16 @@ export const guidedSetupCompletionReasonValues = [
 export const guidedSetupActionTypeValues = ["behavior", "training", "progress"] as const;
 
 export const guidedSetupStartSchema = dogProfileSchema.strict();
+export const guidedSetupMutationSchema = z.object({
+  setupId: z.string().uuid(),
+}).strict();
 export const guidedSetupIntentInputSchema = z.object({
+  setupId: z.string().uuid(),
   intent: z.enum(guidedSetupIntentValues),
 }).strict();
 
 export const guidedSetupBehaviorActionSchema = behaviorConcernSchema
-  .extend({ safetyConfirmed: z.boolean() })
+  .extend({ setupId: z.string().uuid(), safetyConfirmed: z.boolean() })
   .strict()
   .superRefine((value, ctx) => {
     if ((value.severity === "severe" || value.safetySignal) && !value.safetyConfirmed) {
@@ -206,6 +217,7 @@ export const guidedSetupBehaviorActionSchema = behaviorConcernSchema
   });
 
 export const guidedSetupTrainingActionSchema = z.object({
+  setupId: z.string().uuid(),
   templateKey: z.string().min(1).max(200),
   weekKey: z.string().date(),
   timezoneOffsetMinutes: z.number().int().min(-840).max(840),
@@ -214,7 +226,7 @@ export const guidedSetupTrainingActionSchema = z.object({
 export const guidedSetupProgressActionSchema = journalDailyCheckInCreateSchema.omit({
   kind: true,
   occurredAt: true,
-}).strict();
+}).extend({ setupId: z.string().uuid() }).strict();
 
 export type GuidedSetupIntent = (typeof guidedSetupIntentValues)[number];
 export type GuidedSetupStep = (typeof guidedSetupStepValues)[number];
@@ -636,13 +648,14 @@ it("starts, resumes, selects intent, skips, and preserves the dog", async () => 
   const intent = await app.request("/api/guided-setup/intent", {
     method: "PUT",
     headers: user.authHeaders,
-    body: JSON.stringify({ intent: "track_progress" }),
+    body: JSON.stringify({ setupId: setup.id, intent: "track_progress" }),
   });
   expect(intent.status).toBe(200);
 
   const skipped = await app.request("/api/guided-setup/skip", {
     method: "POST",
     headers: user.authHeaders,
+    body: JSON.stringify({ setupId: setup.id }),
   });
   expect((await skipped.json()).setup.completionReason).toBe("skipped");
 });
@@ -652,8 +665,9 @@ Add tests for:
 
 - `autoStartEligible: true` only when the owner has no dog and no prior setup row;
 - start is atomic and emits no setup row if dog validation fails;
-- request bodies with extra identity fields such as `userId`, `dogId`, or `setupId`
-  return `400`;
+- request bodies with extra identity fields such as `userId` or `dogId` return `400`;
+- setup mutations require a valid `setupId`; unknown and cross-owner IDs return `404`;
+- retries against a completed setup cannot mutate a newer active setup;
 - a second active start returns `409 active_setup_exists`;
 - intent cannot be saved before start;
 - invalid or cross-owner setup IDs are never accepted from the client;
@@ -710,8 +724,8 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
   .get("/", async (c) => c.json(await loadStatus(c.get("userId"))))
   .post("/", zValidator("json", guidedSetupStartSchema), startSetup)
   .put("/intent", zValidator("json", guidedSetupIntentInputSchema), saveIntent)
-  .post("/skip", skipSetup)
-  .post("/abandon", abandonSetup);
+  .post("/skip", zValidator("json", guidedSetupMutationSchema), skipSetup)
+  .post("/abandon", zValidator("json", guidedSetupMutationSchema), abandonSetup);
 ```
 
 For `startSetup`, take a transaction-scoped advisory lock:
@@ -721,9 +735,10 @@ await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`guided-setup:${use
 ```
 
 Check for an active row under the lock, call `createDog(tx, userId, input)`, insert the
-setup, and return `201`. Save intent only on an active setup and set
-`currentStep: "action"`. Skip and abandon set `completedAt`, `completionReason`, and
-`updatedAt` while leaving action fields null.
+setup, and return `201`. For every later mutation, load the requested `setupId` scoped by
+`userId`; never substitute the owner's current active setup. Save intent only when the
+requested setup is incomplete and set `currentStep: "action"`. Skip and abandon set
+`completedAt`, `completionReason`, and `updatedAt` while leaving action fields null.
 
 - [ ] **Step 5: Add server-only event names and route telemetry**
 
@@ -791,6 +806,7 @@ it("creates one severe concern and completes setup atomically", async () => {
     method: "POST",
     headers,
     body: JSON.stringify({
+      setupId,
       concern: "Snapped when touched",
       severity: "severe",
       safetySignal: null,
@@ -802,7 +818,11 @@ it("creates one severe concern and completes setup atomically", async () => {
 });
 
 it("creates one daily check-in and returns it on a duplicate submit", async () => {
-  const body = JSON.stringify({ trend: "better", note: "Settled after dinner." });
+  const body = JSON.stringify({
+    setupId,
+    trend: "better",
+    note: "Settled after dinner.",
+  });
   const first = await app.request("/api/guided-setup/action/progress", {
     method: "POST",
     headers,
@@ -838,36 +858,38 @@ pnpm --filter @turingcare/api exec vitest run src/routes/guided-setup.test.ts \
 
 Expected: FAIL with route not found.
 
-- [ ] **Step 3: Add serialized setup lookup helpers**
+- [ ] **Step 3: Reuse serialized setup lookup helpers**
 
 ```ts
 async function lockSetupFlow(tx: TransactionType, userId: string) {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`guided-setup:${userId}`}))`);
 }
-
-type ActiveGuidedSetup = typeof guidedSetups.$inferSelect & { dogId: string };
-
-async function loadActiveSetup(
-  tx: TransactionType,
-  userId: string,
-): Promise<ActiveGuidedSetup | null> {
-  const [row] = await tx
-    .select()
-    .from(guidedSetups)
-    .where(and(eq(guidedSetups.userId, userId), isNull(guidedSetups.completedAt)))
-    .limit(1);
-  if (!row) return null;
-  if (!row.dogId) throw new Error("active guided setup has no dog");
-  return { ...row, dogId: row.dogId };
-}
 ```
 
-If no active row exists, load the latest completed row. Return its referenced domain
-record for idempotent repeat requests only when its action type matches the endpoint.
+Reuse Task 4's existing `loadOwnedSetup(tx, userId, input.setupId)` and
+`requireActiveSetupDog(row)` helpers rather than adding a parallel lookup. Load only the
+setup named by the request. Return its referenced domain record for idempotent repeat
+requests only when its action type matches the endpoint.
 The owner-scoped advisory lock serializes duplicate setup submissions without locking the
 setup row before the established dog-safety lock order.
-If the latest setup was skipped, abandoned, or completed with a different action type,
+If the requested setup was skipped, abandoned, or completed with a different action type,
 return `409 setup_already_completed`.
+
+Widen Task 4's `completeSetup` helper to take a discriminated completion object:
+
+```ts
+type SetupCompletion =
+  | { reason: "skipped" | "abandoned" }
+  | {
+      reason: "first_action_completed";
+      actionType: GuidedSetupActionType;
+      actionId: string;
+    };
+```
+
+For first actions, persist `firstActionType` and `firstActionId`; for skip/abandon, keep
+both fields null. Existing lifecycle callers pass `{ reason: "skipped" }` or
+`{ reason: "abandoned" }`.
 
 - [ ] **Step 4: Implement both action routes**
 
@@ -888,11 +910,12 @@ Add:
 
 Inside one transaction:
 
-1. acquire `lockSetupFlow` and load the active setup;
+1. acquire `lockSetupFlow` and load the owner-scoped setup named by `input.setupId`;
 2. verify the saved intent;
 3. call `createBehaviorConcern` or `createJournalEntry`, which acquires the dog-safety
    lock before writing domain rows;
-4. update the setup with `completedAt`, `first_action_completed`, action type, and ID;
+4. call the widened `completeSetup` with the active setup and
+   `{ reason: "first_action_completed", actionType, actionId }`;
 5. return the domain row and setup DTO.
 
 For progress, call:
@@ -941,6 +964,7 @@ it("applies a starter template, focuses its first skill, and returns a suggestio
     method: "POST",
     headers,
     body: JSON.stringify({
+      setupId,
       templateKey: "puppy-fundamentals",
       weekKey: "2026-08-10",
       timezoneOffsetMinutes: 420,
@@ -1002,7 +1026,11 @@ const orderedSkills = [...applied.skills].sort((a, b) => a.position - b.position
 const firstSkill = orderedSkills[0];
 if (!firstSkill) throw new Error("template created no skills");
 const focusResult = await setWeeklyFocus(tx, setup.dogId, firstSkill.id, input.weekKey);
-await completeSetup(tx, setup.id, "training", applied.goal.id);
+await completeSetup(tx, active, {
+  reason: "first_action_completed",
+  actionType: "training",
+  actionId: applied.goal.id,
+});
 return {
   kind: "created" as const,
   goal: applied.goal,
@@ -1067,10 +1095,11 @@ Mock `@/lib/api` and test:
 ```ts
 expect(api.api["guided-setup"].$get).toHaveBeenCalled();
 expect(api.api["guided-setup"].intent.$put).toHaveBeenCalledWith({
-  json: { intent: "train_skill" },
+  json: { setupId, intent: "train_skill" },
 });
 expect(api.api["guided-setup"].action.training.$post).toHaveBeenCalledWith({
   json: {
+    setupId,
     templateKey: "puppy-fundamentals",
     weekKey: "2026-08-10",
     timezoneOffsetMinutes: 420,
@@ -1117,7 +1146,8 @@ export function useGuidedSetup() {
 
 Add `useStartGuidedSetup`, `useSaveGuidedSetupIntent`, `useCompleteBehaviorSetup`,
 `useCompleteTrainingSetup`, `useCompleteProgressSetup`, `useSkipGuidedSetup`, and
-`useAbandonGuidedSetup`. Parse structured errors:
+`useAbandonGuidedSetup`. Every mutation after start takes the active `setupId` and sends
+it in the typed request payload. Parse structured errors:
 
 ```ts
 async function requireOk(response: Response, fallback: string) {
@@ -1400,6 +1430,8 @@ Expected: FAIL because action components do not exist.
 Use `guidedSetupBehaviorActionSchema` with React Hook Form. Show safety confirmation only
 when severity is severe or a signal is selected. Render the options from
 `SAFETY_SIGNAL_KEYS` in `apps/web/src/lib/practice-options.ts`.
+Seed `setupId: setup.id` in `defaultValues`; it is a request binding, not an editable
+form field.
 
 On success, pass the returned setup and concern to route state. Do not render or cache
 owner prose outside the form and normal dog query.
@@ -1407,7 +1439,8 @@ owner prose outside the form and normal dog query.
 - [ ] **Step 4: Implement progress action**
 
 Use `guidedSetupProgressActionSchema`. Render `better`, `same`, and `harder` as a real
-radio group and require the short note. Submit through `useCompleteProgressSetup`.
+radio group and require the short note. Seed `setupId: setup.id` in `defaultValues`
+without rendering an editable field. Submit through `useCompleteProgressSetup`.
 
 - [ ] **Step 5: Wire intent dispatch**
 
@@ -1499,6 +1532,7 @@ Submit:
 
 ```ts
 {
+  setupId: setup.id,
   templateKey,
   weekKey: weekKeyAtOffset(new Date(), new Date().getTimezoneOffset()),
   timezoneOffsetMinutes: new Date().getTimezoneOffset(),
