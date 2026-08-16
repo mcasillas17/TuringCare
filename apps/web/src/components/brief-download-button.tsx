@@ -2,6 +2,7 @@ import { BriefPdfDocument } from "@/components/brief-pdf-document";
 import { buttonVariants } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { type BriefForPdf, type DogForPdf, buildBriefPdfModel } from "@/lib/brief-pdf-model";
+import { track } from "@/lib/track";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 
 /**
@@ -31,6 +32,7 @@ export function BriefDownloadButton({
       document={<BriefPdfDocument model={model} />}
       fileName={model.fileName}
       className={buttonVariants({ variant: "outline" })}
+      onClick={() => track("brief.downloaded")}
     >
       {({ loading }) => (loading ? t("brief.preparingPdf") : t("brief.downloadPdf"))}
     </PDFDownloadLink>

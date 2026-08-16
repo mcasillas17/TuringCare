@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import type { Metrics } from "../use-metrics";
+import { ActivityTrend } from "./activity-trend";
 import { FeatureAdoption } from "./feature-adoption";
 import { Funnel } from "./funnel";
 import { JourneyTimes } from "./journey-times";
@@ -15,10 +16,9 @@ const metrics: Metrics = {
     dau: 9,
     wau: 41,
     mau: 60,
-    stickiness: 0.15,
-    eventCount: 2100,
     activationRate: 0.4,
     returningRate: 0.5,
+    churnedUsers: 2,
   },
   signups: [{ day: "2026-05-01", count: 3 }],
   active: [{ day: "2026-05-01", count: 5 }],
@@ -48,6 +48,22 @@ it("Funnel renders with empty data without throwing", () => {
   expect(() => render(<Funnel funnel={[]} />)).not.toThrow();
 });
 
+it("Funnel renders sequential conversion without exceeding 100%", () => {
+  render(
+    <Funnel
+      funnel={[
+        { step: "signup", users: 10 },
+        { step: "first_dog", users: 8 },
+        { step: "first_journal", users: 4 },
+      ]}
+    />,
+  );
+  expect(screen.getByText("50%")).toBeInTheDocument();
+  for (const value of screen.getAllByText(/%$/)) {
+    expect(Number(value.textContent?.replace("%", ""))).toBeLessThanOrEqual(100);
+  }
+});
+
 it("FeatureAdoption shows grouped product areas instead of raw events", () => {
   render(<FeatureAdoption featureAdoption={metrics.featureAdoption} />);
   expect(screen.getByText("Training")).toBeInTheDocument();
@@ -65,4 +81,9 @@ it("JourneyTimes renders completion percentiles", () => {
   expect(screen.getByText("Signup → dog")).toBeInTheDocument();
   expect(screen.getByText("30m")).toBeInTheDocument();
   expect(screen.getByText("2h")).toBeInTheDocument();
+});
+
+it("ActivityTrend explains an empty range", () => {
+  render(<ActivityTrend activityByDay={[]} />);
+  expect(screen.getByText("No product activity in this range.")).toBeInTheDocument();
 });

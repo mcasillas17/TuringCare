@@ -9,10 +9,9 @@ export type Metrics = {
     dau: number;
     wau: number;
     mau: number;
-    stickiness: number;
-    eventCount: number;
-    activationRate: number;
+    activationRate: number | null;
     returningRate: number;
+    churnedUsers: number;
   };
   signups: { day: string; count: number }[];
   active: { day: string; count: number }[];
@@ -22,7 +21,7 @@ export type Metrics = {
     completed: number;
     medianMinutes: number | null;
     p90Minutes: number | null;
-    within7DaysPct: number;
+    within7DaysPct: number | null;
   }[];
   featureAdoption: { feature: string; users: number; events: number }[];
   topPages: { path: string; views: number; users: number }[];

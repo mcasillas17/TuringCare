@@ -229,15 +229,20 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         weightLbs: weightLbs == null ? weightLbs : String(weightLbs),
         updatedAt: new Date(),
       })
-      .where(eq(dogs.id, dog.id))
+      .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
       .returning();
+    if (!updated) return c.json({ error: "not_found" } as const, 404);
     await recordEvent("dog.updated", { userId: c.get("userId") });
     return c.json({ dog: updated });
   })
   .delete("/:id", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    await db.delete(dogs).where(eq(dogs.id, dog.id));
+    const [deleted] = await db
+      .delete(dogs)
+      .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
+      .returning({ id: dogs.id });
+    if (!deleted) return c.json({ error: "not_found" } as const, 404);
     await recordEvent("dog.deleted", { userId: c.get("userId") });
     return c.json({ ok: true } as const);
   })
@@ -287,8 +292,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         and(eq(behaviorConcerns.id, c.req.param("concernId")), eq(behaviorConcerns.dogId, dog.id)),
       )
       .returning({ id: behaviorConcerns.id });
-    if (!deleted) return c.json({ error: "not_found" } as const, 404);
-    await recordEvent("concern.removed", { userId: c.get("userId") });
+    if (deleted) await recordEvent("concern.removed", { userId: c.get("userId") });
     return c.json({ ok: true } as const);
   })
   .post("/:id/goals", zValidator("json", trainingGoalSchema), async (c) => {
@@ -347,8 +351,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .delete(trainingGoals)
       .where(and(eq(trainingGoals.id, c.req.param("goalId")), eq(trainingGoals.dogId, dog.id)))
       .returning({ id: trainingGoals.id });
-    if (!deleted) return c.json({ error: "not_found" } as const, 404);
-    await recordEvent("training.goal_removed", { userId: c.get("userId") });
+    if (deleted) await recordEvent("training.goal_removed", { userId: c.get("userId") });
     return c.json({ ok: true } as const);
   })
   .get("/:id/progress", async (c) => {
@@ -665,7 +668,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
             reportedAt: new Date(),
           });
         }
-        return { session, anchorRejected };
+        return { session, anchorRejected, updated: Object.keys(changes).length > 0 };
       });
       if (!result) return c.json({ error: "not_found" } as const, 404);
       if (result.session.outcome && body.outcome !== undefined) {
@@ -685,7 +688,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
           props: { signal: body.safetySignal, source: "practice_session" },
         });
       }
-      if (Object.keys(body).length > 0) {
+      if (result.updated) {
         await recordEvent("training.practice_updated", { userId: c.get("userId") });
       }
       return c.json(result);
@@ -1079,8 +1082,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         .where(and(eq(journalEntries.id, entryId), eq(journalEntries.dogId, dog.id)))
         .returning({ id: journalEntries.id }),
     );
-    if (!deleted) return c.json({ error: "not_found" } as const, 404);
-    await recordEvent("journal.entry_deleted", { userId: c.get("userId") });
+    if (deleted) await recordEvent("journal.entry_deleted", { userId: c.get("userId") });
     return c.json({ ok: true } as const);
   })
   .get("/:id/brief", async (c) => {

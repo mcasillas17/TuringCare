@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n";
 import {
   CartesianGrid,
   Line,
@@ -20,7 +21,7 @@ export function ActiveUsage({
         {t("admin.activeUsers")}
       </h2>
       <p className="mb-3 text-xs text-slate-soft">
-        DAU {kpis.dau} · WAU {kpis.wau} · MAU {kpis.mau}
+        {t("admin.activeSummary", { dau: kpis.dau, wau: kpis.wau, mau: kpis.mau })}
       </p>
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={active}>
@@ -34,4 +35,3 @@ export function ActiveUsage({
     </section>
   );
 }
-import { useI18n } from "@/i18n";

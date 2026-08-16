@@ -101,10 +101,14 @@ const app = new Hono<ApiEnv>()
     // Identity is resolved server-side from the auth cookie — never trusted
     // from the client. Anonymous (pre-auth, e.g. landing) is allowed.
     const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    const safeProps =
+      name === "page.viewed" && typeof props.path === "string" && props.path.startsWith("/b/")
+        ? { ...props, path: "/b/:token" }
+        : props;
     await recordEvent(name, {
       userId: session?.user.id ?? null,
       sessionId: session?.session.id ?? null,
-      props,
+      props: safeProps,
     });
     return c.json({ ok: true } as const, 202);
   })

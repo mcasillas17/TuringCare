@@ -31,6 +31,7 @@ describe("telemetry events allowlist", () => {
     expect(
       eventIngestSchema.safeParse({ name: "course.viewed", props: { id: "abc" } }).success,
     ).toBe(true);
+    expect(eventIngestSchema.safeParse({ name: "brief.downloaded", props: {} }).success).toBe(true);
   });
 
   it("still rejects server-only events from the client ingest", () => {

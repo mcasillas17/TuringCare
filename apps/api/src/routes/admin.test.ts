@@ -3,7 +3,8 @@ import { afterAll, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { auth } from "../auth";
 import { db } from "../db";
-import { user } from "../db/schema";
+import { events, user } from "../db/schema";
+import { createTestUser } from "../test-helpers";
 
 const email = `adm_${Date.now()}@example.com`;
 
@@ -40,10 +41,34 @@ describe("/api/admin", () => {
     expect(body).toHaveProperty("funnel");
     expect(body).toHaveProperty("journeyTimes");
     expect(typeof (body as { kpis: { totalUsers: number } }).kpis.totalUsers).toBe("number");
-    expect((body as { kpis: { totalUsers: number } }).kpis.totalUsers).toBeGreaterThanOrEqual(1);
     expect((body as { funnel: unknown[] }).funnel).toHaveLength(7);
-    expect(typeof (body as { kpis: { activationRate: number } }).kpis.activationRate).toBe(
-      "number",
+    expect(["number", "object"]).toContain(
+      typeof (body as { kpis: { activationRate: number | null } }).kpis.activationRate,
     );
+
+    const owner = await createTestUser();
+    try {
+      await db.insert(events).values([
+        { userId: owner.userId, name: "dog.created" },
+        { userId: owner.userId, name: "training.goal_added" },
+      ]);
+      const after = await app.request("/api/admin/metrics?days=30", { headers: { cookie } });
+      const afterBody = (await after.json()) as {
+        funnel: { step: string; users: number }[];
+      };
+      const beforeCounts = new Map(
+        (body as { funnel: { step: string; users: number }[] }).funnel.map((row) => [
+          row.step,
+          row.users,
+        ]),
+      );
+      const afterCounts = new Map(afterBody.funnel.map((row) => [row.step, row.users]));
+      expect(afterCounts.get("signup")).toBe((beforeCounts.get("signup") ?? 0) + 1);
+      expect(afterCounts.get("first_dog")).toBe((beforeCounts.get("first_dog") ?? 0) + 1);
+      expect(afterCounts.get("first_journal")).toBe(beforeCounts.get("first_journal"));
+      expect(afterCounts.get("first_goal")).toBe(beforeCounts.get("first_goal"));
+    } finally {
+      await owner.cleanup();
+    }
   });
 });

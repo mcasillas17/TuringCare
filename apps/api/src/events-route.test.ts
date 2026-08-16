@@ -41,6 +41,7 @@ describe("POST /api/events", () => {
       body: { email, password: "password-123" },
       asResponse: true,
     });
+
     const cookie = signIn.headers.get("set-cookie") ?? "";
     const path = `/auth-${Date.now()}`;
     const res = await app.request("/api/events", {
@@ -64,6 +65,25 @@ describe("POST /api/events", () => {
     // cleanup: events first (FK is set null, rows would linger), then user
     await db.delete(events).where(eq(events.userId, u.id));
     await db.delete(user).where(eq(user.id, u.id));
+  });
+
+  it("normalizes shared-brief tokens before persistence", async () => {
+    const res = await app.request("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "page.viewed",
+        props: { path: "/b/secret-share-token" },
+      }),
+    });
+    expect(res.status).toBe(202);
+    const [row] = await db
+      .select()
+      .from(events)
+      .where(eq(events.name, "page.viewed"))
+      .orderBy(desc(events.createdAt))
+      .limit(1);
+    expect(row?.props).toMatchObject({ path: "/b/:token" });
   });
 
   it("rejects oversized props at the endpoint (400)", async () => {

@@ -71,6 +71,11 @@ export const auth = betterAuth({
           await recordEvent("user.signed_up", { userId: createdUser.id });
         },
       },
+      delete: {
+        before: async (deletedUser) => {
+          await recordEvent("user.deleted", { userId: deletedUser.id });
+        },
+      },
     },
     // Sign-up also creates a session, so registration legitimately emits both
     // signed_up and signed_in. Aggregations use first-occurrence/distinct-user,

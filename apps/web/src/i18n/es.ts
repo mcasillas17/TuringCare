@@ -764,7 +764,9 @@ export const es = {
     wau: "Activos semanales",
     activationRate: "Activados",
     returningRate: "Recurrentes",
+    churnedUsers: "Cuentas eliminadas",
     activeUsers: "Dueños activos",
+    activeSummary: "Diarios {dau} · semanales {wau} · mensuales {mau}",
     signups: "Nuevos dueños a lo largo del tiempo",
     funnel: "Embudo de activación",
     funnelHelp:
@@ -782,11 +784,12 @@ export const es = {
     journey: "Recorrido",
     completed: "Completados",
     median: "Mediana",
-    p90: "P90",
+    p90: "Percentil 90",
     within7Days: "En 7d",
     journey_signup_to_dog: "Registro → perro",
     journey_dog_to_journal: "Perro → diario",
     journey_goal_to_practice: "Objetivo → práctica",
+    journey_signup_to_practice: "Registro → práctica",
     journey_signup_to_brief: "Registro → resumen finalizado",
     journey_full_path_to_share: "Recorrido completo → resumen compartido",
     featureAdoption: "Adopción de funciones",
@@ -804,6 +807,7 @@ export const es = {
     noPageViews: "No hay vistas de páginas en este rango.",
     activity: "Actividad del producto",
     activityHelp: "Acciones exitosas agrupadas por área en lugar de eventos sin procesar.",
+    noActivity: "No hay actividad del producto en este rango.",
   },
   common: { loading: "Cargando…" },
   notFound: {
@@ -824,6 +828,9 @@ export const es = {
     h_emails: "Correos que enviamos",
     p_emails:
       "Enviamos correos transaccionales (verificación de inicio de sesión, restablecimiento de contraseña y Resúmenes que tú decides enviar a un adiestrador). Los adiestradores ven tu correo como Reply-To para responderte directamente. No enviamos correos de marketing.",
+    h_analytics: "Analítica del producto",
+    p_analytics:
+      "Conservamos eventos de uso que protegen la privacidad, como acciones exitosas, categorías de páginas y tiempos agregados de finalización, para mejorar TuringCare. No guardamos texto del diario, nombres de perros, correos ni tokens de enlaces compartidos en la analítica. Los eventos se conservan hasta 180 días; al eliminar una cuenta se quita su identidad de los eventos retenidos, por lo que los agregados históricos pueden cambiar.",
     h_retention: "Conservación y eliminación de tus datos",
     p_retention:
       "Conservamos tus datos mientras tu cuenta esté activa. Puedes eliminar tu cuenta en cualquier momento desde Configuración — al hacerlo, se eliminan tus perros, entradas del diario, progreso de entrenamiento, resúmenes e historial de envíos. También puedes escribir a feedback@turingcare.dog para solicitar la eliminación.",

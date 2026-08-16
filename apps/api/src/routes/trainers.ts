@@ -37,9 +37,9 @@ export const trainersApp = new Hono<{ Variables: OptionalVars }>()
       await recordEvent("directory.trainers_searched", {
         userId: c.get("userId"),
         props: {
-          state: state ?? "any",
-          specialty: specialty ?? "any",
-          methodology: methodology ?? "any",
+          hasState: state !== undefined,
+          hasSpecialty: specialty !== undefined,
+          hasMethodology: methodology !== undefined,
           resultCount: rows.length,
         },
       });

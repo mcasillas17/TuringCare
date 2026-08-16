@@ -5,11 +5,15 @@ const base = import.meta.env.VITE_API_URL || "";
 
 /** Fire-and-forget telemetry. Network/HTTP failures are swallowed. */
 export function track(name: string, props: Record<string, unknown> = {}): void {
+  const safeProps =
+    name === "page.viewed" && typeof props.path === "string" && props.path.startsWith("/b/")
+      ? { ...props, path: "/b/:token" }
+      : props;
   void fetch(`${base}/api/events`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ name, props }),
+    body: JSON.stringify({ name, props: safeProps }),
   }).catch(() => {});
 }
 

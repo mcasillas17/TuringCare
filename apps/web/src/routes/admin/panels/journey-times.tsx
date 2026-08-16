@@ -41,7 +41,9 @@ export function JourneyTimes({ journeyTimes }: { journeyTimes: Metrics["journeyT
                     {duration(journey.medianMinutes)}
                   </td>
                   <td className="py-2 text-right tabular-nums">{duration(journey.p90Minutes)}</td>
-                  <td className="py-2 text-right tabular-nums">{journey.within7DaysPct}%</td>
+                  <td className="py-2 text-right tabular-nums">
+                    {journey.within7DaysPct === null ? "—" : `${journey.within7DaysPct}%`}
+                  </td>
                 </tr>
               ))}
             </tbody>

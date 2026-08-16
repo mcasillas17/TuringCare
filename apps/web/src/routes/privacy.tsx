@@ -20,6 +20,10 @@ export function Privacy() {
           <p className="text-sm">{t("privacy.p_emails")}</p>
         </section>
         <section className="space-y-2">
+          <h2 className="text-lg font-semibold text-slate">{t("privacy.h_analytics")}</h2>
+          <p className="text-sm">{t("privacy.p_analytics")}</p>
+        </section>
+        <section className="space-y-2">
           <h2 className="text-lg font-semibold text-slate">{t("privacy.h_retention")}</h2>
           <p className="text-sm">{t("privacy.p_retention")}</p>
         </section>

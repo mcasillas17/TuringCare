@@ -49,6 +49,23 @@ it("fires a new page.viewed on route change", async () => {
   expect(paths).toContain("/other");
 });
 
+it("never sends a shared-brief bearer token in telemetry", () => {
+  render(
+    <MemoryRouter initialEntries={["/b/secret-share-token"]}>
+      <PageViewTracker />
+      <Routes>
+        <Route path="/b/:token" element={<div>brief</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+  const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
+  expect(JSON.parse(firstCall[1].body as string)).toEqual({
+    name: "page.viewed",
+    props: { path: "/b/:token" },
+  });
+});
+
 it("swallows fetch failures without throwing", () => {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
   expect(() =>

@@ -26,9 +26,9 @@ export const coursesApp = new Hono<{ Variables: OptionalVars }>()
       await recordEvent("directory.courses_searched", {
         userId: c.get("userId"),
         props: {
-          ageGroup: ageGroup ?? "any",
-          format: format ?? "any",
-          state: state ?? "any",
+          hasAgeGroup: ageGroup !== undefined,
+          hasFormat: format !== undefined,
+          hasState: state !== undefined,
           online: online === "true",
           resultCount: rows.length,
         },

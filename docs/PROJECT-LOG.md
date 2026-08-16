@@ -1026,3 +1026,13 @@ advancement, and safety decisions, including legacy focus compatibility use.
 - Spec/plan: `specs/2026-08-11-personalized-training-progress-design.md`,
   `plans/2026-08-11-personalized-training-gate-1.md`.
 - Commits: `9095ed4..HEAD` on `feat/personalized-training-gate-1`.
+## 2026-08-16 — Product telemetry and admin insights
+
+Expanded privacy-safe telemetry across owner mutations, discovery filters, brief consumption, PDF
+downloads, and account deletion. Replaced raw event-oriented admin views with strict cohort funnels,
+seven-day activation, returning-owner and churn KPIs, happy-path median/P90 completion times,
+feature adoption, normalized destinations, and grouped activity. Added the event query index in
+migration `0018`, localized the dashboard, and documented analytics privacy and metric semantics.
+
+- Documentation: `docs/telemetry-analytics.md`
+- Builds on: `specs/2026-06-21-telemetry-expansion-design.md`

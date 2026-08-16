@@ -40,12 +40,12 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       mau,
       signups,
       active,
-      funnel,
-      journeyTimes,
+      lifecycle,
       featureAdoption,
       topPages,
       activityByDay,
       returning,
+      churnedUsers,
     ] = await Promise.all([
       db
         .execute<{ totalUsers: number }>(
@@ -97,77 +97,105 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
         )
         .then((r) => r.rows),
       db
-        .execute<{ step: string; users: number }>(sql`
-          with cohort as (
-            select id, created_at from "user" where role = 'user' and created_at >= ${since}
-          ), firsts as (
-            select c.id,
-              min(e.created_at) filter (where e.name = 'dog.created') as dog_at,
-              min(e.created_at) filter (where e.name = 'journal.entry_created') as journal_at,
-              min(e.created_at) filter (where e.name = 'training.goal_added') as goal_at,
-              min(e.created_at) filter (where e.name = 'training.practice_logged') as practice_at,
-              min(e.created_at) filter (where e.name = 'brief.finalized') as brief_at,
-              min(e.created_at) filter (where e.name in ('brief.shared', 'brief.emailed')) as shared_at
-            from cohort c left join events e on e.user_id = c.id and e.created_at >= c.created_at
-            group by c.id
-          )
-          select step, users::int from (
-            select 1 as position, 'signup' as step, count(*) as users from cohort
-            union all select 2, 'first_dog', count(*) filter (where dog_at is not null) from firsts
-            union all select 3, 'first_journal',
-              count(*) filter (where journal_at >= dog_at) from firsts
-            union all select 4, 'first_goal',
-              count(*) filter (where goal_at >= dog_at) from firsts
-            union all select 5, 'first_practice',
-              count(*) filter (where practice_at >= goal_at and goal_at >= dog_at) from firsts
-            union all select 6, 'brief_finalized',
-              count(*) filter (where brief_at >= journal_at and brief_at >= practice_at) from firsts
-            union all select 7, 'brief_shared',
-              count(*) filter (where shared_at >= brief_at and brief_at >= journal_at
-                and brief_at >= practice_at) from firsts
-          ) steps order by position
-        `)
-        .then((r) => r.rows),
-      db
         .execute<{
+          kind: "funnel" | "journey";
           step: string;
+          position: number;
+          users: number | null;
           completed: number;
           medianMinutes: number | null;
           p90Minutes: number | null;
-          within7DaysPct: number;
+          within7DaysPct: number | null;
         }>(sql`
           with cohort as (
             select id, created_at from "user" where role = 'user' and created_at >= ${since}
-          ), firsts as (
-            select c.id, c.created_at as signup_at,
-              min(e.created_at) filter (where e.name = 'dog.created') as dog_at,
-              min(e.created_at) filter (where e.name = 'journal.entry_created') as journal_at,
-              min(e.created_at) filter (where e.name = 'training.goal_added') as goal_at,
-              min(e.created_at) filter (where e.name = 'training.practice_logged') as practice_at,
-              min(e.created_at) filter (where e.name = 'brief.finalized') as brief_at,
-              min(e.created_at) filter (where e.name in ('brief.shared', 'brief.emailed')) as shared_at
-            from cohort c left join events e on e.user_id = c.id and e.created_at >= c.created_at
-            group by c.id, c.created_at
-          ), durations as (
-            select step, extract(epoch from (finished_at - started_at)) / 60.0 as minutes
-            from firsts cross join lateral (values
+          ), stages as (
+            select c.id, c.created_at as signup_at, dog.dog_at, journal.journal_at,
+                   goal.goal_at, practice.practice_at, brief.brief_at, shared.shared_at
+            from cohort c
+            left join lateral (
+              select min(created_at) as dog_at from events
+              where user_id = c.id and name = 'dog.created' and created_at >= c.created_at
+            ) dog on true
+            left join lateral (
+              select min(created_at) as journal_at from events
+              where user_id = c.id and name = 'journal.entry_created'
+                and created_at >= dog.dog_at
+            ) journal on true
+            left join lateral (
+              select min(created_at) as goal_at from events
+              where user_id = c.id and name = 'training.goal_added'
+                and created_at >= journal.journal_at
+            ) goal on true
+            left join lateral (
+              select min(created_at) as practice_at from events
+              where user_id = c.id and name = 'training.practice_logged'
+                and created_at >= goal.goal_at
+            ) practice on true
+            left join lateral (
+              select min(created_at) as brief_at from events
+              where user_id = c.id and name = 'brief.finalized'
+                and created_at >= practice.practice_at
+            ) brief on true
+            left join lateral (
+              select min(created_at) as shared_at from events
+              where user_id = c.id and name in ('brief.shared', 'brief.emailed', 'brief.downloaded')
+                and created_at >= brief.brief_at
+            ) shared on true
+          ), funnel_rows as (
+            select 1 as position, 'signup' as step, count(*)::int as users from cohort
+            union all select 2, 'first_dog', count(*) filter (where dog_at is not null)::int
+              from stages
+            union all select 3, 'first_journal', count(*) filter (where journal_at is not null)::int
+              from stages
+            union all select 4, 'first_goal', count(*) filter (where goal_at is not null)::int
+              from stages
+            union all select 5, 'first_practice',
+              count(*) filter (where practice_at is not null)::int from stages
+            union all select 6, 'brief_finalized',
+              count(*) filter (where brief_at is not null)::int from stages
+            union all select 7, 'brief_shared',
+              count(*) filter (where shared_at is not null)::int from stages
+          ), journey_observations as (
+            select step, started_at, finished_at,
+                   extract(epoch from (finished_at - started_at)) / 60.0 as minutes
+            from stages cross join lateral (values
               ('signup_to_dog', signup_at, dog_at),
               ('dog_to_journal', dog_at, journal_at),
               ('goal_to_practice', goal_at, practice_at),
+              ('signup_to_practice', signup_at, practice_at),
               ('signup_to_brief', signup_at, brief_at),
-              ('full_path_to_share', signup_at,
-                case when dog_at <= journal_at and dog_at <= goal_at and goal_at <= practice_at
-                  and journal_at <= brief_at and practice_at <= brief_at and brief_at <= shared_at
-                  then shared_at end)
+              ('full_path_to_share', signup_at, shared_at)
             ) transition(step, started_at, finished_at)
-            where finished_at is not null and finished_at >= started_at
+            where started_at is not null
+          ), timing_rows as (
+            select step, count(*) filter (where finished_at is not null)::int as completed,
+              round(percentile_cont(0.5) within group (order by minutes)
+                filter (where finished_at is not null))::int
+                as "medianMinutes",
+              round(percentile_cont(0.9) within group (order by minutes)
+                filter (where finished_at is not null))::int as "p90Minutes",
+              round(100.0 * count(*) filter (
+                where finished_at <= started_at + interval '7 days'
+                  and started_at <= now() - interval '7 days'
+              ) / nullif(count(*) filter (
+                where started_at <= now() - interval '7 days'
+              ), 0))::int
+                as "within7DaysPct"
+            from journey_observations group by step
           )
-          select step, count(*)::int as completed,
-            round(percentile_cont(0.5) within group (order by minutes))::int as "medianMinutes",
-            round(percentile_cont(0.9) within group (order by minutes))::int as "p90Minutes",
-            round(100.0 * count(*) filter (where minutes <= 10080) / count(*))::int
-              as "within7DaysPct"
-          from durations group by step order by min(minutes)
+          select 'funnel' as kind, step, position, users, null::int as completed,
+                 null::int as "medianMinutes", null::int as "p90Minutes",
+                 null::int as "within7DaysPct"
+          from funnel_rows
+          union all
+          select 'journey', step,
+                 case step when 'signup_to_dog' then 1 when 'dog_to_journal' then 2
+                   when 'goal_to_practice' then 3 when 'signup_to_practice' then 4
+                   when 'signup_to_brief' then 5 else 6 end,
+                 null, completed, "medianMinutes", "p90Minutes", "within7DaysPct"
+          from timing_rows
+          order by kind, position
         `)
         .then((r) => r.rows),
       db
@@ -205,6 +233,7 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
                  ${categorySql} as category, count(*)::int as count
           from events e left join "user" u on u.id = e.user_id
           where e.created_at >= ${since} and (u.role = 'user' or e.user_id is null)
+            and e.name <> 'page.viewed'
           group by 1, 2 order by 1
         `)
         .then((r) => r.rows),
@@ -214,7 +243,7 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
             select e.user_id, count(distinct date_trunc('day', e.created_at)) as active_days
             from events e inner join "user" u on u.id = e.user_id
             where u.role = 'user' and e.created_at >= ${since}
-              and e.name <> 'user.signed_in'
+              and e.name not in ('user.signed_in', 'page.viewed')
             group by e.user_id
           )
           select count(*)::int as "activeUsers",
@@ -222,11 +251,28 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
           from activity
         `)
         .then((r) => scalarRow(r.rows)),
+      db
+        .execute<{ value: number }>(
+          sql`select count(*)::int as value from events
+              where name = 'user.deleted' and created_at >= ${since}`,
+        )
+        .then((r) => scalarRow(r.rows).value),
     ]);
 
-    const cohortUsers = funnel[0]?.users ?? 0;
-    const activatedUsers = funnel.find((step) => step.step === "first_practice")?.users ?? 0;
-    const eventCount = featureAdoption.reduce((sum, row) => sum + row.events, 0);
+    const funnel = lifecycle
+      .filter((row) => row.kind === "funnel")
+      .map((row) => ({ step: row.step, users: row.users ?? 0 }));
+    const journeyTimes = lifecycle
+      .filter((row) => row.kind === "journey")
+      .map((row) => ({
+        step: row.step,
+        completed: row.completed,
+        medianMinutes: row.medianMinutes,
+        p90Minutes: row.p90Minutes,
+        within7DaysPct: row.within7DaysPct,
+      }));
+    const activationRate =
+      journeyTimes.find((journey) => journey.step === "signup_to_practice")?.within7DaysPct ?? null;
     const returningRate =
       returning.activeUsers === 0
         ? 0
@@ -240,11 +286,9 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
         dau,
         wau,
         mau,
-        stickiness: mau === 0 ? 0 : Math.round((dau / mau) * 100) / 100,
-        eventCount,
-        activationRate:
-          cohortUsers === 0 ? 0 : Math.round((activatedUsers / cohortUsers) * 100) / 100,
+        activationRate: activationRate === null ? null : activationRate / 100,
         returningRate,
+        churnedUsers,
       },
       signups,
       active,

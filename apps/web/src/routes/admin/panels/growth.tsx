@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { Metrics } from "../use-metrics";
 
@@ -18,4 +19,3 @@ export function Growth({ signups }: { signups: Metrics["signups"] }) {
     </section>
   );
 }
-import { useI18n } from "@/i18n";

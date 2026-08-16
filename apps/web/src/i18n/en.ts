@@ -759,7 +759,9 @@ export const en = {
     wau: "Weekly active",
     activationRate: "Activated",
     returningRate: "Returning",
+    churnedUsers: "Deleted accounts",
     activeUsers: "Active owners",
+    activeSummary: "DAU {dau} · WAU {wau} · MAU {mau}",
     signups: "New owners over time",
     funnel: "Owner activation funnel",
     funnelHelp:
@@ -782,6 +784,7 @@ export const en = {
     journey_signup_to_dog: "Signup → dog",
     journey_dog_to_journal: "Dog → journal",
     journey_goal_to_practice: "Goal → practice",
+    journey_signup_to_practice: "Signup → practice",
     journey_signup_to_brief: "Signup → finalized brief",
     journey_full_path_to_share: "Full path → shared brief",
     featureAdoption: "Feature adoption",
@@ -799,6 +802,7 @@ export const en = {
     noPageViews: "No page views in this range.",
     activity: "Product activity",
     activityHelp: "Successful actions grouped by product area instead of raw event names.",
+    noActivity: "No product activity in this range.",
   },
   common: { loading: "Loading…" },
   notFound: {
@@ -819,6 +823,9 @@ export const en = {
     h_emails: "Emails we send",
     p_emails:
       "We send transactional emails (sign-in verification, password reset, and Briefs you choose to send to a trainer). Trainers see your email address as the Reply-To so they can reply directly to you. We don't send marketing emails.",
+    h_analytics: "Product analytics",
+    p_analytics:
+      "We keep privacy-safe usage events, such as successful feature actions, page categories, and aggregate completion times, to improve TuringCare. We don't store journal text, dog names, emails, or shared-link tokens in analytics. Events are retained for up to 180 days; deleting an account removes its identity from retained events, so historical aggregates may change.",
     h_retention: "Keeping and deleting your data",
     p_retention:
       "We keep your data while your account is active. You can delete your account at any time from Settings — when you do, your dogs, journal entries, training progress, briefs, and send history are removed. You can also email feedback@turingcare.dog to request deletion.",
