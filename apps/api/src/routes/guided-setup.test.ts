@@ -11,10 +11,11 @@ vi.mock("../lib/behavior-concern-writes", async (importOriginal) => {
     createBehaviorConcern: async (
       ...args: Parameters<typeof actual.createBehaviorConcern>
     ): ReturnType<typeof actual.createBehaviorConcern> => {
+      const result = await actual.createBehaviorConcern(...args);
       if (behaviorConcernWriteControl.fail) {
         throw new Error("guided behavior writer failed");
       }
-      return actual.createBehaviorConcern(...args);
+      return result;
     },
   };
 });
@@ -197,7 +198,6 @@ async function actionEvents(userId: string) {
       and(
         eq(events.userId, userId),
         inArray(events.name, [
-          "behavior.concern_added",
           "journal.entry_created",
           "safety.signal_reported",
           "guided_setup.first_action_completed",
@@ -752,7 +752,10 @@ describe("guided setup lifecycle", () => {
     });
     const rows = await actionEvents(user.userId);
     expect(rows).toEqual([
-      { name: "behavior.concern_added", props: { severity: "severe" } },
+      {
+        name: "safety.signal_reported",
+        props: { signal: "severe_behavior_concern", source: "behavior_concern" },
+      },
       {
         name: "guided_setup.first_action_completed",
         props: { intent: "understand_behavior", actionType: "behavior" },
@@ -953,7 +956,7 @@ describe("guided setup lifecycle", () => {
     expect(await wrongEndpoint.json()).toEqual({ error: "setup_already_completed" });
   });
 
-  it("rolls back the behavior row and setup completion when the domain writer fails", async () => {
+  it("rolls back behavior and safety rows and setup completion when the domain writer fails", async () => {
     const user = await createTestUser();
     users.push(user);
 
@@ -964,19 +967,30 @@ describe("guided setup lifecycle", () => {
     behaviorConcernWriteControl.fail = true;
     const failed = await createBehaviorAction(user, {
       setupId: setup.id,
-      concern: "Writer failure",
+      concern: "Writer failure after insert",
       severity: "moderate",
-      safetyConfirmed: false,
+      safetySignal: "aggression_or_bite_risk",
+      safetyConfirmed: true,
     });
     expect(failed.status).toBe(500);
 
     const status = await readStatus(user);
-    expect(status.active?.id).toBe(setup.id);
-    expect(status.active?.completedAt).toBeNull();
+    expect(status.active).toMatchObject({
+      id: setup.id,
+      currentStep: "action",
+      intent: "understand_behavior",
+      completedAt: null,
+    });
     expect(await countActionRows(setup.dogId as string)).toMatchObject({
       concerns: 0,
       journals: 0,
     });
+    expect(
+      await db
+        .select()
+        .from(dogSafetySignals)
+        .where(eq(dogSafetySignals.dogId, setup.dogId as string)),
+    ).toEqual([]);
   });
 
   it("emits bounded action telemetry only after commit and never records owner prose", async () => {

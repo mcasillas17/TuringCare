@@ -16,10 +16,9 @@ import { db } from "../db";
 import { behaviorConcerns, dogs, guidedSetups, journalEntries } from "../db/schema";
 import { createBehaviorConcern } from "../lib/behavior-concern-writes";
 import { createDog } from "../lib/dog-writes";
-import { InvalidJournalOccurredAtError, createJournalEntry } from "../lib/journal-writes";
+import { createJournalEntry } from "../lib/journal-writes";
 import type { TransactionType } from "../lib/safety-lock";
 import { type Vars, requireUser } from "../middleware/require-user";
-import type { EventName } from "../telemetry/events";
 import { recordEvent } from "../telemetry/record-event";
 
 type SetupRow = typeof guidedSetups.$inferSelect;
@@ -389,7 +388,11 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       }
 
       const { setupId: _setupId, safetyConfirmed: _safetyConfirmed, ...concernInput } = input;
-      const { concern } = await createBehaviorConcern(tx, active.setup.dogId, concernInput);
+      const { concern, reportedSignals } = await createBehaviorConcern(
+        tx,
+        active.setup.dogId,
+        concernInput,
+      );
       const setup = await completeSetup(tx, active, {
         reason: "first_action_completed",
         actionType: "behavior",
@@ -399,7 +402,7 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
         kind: "completed",
         setup,
         concern,
-        severity: concern.severity,
+        reportedSignals,
       } as const;
     });
 
@@ -416,10 +419,12 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       return c.json({ setup: result.setup, concern: result.concern });
     }
 
-    await recordEvent("behavior.concern_added" as EventName, {
-      userId,
-      props: { severity: result.severity },
-    });
+    for (const signal of result.reportedSignals) {
+      await recordEvent("safety.signal_reported", {
+        userId,
+        props: { signal, source: "behavior_concern" },
+      });
+    }
     await recordEvent("guided_setup.first_action_completed", {
       userId,
       props: {
@@ -440,56 +445,32 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
   .post("/action/progress", zValidator("json", guidedSetupProgressActionSchema), async (c) => {
     const userId = c.get("userId");
     const input = c.req.valid("json");
-    let result:
-      | Awaited<ReturnType<typeof resolveCompletedActionReplay>>
-      | {
-          kind: "completed";
-          setup: GuidedSetupRecord;
-          entry: typeof journalEntries.$inferSelect;
-        }
-      | { kind: "not_found" }
-      | { kind: "intent_mismatch" };
-    try {
-      result = await db.transaction(async (tx) => {
-        await lockSetupFlow(tx, userId);
+    const result = await db.transaction(async (tx) => {
+      await lockSetupFlow(tx, userId);
 
-        const row = await loadOwnedSetup(tx, userId, input.setupId);
-        if (!row) return { kind: "not_found" } as const;
-        if (row.setup.completedAt !== null) {
-          return resolveCompletedActionReplay(tx, row, "progress");
-        }
-
-        const active = requireActiveSetupDog(row);
-        if (active.setup.currentStep !== "action" || active.setup.intent !== "track_progress") {
-          return { kind: "intent_mismatch" } as const;
-        }
-
-        const entry = await createJournalEntry(tx, active.setup.dogId, {
-          kind: "daily_checkin",
-          trend: input.trend,
-          note: input.note,
-        });
-        const setup = await completeSetup(tx, active, {
-          reason: "first_action_completed",
-          actionType: "progress",
-          actionId: entry.id,
-        });
-        return { kind: "completed", setup, entry } as const;
-      });
-    } catch (error) {
-      if (error instanceof InvalidJournalOccurredAtError) {
-        return c.json(
-          {
-            success: false,
-            error: {
-              issues: [{ code: "custom", path: ["occurredAt"], message: "Invalid date" }],
-            },
-          } as const,
-          400,
-        );
+      const row = await loadOwnedSetup(tx, userId, input.setupId);
+      if (!row) return { kind: "not_found" } as const;
+      if (row.setup.completedAt !== null) {
+        return resolveCompletedActionReplay(tx, row, "progress");
       }
-      throw error;
-    }
+
+      const active = requireActiveSetupDog(row);
+      if (active.setup.currentStep !== "action" || active.setup.intent !== "track_progress") {
+        return { kind: "intent_mismatch" } as const;
+      }
+
+      const entry = await createJournalEntry(tx, active.setup.dogId, {
+        kind: "daily_checkin",
+        trend: input.trend,
+        note: input.note,
+      });
+      const setup = await completeSetup(tx, active, {
+        reason: "first_action_completed",
+        actionType: "progress",
+        actionId: entry.id,
+      });
+      return { kind: "completed", setup, entry } as const;
+    });
 
     if (result.kind === "not_found") {
       return c.json({ error: "not_found" } as const, 404);
