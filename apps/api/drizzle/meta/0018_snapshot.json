@@ -1,5 +1,5 @@
 {
-  "id": "e636cd8c-d16f-4e00-8330-19c9fe45a232",
+  "id": "79deee98-802b-4471-9b8e-6d4964af0017",
   "prevId": "565fb38e-678c-4d53-948b-32eca8d13fa8",
   "version": "7",
   "dialect": "postgresql",
@@ -1182,6 +1182,14 @@
         "guided_setups_completion_consistent": {
           "name": "guided_setups_completion_consistent",
           "value": "(\"guided_setups\".\"completed_at\" IS NULL AND \"guided_setups\".\"completion_reason\" IS NULL) OR (\"guided_setups\".\"completed_at\" IS NOT NULL AND \"guided_setups\".\"completion_reason\" IS NOT NULL)"
+        },
+        "guided_setups_step_intent_consistent": {
+          "name": "guided_setups_step_intent_consistent",
+          "value": "(\"guided_setups\".\"current_step\" = 'intent' AND \"guided_setups\".\"intent\" IS NULL) OR (\"guided_setups\".\"current_step\" = 'action' AND \"guided_setups\".\"intent\" IS NOT NULL)"
+        },
+        "guided_setups_action_completion_consistent": {
+          "name": "guided_setups_action_completion_consistent",
+          "value": "(\"guided_setups\".\"completed_at\" IS NULL AND \"guided_setups\".\"first_action_type\" IS NULL AND \"guided_setups\".\"first_action_id\" IS NULL) OR (\"guided_setups\".\"completed_at\" IS NOT NULL AND \"guided_setups\".\"completion_reason\" = 'first_action_completed' AND \"guided_setups\".\"first_action_type\" IS NOT NULL AND \"guided_setups\".\"first_action_id\" IS NOT NULL) OR (\"guided_setups\".\"completed_at\" IS NOT NULL AND \"guided_setups\".\"completion_reason\" IN ('skipped', 'abandoned') AND \"guided_setups\".\"first_action_type\" IS NULL AND \"guided_setups\".\"first_action_id\" IS NULL)"
         },
         "guided_setups_active_dog_required": {
           "name": "guided_setups_active_dog_required",

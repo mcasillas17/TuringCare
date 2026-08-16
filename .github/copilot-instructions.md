@@ -9,10 +9,10 @@
 cp .env.example .env
 docker compose up -d --wait
 set -a && . ./.env && set +a
-pnpm --filter @turingcare/api db:push
+pnpm --filter @turingcare/api db:migrate
 ```
 
-The API and Drizzle do not auto-load `.env`. API tests use the root `.env` through `apps/api/vitest.setup.ts` and exercise a real Postgres database.
+The API and Drizzle do not auto-load `.env`. API tests use the root `.env` through `apps/api/vitest.setup.ts` and exercise a real Postgres database. Use `db:migrate` for fresh/local setups that need the full committed database contract; `db:push` is only for local schema iteration and skips manual SQL appended to committed migrations (for example trigger-based invariants or RLS/revoke blocks).
 - Run both apps with `pnpm dev` (web `:3000`, API `:3001`). The standard repository checks are:
 
 ```bash
@@ -49,7 +49,7 @@ Add `-t "test name"` to run one matching test. API tests load the root `.env` vi
 - Preserve owner isolation for authenticated domain resources. Scope reads and mutations through the signed-in user (reuse helpers such as `findOwnedDog` and `findOwnedSkill`), including nested IDs. Return `404`, not `403`, for records the caller does not own so existence is not leaked; tests explicitly cover cross-user access.
 - Extend the API through a Hono sub-app mounted in `apps/api/src/app.ts` so `AppType` and the web RPC client learn the route. On the web, keep query keys stable and invalidate every affected aggregate/detail cache after mutations (for example dog changes can affect `dogs`, `dogs-overview`, `overview`, or `onboarding`).
 - All user-facing web copy goes through the typed i18n catalogs. Add matching keys to both `apps/web/src/i18n/en.ts` and `es.ts`; English is the literal source used to derive `MessageKey`, and catalog shape parity is compile-time checked.
-- Change database structure in `apps/api/src/db/schema.ts`, generate a committed migration with `pnpm db:generate`, and use `db:migrate` for committed migrations/CI. `db:push` is for applying the current schema during local setup.
+- Change database structure in `apps/api/src/db/schema.ts`, generate a committed migration with `pnpm db:generate`, and use `db:migrate` for committed migrations/CI and any fresh/local setup that must include migration-only SQL. `db:push` is only for applying the current schema during local iteration and does not include manual SQL appended to committed migrations.
 - API integration tests call `app.request()` directly. Use `createTestUser()` for authenticated requests and clean users in `afterEach`; cascading deletes remove owned test data. Tests that touch domain routes assume real Postgres.
 - Product telemetry is recorded server-side with `recordEvent`; never trust a client-supplied user/session identity. Keep telemetry properties scalar and update the route telemetry tests when changing an already tracked action.
 - Biome enforces 2-space indentation, double quotes, semicolons, and a 100-column line width. `components/ui/**` is generated shadcn code and is intentionally excluded from Biome checks. TypeScript is strict with `noUncheckedIndexedAccess`; avoid weakening types when extending the typed API boundary.

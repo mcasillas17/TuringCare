@@ -153,6 +153,14 @@ export const guidedSetups = pgTable(
       sql`(${t.completedAt} IS NULL AND ${t.completionReason} IS NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} IS NOT NULL)`,
     ),
     check(
+      "guided_setups_step_intent_consistent",
+      sql`(${t.currentStep} = 'intent' AND ${t.intent} IS NULL) OR (${t.currentStep} = 'action' AND ${t.intent} IS NOT NULL)`,
+    ),
+    check(
+      "guided_setups_action_completion_consistent",
+      sql`(${t.completedAt} IS NULL AND ${t.firstActionType} IS NULL AND ${t.firstActionId} IS NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} = 'first_action_completed' AND ${t.firstActionType} IS NOT NULL AND ${t.firstActionId} IS NOT NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} IN ('skipped', 'abandoned') AND ${t.firstActionType} IS NULL AND ${t.firstActionId} IS NULL)`,
+    ),
+    check(
       "guided_setups_active_dog_required",
       sql`${t.completedAt} IS NOT NULL OR ${t.dogId} IS NOT NULL`,
     ),

@@ -28,6 +28,38 @@ import {
   trainingSuggestions,
 } from "./schema";
 
+type SqlChunkSummary =
+  | { kind: "string"; value: string }
+  | { kind: "column"; name: string };
+
+function summarizeSql(sqlValue: unknown): SqlChunkSummary[] {
+  if (
+    !sqlValue ||
+    typeof sqlValue !== "object" ||
+    !("queryChunks" in sqlValue) ||
+    !Array.isArray(sqlValue.queryChunks)
+  ) {
+    return [];
+  }
+
+  return sqlValue.queryChunks.map((chunk): SqlChunkSummary => {
+    if (chunk && typeof chunk === "object") {
+      if ("name" in chunk && typeof chunk.name === "string") {
+        return { kind: "column", name: chunk.name };
+      }
+
+      if ("value" in chunk && Array.isArray(chunk.value)) {
+        return {
+          kind: "string",
+          value: chunk.value.join(""),
+        };
+      }
+    }
+
+    return { kind: "string", value: String(chunk) };
+  });
+}
+
 describe("training progress tables", () => {
   it("exports the expected table names", () => {
     expect(getTableName(trainingSkills)).toBe("training_skills");
@@ -154,7 +186,7 @@ describe("suggestion and advancement audit schema", () => {
 });
 
 describe("guided setup schema", () => {
-  it("declares the guided setup guardrails with exact names", () => {
+  it("declares the guided setup guardrails with exact names and predicates", () => {
     const config = getTableConfig(guidedSetups);
     const index = config.indexes.find(
       ({ config }) => config.name === "guided_setups_one_active_owner",
@@ -162,17 +194,71 @@ describe("guided setup schema", () => {
     const dogUnique = config.uniqueConstraints.find(
       ({ name }) => name === "guided_setups_dog_unique",
     );
-    const completionCheck = config.checks.find(
-      ({ name }) => name === "guided_setups_completion_consistent",
-    );
-    const activeDogCheck = config.checks.find(
-      ({ name }) => name === "guided_setups_active_dog_required",
-    );
 
     expect(index?.config.unique).toBe(true);
-    expect(index?.config.where).toBeDefined();
+    expect(summarizeSql(index?.config.where)).toEqual([
+      { kind: "string", value: "" },
+      { kind: "column", name: "completed_at" },
+      { kind: "string", value: " IS NULL" },
+    ]);
     expect(dogUnique).toBeDefined();
-    expect(completionCheck).toBeDefined();
-    expect(activeDogCheck).toBeDefined();
+    expect(
+      Object.fromEntries(config.checks.map(({ name, value }) => [name, summarizeSql(value)])),
+    ).toEqual({
+      guided_setups_completion_consistent: [
+        { kind: "string", value: "(" },
+        { kind: "column", name: "completed_at" },
+        { kind: "string", value: " IS NULL AND " },
+        { kind: "column", name: "completion_reason" },
+        { kind: "string", value: " IS NULL) OR (" },
+        { kind: "column", name: "completed_at" },
+        { kind: "string", value: " IS NOT NULL AND " },
+        { kind: "column", name: "completion_reason" },
+        { kind: "string", value: " IS NOT NULL)" },
+      ],
+      guided_setups_active_dog_required: [
+        { kind: "string", value: "" },
+        { kind: "column", name: "completed_at" },
+        { kind: "string", value: " IS NOT NULL OR " },
+        { kind: "column", name: "dog_id" },
+        { kind: "string", value: " IS NOT NULL" },
+      ],
+      guided_setups_step_intent_consistent: [
+        { kind: "string", value: "(" },
+        { kind: "column", name: "current_step" },
+        { kind: "string", value: " = 'intent' AND " },
+        { kind: "column", name: "intent" },
+        { kind: "string", value: " IS NULL) OR (" },
+        { kind: "column", name: "current_step" },
+        { kind: "string", value: " = 'action' AND " },
+        { kind: "column", name: "intent" },
+        { kind: "string", value: " IS NOT NULL)" },
+      ],
+      guided_setups_action_completion_consistent: [
+        { kind: "string", value: "(" },
+        { kind: "column", name: "completed_at" },
+        { kind: "string", value: " IS NULL AND " },
+        { kind: "column", name: "first_action_type" },
+        { kind: "string", value: " IS NULL AND " },
+        { kind: "column", name: "first_action_id" },
+        { kind: "string", value: " IS NULL) OR (" },
+        { kind: "column", name: "completed_at" },
+        { kind: "string", value: " IS NOT NULL AND " },
+        { kind: "column", name: "completion_reason" },
+        { kind: "string", value: " = 'first_action_completed' AND " },
+        { kind: "column", name: "first_action_type" },
+        { kind: "string", value: " IS NOT NULL AND " },
+        { kind: "column", name: "first_action_id" },
+        { kind: "string", value: " IS NOT NULL) OR (" },
+        { kind: "column", name: "completed_at" },
+        { kind: "string", value: " IS NOT NULL AND " },
+        { kind: "column", name: "completion_reason" },
+        { kind: "string", value: " IN ('skipped', 'abandoned') AND " },
+        { kind: "column", name: "first_action_type" },
+        { kind: "string", value: " IS NULL AND " },
+        { kind: "column", name: "first_action_id" },
+        { kind: "string", value: " IS NULL)" },
+      ],
+    });
   });
 });

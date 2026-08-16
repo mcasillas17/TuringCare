@@ -16,6 +16,8 @@ CREATE TABLE "guided_setups" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "guided_setups_dog_unique" UNIQUE("dog_id"),
 	CONSTRAINT "guided_setups_completion_consistent" CHECK (("guided_setups"."completed_at" IS NULL AND "guided_setups"."completion_reason" IS NULL) OR ("guided_setups"."completed_at" IS NOT NULL AND "guided_setups"."completion_reason" IS NOT NULL)),
+	CONSTRAINT "guided_setups_step_intent_consistent" CHECK (("guided_setups"."current_step" = 'intent' AND "guided_setups"."intent" IS NULL) OR ("guided_setups"."current_step" = 'action' AND "guided_setups"."intent" IS NOT NULL)),
+	CONSTRAINT "guided_setups_action_completion_consistent" CHECK (("guided_setups"."completed_at" IS NULL AND "guided_setups"."first_action_type" IS NULL AND "guided_setups"."first_action_id" IS NULL) OR ("guided_setups"."completed_at" IS NOT NULL AND "guided_setups"."completion_reason" = 'first_action_completed' AND "guided_setups"."first_action_type" IS NOT NULL AND "guided_setups"."first_action_id" IS NOT NULL) OR ("guided_setups"."completed_at" IS NOT NULL AND "guided_setups"."completion_reason" IN ('skipped', 'abandoned') AND "guided_setups"."first_action_type" IS NULL AND "guided_setups"."first_action_id" IS NULL)),
 	CONSTRAINT "guided_setups_active_dog_required" CHECK ("guided_setups"."completed_at" IS NOT NULL OR "guided_setups"."dog_id" IS NOT NULL)
 );
 --> statement-breakpoint
@@ -24,6 +26,32 @@ ALTER TABLE "guided_setups" ADD CONSTRAINT "guided_setups_dog_id_dogs_id_fk" FOR
 CREATE UNIQUE INDEX "guided_setups_one_active_owner" ON "guided_setups" USING btree ("user_id") WHERE "guided_setups"."completed_at" IS NULL;--> statement-breakpoint
 CREATE INDEX "guided_setups_user_started_idx" ON "guided_setups" USING btree ("user_id","started_at");
 --> statement-breakpoint
+CREATE FUNCTION "enforce_guided_setup_dog_owner"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW."dog_id" IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM "dogs"
+    WHERE "id" = NEW."dog_id"
+      AND "owner_id" = NEW."user_id"
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION 'violates check constraint "guided_setups_dog_owner_match"'
+    USING ERRCODE = '23514',
+          CONSTRAINT = 'guided_setups_dog_owner_match';
+END;
+$$;--> statement-breakpoint
+CREATE TRIGGER "guided_setups_dog_owner_match_guard"
+BEFORE INSERT OR UPDATE OF "dog_id", "user_id" ON "guided_setups"
+FOR EACH ROW EXECUTE FUNCTION "enforce_guided_setup_dog_owner"();--> statement-breakpoint
 ALTER TABLE "guided_setups" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 DO $$
 DECLARE
