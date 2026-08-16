@@ -271,7 +271,8 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       db
         .execute<{ value: number }>(
           sql`select count(*)::int as value from events
-              where name = 'user.deleted' and props->>'role' = 'user'
+              where name = 'user.deleted'
+                and (props->>'role' = 'user' or props->>'role' is null)
                 and created_at >= ${since}`,
         )
         .then((r) => scalarRow(r.rows).value),

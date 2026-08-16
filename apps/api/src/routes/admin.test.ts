@@ -1,9 +1,9 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { auth } from "../auth";
 import { db } from "../db";
-import { user } from "../db/schema";
+import { events, user } from "../db/schema";
 
 const email = `adm_${Date.now()}@example.com`;
 
@@ -44,6 +44,32 @@ describe("/api/admin", () => {
     expect(["number", "object"]).toContain(
       typeof (body as { kpis: { activationRate: number | null } }).kpis.activationRate,
     );
+
+    const churnedUsers = (body as { kpis: { churnedUsers: number } }).kpis.churnedUsers;
+    const insertedEvents = await db
+      .insert(events)
+      .values([
+        { name: "user.deleted", props: {} },
+        { name: "user.deleted", props: { role: "user" } },
+        { name: "user.deleted", props: { role: "admin" } },
+      ])
+      .returning({ id: events.id });
+    let updatedChurnedUsers: number;
+    try {
+      const updatedRes = await app.request("/api/admin/metrics?days=30", {
+        headers: { cookie },
+      });
+      const updatedBody = await updatedRes.json();
+      updatedChurnedUsers = (updatedBody as { kpis: { churnedUsers: number } }).kpis.churnedUsers;
+    } finally {
+      await db.delete(events).where(
+        inArray(
+          events.id,
+          insertedEvents.map(({ id }) => id),
+        ),
+      );
+    }
+    expect(updatedChurnedUsers).toBe(churnedUsers + 2);
 
     const funnel = (body as { funnel: { users: number }[] }).funnel;
     for (let index = 1; index < funnel.length; index += 1) {
