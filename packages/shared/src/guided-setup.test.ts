@@ -101,6 +101,22 @@ describe("guided setup contracts", () => {
 
   it("rejects identity fields on strict request payloads", () => {
     expect(
+      guidedSetupBehaviorActionSchema.safeParse({
+        concern: "Pulled away from loud noises",
+        severity: "mild",
+        safetyConfirmed: true,
+        userId: "x",
+      }).success,
+    ).toBe(false);
+    expect(
+      guidedSetupBehaviorActionSchema.safeParse({
+        concern: "Pulled away from loud noises",
+        severity: "mild",
+        safetyConfirmed: true,
+        dogId: "x",
+      }).success,
+    ).toBe(false);
+    expect(
       guidedSetupIntentInputSchema.safeParse({ intent: "train_skill", userId: "x" }).success,
     ).toBe(false);
     expect(
