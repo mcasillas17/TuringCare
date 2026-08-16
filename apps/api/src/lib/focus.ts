@@ -25,6 +25,30 @@ export type FocusSkill = {
   sessions: FocusSession[];
 };
 
+export class FocusSkillDogMismatchError extends Error {
+  declare readonly dogId: string;
+  declare readonly skillId: string;
+
+  constructor(dogId: string, skillId: string) {
+    super("focus skill does not belong to dog");
+    this.name = "FocusSkillDogMismatchError";
+    Object.defineProperties(this, {
+      dogId: {
+        value: dogId,
+        enumerable: false,
+        configurable: false,
+        writable: false,
+      },
+      skillId: {
+        value: skillId,
+        enumerable: false,
+        configurable: false,
+        writable: false,
+      },
+    });
+  }
+}
+
 export function weekBoundsFromOffset(
   weekKey: string,
   timezoneOffsetMinutes: number,
@@ -119,6 +143,14 @@ export async function setWeeklyFocus(
   skillId: string,
   weekKey: string,
 ) {
+  const [ownedSkill] = await executor
+    .select({ id: trainingSkills.id })
+    .from(trainingSkills)
+    .innerJoin(trainingGoals, eq(trainingSkills.goalId, trainingGoals.id))
+    .where(and(eq(trainingSkills.id, skillId), eq(trainingGoals.dogId, dogId)))
+    .limit(1);
+  if (!ownedSkill) throw new FocusSkillDogMismatchError(dogId, skillId);
+
   await lockFocusWeek(executor, dogId, weekKey);
 
   const [existing] = await executor

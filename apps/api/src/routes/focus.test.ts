@@ -254,6 +254,22 @@ describe("dogs: weekly focus", () => {
     });
   });
 
+  it("setWeeklyFocus rejects a skill from another dog and leaves focus empty", async () => {
+    const { dog } = await setupDogWithSkill(u);
+    const { dog: otherDog, skill: otherSkill } = await setupDogWithSkill(u, "Stay");
+    const focusModule = await import("../lib/focus");
+
+    await expect(
+      db.transaction((tx) => focusModule.setWeeklyFocus(tx, dog.id, otherSkill.id, WEEK_KEY)),
+    ).rejects.toMatchObject({ name: "FocusSkillDogMismatchError" });
+    expect(focusModule.FocusSkillDogMismatchError).toBeTypeOf("function");
+
+    expect(await db.select().from(weeklyFocus).where(eq(weeklyFocus.dogId, dog.id))).toEqual([]);
+    expect(await db.select().from(weeklyFocus).where(eq(weeklyFocus.dogId, otherDog.id))).toEqual(
+      [],
+    );
+  });
+
   it("claims the exact earliest retained NULL row into the requested week only once", async () => {
     const { dog, skill } = await setupDogWithSkill(u);
     const { skill: auditSkill } = await setupDogWithSkillForDog(u, dog.id, "Stay");

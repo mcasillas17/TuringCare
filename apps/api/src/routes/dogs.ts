@@ -241,6 +241,8 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     try {
       const result = await db.transaction(async (tx) => {
+        await lockDogSafety(tx, dog.id);
+
         const [ownedDog] = await tx
           .select({ id: dogs.id })
           .from(dogs)
