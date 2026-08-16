@@ -158,7 +158,7 @@ export const guidedSetups = pgTable(
     ),
     check(
       "guided_setups_action_completion_consistent",
-      sql`(${t.completedAt} IS NULL AND ${t.firstActionType} IS NULL AND ${t.firstActionId} IS NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} = 'first_action_completed' AND ${t.firstActionType} IS NOT NULL AND ${t.firstActionId} IS NOT NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} IN ('skipped', 'abandoned') AND ${t.firstActionType} IS NULL AND ${t.firstActionId} IS NULL)`,
+      sql`(${t.completedAt} IS NULL AND ${t.firstActionType} IS NULL AND ${t.firstActionId} IS NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} = 'first_action_completed' AND ${t.currentStep} = 'action' AND ${t.intent} IS NOT NULL AND ${t.firstActionType} IS NOT NULL AND ${t.firstActionId} IS NOT NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} = 'skipped' AND ${t.currentStep} = 'action' AND ${t.intent} IS NOT NULL AND ${t.firstActionType} IS NULL AND ${t.firstActionId} IS NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} = 'abandoned' AND ${t.firstActionType} IS NULL AND ${t.firstActionId} IS NULL)`,
     ),
     check(
       "guided_setups_active_dog_required",
