@@ -210,19 +210,23 @@ discriminated response contracts:
 
 - available behavior: `{ setup, concern, actionDeleted: false }`;
 - deleted behavior: `{ setup, concern: null, actionDeleted: true }`;
-- available training: `{ setup, goal, skills, focus, suggestion, actionDeleted: false }`;
+- available training: `{ setup, goal, skills, focus: Focus | null, suggestion, actionDeleted: false }`;
 - deleted training: `{ setup, goal: null, skills: [], focus: null, suggestion: null, actionDeleted: true }`;
 - available progress: `{ setup, entry, actionDeleted: false }`;
 - deleted progress: `{ setup, entry: null, actionDeleted: true }`.
 
 If a completed setup still matches the endpoint's completion reason and action
-type but its referenced concern, training goal/domain graph, or journal row is
-missing, the endpoint returns the corresponding deleted tombstone with HTTP
-`200`. It does not persist a snapshot, expose deleted prose, recreate the
-domain row, or emit replay telemetry. Skipped, abandoned, and different-action
-replays remain `409`. Future web hooks and UI must branch on `actionDeleted`
-before rendering a concern, goal/skills/focus/suggestion, or journal entry and
-must show only the setup completion state for a deleted result.
+type but its referenced concern, training goal, or journal row is missing, the
+endpoint returns the corresponding deleted tombstone with HTTP `200`. For
+training, the tombstone is based on the referenced goal row (including a
+cascaded dog deletion), not on missing skills or a missing/changed weekly
+focus. A live goal returns its current ordered skills, the requested week's
+focus or `null`, and a fresh suggestion. The endpoint does not persist a
+snapshot, expose deleted prose, recreate the domain row, or emit replay
+telemetry. Skipped, abandoned, and different-action replays remain `409`.
+Future web hooks and UI must branch on `actionDeleted` before rendering a
+concern, goal/skills/focus/suggestion, or journal entry and must show only the
+setup completion state for a deleted result.
 
 ### Web
 

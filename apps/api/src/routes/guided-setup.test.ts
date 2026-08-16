@@ -1419,7 +1419,7 @@ describe("guided setup lifecycle", () => {
     });
   });
 
-  it("replays sequential and concurrent training submits without duplicate rows or telemetry", async () => {
+  it("serializes concurrent first training submits without duplicate rows or telemetry", async () => {
     const user = await createTestUser();
     users.push(user);
 
@@ -1433,23 +1433,24 @@ describe("guided setup lifecycle", () => {
       timezoneOffsetMinutes: 0,
     };
 
-    const first = await createTrainingAction(user, input);
-    expect(first.status).toBe(201);
-    const firstBody = await first.json();
-    const duplicate = await createTrainingAction(user, {
-      ...input,
-      templateKey: "basic-manners",
-    });
-    expect(duplicate.status).toBe(200);
-    expect(await duplicate.json()).toEqual(firstBody);
-
     const [concurrentA, concurrentB] = await Promise.all([
       createTrainingAction(user, input),
       createTrainingAction(user, input),
     ]);
-    expect([concurrentA.status, concurrentB.status].sort((a, b) => a - b)).toEqual([200, 200]);
-    expect(await concurrentA.json()).toEqual(firstBody);
-    expect(await concurrentB.json()).toEqual(firstBody);
+    expect([concurrentA.status, concurrentB.status].sort((a, b) => a - b)).toEqual([200, 201]);
+
+    const [bodyA, bodyB] = await Promise.all([concurrentA.json(), concurrentB.json()]);
+    expect(bodyA).toMatchObject({
+      actionDeleted: false,
+      goal: { id: expect.any(String) },
+    });
+    expect(bodyB).toMatchObject({
+      actionDeleted: false,
+      goal: { id: expect.any(String) },
+    });
+    expect((bodyA as { goal: { id: string } }).goal.id).toBe(
+      (bodyB as { goal: { id: string } }).goal.id,
+    );
     expect(await countActionRows(setup.dogId as string)).toMatchObject({
       goals: 1,
       skills: 5,
@@ -1464,6 +1465,156 @@ describe("guided setup lifecycle", () => {
       1,
     );
     expect(rows.filter(({ name }) => name === "guided_setup.completed")).toHaveLength(1);
+  });
+
+  it("rejects training actions before intent selection and for a different intent without writes", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    const input = {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+
+    const beforeIntent = await createTrainingAction(user, input);
+    expect(beforeIntent.status).toBe(409);
+    expect(await beforeIntent.json()).toEqual({ error: "intent_mismatch" });
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 0,
+      skills: 0,
+      focus: 0,
+    });
+
+    expect((await saveIntent(user, setup.id, "understand_behavior")).status).toBe(200);
+    const wrongIntent = await createTrainingAction(user, input);
+    expect(wrongIntent.status).toBe(409);
+    expect(await wrongIntent.json()).toEqual({ error: "intent_mismatch" });
+    expect((await readStatus(user)).active).toMatchObject({
+      id: setup.id,
+      currentStep: "action",
+      intent: "understand_behavior",
+      completedAt: null,
+    });
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 0,
+      skills: 0,
+      focus: 0,
+    });
+    expect(await trainingActionEvents(user.userId)).toEqual([]);
+  });
+
+  it("keeps a completed training goal live when its current-week focus is removed", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const input = {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+    const created = await createTrainingAction(user, input);
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      goal: { id: string };
+      skills: Array<{ id: string }>;
+    };
+
+    const deleted = await app.request(
+      `/api/dogs/${setup.dogId}/focus/${createdBody.skills[0]?.id}?weekKey=${input.weekKey}`,
+      {
+        method: "DELETE",
+        headers: user.authHeaders,
+      },
+    );
+    expect(deleted.status).toBe(200);
+
+    const replay = await createTrainingAction(user, {
+      ...input,
+      templateKey: "basic-manners",
+    });
+    expect(replay.status).toBe(200);
+    const replayBody = (await replay.json()) as {
+      goal: { id: string } | null;
+      skills: Array<{ id: string }>;
+      focus: { skillId: string } | null;
+      suggestion: { skill: { id: string } | null } | null;
+      actionDeleted: boolean;
+    };
+    expect(replayBody).toMatchObject({
+      goal: { id: createdBody.goal.id },
+      focus: null,
+      actionDeleted: false,
+      suggestion: { skill: null },
+    });
+    expect(replayBody.skills.map(({ id }) => id)).toEqual(createdBody.skills.map(({ id }) => id));
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 1,
+      skills: createdBody.skills.length,
+      focus: 0,
+    });
+  });
+
+  it("keeps a completed training goal live when its current-week focus changes", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const input = {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+    const created = await createTrainingAction(user, input);
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      goal: { id: string };
+      skills: Array<{ id: string }>;
+    };
+    const replacementSkill = createdBody.skills[1];
+    if (!replacementSkill) throw new Error("training template did not create a replacement skill");
+
+    const changed = await app.request(`/api/dogs/${setup.dogId}/focus`, {
+      method: "POST",
+      headers: user.authHeaders,
+      body: JSON.stringify({ skillId: replacementSkill.id, weekKey: input.weekKey }),
+    });
+    expect(changed.status).toBe(200);
+
+    const replay = await createTrainingAction(user, {
+      ...input,
+      templateKey: "basic-manners",
+    });
+    expect(replay.status).toBe(200);
+    const replayBody = (await replay.json()) as {
+      goal: { id: string } | null;
+      skills: Array<{ id: string }>;
+      focus: { skillId: string } | null;
+      suggestion: { skill: { id: string } | null } | null;
+      actionDeleted: boolean;
+    };
+    expect(replayBody).toMatchObject({
+      goal: { id: createdBody.goal.id },
+      focus: { skillId: replacementSkill.id },
+      actionDeleted: false,
+      suggestion: { skill: { id: replacementSkill.id } },
+    });
+    expect(replayBody.skills.map(({ id }) => id)).toEqual(createdBody.skills.map(({ id }) => id));
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 1,
+      skills: createdBody.skills.length,
+      focus: 1,
+    });
   });
 
   it("returns not found for unknown or cross-owner training setup ids without changing active setups", async () => {
@@ -1569,6 +1720,11 @@ describe("guided setup lifecycle", () => {
       suggestion: null,
       actionDeleted: true,
     });
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 0,
+      skills: 0,
+      focus: 0,
+    });
     expect(await trainingActionEvents(user.userId)).toEqual(beforeReplayEvents);
   });
 
@@ -1612,6 +1768,11 @@ describe("guided setup lifecycle", () => {
       focus: null,
       suggestion: null,
       actionDeleted: true,
+    });
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 0,
+      skills: 0,
+      focus: 0,
     });
     expect(await trainingActionEvents(user.userId)).toEqual(beforeReplayEvents);
   });

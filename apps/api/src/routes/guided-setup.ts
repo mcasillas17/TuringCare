@@ -70,7 +70,7 @@ type GuidedTrainingActionResponse =
       setup: GuidedSetupRecord;
       goal: typeof trainingGoals.$inferSelect;
       skills: (typeof trainingSkills.$inferSelect)[];
-      focus: typeof weeklyFocus.$inferSelect;
+      focus: typeof weeklyFocus.$inferSelect | null;
       suggestion: TrainingSuggestion;
       actionDeleted: false;
     }
@@ -260,7 +260,7 @@ async function resolveCompletedTrainingReplay(
       dogId: string;
       goal: typeof trainingGoals.$inferSelect;
       skills: (typeof trainingSkills.$inferSelect)[];
-      focus: typeof weeklyFocus.$inferSelect;
+      focus: typeof weeklyFocus.$inferSelect | null;
     }
 > {
   const setup = toSetupDto(row);
@@ -292,7 +292,6 @@ async function resolveCompletedTrainingReplay(
     .where(and(eq(weeklyFocus.dogId, row.setup.dogId), eq(weeklyFocus.weekStart, weekKey)))
     .orderBy(asc(weeklyFocus.position), asc(weeklyFocus.createdAt))
     .limit(1);
-  if (!skills[0] || !focus) return { kind: "tombstone", setup };
 
   return {
     kind: "idempotent",
@@ -300,7 +299,7 @@ async function resolveCompletedTrainingReplay(
     dogId: row.setup.dogId,
     goal,
     skills,
-    focus,
+    focus: focus ?? null,
   };
 }
 

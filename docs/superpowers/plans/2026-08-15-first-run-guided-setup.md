@@ -1022,7 +1022,9 @@ Add tests for:
 - cross-owner state cannot be addressed.
 - a deleted goal or completed dog returns the `200` training tombstone
   `{ setup, goal: null, skills: [], focus: null, suggestion: null, actionDeleted: true }`
-  without recreating rows or emitting replay telemetry;
+  without recreating rows or emitting replay telemetry; a live goal remains
+  available when its skills or requested-week focus are later removed or
+  changed, with `focus` nullable in the available response;
 - stale retries use the original completed setup rather than a newer active setup;
 - telemetry contains only the bounded normal template/focus and guided completion props.
 
@@ -1080,9 +1082,11 @@ return {
 
 After commit, call `loadSuggestion()` through its normal current-week path and include the
 result in the response. On duplicate submission, load the goal by `firstActionId`, its
-ordered skills, the matching focus, and a fresh suggestion. A matching completed training
-setup whose goal/domain graph is missing returns the same typed `actionDeleted: true`
-tombstone contract as behavior and progress; do not snapshot or recreate training data.
+ordered skills, the requested-week focus when present, and a fresh suggestion. A matching
+completed training setup whose referenced goal is missing (including dog cascade) returns
+the same typed `actionDeleted: true` tombstone contract as behavior and progress; missing
+skills or focus do not make a live goal a tombstone. Do not snapshot or recreate training
+data.
 Future web consumers must branch on `actionDeleted` before rendering the goal, skills,
 focus, or suggestion.
 
