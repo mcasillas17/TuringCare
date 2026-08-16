@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { db } from "../db";
 import { trainers } from "../db/schema";
 import { type OptionalVars, optionalUser } from "../middleware/optional-user";
+import { recordEvent } from "../telemetry/record-event";
 
 const TRAINER_COLS = {
   id: trainers.id,
@@ -32,6 +33,17 @@ export const trainersApp = new Hono<{ Variables: OptionalVars }>()
       .select(TRAINER_COLS)
       .from(trainers)
       .where(conds.length ? and(...conds) : undefined);
+    if (conds.length > 0) {
+      await recordEvent("directory.trainers_searched", {
+        userId: c.get("userId"),
+        props: {
+          state: state ?? "any",
+          specialty: specialty ?? "any",
+          methodology: methodology ?? "any",
+          resultCount: rows.length,
+        },
+      });
+    }
     // List NEVER exposes contact (bulk-scrape surface), even when authed.
     return c.json({ trainers: rows.map((t) => ({ ...t, email: null, phone: null })) });
   })

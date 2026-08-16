@@ -571,6 +571,7 @@ export const events = pgTable(
   (t) => [
     index("events_name_created_at_idx").on(t.name, t.createdAt),
     index("events_created_at_idx").on(t.createdAt),
+    index("events_user_name_created_at_idx").on(t.userId, t.name, t.createdAt),
   ],
 );
 

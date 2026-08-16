@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { db } from "../db";
 import { courses } from "../db/schema";
 import { type OptionalVars, optionalUser } from "../middleware/optional-user";
+import { recordEvent } from "../telemetry/record-event";
 
 export const coursesApp = new Hono<{ Variables: OptionalVars }>()
   .use("*", optionalUser)
@@ -21,6 +22,18 @@ export const coursesApp = new Hono<{ Variables: OptionalVars }>()
       .from(courses)
       .where(conds.length ? and(...conds) : undefined)
       .orderBy(courses.organizationName, courses.position);
+    if (conds.length > 0) {
+      await recordEvent("directory.courses_searched", {
+        userId: c.get("userId"),
+        props: {
+          ageGroup: ageGroup ?? "any",
+          format: format ?? "any",
+          state: state ?? "any",
+          online: online === "true",
+          resultCount: rows.length,
+        },
+      });
+    }
     return c.json({ courses: rows });
   })
   .get("/:id", async (c) => {

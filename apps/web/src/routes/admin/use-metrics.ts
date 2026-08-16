@@ -11,13 +11,22 @@ export type Metrics = {
     mau: number;
     stickiness: number;
     eventCount: number;
+    activationRate: number;
+    returningRate: number;
   };
   signups: { day: string; count: number }[];
   active: { day: string; count: number }[];
-  eventVolume: { name: string; count: number }[];
   funnel: { step: string; users: number }[];
-  topPages: { path: string; count: number }[];
-  eventsByDay: { day: string; name: string; count: number }[];
+  journeyTimes: {
+    step: string;
+    completed: number;
+    medianMinutes: number | null;
+    p90Minutes: number | null;
+    within7DaysPct: number;
+  }[];
+  featureAdoption: { feature: string; users: number; events: number }[];
+  topPages: { path: string; views: number; users: number }[];
+  activityByDay: { day: string; category: string; count: number }[];
 };
 
 export function useMetrics(days: number) {

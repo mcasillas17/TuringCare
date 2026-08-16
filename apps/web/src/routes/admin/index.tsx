@@ -1,9 +1,11 @@
+import { useI18n } from "@/i18n";
 import { useState } from "react";
 import { ActiveUsage } from "./panels/active-usage";
-import { EventsOverTime } from "./panels/events-over-time";
-import { FeatureUsage } from "./panels/feature-usage";
+import { ActivityTrend } from "./panels/activity-trend";
+import { FeatureAdoption } from "./panels/feature-adoption";
 import { Funnel } from "./panels/funnel";
 import { Growth } from "./panels/growth";
+import { JourneyTimes } from "./panels/journey-times";
 import { KpiStrip } from "./panels/kpi-strip";
 import { TopPages } from "./panels/top-pages";
 import { useMetrics } from "./use-metrics";
@@ -11,16 +13,20 @@ import { useMetrics } from "./use-metrics";
 const RANGES = [7, 30, 90] as const;
 
 export function AdminDashboard() {
+  const { t } = useI18n();
   const [days, setDays] = useState<number>(30);
   const metrics = useMetrics(days);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate">Admin dashboard</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate">{t("admin.title")}</h1>
+          <p className="text-sm text-slate-soft">{t("admin.subtitle")}</p>
+        </div>
         <div>
           <label htmlFor="range-select" className="sr-only">
-            Date range
+            {t("admin.dateRange")}
           </label>
           <select
             id="range-select"
@@ -30,7 +36,7 @@ export function AdminDashboard() {
           >
             {RANGES.map((r) => (
               <option key={r} value={r}>
-                Last {r}d
+                {t("admin.lastDays", { days: r })}
               </option>
             ))}
           </select>
@@ -38,22 +44,23 @@ export function AdminDashboard() {
       </div>
 
       {metrics.isPending ? (
-        <p className="p-8">Loading metrics…</p>
+        <p className="p-8">{t("admin.loading")}</p>
       ) : metrics.isError || !metrics.data ? (
-        <p className="p-8 text-red-600">Failed to load metrics.</p>
+        <p className="p-8 text-red-600">{t("admin.loadError")}</p>
       ) : (
         <>
           <KpiStrip kpis={metrics.data.kpis} />
-          <Growth signups={metrics.data.signups} />
           <div className="grid gap-4 md:grid-cols-2">
             <ActiveUsage active={metrics.data.active} kpis={metrics.data.kpis} />
-            <Funnel funnel={metrics.data.funnel} />
+            <Growth signups={metrics.data.signups} />
           </div>
+          <Funnel funnel={metrics.data.funnel} />
+          <JourneyTimes journeyTimes={metrics.data.journeyTimes} />
           <div className="grid gap-4 md:grid-cols-2">
-            <FeatureUsage eventVolume={metrics.data.eventVolume} />
+            <FeatureAdoption featureAdoption={metrics.data.featureAdoption} />
             <TopPages topPages={metrics.data.topPages} />
           </div>
-          <EventsOverTime eventsByDay={metrics.data.eventsByDay} />
+          <ActivityTrend activityByDay={metrics.data.activityByDay} />
         </>
       )}
     </div>
