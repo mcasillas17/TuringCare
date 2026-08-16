@@ -149,6 +149,11 @@ Enforce this with a database constraint rather than a read-then-write check.
 Abandoning setup preserves the already-created dog and creates no other domain
 data.
 
+An active setup must retain its dog link, so deleting that dog is blocked until
+setup is completed or abandoned. A completed setup remains as account-level
+eligibility history if its dog is later deleted; the historical dog link becomes
+null rather than cascading away the setup record.
+
 The API is the source of truth. Refreshing, signing out, or switching devices
 resumes the latest incomplete setup. Client state may hold unsaved form values
 but must not be the only record of the current step.
