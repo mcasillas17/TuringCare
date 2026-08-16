@@ -1,19 +1,25 @@
 import { zValidator } from "@hono/zod-validator";
 import {
+  type GuidedSetupActionType,
   type GuidedSetupCompletionReason,
   type GuidedSetupRecord,
   type GuidedSetupStatus,
+  guidedSetupBehaviorActionSchema,
   guidedSetupIntentInputSchema,
   guidedSetupMutationSchema,
+  guidedSetupProgressActionSchema,
   guidedSetupStartSchema,
 } from "@turingcare/shared";
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
-import { dogs, guidedSetups } from "../db/schema";
+import { behaviorConcerns, dogs, guidedSetups, journalEntries } from "../db/schema";
+import { createBehaviorConcern } from "../lib/behavior-concern-writes";
 import { createDog } from "../lib/dog-writes";
+import { InvalidJournalOccurredAtError, createJournalEntry } from "../lib/journal-writes";
 import type { TransactionType } from "../lib/safety-lock";
 import { type Vars, requireUser } from "../middleware/require-user";
+import type { EventName } from "../telemetry/events";
 import { recordEvent } from "../telemetry/record-event";
 
 type SetupRow = typeof guidedSetups.$inferSelect;
@@ -125,19 +131,62 @@ function resolveCompletedSetupReplay(setup: SetupDogJoinRow, reason: GuidedSetup
   return { kind: "already_completed" } as const;
 }
 
+async function resolveCompletedActionReplay(
+  tx: TransactionType,
+  row: SetupDogJoinRow,
+  actionType: "behavior" | "progress",
+) {
+  const setup = toSetupDto(row);
+  const actionId = row.setup.firstActionId;
+  if (
+    row.setup.completionReason !== "first_action_completed" ||
+    row.setup.firstActionType !== actionType ||
+    actionId === null
+  ) {
+    return { kind: "already_completed" } as const;
+  }
+
+  if (actionType === "behavior") {
+    const [concern] = await tx
+      .select()
+      .from(behaviorConcerns)
+      .where(eq(behaviorConcerns.id, actionId))
+      .limit(1);
+    if (!concern) return { kind: "already_completed" } as const;
+    return { kind: "idempotent", setup, concern } as const;
+  }
+
+  const [entry] = await tx
+    .select()
+    .from(journalEntries)
+    .where(eq(journalEntries.id, actionId))
+    .limit(1);
+  if (!entry) return { kind: "already_completed" } as const;
+  return { kind: "idempotent", setup, entry } as const;
+}
+
+type SetupCompletion =
+  | { reason: "skipped" | "abandoned" }
+  | {
+      reason: "first_action_completed";
+      actionType: GuidedSetupActionType;
+      actionId: string;
+    };
+
 async function completeSetup(
   tx: TransactionType,
   active: ActiveSetupWithDogRow,
-  completionReason: "skipped" | "abandoned",
+  completion: SetupCompletion,
 ) {
   const completedAt = new Date();
   const [setup] = await tx
     .update(guidedSetups)
     .set({
       completedAt,
-      completionReason,
-      firstActionType: null,
-      firstActionId: null,
+      completionReason: completion.reason,
+      firstActionType:
+        completion.reason === "first_action_completed" ? completion.actionType : null,
+      firstActionId: completion.reason === "first_action_completed" ? completion.actionId : null,
       updatedAt: completedAt,
     })
     .where(eq(guidedSetups.id, active.setup.id))
@@ -254,7 +303,7 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       return {
         kind: "completed",
         intent: active.setup.intent,
-        setup: await completeSetup(tx, active, "skipped"),
+        setup: await completeSetup(tx, active, { reason: "skipped" }),
       } as const;
     });
 
@@ -300,7 +349,7 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
 
       return {
         kind: "completed",
-        setup: await completeSetup(tx, active, "abandoned"),
+        setup: await completeSetup(tx, active, { reason: "abandoned" }),
       } as const;
     });
 
@@ -321,4 +370,158 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
     if (result.setup.intent) props.intent = result.setup.intent;
     await recordEvent("guided_setup.completed", { userId, props });
     return c.json({ setup: result.setup });
+  })
+  .post("/action/behavior", zValidator("json", guidedSetupBehaviorActionSchema), async (c) => {
+    const userId = c.get("userId");
+    const input = c.req.valid("json");
+    const result = await db.transaction(async (tx) => {
+      await lockSetupFlow(tx, userId);
+
+      const row = await loadOwnedSetup(tx, userId, input.setupId);
+      if (!row) return { kind: "not_found" } as const;
+      if (row.setup.completedAt !== null) {
+        return resolveCompletedActionReplay(tx, row, "behavior");
+      }
+
+      const active = requireActiveSetupDog(row);
+      if (active.setup.currentStep !== "action" || active.setup.intent !== "understand_behavior") {
+        return { kind: "intent_mismatch" } as const;
+      }
+
+      const { setupId: _setupId, safetyConfirmed: _safetyConfirmed, ...concernInput } = input;
+      const { concern } = await createBehaviorConcern(tx, active.setup.dogId, concernInput);
+      const setup = await completeSetup(tx, active, {
+        reason: "first_action_completed",
+        actionType: "behavior",
+        actionId: concern.id,
+      });
+      return {
+        kind: "completed",
+        setup,
+        concern,
+        severity: concern.severity,
+      } as const;
+    });
+
+    if (result.kind === "not_found") {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    if (result.kind === "intent_mismatch") {
+      return c.json({ error: "intent_mismatch" } as const, 409);
+    }
+    if (result.kind === "already_completed") {
+      return c.json({ error: "setup_already_completed" } as const, 409);
+    }
+    if (result.kind === "idempotent") {
+      return c.json({ setup: result.setup, concern: result.concern });
+    }
+
+    await recordEvent("behavior.concern_added" as EventName, {
+      userId,
+      props: { severity: result.severity },
+    });
+    await recordEvent("guided_setup.first_action_completed", {
+      userId,
+      props: {
+        intent: "understand_behavior",
+        actionType: "behavior",
+      },
+    });
+    await recordEvent("guided_setup.completed", {
+      userId,
+      props: {
+        intent: "understand_behavior",
+        actionType: "behavior",
+        completionReason: "first_action_completed",
+      },
+    });
+    return c.json({ setup: result.setup, concern: result.concern }, 201);
+  })
+  .post("/action/progress", zValidator("json", guidedSetupProgressActionSchema), async (c) => {
+    const userId = c.get("userId");
+    const input = c.req.valid("json");
+    let result:
+      | Awaited<ReturnType<typeof resolveCompletedActionReplay>>
+      | {
+          kind: "completed";
+          setup: GuidedSetupRecord;
+          entry: typeof journalEntries.$inferSelect;
+        }
+      | { kind: "not_found" }
+      | { kind: "intent_mismatch" };
+    try {
+      result = await db.transaction(async (tx) => {
+        await lockSetupFlow(tx, userId);
+
+        const row = await loadOwnedSetup(tx, userId, input.setupId);
+        if (!row) return { kind: "not_found" } as const;
+        if (row.setup.completedAt !== null) {
+          return resolveCompletedActionReplay(tx, row, "progress");
+        }
+
+        const active = requireActiveSetupDog(row);
+        if (active.setup.currentStep !== "action" || active.setup.intent !== "track_progress") {
+          return { kind: "intent_mismatch" } as const;
+        }
+
+        const entry = await createJournalEntry(tx, active.setup.dogId, {
+          kind: "daily_checkin",
+          trend: input.trend,
+          note: input.note,
+        });
+        const setup = await completeSetup(tx, active, {
+          reason: "first_action_completed",
+          actionType: "progress",
+          actionId: entry.id,
+        });
+        return { kind: "completed", setup, entry } as const;
+      });
+    } catch (error) {
+      if (error instanceof InvalidJournalOccurredAtError) {
+        return c.json(
+          {
+            success: false,
+            error: {
+              issues: [{ code: "custom", path: ["occurredAt"], message: "Invalid date" }],
+            },
+          } as const,
+          400,
+        );
+      }
+      throw error;
+    }
+
+    if (result.kind === "not_found") {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    if (result.kind === "intent_mismatch") {
+      return c.json({ error: "intent_mismatch" } as const, 409);
+    }
+    if (result.kind === "already_completed") {
+      return c.json({ error: "setup_already_completed" } as const, 409);
+    }
+    if (result.kind === "idempotent") {
+      return c.json({ setup: result.setup, entry: result.entry });
+    }
+
+    await recordEvent("journal.entry_created", {
+      userId,
+      props: { kind: "daily_checkin" },
+    });
+    await recordEvent("guided_setup.first_action_completed", {
+      userId,
+      props: {
+        intent: "track_progress",
+        actionType: "progress",
+      },
+    });
+    await recordEvent("guided_setup.completed", {
+      userId,
+      props: {
+        intent: "track_progress",
+        actionType: "progress",
+        completionReason: "first_action_completed",
+      },
+    });
+    return c.json({ setup: result.setup, entry: result.entry }, 201);
   });
