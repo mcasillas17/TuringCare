@@ -1020,6 +1020,11 @@ Add tests for:
 - duplicate submit returns the existing goal, skills, focus, and current suggestion;
 - no duplicate goals or focus rows are created;
 - cross-owner state cannot be addressed.
+- a deleted goal or completed dog returns the `200` training tombstone
+  `{ setup, goal: null, skills: [], focus: null, suggestion: null, actionDeleted: true }`
+  without recreating rows or emitting replay telemetry;
+- stale retries use the original completed setup rather than a newer active setup;
+- telemetry contains only the bounded normal template/focus and guided completion props.
 
 - [ ] **Step 2: Run training tests**
 
@@ -1075,7 +1080,11 @@ return {
 
 After commit, call `loadSuggestion()` through its normal current-week path and include the
 result in the response. On duplicate submission, load the goal by `firstActionId`, its
-skills, the matching focus, and a fresh suggestion.
+ordered skills, the matching focus, and a fresh suggestion. A matching completed training
+setup whose goal/domain graph is missing returns the same typed `actionDeleted: true`
+tombstone contract as behavior and progress; do not snapshot or recreate training data.
+Future web consumers must branch on `actionDeleted` before rendering the goal, skills,
+focus, or suggestion.
 
 - [ ] **Step 4: Emit existing and setup telemetry**
 
@@ -1093,6 +1102,14 @@ await recordEvent("focus.week_set", {
 await recordEvent("guided_setup.first_action_completed", {
   userId,
   props: { intent: "train_skill", actionType: "training" },
+});
+await recordEvent("guided_setup.completed", {
+  userId,
+  props: {
+    intent: "train_skill",
+    actionType: "training",
+    completionReason: "first_action_completed",
+  },
 });
 ```
 

@@ -205,22 +205,24 @@ Submitting a completed setup by its `setupId` returns the already-created result
 repeating the domain write. This idempotency is enforced by the setup row's
 completion state inside the transaction, not by client timing.
 
-Behavior and progress action creates and replays use the same typed,
-discriminated response contract:
+Behavior, training, and progress action creates and replays use typed,
+discriminated response contracts:
 
 - available behavior: `{ setup, concern, actionDeleted: false }`;
 - deleted behavior: `{ setup, concern: null, actionDeleted: true }`;
+- available training: `{ setup, goal, skills, focus, suggestion, actionDeleted: false }`;
+- deleted training: `{ setup, goal: null, skills: [], focus: null, suggestion: null, actionDeleted: true }`;
 - available progress: `{ setup, entry, actionDeleted: false }`;
 - deleted progress: `{ setup, entry: null, actionDeleted: true }`.
 
 If a completed setup still matches the endpoint's completion reason and action
-type but its referenced concern or journal row is missing, the endpoint returns
-the corresponding deleted tombstone with HTTP `200`. It does not persist a
-snapshot, expose deleted prose, recreate the domain row, or emit replay
-telemetry. Skipped, abandoned, and different-action replays remain `409`.
-Future web hooks and UI must branch on `actionDeleted` before rendering a
-concern or journal entry and must show only the setup completion state for a
-deleted result.
+type but its referenced concern, training goal/domain graph, or journal row is
+missing, the endpoint returns the corresponding deleted tombstone with HTTP
+`200`. It does not persist a snapshot, expose deleted prose, recreate the
+domain row, or emit replay telemetry. Skipped, abandoned, and different-action
+replays remain `409`. Future web hooks and UI must branch on `actionDeleted`
+before rendering a concern, goal/skills/focus/suggestion, or journal entry and
+must show only the setup completion state for a deleted result.
 
 ### Web
 

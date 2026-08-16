@@ -4,20 +4,33 @@ import {
   type GuidedSetupCompletionReason,
   type GuidedSetupRecord,
   type GuidedSetupStatus,
+  type TrainingSuggestion,
   guidedSetupBehaviorActionSchema,
   guidedSetupIntentInputSchema,
   guidedSetupMutationSchema,
   guidedSetupProgressActionSchema,
   guidedSetupStartSchema,
+  guidedSetupTrainingActionSchema,
 } from "@turingcare/shared";
-import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
-import { behaviorConcerns, dogs, guidedSetups, journalEntries } from "../db/schema";
+import {
+  behaviorConcerns,
+  dogs,
+  guidedSetups,
+  journalEntries,
+  trainingGoals,
+  trainingSkills,
+  weeklyFocus,
+} from "../db/schema";
 import { createBehaviorConcern } from "../lib/behavior-concern-writes";
 import { createDog } from "../lib/dog-writes";
+import { setWeeklyFocus } from "../lib/focus";
 import { createJournalEntry } from "../lib/journal-writes";
 import type { TransactionType } from "../lib/safety-lock";
+import { currentWeekKey, loadSuggestion } from "../lib/suggestion";
+import { applyTrainingTemplate } from "../lib/training-template-writes";
 import { type Vars, requireUser } from "../middleware/require-user";
 import { recordEvent } from "../telemetry/record-event";
 
@@ -50,6 +63,23 @@ type GuidedProgressActionResponse =
   | {
       setup: GuidedSetupRecord;
       entry: null;
+      actionDeleted: true;
+    };
+type GuidedTrainingActionResponse =
+  | {
+      setup: GuidedSetupRecord;
+      goal: typeof trainingGoals.$inferSelect;
+      skills: (typeof trainingSkills.$inferSelect)[];
+      focus: typeof weeklyFocus.$inferSelect;
+      suggestion: TrainingSuggestion;
+      actionDeleted: false;
+    }
+  | {
+      setup: GuidedSetupRecord;
+      goal: null;
+      skills: [];
+      focus: null;
+      suggestion: null;
       actionDeleted: true;
     };
 type CompletedActionReplay<T> = { kind: "already_completed" } | { kind: "idempotent"; response: T };
@@ -215,6 +245,63 @@ async function resolveCompletedActionReplay(
     kind: "idempotent",
     response: { setup, entry, actionDeleted: false } satisfies GuidedProgressActionResponse,
   } as const;
+}
+
+async function resolveCompletedTrainingReplay(
+  tx: TransactionType,
+  row: SetupDogJoinRow,
+  weekKey: string,
+): Promise<
+  | { kind: "already_completed" }
+  | { kind: "tombstone"; setup: GuidedSetupRecord }
+  | {
+      kind: "idempotent";
+      setup: GuidedSetupRecord;
+      dogId: string;
+      goal: typeof trainingGoals.$inferSelect;
+      skills: (typeof trainingSkills.$inferSelect)[];
+      focus: typeof weeklyFocus.$inferSelect;
+    }
+> {
+  const setup = toSetupDto(row);
+  const actionId = row.setup.firstActionId;
+  if (
+    row.setup.completionReason !== "first_action_completed" ||
+    row.setup.firstActionType !== "training" ||
+    actionId === null
+  ) {
+    return { kind: "already_completed" };
+  }
+  if (row.setup.dogId === null) return { kind: "tombstone", setup };
+
+  const [goal] = await tx
+    .select()
+    .from(trainingGoals)
+    .where(and(eq(trainingGoals.id, actionId), eq(trainingGoals.dogId, row.setup.dogId)))
+    .limit(1);
+  if (!goal) return { kind: "tombstone", setup };
+
+  const skills = await tx
+    .select()
+    .from(trainingSkills)
+    .where(eq(trainingSkills.goalId, goal.id))
+    .orderBy(asc(trainingSkills.position), asc(trainingSkills.id));
+  const [focus] = await tx
+    .select()
+    .from(weeklyFocus)
+    .where(and(eq(weeklyFocus.dogId, row.setup.dogId), eq(weeklyFocus.weekStart, weekKey)))
+    .orderBy(asc(weeklyFocus.position), asc(weeklyFocus.createdAt))
+    .limit(1);
+  if (!skills[0] || !focus) return { kind: "tombstone", setup };
+
+  return {
+    kind: "idempotent",
+    setup,
+    dogId: row.setup.dogId,
+    goal,
+    skills,
+    focus,
+  };
 }
 
 type SetupCompletion =
@@ -422,6 +509,125 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
     if (result.setup.intent) props.intent = result.setup.intent;
     await recordEvent("guided_setup.completed", { userId, props });
     return c.json({ setup: result.setup });
+  })
+  .post("/action/training", zValidator("json", guidedSetupTrainingActionSchema), async (c) => {
+    const userId = c.get("userId");
+    const input = c.req.valid("json");
+    if (input.weekKey !== currentWeekKey(new Date(), input.timezoneOffsetMinutes)) {
+      return c.json({ error: "historical_suggestion_unavailable" } as const, 409);
+    }
+
+    const result = await db.transaction(async (tx) => {
+      await lockSetupFlow(tx, userId);
+
+      const row = await loadOwnedSetup(tx, userId, input.setupId);
+      if (!row) return { kind: "not_found" } as const;
+      if (row.setup.completedAt !== null) {
+        return resolveCompletedTrainingReplay(tx, row, input.weekKey);
+      }
+
+      const active = requireActiveSetupDog(row);
+      if (active.setup.currentStep !== "action" || active.setup.intent !== "train_skill") {
+        return { kind: "intent_mismatch" } as const;
+      }
+
+      const applied = await applyTrainingTemplate(tx, active.setup.dogId, input.templateKey);
+      if (!applied) return { kind: "invalid_template" } as const;
+      const skills = [...applied.skills].sort(
+        (left, right) => left.position - right.position || left.id.localeCompare(right.id),
+      );
+      const firstSkill = skills[0];
+      if (!firstSkill) throw new Error("training template created no skills");
+
+      const focusResult = await setWeeklyFocus(
+        tx,
+        active.setup.dogId,
+        firstSkill.id,
+        input.weekKey,
+      );
+      const setup = await completeSetup(tx, active, {
+        reason: "first_action_completed",
+        actionType: "training",
+        actionId: applied.goal.id,
+      });
+      return {
+        kind: "completed",
+        setup,
+        dogId: active.setup.dogId,
+        goal: applied.goal,
+        skills,
+        focus: focusResult.focus,
+        focusReplaced: focusResult.kind === "replaced",
+      } as const;
+    });
+
+    if (result.kind === "not_found") {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    if (result.kind === "intent_mismatch") {
+      return c.json({ error: "intent_mismatch" } as const, 409);
+    }
+    if (result.kind === "invalid_template") {
+      return c.json({ error: "invalid_template" } as const, 400);
+    }
+    if (result.kind === "already_completed") {
+      return c.json({ error: "setup_already_completed" } as const, 409);
+    }
+    if (result.kind === "tombstone") {
+      return c.json({
+        setup: result.setup,
+        goal: null,
+        skills: [],
+        focus: null,
+        suggestion: null,
+        actionDeleted: true,
+      } satisfies GuidedTrainingActionResponse);
+    }
+
+    const created = result.kind === "completed";
+    if (created) {
+      await recordEvent("training.goal_added", {
+        userId,
+        props: { source: "template" },
+      });
+      await recordEvent("focus.week_set", {
+        userId,
+        props: { replaced: result.focusReplaced },
+      });
+      await recordEvent("guided_setup.first_action_completed", {
+        userId,
+        props: {
+          intent: "train_skill",
+          actionType: "training",
+        },
+      });
+      await recordEvent("guided_setup.completed", {
+        userId,
+        props: {
+          intent: "train_skill",
+          actionType: "training",
+          completionReason: "first_action_completed",
+        },
+      });
+    }
+
+    const suggestion = await loadSuggestion({
+      userId,
+      dogId: result.dogId,
+      weekKey: input.weekKey,
+      timezoneOffsetMinutes: input.timezoneOffsetMinutes,
+    });
+    return c.json(
+      {
+        setup: result.setup,
+        goal: result.goal,
+        skills: result.skills,
+        focus: result.focus,
+        suggestion,
+        actionDeleted: false,
+      } satisfies GuidedTrainingActionResponse,
+      created ? 201 : 200,
+    );
   })
   .post("/action/behavior", zValidator("json", guidedSetupBehaviorActionSchema), async (c) => {
     const userId = c.get("userId");

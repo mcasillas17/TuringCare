@@ -120,6 +120,22 @@ async function createProgressAction(
   });
 }
 
+async function createTrainingAction(
+  user: TestUser,
+  input: {
+    setupId: string;
+    templateKey: string;
+    weekKey: string;
+    timezoneOffsetMinutes: number;
+  },
+) {
+  return app.request("/api/guided-setup/action/training", {
+    method: "POST",
+    headers: user.authHeaders,
+    body: JSON.stringify(input),
+  });
+}
+
 async function createDog(user: TestUser, body: unknown = validDog) {
   return app.request("/api/dogs", {
     method: "POST",
@@ -200,6 +216,25 @@ async function actionEvents(userId: string) {
         inArray(events.name, [
           "journal.entry_created",
           "safety.signal_reported",
+          "guided_setup.first_action_completed",
+          "guided_setup.completed",
+        ]),
+      ),
+    )
+    .orderBy(asc(events.createdAt));
+}
+
+async function trainingActionEvents(userId: string) {
+  return db
+    .select({ name: events.name, props: events.props })
+    .from(events)
+    .where(
+      and(
+        eq(events.userId, userId),
+        inArray(events.name, [
+          "training.goal_added",
+          "focus.week_set",
+          "training.suggestion_shown",
           "guided_setup.first_action_completed",
           "guided_setup.completed",
         ]),
@@ -1210,6 +1245,375 @@ describe("guided setup lifecycle", () => {
     expect(JSON.stringify(rows)).not.toContain(note);
     expect(JSON.stringify(rows)).not.toContain(validDog.name);
     expect(JSON.stringify(rows)).not.toContain(validDog.breed);
+  });
+
+  it("applies a starter training template, focuses the first skill, and returns a suggestion", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const weekKey = currentWeekKey(new Date(), 420);
+
+    const response = await createTrainingAction(user, {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey,
+      timezoneOffsetMinutes: 420,
+    });
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as {
+      setup: GuidedSetupRecord;
+      goal: { id: string; catalogGoalKey: string };
+      skills: Array<{ id: string; position: number }>;
+      focus: { skillId: string; weekStart: string };
+      suggestion: { type: string; skill: { id: string } | null };
+      actionDeleted: false;
+    };
+    expect(body.actionDeleted).toBe(false);
+    expect(body.goal.catalogGoalKey).toBe("puppy-fundamentals");
+    expect(body.skills.map((skill) => skill.position)).toEqual(
+      body.skills.map((_, index) => index),
+    );
+    expect(body.focus).toMatchObject({ skillId: body.skills[0]?.id, weekStart: weekKey });
+    expect(body.suggestion).toMatchObject({
+      type: "exercise",
+      skill: { id: body.skills[0]?.id },
+    });
+    expect(body.setup).toMatchObject({
+      id: setup.id,
+      completionReason: "first_action_completed",
+      firstActionType: "training",
+      firstActionId: body.goal.id,
+    });
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 1,
+      skills: body.skills.length,
+      focus: 1,
+    });
+
+    expect(await trainingActionEvents(user.userId)).toEqual([
+      { name: "training.goal_added", props: { source: "template" } },
+      { name: "focus.week_set", props: { replaced: false } },
+      {
+        name: "guided_setup.first_action_completed",
+        props: { intent: "train_skill", actionType: "training" },
+      },
+      {
+        name: "guided_setup.completed",
+        props: {
+          intent: "train_skill",
+          actionType: "training",
+          completionReason: "first_action_completed",
+        },
+      },
+      {
+        name: "training.suggestion_shown",
+        props: {
+          suggestionType: "exercise",
+          ruleId: "cold_start_curriculum_level",
+          level: 1,
+          suppressed: false,
+          curriculumVersion: expect.any(String),
+        },
+      },
+    ]);
+    expect(JSON.stringify(await trainingActionEvents(user.userId))).not.toContain(validDog.name);
+  });
+
+  it("rejects an invalid training template without writing or completing the setup", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+
+    const response = await createTrainingAction(user, {
+      setupId: setup.id,
+      templateKey: "missing-template",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_template" });
+    expect((await readStatus(user)).active).toMatchObject({
+      id: setup.id,
+      completedAt: null,
+      intent: "train_skill",
+    });
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 0,
+      skills: 0,
+      focus: 0,
+    });
+    expect(await trainingActionEvents(user.userId)).toEqual([]);
+  });
+
+  it("rejects a historical training week before writing", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const current = currentWeekKey(new Date(), 0);
+    const historical = new Date(`${current}T00:00:00.000Z`);
+    historical.setUTCDate(historical.getUTCDate() - 7);
+
+    const response = await createTrainingAction(user, {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: historical.toISOString().slice(0, 10),
+      timezoneOffsetMinutes: 0,
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "historical_suggestion_unavailable" });
+    expect((await readStatus(user)).active?.completedAt).toBeNull();
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 0,
+      skills: 0,
+      focus: 0,
+    });
+    expect(await trainingActionEvents(user.userId)).toEqual([]);
+  });
+
+  it("returns the normal safety suggestion instead of an exercise for a safety-suppressed dog", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    await db.insert(dogSafetySignals).values({
+      dogId: setup.dogId as string,
+      type: "aggression_or_bite_risk",
+      source: "behavior_concern",
+    });
+
+    const response = await createTrainingAction(user, {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    });
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as {
+      suggestion: {
+        type: string;
+        primary: unknown;
+        fallback: unknown;
+        safety: { suppressed: boolean } | null;
+      };
+    };
+    expect(body.suggestion).toMatchObject({
+      type: "safety_suppressed",
+      primary: null,
+      fallback: null,
+      safety: { suppressed: true },
+    });
+  });
+
+  it("replays sequential and concurrent training submits without duplicate rows or telemetry", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const input = {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+
+    const first = await createTrainingAction(user, input);
+    expect(first.status).toBe(201);
+    const firstBody = await first.json();
+    const duplicate = await createTrainingAction(user, {
+      ...input,
+      templateKey: "basic-manners",
+    });
+    expect(duplicate.status).toBe(200);
+    expect(await duplicate.json()).toEqual(firstBody);
+
+    const [concurrentA, concurrentB] = await Promise.all([
+      createTrainingAction(user, input),
+      createTrainingAction(user, input),
+    ]);
+    expect([concurrentA.status, concurrentB.status].sort((a, b) => a - b)).toEqual([200, 200]);
+    expect(await concurrentA.json()).toEqual(firstBody);
+    expect(await concurrentB.json()).toEqual(firstBody);
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 1,
+      skills: 5,
+      focus: 1,
+    });
+
+    const rows = await trainingActionEvents(user.userId);
+    expect(rows.filter(({ name }) => name === "training.goal_added")).toHaveLength(1);
+    expect(rows.filter(({ name }) => name === "focus.week_set")).toHaveLength(1);
+    expect(rows.filter(({ name }) => name === "training.suggestion_shown")).toHaveLength(1);
+    expect(rows.filter(({ name }) => name === "guided_setup.first_action_completed")).toHaveLength(
+      1,
+    );
+    expect(rows.filter(({ name }) => name === "guided_setup.completed")).toHaveLength(1);
+  });
+
+  it("returns not found for unknown or cross-owner training setup ids without changing active setups", async () => {
+    const owner = await createTestUser();
+    const other = await createTestUser();
+    users.push(owner, other);
+
+    const ownerStarted = await startSetup(owner);
+    const ownerSetup = ((await ownerStarted.json()) as SetupBody).setup;
+    const otherStarted = await startSetup(other, { ...validDog, name: "Other Biscuit" });
+    const otherSetup = ((await otherStarted.json()) as SetupBody).setup;
+    const input = {
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+
+    for (const setupId of [ownerSetup.id, "00000000-0000-4000-8000-000000000001"]) {
+      const response = await createTrainingAction(other, { setupId, ...input });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
+    }
+
+    expect((await readStatus(owner)).active).toEqual(ownerSetup);
+    expect((await readStatus(other)).active).toEqual(otherSetup);
+    expect(await countActionRows(ownerSetup.dogId as string)).toMatchObject({
+      goals: 0,
+      focus: 0,
+    });
+    expect(await countActionRows(otherSetup.dogId as string)).toMatchObject({
+      goals: 0,
+      focus: 0,
+    });
+  });
+
+  it("replays a stale training action against its completed setup after a newer setup starts", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const firstStart = await startSetup(user);
+    const first = ((await firstStart.json()) as SetupBody).setup;
+    expect((await saveIntent(user, first.id, "train_skill")).status).toBe(200);
+    const input = {
+      setupId: first.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+    const firstAction = await createTrainingAction(user, input);
+    expect(firstAction.status).toBe(201);
+    const firstBody = await firstAction.json();
+
+    const secondStart = await startSetup(user, { ...validDog, name: "Second Biscuit" });
+    const second = ((await secondStart.json()) as SetupBody).setup;
+
+    const stale = await createTrainingAction(user, {
+      ...input,
+      templateKey: "basic-manners",
+    });
+    expect(stale.status).toBe(200);
+    expect(await stale.json()).toEqual(firstBody);
+    expect((await readStatus(user)).active).toEqual(second);
+  });
+
+  it("returns a tombstone after the referenced training goal is deleted without telemetry", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const input = {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+    const created = await createTrainingAction(user, input);
+    expect(created.status).toBe(201);
+    const body = (await created.json()) as { goal: { id: string } };
+    const beforeReplayEvents = await trainingActionEvents(user.userId);
+
+    const deleted = await app.request(`/api/dogs/${setup.dogId}/goals/${body.goal.id}`, {
+      method: "DELETE",
+      headers: user.authHeaders,
+    });
+    expect(deleted.status).toBe(200);
+
+    const replay = await createTrainingAction(user, {
+      ...input,
+      templateKey: "basic-manners",
+    });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({
+      setup: expect.objectContaining({
+        id: setup.id,
+        firstActionType: "training",
+        firstActionId: body.goal.id,
+      }),
+      goal: null,
+      skills: [],
+      focus: null,
+      suggestion: null,
+      actionDeleted: true,
+    });
+    expect(await trainingActionEvents(user.userId)).toEqual(beforeReplayEvents);
+  });
+
+  it("returns a tombstone after completed dog deletion without telemetry", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const input = {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+    const created = await createTrainingAction(user, input);
+    expect(created.status).toBe(201);
+    const beforeReplayEvents = await trainingActionEvents(user.userId);
+
+    const deleted = await app.request(`/api/dogs/${setup.dogId}`, {
+      method: "DELETE",
+      headers: user.authHeaders,
+    });
+    expect(deleted.status).toBe(200);
+
+    const replay = await createTrainingAction(user, {
+      ...input,
+      templateKey: "basic-manners",
+    });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({
+      setup: expect.objectContaining({
+        id: setup.id,
+        dogId: null,
+        dogName: null,
+        firstActionType: "training",
+      }),
+      goal: null,
+      skills: [],
+      focus: null,
+      suggestion: null,
+      actionDeleted: true,
+    });
+    expect(await trainingActionEvents(user.userId)).toEqual(beforeReplayEvents);
   });
 });
 
