@@ -1,27 +1,33 @@
-import { AbandonSetupButton } from "@/components/guided-setup/abandon-setup-button";
 import { BehaviorActionStep } from "@/components/guided-setup/behavior-action-step";
 import { DogBasicsStep } from "@/components/guided-setup/dog-basics-step";
 import { IntentStep } from "@/components/guided-setup/intent-step";
 import { ProgressActionStep } from "@/components/guided-setup/progress-action-step";
 import { SetupShell } from "@/components/guided-setup/setup-shell";
-import { Button } from "@/components/ui/button";
+import { TrainingActionStep } from "@/components/guided-setup/training-action-step";
+import { SuggestionCard } from "@/components/training/suggestion-card";
 import { useI18n } from "@/i18n";
 import {
   type GuidedBehaviorActionResponse,
   type GuidedProgressActionResponse,
   type GuidedSkipResponse,
+  type GuidedTrainingActionResponse,
   isGuidedSetupReconciliationConflict,
   useGuidedSetup,
   useSkipGuidedSetup,
 } from "@/lib/guided-setup";
-import type { GuidedSetupRecord, GuidedSetupStatus } from "@turingcare/shared";
+import type { GuidedSetupRecord, GuidedSetupStatus, TrainingSuggestion } from "@turingcare/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 
 type CompletionState =
-  | { kind: "saved"; setup: GuidedSetupRecord }
-  | { kind: "skipped"; setup: GuidedSetupRecord }
-  | { kind: "deleted"; setup: GuidedSetupRecord };
+  | {
+      kind: "saved";
+      setup: GuidedSetupRecord;
+      actionDeleted: false;
+      suggestion?: TrainingSuggestion;
+    }
+  | { kind: "skipped"; setup: GuidedSetupRecord; actionDeleted: false }
+  | { kind: "deleted"; setup: GuidedSetupRecord; actionDeleted: true; suggestion: null };
 
 function CompletionHandoff({ completion }: { completion: CompletionState }) {
   const { t } = useI18n();
@@ -42,24 +48,29 @@ function CompletionHandoff({ completion }: { completion: CompletionState }) {
           : "guidedSetup.completionNoWorkspaceDescription",
       )}
     >
-      <output className="space-y-4 rounded border border-silver bg-white p-5 text-slate">
-        <p>{message}</p>
-        <div className="flex flex-wrap gap-3">
-          {completion.setup.dogId && (
-            <Link
-              className="rounded bg-slate px-3 py-2 text-sm text-cream"
-              to={`/my/dogs/${completion.setup.dogId}`}
-            >
-              {t("guidedSetup.openDogWorkspace", {
-                dog: completion.setup.dogName ?? "",
-              })}
+      <div className="space-y-5">
+        <output className="space-y-4 rounded border border-silver bg-white p-5 text-slate">
+          <p>{message}</p>
+          <div className="flex flex-wrap gap-3">
+            {completion.setup.dogId && (
+              <Link
+                className="rounded bg-slate px-3 py-2 text-sm text-cream"
+                to={`/my/dogs/${completion.setup.dogId}`}
+              >
+                {t("guidedSetup.openDogWorkspace", {
+                  dog: completion.setup.dogName ?? "",
+                })}
+              </Link>
+            )}
+            <Link className="rounded border border-slate px-3 py-2 text-sm text-slate" to="/my">
+              {t("guidedSetup.returnToDashboard")}
             </Link>
-          )}
-          <Link className="rounded border border-slate px-3 py-2 text-sm text-slate" to="/my">
-            {t("guidedSetup.returnToDashboard")}
-          </Link>
-        </div>
-      </output>
+          </div>
+        </output>
+        {completion.kind === "saved" && completion.suggestion && (
+          <SuggestionCard mode="preview" suggestion={completion.suggestion} />
+        )}
+      </div>
     </SetupShell>
   );
 }
@@ -92,7 +103,11 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
   const canNavigateAfterAbandon = useCallback(() => completionRef.current === null, []);
   const skip = useSkipGuidedSetup({
     onCompleted: (response: GuidedSkipResponse) => {
-      const nextCompletion = { kind: "skipped" as const, setup: response.setup };
+      const nextCompletion: CompletionState = {
+        kind: "skipped",
+        setup: response.setup,
+        actionDeleted: false,
+      };
       completionRef.current = nextCompletion;
       setCompletion(nextCompletion);
     },
@@ -182,18 +197,28 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
     }
   };
   const onBehaviorCompleted = (response: GuidedBehaviorActionResponse) => {
-    const nextCompletion = {
-      kind: response.actionDeleted ? "deleted" : "saved",
-      setup: response.setup,
-    } as const;
+    const nextCompletion: CompletionState = response.actionDeleted
+      ? { kind: "deleted", setup: response.setup, actionDeleted: true, suggestion: null }
+      : { kind: "saved", setup: response.setup, actionDeleted: false };
     completionRef.current = nextCompletion;
     setCompletion(nextCompletion);
   };
   const onProgressCompleted = (response: GuidedProgressActionResponse) => {
-    const nextCompletion = {
-      kind: response.actionDeleted ? "deleted" : "saved",
-      setup: response.setup,
-    } as const;
+    const nextCompletion: CompletionState = response.actionDeleted
+      ? { kind: "deleted", setup: response.setup, actionDeleted: true, suggestion: null }
+      : { kind: "saved", setup: response.setup, actionDeleted: false };
+    completionRef.current = nextCompletion;
+    setCompletion(nextCompletion);
+  };
+  const onTrainingCompleted = (response: GuidedTrainingActionResponse) => {
+    const nextCompletion: CompletionState = response.actionDeleted
+      ? { kind: "deleted", setup: response.setup, actionDeleted: true, suggestion: null }
+      : {
+          kind: "saved",
+          setup: response.setup,
+          actionDeleted: false,
+          suggestion: response.suggestion,
+        };
     completionRef.current = nextCompletion;
     setCompletion(nextCompletion);
   };
@@ -260,38 +285,19 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
           canNavigateAfterAbandon={canNavigateAfterAbandon}
         />
       ) : (
-        <SetupShell
+        <TrainingActionStep
           key={active.id}
-          step={3}
-          title={t("guidedSetup.actionTitle")}
-          description={t("guidedSetup.actionDescription", { dog: active.dogName ?? "" })}
-        >
-          <div className="space-y-6">
-            <section className="rounded border border-silver bg-white p-5 text-slate-soft">
-              {t("guidedSetup.trainingPlaceholder")}
-            </section>
-            {skipError && (
-              <p role="alert" className="text-sm text-red-600">
-                {t("guidedSetup.skipError")}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-3">
-              <Button
-                type="button"
-                onClick={() => void onSkip()}
-                disabled={abandonPending || skipSubmitting || skip.isPending}
-              >
-                {skipSubmitting || skip.isPending ? t("guidedSetup.saving") : t("guidedSetup.skip")}
-              </Button>
-              <AbandonSetupButton
-                setupId={active.id}
-                disabled={abandonPending || skipSubmitting || skip.isPending}
-                onPendingChange={onAbandonPendingChange}
-                canNavigate={canNavigateAfterAbandon}
-              />
-            </div>
-          </div>
-        </SetupShell>
+          setup={active}
+          onCompleted={onTrainingCompleted}
+          onReconcile={reconcileSetup}
+          onBack={onBack}
+          onSkip={() => void onSkip()}
+          skipPending={skipSubmitting || skip.isPending}
+          skipError={skipError}
+          abandonPending={abandonPending}
+          onAbandonPendingChange={onAbandonPendingChange}
+          canNavigateAfterAbandon={canNavigateAfterAbandon}
+        />
       )}
     </>
   );

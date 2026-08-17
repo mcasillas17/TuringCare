@@ -13,22 +13,26 @@ const ACTIONS: { action: SuggestionAction; labelKey: MessageKey }[] = [
   { action: "rated_not_useful", labelKey: "suggestion.rateNotUseful" },
 ];
 
-export function SuggestionCard({
-  suggestion,
-  onAction,
-  onDecision,
-  onPickFocus,
-  actionPending = false,
-  decisionPending = false,
-}: {
+type InteractiveSuggestionCardProps = {
+  mode?: "interactive";
   suggestion: TrainingSuggestion;
   onAction: (action: SuggestionAction) => void;
   onDecision: (proposalId: string, decision: AdvancementDecision) => void;
   onPickFocus: () => void;
   actionPending?: boolean;
   decisionPending?: boolean;
-}) {
+};
+
+type PreviewSuggestionCardProps = {
+  mode: "preview";
+  suggestion: TrainingSuggestion;
+};
+
+export type SuggestionCardProps = InteractiveSuggestionCardProps | PreviewSuggestionCardProps;
+
+export function SuggestionCard(props: SuggestionCardProps) {
   const { t } = useI18n();
+  const { suggestion } = props;
 
   if (suggestion.safety) return <SafetyNotice safety={suggestion.safety} />;
 
@@ -46,9 +50,11 @@ export function SuggestionCard({
       <section className="space-y-3 rounded border border-silver bg-white p-4">
         <h2 className="font-semibold text-slate">{t("suggestion.needsFocusTitle")}</h2>
         <p className="text-sm text-slate-soft">{t("suggestion.needsFocusBody")}</p>
-        <Button type="button" onClick={onPickFocus}>
-          {t("suggestion.needsFocusCta")}
-        </Button>
+        {props.mode !== "preview" && (
+          <Button type="button" onClick={props.onPickFocus}>
+            {t("suggestion.needsFocusCta")}
+          </Button>
+        )}
       </section>
     );
   }
@@ -117,30 +123,34 @@ export function SuggestionCard({
             })}
       </p>
 
-      <div className="flex flex-wrap gap-2">
-        {ACTIONS.map((entry) => (
-          <Button
-            key={entry.action}
-            type="button"
-            variant={entry.action === "started" ? "default" : "outline"}
-            disabled={!suggestion.suggestionId || actionPending}
-            onClick={() => onAction(entry.action)}
-          >
-            {t(entry.labelKey)}
-          </Button>
-        ))}
-        <Button type="button" variant="outline" onClick={onPickFocus}>
-          {t("suggestion.changeFocus")}
-        </Button>
-      </div>
+      {props.mode !== "preview" && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {ACTIONS.map((entry) => (
+              <Button
+                key={entry.action}
+                type="button"
+                variant={entry.action === "started" ? "default" : "outline"}
+                disabled={!suggestion.suggestionId || props.actionPending}
+                onClick={() => props.onAction(entry.action)}
+              >
+                {t(entry.labelKey)}
+              </Button>
+            ))}
+            <Button type="button" variant="outline" onClick={props.onPickFocus}>
+              {t("suggestion.changeFocus")}
+            </Button>
+          </div>
 
-      {suggestion.advancementProposal?.status === "proposed" && skill && (
-        <AdvancementProposalCard
-          proposal={suggestion.advancementProposal}
-          skillName={skill.name}
-          onDecision={onDecision}
-          pending={decisionPending}
-        />
+          {suggestion.advancementProposal?.status === "proposed" && skill && (
+            <AdvancementProposalCard
+              proposal={suggestion.advancementProposal}
+              skillName={skill.name}
+              onDecision={props.onDecision}
+              pending={props.decisionPending}
+            />
+          )}
+        </>
       )}
     </section>
   );

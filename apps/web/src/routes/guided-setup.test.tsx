@@ -2,7 +2,7 @@ import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { GuidedSetupRecord, GuidedSetupStatus } from "@turingcare/shared";
+import type { GuidedSetupRecord, GuidedSetupStatus, TrainingSuggestion } from "@turingcare/shared";
 import { StrictMode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   start: vi.fn(),
   saveIntent: vi.fn(),
   completeBehavior: vi.fn(),
+  completeTraining: vi.fn(),
   completeProgress: vi.fn(),
   afterComplete: vi.fn(),
   onBehaviorCompleted: undefined as ((response: unknown) => void) | undefined,
@@ -54,6 +55,14 @@ vi.mock("@/lib/guided-setup", () => ({
     },
     isPending: false,
   }),
+  useCompleteTrainingSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
+    mutateAsync: async (body: unknown) => {
+      const response = await mocks.completeTraining(body);
+      options?.onCompleted?.(response);
+      return response;
+    },
+    isPending: false,
+  }),
   useSkipGuidedSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
     mutateAsync: async (body: unknown) => {
       const response = await mocks.skip(body);
@@ -68,6 +77,33 @@ vi.mock("@/lib/guided-setup", () => ({
 vi.mock("@/lib/auth-client", () => ({
   signOut: mocks.signOut,
   useSession: mocks.useSession,
+}));
+
+vi.mock("@/lib/training-catalog", () => ({
+  useTrainingCatalog: () => ({
+    data: [
+      {
+        key: "basic-manners",
+        name: "Basic Manners",
+        description: "Foundational skills",
+        skills: [],
+      },
+      {
+        key: "puppy-fundamentals",
+        name: "Puppy Fundamentals",
+        description: "Puppy skills",
+        skills: [],
+      },
+      {
+        key: "recall-reliability",
+        name: "Recall Reliability",
+        description: "Reliable recall",
+        skills: [],
+      },
+    ],
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
 import { GuidedSetupLayout } from "@/components/guided-setup/guided-setup-layout";
@@ -94,6 +130,47 @@ function record(overrides: Partial<GuidedSetupRecord> = {}): GuidedSetupRecord {
 
 function status(overrides: Partial<GuidedSetupStatus> = {}): GuidedSetupStatus {
   return { active: null, latest: null, autoStartEligible: true, ...overrides };
+}
+
+function trainingSuggestion(): TrainingSuggestion {
+  return {
+    suggestionId: "suggestion-1",
+    dismissed: false,
+    type: "exercise",
+    ruleId: "cold_start_curriculum_level",
+    curriculumVersion: "2026-08-11",
+    dogId: "dog-1",
+    weekKey: "2026-08-10",
+    skill: {
+      id: "skill-1",
+      name: "Sit",
+      catalogSkillKey: "basic-manners.sit",
+      level: 1,
+      goalId: "goal-1",
+      goalName: "Basic Manners",
+    },
+    primary: { level: 1, exercise: "Lure into a sit in a quiet room.", dimension: "cue_support" },
+    fallback: {
+      level: 1,
+      exercise: "Lure into a sit in a quiet room.",
+      reducedDimension: "cue_support",
+      sameLevelEasing: true,
+      easingStrategy: "add_cue_help",
+    },
+    requestedDimensions: ["cue_support", "environment", "distraction"],
+    evidenceCategory: "curriculum_only",
+    evidence: {
+      windowDays: 21,
+      sessionCount: 0,
+      wentWellCount: 0,
+      mixedCount: 0,
+      tooHardCount: 0,
+      distinctDayCount: 0,
+      lastPracticeAt: null,
+    },
+    safety: null,
+    advancementProposal: null,
+  };
 }
 
 function routeTree(initialEntry: string, allowNewDog: boolean) {
@@ -1965,7 +2042,7 @@ describe("GuidedSetup", () => {
     expect(screen.queryByText("Your first step was saved.")).not.toBeInTheDocument();
   });
 
-  it("keeps train skill as an accessible placeholder without a training mutation", async () => {
+  it("shows the allowlisted training templates for the train skill path", async () => {
     renderRoute(
       "/my/setup",
       status({
@@ -1974,10 +2051,87 @@ describe("GuidedSetup", () => {
       }),
     );
 
-    expect(screen.getByText("Skill training will be available here soon.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Save first step" })).not.toBeInTheDocument();
+    expect(screen.getByText("Basic Manners")).toBeInTheDocument();
+    expect(screen.getByText("Puppy Fundamentals")).toBeInTheDocument();
+    expect(screen.getByText("Recall Reliability")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save first step" })).toBeDisabled();
     expect(mocks.completeBehavior).not.toHaveBeenCalled();
     expect(mocks.completeProgress).not.toHaveBeenCalled();
+  });
+
+  it("captures a training completion suggestion before invalidation and renders a preview only", async () => {
+    const user = userEvent.setup();
+    const suggestion = trainingSuggestion();
+    mocks.completeTraining.mockResolvedValue({
+      setup: record({
+        currentStep: "action",
+        intent: "train_skill",
+        completedAt: "2026-08-16T01:00:00Z",
+        completionReason: "first_action_completed",
+        firstActionType: "training",
+        firstActionId: "goal-1",
+      }),
+      goal: { id: "goal-1" },
+      skills: [],
+      focus: null,
+      suggestion,
+      actionDeleted: false,
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "train_skill" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("radio", { name: /Basic Manners/ }));
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    await waitFor(() => expect(screen.getByText("Your first step was saved.")).toBeInTheDocument());
+    expect(screen.getAllByText("Lure into a sit in a quiet room.")).toHaveLength(2);
+    expect(screen.queryByText("We did this")).not.toBeInTheDocument();
+    expect(screen.queryByText("Choose a different focus")).not.toBeInTheDocument();
+    expect(mocks.completeTraining).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a safe tombstone for a deleted training completion", async () => {
+    const user = userEvent.setup();
+    mocks.completeTraining.mockResolvedValue({
+      setup: record({
+        dogId: null,
+        dogName: null,
+        currentStep: "action",
+        intent: "train_skill",
+        completedAt: "2026-08-16T01:00:00Z",
+        completionReason: "first_action_completed",
+        firstActionType: "training",
+        firstActionId: "goal-1",
+      }),
+      goal: null,
+      skills: [],
+      focus: null,
+      suggestion: null,
+      actionDeleted: true,
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "train_skill" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("radio", { name: /Basic Manners/ }));
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Your first-step record is no longer available."),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("Lure into a sit in a quiet room.")).not.toBeInTheDocument();
+    expect(screen.queryByText("We did this")).not.toBeInTheDocument();
   });
 
   it("skips train skill with the exact setup id and enters completion", async () => {
@@ -2000,12 +2154,10 @@ describe("GuidedSetup", () => {
 
     await waitFor(() => expect(mocks.skip).toHaveBeenCalledWith({ setupId }));
     expect(screen.getByText("You skipped your first step.")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Skill training will be available here soon."),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Basic Manners")).not.toBeInTheDocument();
   });
 
-  it("keeps train skill placeholder and shows a localized skip error when skip is rejected", async () => {
+  it("keeps training options and shows a localized skip error when skip is rejected", async () => {
     const user = userEvent.setup();
     mocks.skip.mockRejectedValue(new Error("skip_failed"));
     renderRoute(
@@ -2023,7 +2175,7 @@ describe("GuidedSetup", () => {
         "Couldn't skip this step. Please try again.",
       ),
     );
-    expect(screen.getByText("Skill training will be available here soon.")).toBeInTheDocument();
+    expect(screen.getByText("Basic Manners")).toBeInTheDocument();
     expect(screen.queryByText("You skipped your first step.")).not.toBeInTheDocument();
     expect(mocks.skip).toHaveBeenCalledWith({ setupId });
   });
@@ -2106,6 +2258,35 @@ describe("GuidedSetup", () => {
         screen.getByRole("heading", { name: /Da el primer paso para entender su conducta/i }),
       ).toBeInTheDocument();
       expect(screen.getByLabelText("¿Qué conducta quieres entender?")).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(navigator, "languages", {
+        configurable: true,
+        value: languages,
+      });
+    }
+  });
+
+  it("renders Spanish training action copy", () => {
+    const languages = navigator.languages;
+    try {
+      Object.defineProperty(navigator, "languages", {
+        configurable: true,
+        value: ["es-MX"],
+      });
+      renderRoute(
+        "/my/setup",
+        status({
+          active: record({ currentStep: "action", intent: "train_skill" }),
+          autoStartEligible: false,
+        }),
+      );
+
+      expect(
+        screen.getByRole("heading", {
+          name: /Da el primer paso para entrenar una habilidad/i,
+        }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Elige una plantilla de entrenamiento")).toBeInTheDocument();
     } finally {
       Object.defineProperty(navigator, "languages", {
         configurable: true,

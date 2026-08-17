@@ -503,6 +503,47 @@ describe("guided setup hooks", () => {
     ).rejects.toThrow("historical_suggestion_unavailable");
   });
 
+  it("calls the training completion callback before invalidating caches", async () => {
+    const response = {
+      setup: setupRecord(),
+      goal: { id: "goal-1" },
+      skills: [],
+      focus: null,
+      suggestion: { suggestionId: "suggestion-1" },
+      actionDeleted: false,
+    };
+    completeTraining.mockResolvedValue({
+      ok: true,
+      json: async () => response,
+    });
+    const queryClient = makeQueryClient();
+    let releaseInvalidation!: () => void;
+    const invalidation = new Promise<void>((resolve) => {
+      releaseInvalidation = () => resolve();
+    });
+    vi.spyOn(queryClient, "invalidateQueries").mockImplementation(() => invalidation);
+    const onCompleted = vi.fn();
+    const { result } = renderHook(() => useCompleteTrainingSetup({ onCompleted }), {
+      wrapper: makeWrapper(queryClient),
+    });
+
+    let mutationPromise!: Promise<unknown>;
+    await act(async () => {
+      mutationPromise = result.current.mutateAsync({
+        setupId,
+        templateKey: "puppy-fundamentals",
+        weekKey,
+        timezoneOffsetMinutes: 420,
+      });
+    });
+    await waitFor(() => expect(onCompleted).toHaveBeenCalledWith(response));
+
+    releaseInvalidation();
+    await act(async () => {
+      await mutationPromise;
+    });
+  });
+
   it("calls action completion callbacks before waiting for cache invalidation", async () => {
     const response = {
       setup: setupRecord(),

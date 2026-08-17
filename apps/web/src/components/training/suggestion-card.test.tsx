@@ -245,4 +245,93 @@ describe("SuggestionCard", () => {
     expect(screen.getByText("Yes, move up")).toBeDisabled();
     expect(screen.getByText("Stay at this step")).toBeDisabled();
   });
+
+  it("previews authored exercises without interactive controls", () => {
+    render(
+      <LocaleProvider>
+        <SuggestionCard mode="preview" suggestion={advancementSuggestion} />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getAllByText("Lure into a sit in a quiet room.")).toHaveLength(2);
+    expect(screen.queryByText("We did this")).not.toBeInTheDocument();
+    expect(screen.queryByText("Choose a different focus")).not.toBeInTheDocument();
+    expect(screen.queryByText("Yes, move up")).not.toBeInTheDocument();
+    expect(screen.queryByText("Stay at this step")).not.toBeInTheDocument();
+  });
+
+  it("does not fabricate exercise content for malformed preview payloads", () => {
+    render(
+      <LocaleProvider>
+        <SuggestionCard
+          mode="preview"
+          suggestion={{ ...baseSuggestion, type: "exercise", primary: null, fallback: null }}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(screen.queryByText("Lure into a sit in a quiet room.")).not.toBeInTheDocument();
+    expect(screen.queryByText("We did this")).not.toBeInTheDocument();
+  });
+
+  it("preserves the safety notice and suppresses exercise text in preview mode", () => {
+    render(
+      <LocaleProvider>
+        <SuggestionCard
+          mode="preview"
+          suggestion={{
+            ...baseSuggestion,
+            type: "safety_suppressed",
+            ruleId: null,
+            primary: null,
+            fallback: null,
+            safety: {
+              suppressed: true,
+              ruleId: "reported_injury_or_pain",
+              referral: "veterinarian",
+            },
+          }}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByRole("alert")).toHaveAccessibleName("Let's pause training suggestions");
+    expect(screen.queryByText("Lure into a sit in a quiet room.")).not.toBeInTheDocument();
+    expect(screen.queryByText("We did this")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["dismissed", { ...baseSuggestion, dismissed: true }],
+    [
+      "needs focus",
+      {
+        ...baseSuggestion,
+        type: "needs_focus_skill" as const,
+        ruleId: "needs_focus_skill" as const,
+        skill: null,
+        primary: null,
+        fallback: null,
+        evidenceCategory: null,
+      },
+    ],
+    [
+      "custom",
+      {
+        ...baseSuggestion,
+        type: "custom_skill_unsupported" as const,
+        ruleId: "custom_skill_unsupported" as const,
+        primary: null,
+        fallback: null,
+        evidenceCategory: null,
+      },
+    ],
+  ])("does not show exercise fallback for %s preview states", (_label, suggestion) => {
+    render(
+      <LocaleProvider>
+        <SuggestionCard mode="preview" suggestion={suggestion} />
+      </LocaleProvider>,
+    );
+
+    expect(screen.queryByText("Lure into a sit in a quiet room.")).not.toBeInTheDocument();
+  });
 });

@@ -26,6 +26,10 @@ export type GuidedProgressActionResponse = InferResponseType<
   typeof guidedSetup.action.progress.$post,
   200 | 201
 >;
+export type GuidedTrainingActionResponse = InferResponseType<
+  typeof guidedSetup.action.training.$post,
+  200 | 201
+>;
 export type GuidedSkipResponse = InferResponseType<typeof guidedSetup.skip.$post, 200>;
 
 type CompletionCallback<T> = {
@@ -153,7 +157,9 @@ export function useCompleteBehaviorSetup(
   });
 }
 
-export function useCompleteTrainingSetup() {
+export function useCompleteTrainingSetup(
+  options: CompletionCallback<GuidedTrainingActionResponse> = {},
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: GuidedSetupTrainingAction) =>
@@ -161,8 +167,10 @@ export function useCompleteTrainingSetup() {
         await guidedSetup.action.training.$post({ json: body }),
         "training_failed",
       ),
-    onSuccess: (response, variables) =>
-      invalidateActionCaches(queryClient, response.setup.dogId, variables.weekKey),
+    onSuccess: (response, variables) => {
+      options.onCompleted?.(response);
+      return invalidateActionCaches(queryClient, response.setup.dogId, variables.weekKey);
+    },
   });
 }
 
