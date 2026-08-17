@@ -193,7 +193,6 @@ async function finalizeUnderSafetyLock(input: {
   weekKey: string;
   auditDay: string;
   now: Date;
-  emitTelemetry?: boolean;
   build: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<TrainingSuggestion>;
 }): Promise<TrainingSuggestion> {
   // A plain `let` would be narrowed to `null`; the holder remains readable from `catch`.
@@ -222,7 +221,7 @@ async function finalizeUnderSafetyLock(input: {
       },
     );
     // The audit transaction committed, so telemetry cannot affect it.
-    if (inserted && input.emitTelemetry !== false) {
+    if (inserted) {
       await emitAfterCommit(input.userId, suggestion);
     }
     return suggestion;
@@ -245,7 +244,6 @@ export async function loadSuggestion(input: {
   weekKey: string;
   timezoneOffsetMinutes: number;
   now?: Date;
-  emitTelemetry?: boolean;
 }): Promise<TrainingSuggestion> {
   const now = input.now ?? new Date();
   const auditDay = new Date(now.getTime() - input.timezoneOffsetMinutes * 60_000)
@@ -300,7 +298,6 @@ export async function loadSuggestion(input: {
       weekKey: input.weekKey,
       auditDay,
       now,
-      emitTelemetry: input.emitTelemetry,
       build: (decision, tx) => buildSuppressed(decision ?? safety, tx),
     });
   }
@@ -351,7 +348,6 @@ export async function loadSuggestion(input: {
       weekKey: input.weekKey,
       auditDay,
       now,
-      emitTelemetry: input.emitTelemetry,
       build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : unsupported),
     });
   }
@@ -368,7 +364,7 @@ export async function loadSuggestion(input: {
         evidence.advancementRows,
       )
     : { proposal: null, created: false };
-  if (advancement.proposal && advancement.created && input.emitTelemetry !== false) {
+  if (advancement.proposal && advancement.created) {
     await recordEvent("training.advancement_proposed", {
       userId: input.userId,
       props: {
@@ -404,7 +400,6 @@ export async function loadSuggestion(input: {
     weekKey: input.weekKey,
     auditDay,
     now,
-    emitTelemetry: input.emitTelemetry,
     build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : suggestion),
   });
 }

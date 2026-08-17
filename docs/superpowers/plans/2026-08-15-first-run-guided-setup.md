@@ -848,13 +848,13 @@ Also assert:
 - telemetry props contain action type and intent but no prose.
 - a deleted concern replay returns `200` with `{ concern: null, actionDeleted: true }`
   after the normal owner concern-delete route, without a duplicate concern or
-  replay telemetry;
+  setup/domain mutation telemetry;
 - a deleted journal replay returns `200` with `{ entry: null, actionDeleted: true }`
   after the normal owner journal-delete route, without a duplicate entry or
-  replay telemetry;
+  setup/domain mutation telemetry;
 - deleting a completed action's dog cascades its domain row, preserves completed
   setup history with `dogId` and `dogName` set to `null`, and returns the same
-  tombstone contract on replay without telemetry.
+  tombstone contract on replay without setup/domain mutation telemetry.
 
 - [ ] **Step 2: Run the action tests**
 
@@ -916,8 +916,9 @@ uses a discriminated shape:
 When a completed setup's `firstActionType` and completion reason match the
 endpoint but the referenced concern or journal row is gone, return the deleted
 tombstone with `200`. Do not snapshot or recreate the deleted row, include its
-prose, or emit telemetry on replay. Skipped, abandoned, and different-action
-replays remain `409`. Future hooks and UI must check `actionDeleted` before
+prose, or emit setup/domain mutation telemetry on replay. Normal suggestion-view
+telemetry remains deduped for live training replays. Skipped, abandoned, and
+different-action replays remain `409`. Future hooks and UI must check `actionDeleted` before
 rendering `concern` or `entry`.
 
 - [ ] **Step 4: Implement both action routes**
@@ -949,8 +950,9 @@ Inside one transaction:
 
 For a completed setup, resolve the saved action row before deciding the replay
 status. A present row returns `actionDeleted: false`; a missing row returns the
-matching `actionDeleted: true` tombstone and no telemetry. Keep the existing
-owner-scoped setup lookup and advisory-lock ordering unchanged.
+matching `actionDeleted: true` tombstone without setup/domain mutation telemetry.
+Normal suggestion-view telemetry remains deduped for live training replays. Keep
+the existing owner-scoped setup lookup and advisory-lock ordering unchanged.
 
 For progress, call:
 
@@ -1022,7 +1024,8 @@ Add tests for:
 - cross-owner state cannot be addressed.
 - a deleted goal or completed dog returns the `200` training tombstone
   `{ setup, goal: null, skills: [], focus: null, suggestion: null, actionDeleted: true }`
-  without recreating rows or emitting replay telemetry; a live goal remains
+  without recreating rows or emitting setup/domain mutation telemetry; normal
+  suggestion-view telemetry remains deduped on live replays; a live goal remains
   available when its skills or requested-week focus are later removed or
   changed, with `focus` nullable in the available response;
 - stale retries use the original completed setup rather than a newer active setup;

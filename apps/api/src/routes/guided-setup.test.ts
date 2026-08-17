@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const behaviorConcernWriteControl = vi.hoisted(() => ({ fail: false }));
 const suggestionLoadControl = vi.hoisted(() => ({
-  pauseGuidedLoad: false,
-  guidedLoadHold: Promise.resolve(),
-  markGuidedLoadStarted: undefined as (() => void) | undefined,
-  releaseGuidedLoad: undefined as (() => void) | undefined,
+  pauseLoad: false,
+  loadHold: Promise.resolve(),
+  markLoadStarted: undefined as (() => void) | undefined,
+  releaseLoad: undefined as (() => void) | undefined,
 }));
 
 vi.mock("../lib/behavior-concern-writes", async (importOriginal) => {
@@ -33,10 +33,10 @@ vi.mock("../lib/suggestion", async (importOriginal) => {
     loadSuggestion: async (
       input: Parameters<typeof actual.loadSuggestion>[0],
     ): ReturnType<typeof actual.loadSuggestion> => {
-      if (suggestionLoadControl.pauseGuidedLoad && input.emitTelemetry === true) {
-        suggestionLoadControl.pauseGuidedLoad = false;
-        suggestionLoadControl.markGuidedLoadStarted?.();
-        await suggestionLoadControl.guidedLoadHold;
+      if (suggestionLoadControl.pauseLoad) {
+        suggestionLoadControl.pauseLoad = false;
+        suggestionLoadControl.markLoadStarted?.();
+        await suggestionLoadControl.loadHold;
       }
       return actual.loadSuggestion(input);
     },
@@ -279,25 +279,25 @@ async function suggestionTelemetryEvents(userId: string) {
     .orderBy(asc(events.createdAt));
 }
 
-function pauseGuidedSuggestionLoad() {
+function pauseSuggestionLoad() {
   let releaseHold: () => void = () => {};
-  suggestionLoadControl.guidedLoadHold = new Promise<void>((resolve) => {
+  suggestionLoadControl.loadHold = new Promise<void>((resolve) => {
     releaseHold = resolve;
   });
-  const guidedLoadStarted = new Promise<void>((resolve) => {
-    suggestionLoadControl.markGuidedLoadStarted = resolve;
+  const loadStarted = new Promise<void>((resolve) => {
+    suggestionLoadControl.markLoadStarted = resolve;
   });
-  suggestionLoadControl.pauseGuidedLoad = true;
+  suggestionLoadControl.pauseLoad = true;
   let released = false;
   const release = () => {
     if (released) return;
     released = true;
-    suggestionLoadControl.markGuidedLoadStarted = undefined;
-    suggestionLoadControl.releaseGuidedLoad = undefined;
+    suggestionLoadControl.markLoadStarted = undefined;
+    suggestionLoadControl.releaseLoad = undefined;
     releaseHold();
   };
-  suggestionLoadControl.releaseGuidedLoad = release;
-  return { guidedLoadStarted, release };
+  suggestionLoadControl.releaseLoad = release;
+  return { loadStarted, release };
 }
 
 async function waitForTrainingGoalLockWaiter() {
@@ -323,8 +323,8 @@ describe("guided setup lifecycle", () => {
 
   afterEach(async () => {
     behaviorConcernWriteControl.fail = false;
-    suggestionLoadControl.pauseGuidedLoad = false;
-    suggestionLoadControl.releaseGuidedLoad?.();
+    suggestionLoadControl.pauseLoad = false;
+    suggestionLoadControl.releaseLoad?.();
     for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
   });
 
@@ -1400,6 +1400,35 @@ describe("guided setup lifecycle", () => {
     expect(JSON.stringify(await trainingActionEvents(user.userId))).not.toContain(validDog.name);
   });
 
+  it("does not duplicate suggestion telemetry on an immediate training replay", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const input = {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+
+    const created = await createTrainingAction(user, input);
+    expect(created.status).toBe(201);
+    const replay = await createTrainingAction(user, {
+      ...input,
+      templateKey: "basic-manners",
+    });
+    expect(replay.status).toBe(200);
+
+    expect(
+      (await suggestionTelemetryEvents(user.userId)).filter(
+        ({ name }) => name === "training.suggestion_shown",
+      ),
+    ).toHaveLength(1);
+  });
+
   it("rejects an invalid training template without writing or completing the setup", async () => {
     const user = await createTestUser();
     users.push(user);
@@ -1562,11 +1591,11 @@ describe("guided setup lifecycle", () => {
       weekKey: currentWeekKey(new Date(), 0),
       timezoneOffsetMinutes: 0,
     };
-    const guidedLoad = pauseGuidedSuggestionLoad();
+    const guidedLoad = pauseSuggestionLoad();
     const guidedCreate = createTrainingAction(user, input);
 
     try {
-      await guidedLoad.guidedLoadStarted;
+      await guidedLoad.loadStarted;
       const normalSuggestion = await app.request(
         `/api/dogs/${setup.dogId}/suggestion?weekKey=${input.weekKey}&timezoneOffsetMinutes=0`,
         { headers: user.authHeaders },
@@ -1592,6 +1621,51 @@ describe("guided setup lifecycle", () => {
     } finally {
       guidedLoad.release();
       await guidedCreate.catch(() => undefined);
+    }
+  });
+
+  it("does not duplicate suggestion telemetry when guided creation wins the audit before normal loading", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const input = {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    };
+    const normalLoad = pauseSuggestionLoad();
+    const normalGet = Promise.resolve(
+      app.request(
+        `/api/dogs/${setup.dogId}/suggestion?weekKey=${input.weekKey}&timezoneOffsetMinutes=0`,
+        { headers: user.authHeaders },
+      ),
+    );
+
+    try {
+      await normalLoad.loadStarted;
+      const guidedCreate = await createTrainingAction(user, input);
+      expect(guidedCreate.status).toBe(201);
+      expect(
+        (await suggestionTelemetryEvents(user.userId)).filter(
+          ({ name }) => name === "training.suggestion_shown",
+        ),
+      ).toHaveLength(1);
+
+      normalLoad.release();
+      const normalResponse = await normalGet;
+      expect(normalResponse.status).toBe(200);
+      expect(
+        (await suggestionTelemetryEvents(user.userId)).filter(
+          ({ name }) => name === "training.suggestion_shown",
+        ),
+      ).toHaveLength(1);
+    } finally {
+      normalLoad.release();
+      await normalGet.catch(() => undefined);
     }
   });
 
@@ -1709,6 +1783,11 @@ describe("guided setup lifecycle", () => {
       goal: { id: string };
       skills: Array<{ id: string }>;
     };
+    expect(
+      (await suggestionTelemetryEvents(user.userId)).filter(
+        ({ name }) => name === "training.suggestion_shown",
+      ),
+    ).toHaveLength(1);
     const replacementSkill = createdBody.skills[1];
     if (!replacementSkill) throw new Error("training template did not create a replacement skill");
 
@@ -1743,6 +1822,32 @@ describe("guided setup lifecycle", () => {
       skills: createdBody.skills.length,
       focus: 1,
     });
+    expect(
+      (await suggestionTelemetryEvents(user.userId)).filter(
+        ({ name }) => name === "training.suggestion_shown",
+      ),
+    ).toHaveLength(2);
+
+    const normalSuggestion = await app.request(
+      `/api/dogs/${setup.dogId}/suggestion?weekKey=${input.weekKey}&timezoneOffsetMinutes=0`,
+      { headers: user.authHeaders },
+    );
+    expect(normalSuggestion.status).toBe(200);
+    expect(
+      ((await normalSuggestion.json()) as { suggestion: { skill: { id: string } | null } })
+        .suggestion,
+    ).toMatchObject({ skill: { id: replacementSkill.id } });
+
+    const replayAgain = await createTrainingAction(user, {
+      ...input,
+      templateKey: "basic-manners",
+    });
+    expect(replayAgain.status).toBe(200);
+    expect(
+      (await suggestionTelemetryEvents(user.userId)).filter(
+        ({ name }) => name === "training.suggestion_shown",
+      ),
+    ).toHaveLength(2);
   });
 
   it("replays a live training goal after an owned skill is deleted and another is renamed", async () => {
@@ -1819,7 +1924,19 @@ describe("guided setup lifecycle", () => {
       skills: createdBody.skills.length - 1,
       focus: 0,
     });
-    expect(await trainingActionEvents(user.userId)).toEqual(beforeReplayEvents);
+    expect(await trainingActionEvents(user.userId)).toEqual([
+      ...beforeReplayEvents,
+      {
+        name: "training.suggestion_shown",
+        props: {
+          suggestionType: "needs_focus_skill",
+          ruleId: "needs_focus_skill",
+          level: 0,
+          suppressed: false,
+          curriculumVersion: expect.any(String),
+        },
+      },
+    ]);
   });
 
   it("returns not found for unknown or cross-owner training setup ids without changing active setups", async () => {

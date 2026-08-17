@@ -222,8 +222,9 @@ training, the tombstone is based on the referenced goal row (including a
 cascaded dog deletion), not on missing skills or a missing/changed weekly
 focus. A live goal returns its current ordered skills, the requested week's
 focus or `null`, and a fresh suggestion. The endpoint does not persist a
-snapshot, expose deleted prose, recreate the domain row, or emit replay
-telemetry. Skipped, abandoned, and different-action replays remain `409`.
+snapshot, expose deleted prose, recreate the domain row, or emit setup/domain
+mutation telemetry. Normal suggestion-view telemetry remains deduped for live
+training replays. Skipped, abandoned, and different-action replays remain `409`.
 Future web hooks and UI must branch on `actionDeleted` before rendering a
 concern, goal/skills/focus/suggestion, or journal entry and must show only the
 setup completion state for a deleted result.
