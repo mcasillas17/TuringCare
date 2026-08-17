@@ -300,7 +300,6 @@ export const en = {
     question: "What would help most with {dog}?",
     actionTitle: "Your first step is ready",
     actionDescription: "We will help you take one small, useful action with {dog}.",
-    actionHandoff: "The action form will appear here next.",
     behaviorTitle: "Take the first step toward understanding behavior",
     behaviorDescription: "Describe one concern so you can start noticing what may be driving it.",
     behaviorConcernLabel: "What concern would you like to understand?",

@@ -303,7 +303,6 @@ export const es = {
     question: "¿Qué te ayudaría más con {dog}?",
     actionTitle: "Tu primer paso está listo",
     actionDescription: "Te ayudaremos a dar un paso pequeño y útil con {dog}.",
-    actionHandoff: "El formulario de acción aparecerá aquí próximamente.",
     behaviorTitle: "Da el primer paso para entender su conducta",
     behaviorDescription: "Describe una conducta para empezar a notar qué puede estar provocándola.",
     behaviorConcernLabel: "¿Qué conducta quieres entender?",

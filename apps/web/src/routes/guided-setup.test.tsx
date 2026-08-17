@@ -1,6 +1,6 @@
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { GuidedSetupRecord, GuidedSetupStatus } from "@turingcare/shared";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -1001,7 +1001,6 @@ describe("GuidedSetup", () => {
   });
 
   it("sends one behavior mutation for rapid duplicate submits", async () => {
-    const user = userEvent.setup();
     let resolveMutation!: (value: unknown) => void;
     mocks.completeBehavior.mockReturnValue(
       new Promise((resolve) => {
@@ -1016,15 +1015,49 @@ describe("GuidedSetup", () => {
       }),
     );
 
-    await user.type(screen.getByLabelText("What concern would you like to understand?"), "Barking");
-    const saveButton = screen.getByRole("button", { name: "Save first step" });
-    await user.click(saveButton);
-    await user.click(saveButton);
+    const concern = screen.getByLabelText("What concern would you like to understand?");
+    fireEvent.change(concern, { target: { value: "Barking" } });
+    const form = screen.getByRole("button", { name: "Save first step" }).closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
+    fireEvent.submit(form as HTMLFormElement);
 
-    expect(mocks.completeBehavior).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mocks.completeBehavior).toHaveBeenCalledTimes(1));
     resolveMutation({
       setup: record({ completedAt: "2026-08-16T01:00:00Z" }),
       concern: { id: "concern-1" },
+      actionDeleted: false,
+    });
+    await waitFor(() => expect(screen.getByText("Your first step was saved.")).toBeInTheDocument());
+  });
+
+  it("sends one progress mutation for rapid duplicate submits", async () => {
+    let resolveMutation!: (value: unknown) => void;
+    mocks.completeProgress.mockReturnValue(
+      new Promise((resolve) => {
+        resolveMutation = resolve;
+      }),
+    );
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "track_progress" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: "Better" }));
+    const note = screen.getByRole("textbox", { name: "Short note" });
+    fireEvent.change(note, { target: { value: "Settled faster." } });
+    const form = screen.getByRole("button", { name: "Save first step" }).closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
+    fireEvent.submit(form as HTMLFormElement);
+
+    await waitFor(() => expect(mocks.completeProgress).toHaveBeenCalledTimes(1));
+    resolveMutation({
+      setup: record({ completedAt: "2026-08-16T01:00:00Z" }),
+      entry: { id: "entry-1" },
       actionDeleted: false,
     });
     await waitFor(() => expect(screen.getByText("Your first step was saved.")).toBeInTheDocument());
@@ -1162,6 +1195,68 @@ describe("GuidedSetup", () => {
     expect(screen.queryByText("overview destination")).not.toBeInTheDocument();
   });
 
+  it("keeps behavior values and shows a localized skip error when skip is rejected", async () => {
+    const user = userEvent.setup();
+    mocks.skip.mockRejectedValue(new Error("skip_failed"));
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    const concern = screen.getByLabelText("What concern would you like to understand?");
+    await user.type(concern, "Barking at visitors");
+    const severity = screen.getByRole("combobox", { name: "Severity" });
+    await user.selectOptions(severity, "moderate");
+    await user.click(screen.getByRole("button", { name: "Skip this step" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Couldn't skip this step. Please try again.",
+      ),
+    );
+    expect(
+      screen.getByRole("heading", { name: /Take the first step toward understanding/i }),
+    ).toBeInTheDocument();
+    expect(concern).toHaveValue("Barking at visitors");
+    expect(severity).toHaveValue("moderate");
+    expect(screen.queryByText("You skipped your first step.")).not.toBeInTheDocument();
+    expect(mocks.skip).toHaveBeenCalledWith({ setupId });
+  });
+
+  it("keeps progress values and shows a localized skip error when skip is rejected", async () => {
+    const user = userEvent.setup();
+    mocks.skip.mockRejectedValue(new Error("skip_failed"));
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "track_progress" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    const better = screen.getByRole("radio", { name: "Better" });
+    await user.click(better);
+    const note = screen.getByRole("textbox", { name: "Short note" });
+    await user.type(note, "Settled faster.");
+    await user.click(screen.getByRole("button", { name: "Skip this step" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Couldn't skip this step. Please try again.",
+      ),
+    );
+    expect(
+      screen.getByRole("heading", { name: /Take the first step toward tracking progress/i }),
+    ).toBeInTheDocument();
+    expect(better).toBeChecked();
+    expect(note).toHaveValue("Settled faster.");
+    expect(screen.queryByText("You skipped your first step.")).not.toBeInTheDocument();
+    expect(mocks.skip).toHaveBeenCalledWith({ setupId });
+  });
+
   it("renders a safe tombstone completion without claiming the deleted action was saved", async () => {
     const user = userEvent.setup();
     mocks.completeBehavior.mockResolvedValue({
@@ -1206,6 +1301,54 @@ describe("GuidedSetup", () => {
     expect(mocks.completeProgress).not.toHaveBeenCalled();
   });
 
+  it("skips train skill with the exact setup id and enters completion", async () => {
+    const user = userEvent.setup();
+    mocks.skip.mockResolvedValue({
+      setup: record({
+        completedAt: "2026-08-16T01:00:00Z",
+        completionReason: "skipped",
+      }),
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "train_skill" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Skip this step" }));
+
+    await waitFor(() => expect(mocks.skip).toHaveBeenCalledWith({ setupId }));
+    expect(screen.getByText("You skipped your first step.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Skill training will be available here soon."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps train skill placeholder and shows a localized skip error when skip is rejected", async () => {
+    const user = userEvent.setup();
+    mocks.skip.mockRejectedValue(new Error("skip_failed"));
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "train_skill" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Skip this step" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Couldn't skip this step. Please try again.",
+      ),
+    );
+    expect(screen.getByText("Skill training will be available here soon.")).toBeInTheDocument();
+    expect(screen.queryByText("You skipped your first step.")).not.toBeInTheDocument();
+    expect(mocks.skip).toHaveBeenCalledWith({ setupId });
+  });
+
   it("renders Spanish behavior action copy", () => {
     const languages = navigator.languages;
     try {
@@ -1225,6 +1368,36 @@ describe("GuidedSetup", () => {
         screen.getByRole("heading", { name: /Da el primer paso para entender su conducta/i }),
       ).toBeInTheDocument();
       expect(screen.getByLabelText("¿Qué conducta quieres entender?")).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(navigator, "languages", {
+        configurable: true,
+        value: languages,
+      });
+    }
+  });
+
+  it("renders Spanish progress action copy", () => {
+    const languages = navigator.languages;
+    try {
+      Object.defineProperty(navigator, "languages", {
+        configurable: true,
+        value: ["es-MX"],
+      });
+      renderRoute(
+        "/my/setup",
+        status({
+          active: record({ currentStep: "action", intent: "track_progress" }),
+          autoStartEligible: false,
+        }),
+      );
+
+      expect(
+        screen.getByRole("heading", {
+          name: /Da el primer paso para dar seguimiento al progreso/i,
+        }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("¿Cómo va todo?")).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: "Mejor" })).toBeInTheDocument();
     } finally {
       Object.defineProperty(navigator, "languages", {
         configurable: true,
