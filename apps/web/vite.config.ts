@@ -3,7 +3,8 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-const API = "http://localhost:3001";
+const API =
+  process.env.VITE_API_PROXY_TARGET ?? process.env.VITE_API_URL ?? "http://localhost:3001";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],

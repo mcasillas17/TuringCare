@@ -7,6 +7,7 @@ import { type APIRequestContext, type Page, expect, test } from "@playwright/tes
  */
 
 const PASSWORD = "Maple2024!xQ"; // satisfies min-8 + mixed-case + digit + special
+const API_BASE_URL = process.env.PLAYWRIGHT_API_BASE_URL ?? "http://localhost:3311";
 
 function makeEmail(project: string): string {
   const ts = Date.now();
@@ -15,12 +16,13 @@ function makeEmail(project: string): string {
 }
 
 async function verifyEmail(page: Page, request: APIRequestContext, email: string) {
-  const outboxUrl = `http://127.0.0.1:3001/api/test/emails/latest?to=${encodeURIComponent(email)}`;
+  const outboxUrl = new URL("/api/test/emails/latest", API_BASE_URL);
+  outboxUrl.searchParams.set("to", email);
   let emailBody = "";
   await expect
     .poll(
       async () => {
-        const res = await request.get(outboxUrl);
+        const res = await request.get(outboxUrl.toString());
         if (res.status() !== 200) return null;
         const json = (await res.json()) as { email: { text?: string; html?: string } };
         emailBody = json.email.text ?? json.email.html ?? "";
@@ -252,6 +254,6 @@ test("[phone] guided training setup resumes after reload", async ({ page, reques
 
   await completion.getByRole("link", { name: "Continue to This Week" }).click();
   await expect(page).toHaveURL(/\/my\/dogs\/[^/]+\/week$/, { timeout: 10_000 });
-  await expect(page.getByRole("heading", { name: "This Week", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "This week", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Juniper", exact: true })).toBeVisible();
 });
