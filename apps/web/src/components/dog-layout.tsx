@@ -9,25 +9,24 @@ type DeleteRequest = {
   token: number;
   dogId: string;
   pathname: string;
-  locationKey: string;
   lifecycle: symbol;
 };
 
 export function DogLayout() {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const { pathname, key: locationKey } = useLocation();
+  const { pathname } = useLocation();
   const { id = "" } = useParams();
   const { data, isLoading, isError } = useDog(id);
   const del = useDeleteDog();
   const [confirming, setConfirming] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const routeRef = useRef({ dogId: id, pathname, locationKey });
+  const routeRef = useRef({ dogId: id, pathname });
   const deleteTokenRef = useRef(0);
   const deleteRequestRef = useRef<DeleteRequest | null>(null);
   const lifecycleRef = useRef<symbol | null>(null);
 
-  routeRef.current = { dogId: id, pathname, locationKey };
+  routeRef.current = { dogId: id, pathname };
 
   useEffect(() => {
     const lifecycle = Symbol();
@@ -75,8 +74,7 @@ export function DogLayout() {
       deleteRequestRef.current?.token === request.token &&
       lifecycleRef.current === request.lifecycle &&
       route.dogId === request.dogId &&
-      route.pathname === request.pathname &&
-      route.locationKey === request.locationKey
+      route.pathname === request.pathname
     );
   };
 
@@ -115,7 +113,6 @@ export function DogLayout() {
                       token: ++deleteTokenRef.current,
                       dogId: dog.id,
                       pathname,
-                      locationKey,
                       lifecycle,
                     };
                     deleteRequestRef.current = request;

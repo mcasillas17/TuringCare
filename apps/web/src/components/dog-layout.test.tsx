@@ -3,7 +3,7 @@ import * as dogsLib from "@/lib/dogs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DogLayout } from "./dog-layout";
 
@@ -46,7 +46,15 @@ function renderLayoutAt(path: string, strictMode = false) {
         <MemoryRouter initialEntries={[path]}>
           <Routes>
             <Route path="/my/dogs" element={<p>DOGS LIST</p>} />
-            <Route path="/my/dogs/:id" element={<DogLayout />}>
+            <Route
+              path="/my/dogs/:id"
+              element={
+                <>
+                  <DogLayout />
+                  <SamePathPush />
+                </>
+              }
+            >
               <Route path="journal" element={<p>JOURNAL</p>} />
               <Route path="training" element={<p>TRAINING</p>} />
               <Route path="brief" element={<p>BRIEF</p>} />
@@ -58,6 +66,16 @@ function renderLayoutAt(path: string, strictMode = false) {
     </QueryClientProvider>
   );
   return render(strictMode ? <StrictMode>{tree}</StrictMode> : tree);
+}
+
+function SamePathPush() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return (
+    <button type="button" onClick={() => navigate(location.pathname)}>
+      Push same route
+    </button>
+  );
 }
 
 function deferred<T>() {
@@ -146,12 +164,41 @@ describe("DogLayout", () => {
     expect(toastError).not.toHaveBeenCalled();
   });
 
+  it("shows a conflict after pushing the same route during deletion", async () => {
+    const pending = deferred<never>();
+    deleteDog.mockReturnValueOnce(pending.promise);
+    renderLayoutAt("/my/dogs/d1/journal");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: /push same route/i }));
+
+    pending.reject(new Error("active_guided_setup"));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.getByRole("alert")).toHaveTextContent(/guided setup/i);
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
   it("navigates to the dogs list after a successful deletion on the current route", async () => {
     renderLayoutAt("/my/dogs/d1/journal", true);
 
     fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
     fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
 
+    await waitFor(() => expect(screen.getByText("DOGS LIST")).toBeInTheDocument());
+    expect(toastSuccess).toHaveBeenCalledWith("Dog deleted");
+  });
+
+  it("keeps a successful deletion result after pushing the same route", async () => {
+    const pending = deferred<unknown>();
+    deleteDog.mockReturnValueOnce(pending.promise);
+    renderLayoutAt("/my/dogs/d1/journal");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: /push same route/i }));
+
+    pending.resolve({});
     await waitFor(() => expect(screen.getByText("DOGS LIST")).toBeInTheDocument());
     expect(toastSuccess).toHaveBeenCalledWith("Dog deleted");
   });
@@ -197,6 +244,20 @@ describe("DogLayout", () => {
     await waitFor(() => expect(screen.getByText("TRAINING")).toBeInTheDocument());
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("shows a generic error after pushing the same route during deletion", async () => {
+    const pending = deferred<never>();
+    deleteDog.mockReturnValueOnce(pending.promise);
+    renderLayoutAt("/my/dogs/d1/journal");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: /push same route/i }));
+
+    pending.reject(new Error("delete_failed"));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Save failed"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("keeps the generic error toast for unrelated deletion failures", async () => {
