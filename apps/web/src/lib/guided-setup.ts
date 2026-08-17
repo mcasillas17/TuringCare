@@ -18,6 +18,20 @@ export const guidedSetupKey = ["guided-setup"] as const;
 
 const guidedSetup = api.api["guided-setup"];
 
+export type GuidedBehaviorActionResponse = InferResponseType<
+  typeof guidedSetup.action.behavior.$post,
+  200 | 201
+>;
+export type GuidedProgressActionResponse = InferResponseType<
+  typeof guidedSetup.action.progress.$post,
+  200 | 201
+>;
+export type GuidedSkipResponse = InferResponseType<typeof guidedSetup.skip.$post, 200>;
+
+type CompletionCallback<T> = {
+  onCompleted?: (response: T) => void;
+};
+
 export function isGuidedSetupConflict(error: unknown, code: string): boolean {
   return error instanceof Error && error.message === code;
 }
@@ -114,7 +128,9 @@ export function useSaveGuidedSetupIntent() {
   });
 }
 
-export function useCompleteBehaviorSetup() {
+export function useCompleteBehaviorSetup(
+  options: CompletionCallback<GuidedBehaviorActionResponse> = {},
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: GuidedSetupBehaviorAction) =>
@@ -122,7 +138,10 @@ export function useCompleteBehaviorSetup() {
         await guidedSetup.action.behavior.$post({ json: body }),
         "behavior_failed",
       ),
-    onSuccess: (response) => invalidateActionCaches(queryClient, response.setup.dogId),
+    onSuccess: (response) => {
+      options.onCompleted?.(response);
+      return invalidateActionCaches(queryClient, response.setup.dogId);
+    },
   });
 }
 
@@ -139,7 +158,9 @@ export function useCompleteTrainingSetup() {
   });
 }
 
-export function useCompleteProgressSetup() {
+export function useCompleteProgressSetup(
+  options: CompletionCallback<GuidedProgressActionResponse> = {},
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: GuidedSetupProgressAction) =>
@@ -147,11 +168,14 @@ export function useCompleteProgressSetup() {
         await guidedSetup.action.progress.$post({ json: body }),
         "progress_failed",
       ),
-    onSuccess: (response) => invalidateActionCaches(queryClient, response.setup.dogId),
+    onSuccess: (response) => {
+      options.onCompleted?.(response);
+      return invalidateActionCaches(queryClient, response.setup.dogId);
+    },
   });
 }
 
-export function useSkipGuidedSetup() {
+export function useSkipGuidedSetup(options: CompletionCallback<GuidedSkipResponse> = {}) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (body: z.infer<typeof guidedSetupMutationSchema>) =>
@@ -159,7 +183,10 @@ export function useSkipGuidedSetup() {
         await guidedSetup.skip.$post({ json: body }),
         "skip_failed",
       ),
-    onSuccess: () => invalidateAggregateCaches(queryClient),
+    onSuccess: (response) => {
+      options.onCompleted?.(response);
+      return invalidateAggregateCaches(queryClient);
+    },
   });
 }
 

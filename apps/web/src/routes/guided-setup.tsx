@@ -1,25 +1,96 @@
 import { AbandonSetupButton } from "@/components/guided-setup/abandon-setup-button";
+import { BehaviorActionStep } from "@/components/guided-setup/behavior-action-step";
 import { DogBasicsStep } from "@/components/guided-setup/dog-basics-step";
 import { IntentStep } from "@/components/guided-setup/intent-step";
+import { ProgressActionStep } from "@/components/guided-setup/progress-action-step";
 import { SetupShell } from "@/components/guided-setup/setup-shell";
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { useGuidedSetup } from "@/lib/guided-setup";
+import {
+  type GuidedBehaviorActionResponse,
+  type GuidedProgressActionResponse,
+  type GuidedSkipResponse,
+  useGuidedSetup,
+  useSkipGuidedSetup,
+} from "@/lib/guided-setup";
 import type { GuidedSetupRecord, GuidedSetupStatus } from "@turingcare/shared";
 import { useRef, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
+
+type CompletionState =
+  | { kind: "saved"; setup: GuidedSetupRecord }
+  | { kind: "skipped"; setup: GuidedSetupRecord }
+  | { kind: "deleted"; setup: GuidedSetupRecord };
+
+function CompletionHandoff({ completion }: { completion: CompletionState }) {
+  const { t } = useI18n();
+  const message =
+    completion.kind === "saved"
+      ? t("guidedSetup.completionSaved")
+      : completion.kind === "skipped"
+        ? t("guidedSetup.completionSkipped")
+        : t("guidedSetup.completionDeleted");
+
+  return (
+    <SetupShell
+      step={3}
+      title={t("guidedSetup.completionTitle")}
+      description={t(
+        completion.setup.dogId
+          ? "guidedSetup.completionDescription"
+          : "guidedSetup.completionNoWorkspaceDescription",
+      )}
+    >
+      <output className="space-y-4 rounded border border-silver bg-white p-5 text-slate">
+        <p>{message}</p>
+        <div className="flex flex-wrap gap-3">
+          {completion.setup.dogId && (
+            <Link
+              className="rounded bg-slate px-3 py-2 text-sm text-cream"
+              to={`/my/dogs/${completion.setup.dogId}`}
+            >
+              {t("guidedSetup.openDogWorkspace", {
+                dog: completion.setup.dogName ?? "",
+              })}
+            </Link>
+          )}
+          <Link className="rounded border border-slate px-3 py-2 text-sm text-slate" to="/my">
+            {t("guidedSetup.returnToDashboard")}
+          </Link>
+        </div>
+      </output>
+    </SetupShell>
+  );
+}
 
 export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) {
   const { t } = useI18n();
   const setupQuery = useGuidedSetup();
   const lastKnownStatus = useRef<GuidedSetupStatus | undefined>(undefined);
+  const skipLock = useRef(false);
+  const completionRef = useRef<CompletionState | null>(null);
   const [startedSetup, setStartedSetup] = useState<GuidedSetupRecord | null>(null);
   const [hasStartedSetup, setHasStartedSetup] = useState(false);
+  const [completion, setCompletion] = useState<CompletionState | null>(null);
+  const [skipError, setSkipError] = useState(false);
+  const skip = useSkipGuidedSetup({
+    onCompleted: (response: GuidedSkipResponse) => {
+      const nextCompletion = { kind: "skipped" as const, setup: response.setup };
+      completionRef.current = nextCompletion;
+      setCompletion(nextCompletion);
+    },
+  });
 
   if (setupQuery.data !== undefined) {
     lastKnownStatus.current = setupQuery.data;
   }
   const usableStatus = setupQuery.data ?? lastKnownStatus.current;
   const statusUnavailable = setupQuery.isError || setupQuery.data === undefined;
+
+  const visibleCompletion = completion ?? completionRef.current;
+  if (visibleCompletion) {
+    return <CompletionHandoff completion={visibleCompletion} />;
+  }
 
   if (setupQuery.isLoading && !usableStatus) {
     return <p>{t("common.loading")}</p>;
@@ -56,6 +127,40 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
     setStartedSetup(setup);
     setHasStartedSetup(true);
   };
+  const onBack = () => {
+    if (active) {
+      setStartedSetup({ ...active, currentStep: "intent" });
+      setHasStartedSetup(true);
+    }
+  };
+  const onSkip = async () => {
+    if (skipLock.current || !active) return;
+    skipLock.current = true;
+    setSkipError(false);
+    try {
+      await skip.mutateAsync({ setupId: active.id });
+    } catch {
+      setSkipError(true);
+    } finally {
+      skipLock.current = false;
+    }
+  };
+  const onBehaviorCompleted = (response: GuidedBehaviorActionResponse) => {
+    const nextCompletion = {
+      kind: response.actionDeleted ? "deleted" : "saved",
+      setup: response.setup,
+    } as const;
+    completionRef.current = nextCompletion;
+    setCompletion(nextCompletion);
+  };
+  const onProgressCompleted = (response: GuidedProgressActionResponse) => {
+    const nextCompletion = {
+      kind: response.actionDeleted ? "deleted" : "saved",
+      setup: response.setup,
+    } as const;
+    completionRef.current = nextCompletion;
+    setCompletion(nextCompletion);
+  };
 
   return (
     <>
@@ -82,6 +187,24 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
         <DogBasicsStep onStarted={onStarted} />
       ) : active.currentStep === "intent" ? (
         <IntentStep setup={active} onSaved={onStarted} />
+      ) : active.intent === "understand_behavior" ? (
+        <BehaviorActionStep
+          setup={active}
+          onCompleted={onBehaviorCompleted}
+          onBack={onBack}
+          onSkip={() => void onSkip()}
+          skipPending={skip.isPending}
+          skipError={skipError}
+        />
+      ) : active.intent === "track_progress" ? (
+        <ProgressActionStep
+          setup={active}
+          onCompleted={onProgressCompleted}
+          onBack={onBack}
+          onSkip={() => void onSkip()}
+          skipPending={skip.isPending}
+          skipError={skipError}
+        />
       ) : (
         <SetupShell
           step={3}
@@ -90,9 +213,19 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
         >
           <div className="space-y-6">
             <section className="rounded border border-silver bg-white p-5 text-slate-soft">
-              {t("guidedSetup.actionHandoff")}
+              {t("guidedSetup.trainingPlaceholder")}
             </section>
-            <AbandonSetupButton setupId={active.id} />
+            {skipError && (
+              <p role="alert" className="text-sm text-red-600">
+                {t("guidedSetup.skipError")}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              <Button type="button" onClick={() => void onSkip()} disabled={skip.isPending}>
+                {skip.isPending ? t("guidedSetup.saving") : t("guidedSetup.skip")}
+              </Button>
+              <AbandonSetupButton setupId={active.id} />
+            </div>
           </div>
         </SetupShell>
       )}

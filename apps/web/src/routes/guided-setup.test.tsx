@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
   useGuidedSetup: vi.fn(),
   start: vi.fn(),
   saveIntent: vi.fn(),
+  completeBehavior: vi.fn(),
+  completeProgress: vi.fn(),
+  afterComplete: vi.fn(),
+  skip: vi.fn(),
   abandon: vi.fn(),
   signOut: vi.fn(),
   useSession: vi.fn(),
@@ -22,6 +26,32 @@ vi.mock("@/lib/guided-setup", () => ({
   useGuidedSetup: mocks.useGuidedSetup,
   useStartGuidedSetup: () => ({ mutateAsync: mocks.start, isPending: false }),
   useSaveGuidedSetupIntent: () => ({ mutateAsync: mocks.saveIntent, isPending: false }),
+  useCompleteBehaviorSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
+    mutateAsync: async (body: unknown) => {
+      const response = await mocks.completeBehavior(body);
+      options?.onCompleted?.(response);
+      mocks.afterComplete();
+      return response;
+    },
+    isPending: false,
+  }),
+  useCompleteProgressSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
+    mutateAsync: async (body: unknown) => {
+      const response = await mocks.completeProgress(body);
+      options?.onCompleted?.(response);
+      mocks.afterComplete();
+      return response;
+    },
+    isPending: false,
+  }),
+  useSkipGuidedSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
+    mutateAsync: async (body: unknown) => {
+      const response = await mocks.skip(body);
+      options?.onCompleted?.(response);
+      return response;
+    },
+    isPending: false,
+  }),
   useAbandonGuidedSetup: () => ({ mutateAsync: mocks.abandon, isPending: false }),
 }));
 
@@ -94,6 +124,7 @@ function renderRoute(
 
 afterEach(() => {
   vi.clearAllMocks();
+  mocks.afterComplete.mockReset();
 });
 
 describe("GuidedSetup", () => {
@@ -822,5 +853,383 @@ describe("GuidedSetup", () => {
     expect(mocks.signOut).toHaveBeenCalledTimes(1);
     expect(queryClient.getQueryData(guidedSetupKey)).toBeUndefined();
     expect(queryClient.getQueryData(["dogs"])).toBeUndefined();
+  });
+
+  it("shows the behavior action fields and submits the exact setup-bound payload", async () => {
+    const user = userEvent.setup();
+    mocks.completeBehavior.mockResolvedValue({
+      setup: record({
+        currentStep: "action",
+        intent: "understand_behavior",
+        completedAt: "2026-08-16T01:00:00Z",
+        completionReason: "first_action_completed",
+        firstActionType: "behavior",
+        firstActionId: "concern-1",
+      }),
+      concern: { id: "concern-1" },
+      actionDeleted: false,
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    expect(screen.getByLabelText("What concern would you like to understand?")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Severity" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Safety signal" })).toBeInTheDocument();
+
+    await user.type(
+      screen.getByLabelText("What concern would you like to understand?"),
+      "Barking at the window",
+    );
+    await user.selectOptions(screen.getByRole("combobox", { name: "Severity" }), "mild");
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    await waitFor(() =>
+      expect(mocks.completeBehavior).toHaveBeenCalledWith({
+        setupId,
+        concern: "Barking at the window",
+        severity: "mild",
+        safetySignal: null,
+        safetyConfirmed: false,
+      }),
+    );
+    expect(screen.getByText("Your first step was saved.")).toBeInTheDocument();
+  });
+
+  it("keeps action completion visible when refetch clears the active setup before mutation settles", async () => {
+    const user = userEvent.setup();
+    const queryState: {
+      data: GuidedSetupStatus;
+      isLoading: boolean;
+      isError: boolean;
+      refetch: ReturnType<typeof vi.fn>;
+    } = {
+      data: status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    mocks.useGuidedSetup.mockImplementation(() => queryState);
+    mocks.completeBehavior.mockResolvedValue({
+      setup: record({
+        currentStep: "action",
+        intent: "understand_behavior",
+        completedAt: "2026-08-16T01:00:00Z",
+        completionReason: "first_action_completed",
+        firstActionType: "behavior",
+        firstActionId: "concern-1",
+      }),
+      concern: { id: "concern-1" },
+      actionDeleted: false,
+    });
+    const renderResult = render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        {routeTree("/my/setup", false)}
+      </QueryClientProvider>,
+    );
+    mocks.afterComplete.mockImplementation(() => {
+      queryState.data = status({ active: null, autoStartEligible: false });
+      renderResult.rerender(
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          {routeTree("/my/setup", false)}
+        </QueryClientProvider>,
+      );
+    });
+
+    await user.type(screen.getByLabelText("What concern would you like to understand?"), "Barking");
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    await waitFor(() => expect(screen.getByText("Your first step was saved.")).toBeInTheDocument());
+    expect(screen.queryByText("overview destination")).not.toBeInTheDocument();
+  });
+
+  it("requires safety confirmation for severe behavior and selected safety signals", async () => {
+    const user = userEvent.setup();
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    const concern = screen.getByLabelText("What concern would you like to understand?");
+    const severity = screen.getByRole("combobox", { name: "Severity" });
+    const safetySignal = screen.getByRole("combobox", { name: "Safety signal" });
+    await user.type(concern, "Growling when handled");
+    await user.selectOptions(severity, "severe");
+    expect(screen.getByRole("checkbox", { name: /confirm/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Please confirm the safety information before saving.",
+    );
+    expect(mocks.completeBehavior).not.toHaveBeenCalled();
+
+    await user.selectOptions(safetySignal, "injury_or_pain");
+    expect(screen.getByRole("option", { name: "Signs of pain or injury" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /confirm/i })).toBeInTheDocument();
+  });
+
+  it("shows accessible localized behavior validation errors", async () => {
+    const user = userEvent.setup();
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    const concern = screen.getByLabelText("What concern would you like to understand?");
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    expect(concern).toHaveAttribute("aria-invalid", "true");
+    expect(concern).toHaveAttribute("aria-describedby", "guided-setup-concern-error");
+    expect(screen.getByRole("alert")).toHaveTextContent("Describe a concern before continuing.");
+  });
+
+  it("sends one behavior mutation for rapid duplicate submits", async () => {
+    const user = userEvent.setup();
+    let resolveMutation!: (value: unknown) => void;
+    mocks.completeBehavior.mockReturnValue(
+      new Promise((resolve) => {
+        resolveMutation = resolve;
+      }),
+    );
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.type(screen.getByLabelText("What concern would you like to understand?"), "Barking");
+    const saveButton = screen.getByRole("button", { name: "Save first step" });
+    await user.click(saveButton);
+    await user.click(saveButton);
+
+    expect(mocks.completeBehavior).toHaveBeenCalledTimes(1);
+    resolveMutation({
+      setup: record({ completedAt: "2026-08-16T01:00:00Z" }),
+      concern: { id: "concern-1" },
+      actionDeleted: false,
+    });
+    await waitFor(() => expect(screen.getByText("Your first step was saved.")).toBeInTheDocument());
+  });
+
+  it("retains behavior values after a rejected mutation", async () => {
+    const user = userEvent.setup();
+    mocks.completeBehavior.mockRejectedValue(new Error("behavior_failed"));
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    const concern = screen.getByLabelText("What concern would you like to understand?");
+    await user.type(concern, "Barking at visitors");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Severity" }), "moderate");
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i));
+    expect(concern).toHaveValue("Barking at visitors");
+    expect(screen.getByRole("combobox", { name: "Severity" })).toHaveValue("moderate");
+  });
+
+  it("shows progress fields and submits the exact setup-bound payload", async () => {
+    const user = userEvent.setup();
+    mocks.completeProgress.mockResolvedValue({
+      setup: record({
+        currentStep: "action",
+        intent: "track_progress",
+        completedAt: "2026-08-16T01:00:00Z",
+        completionReason: "first_action_completed",
+        firstActionType: "progress",
+        firstActionId: "entry-1",
+      }),
+      entry: { id: "entry-1" },
+      actionDeleted: false,
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "track_progress" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    const better = screen.getByRole("radio", { name: "Better" });
+    await user.click(better);
+    await user.type(screen.getByLabelText("Short note"), "Settled faster after dinner.");
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    await waitFor(() =>
+      expect(mocks.completeProgress).toHaveBeenCalledWith({
+        setupId,
+        trend: "better",
+        note: "Settled faster after dinner.",
+      }),
+    );
+    expect(screen.getByText("Your first step was saved.")).toBeInTheDocument();
+  });
+
+  it("requires a progress trend and note with accessible errors", async () => {
+    const user = userEvent.setup();
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "track_progress" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    expect(screen.getByText("Choose how things are going.")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Short note" })).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(screen.getByRole("textbox", { name: "Short note" })).toHaveAttribute(
+      "aria-describedby",
+      "guided-setup-note-error",
+    );
+    expect(mocks.completeProgress).not.toHaveBeenCalled();
+  });
+
+  it("returns to intent before completion and saves a changed intent", async () => {
+    const user = userEvent.setup();
+    mocks.saveIntent.mockResolvedValue({
+      setup: record({ currentStep: "action", intent: "track_progress" }),
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("radiogroup")).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /Track progress/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() =>
+      expect(mocks.saveIntent).toHaveBeenCalledWith({
+        setupId,
+        intent: "track_progress",
+      }),
+    );
+    expect(screen.getByRole("radio", { name: "Better" })).toBeInTheDocument();
+  });
+
+  it("skips the action with the exact setup id and keeps the completion handoff visible", async () => {
+    const user = userEvent.setup();
+    mocks.skip.mockResolvedValue({
+      setup: record({
+        completedAt: "2026-08-16T01:00:00Z",
+        completionReason: "skipped",
+      }),
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "track_progress" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Skip this step" }));
+
+    await waitFor(() => expect(mocks.skip).toHaveBeenCalledWith({ setupId }));
+    expect(screen.getByText("You skipped your first step.")).toBeInTheDocument();
+    expect(screen.queryByText("overview destination")).not.toBeInTheDocument();
+  });
+
+  it("renders a safe tombstone completion without claiming the deleted action was saved", async () => {
+    const user = userEvent.setup();
+    mocks.completeBehavior.mockResolvedValue({
+      setup: record({
+        completedAt: "2026-08-16T01:00:00Z",
+        completionReason: "first_action_completed",
+      }),
+      concern: null,
+      actionDeleted: true,
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.type(screen.getByLabelText("What concern would you like to understand?"), "Barking");
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Your first-step record is no longer available."),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("Your first step was saved.")).not.toBeInTheDocument();
+  });
+
+  it("keeps train skill as an accessible placeholder without a training mutation", async () => {
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "train_skill" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    expect(screen.getByText("Skill training will be available here soon.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save first step" })).not.toBeInTheDocument();
+    expect(mocks.completeBehavior).not.toHaveBeenCalled();
+    expect(mocks.completeProgress).not.toHaveBeenCalled();
+  });
+
+  it("renders Spanish behavior action copy", () => {
+    const languages = navigator.languages;
+    try {
+      Object.defineProperty(navigator, "languages", {
+        configurable: true,
+        value: ["es-MX"],
+      });
+      renderRoute(
+        "/my/setup",
+        status({
+          active: record({ currentStep: "action", intent: "understand_behavior" }),
+          autoStartEligible: false,
+        }),
+      );
+
+      expect(
+        screen.getByRole("heading", { name: /Da el primer paso para entender su conducta/i }),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText("¿Qué conducta quieres entender?")).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(navigator, "languages", {
+        configurable: true,
+        value: languages,
+      });
+    }
   });
 });

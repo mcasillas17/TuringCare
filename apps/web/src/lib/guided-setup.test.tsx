@@ -492,6 +492,74 @@ describe("guided setup hooks", () => {
     ).rejects.toThrow("historical_suggestion_unavailable");
   });
 
+  it("calls action completion callbacks before waiting for cache invalidation", async () => {
+    const response = {
+      setup: setupRecord(),
+      concern: { id: "concern-1" },
+      actionDeleted: false,
+    };
+    completeBehavior.mockResolvedValue({
+      ok: true,
+      json: async () => response,
+    });
+    const queryClient = makeQueryClient();
+    let releaseInvalidation!: () => void;
+    const invalidation = new Promise<void>((resolve) => {
+      releaseInvalidation = () => resolve();
+    });
+    vi.spyOn(queryClient, "invalidateQueries").mockImplementation(() => invalidation);
+    const onCompleted = vi.fn();
+    const { result } = renderHook(() => useCompleteBehaviorSetup({ onCompleted }), {
+      wrapper: makeWrapper(queryClient),
+    });
+
+    let mutationPromise!: Promise<unknown>;
+    await act(async () => {
+      mutationPromise = result.current.mutateAsync({
+        setupId,
+        concern: "Barking at the window",
+        severity: "mild",
+        safetyConfirmed: false,
+      });
+    });
+    await waitFor(() => expect(onCompleted).toHaveBeenCalledTimes(1));
+
+    expect(onCompleted).toHaveBeenCalledWith(response);
+    releaseInvalidation();
+    await act(async () => {
+      await mutationPromise;
+    });
+  });
+
+  it("calls skip completion callbacks before aggregate invalidation", async () => {
+    const response = { setup: setupRecord() };
+    skipGuidedSetup.mockResolvedValue({
+      ok: true,
+      json: async () => response,
+    });
+    const queryClient = makeQueryClient();
+    let releaseInvalidation!: () => void;
+    const invalidation = new Promise<void>((resolve) => {
+      releaseInvalidation = () => resolve();
+    });
+    vi.spyOn(queryClient, "invalidateQueries").mockImplementation(() => invalidation);
+    const onCompleted = vi.fn();
+    const { result } = renderHook(() => useSkipGuidedSetup({ onCompleted }), {
+      wrapper: makeWrapper(queryClient),
+    });
+
+    let mutationPromise!: Promise<unknown>;
+    await act(async () => {
+      mutationPromise = result.current.mutateAsync({ setupId });
+    });
+    await waitFor(() => expect(onCompleted).toHaveBeenCalledWith(response));
+
+    releaseInvalidation();
+    await act(async () => {
+      await mutationPromise;
+    });
+  });
+
   it("falls back to start_failed for a non-string mutation error body", async () => {
     startGuidedSetup.mockResolvedValue({
       ok: false,
