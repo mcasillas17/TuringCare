@@ -96,6 +96,42 @@ it("Confirm calls deleteUser, signs out, toasts success, and navigates to /", as
   expect(await screen.findByText("landing-page")).toBeInTheDocument();
 });
 
+it("finishes account deletion when sign out rejects", async () => {
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(["dogs"], [{ id: "dog-1" }]);
+  deleteUserMock.mockResolvedValue({ data: { success: true }, error: null });
+  signOutMock.mockRejectedValue(new Error("network down"));
+  render(
+    <QueryClientProvider client={queryClient}>
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/settings"]}>
+          <Routes>
+            <Route path="/my/settings" element={<DeleteAccountButton />} />
+            <Route path="/" element={<div>landing-page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </LocaleProvider>
+    </QueryClientProvider>,
+  );
+  await userEvent.click(screen.getByRole("button", { name: /delete account/i }));
+  await userEvent.type(screen.getByRole("textbox"), "delete");
+  await userEvent.click(screen.getByRole("button", { name: /i understand/i }));
+
+  await waitFor(() => expect(screen.getByText("landing-page")).toBeInTheDocument());
+  expect(queryClient.getQueryData(["dogs"])).toBeUndefined();
+  expect(toastErrorMock).toHaveBeenCalledTimes(1);
+  expect(toastErrorMock).toHaveBeenCalledWith(
+    "Couldn't complete sign out. Your local data was cleared.",
+  );
+  expect(toastSuccessMock).toHaveBeenCalledWith("Account deleted");
+  const errorCall = toastErrorMock.mock.invocationCallOrder[0];
+  const successCall = toastSuccessMock.mock.invocationCallOrder[0];
+  expect(errorCall).toBeDefined();
+  expect(successCall).toBeDefined();
+  if (errorCall === undefined || successCall === undefined) throw new Error("Missing toast call");
+  expect(errorCall).toBeLessThan(successCall);
+});
+
 it("On API failure stays expanded and toasts the error", async () => {
   deleteUserMock.mockResolvedValue({ data: null, error: { message: "nope" } });
   setup();

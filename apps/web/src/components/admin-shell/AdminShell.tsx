@@ -117,8 +117,8 @@ export function AdminShell() {
           <Button
             variant="outline"
             onClick={async () => {
-              await signOutAndNavigate();
-              toast.success(t("app.signedOut"));
+              const result = await signOutAndNavigate();
+              if (result.ok) toast.success(t("app.signedOut"));
             }}
           >
             {t("app.signOut")}

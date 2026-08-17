@@ -173,6 +173,7 @@ export const en = {
     loading: "Loading…",
     signOut: "Sign out",
     signedOut: "Signed out",
+    signOutFailed: "Couldn't complete sign out. Your local data was cleared.",
   },
   dogs: {
     listTitle: "Your dogs",

@@ -23,13 +23,21 @@ export function DeleteAccountButton() {
 
   async function onConfirm() {
     setSubmitting(true);
-    const result = await deleteUser({});
+    let result: Awaited<ReturnType<typeof deleteUser>>;
+    try {
+      result = await deleteUser({});
+    } catch {
+      setSubmitting(false);
+      toast.error(t("settings.deleteFailed"));
+      return;
+    }
     if (result?.error) {
       setSubmitting(false);
       toast.error(t("settings.deleteFailed"));
       return;
     }
     await signOutAndNavigate("/");
+    setSubmitting(false);
     toast.success(t("settings.accountDeleted"));
   }
 

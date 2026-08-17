@@ -8,12 +8,20 @@ import { AppShell } from "./AppShell";
 
 const mocks = vi.hoisted(() => ({
   signOut: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
   useSession: vi.fn(() => ({ data: null, isPending: false })),
 }));
 
 vi.mock("@/lib/auth-client", () => ({
   signOut: mocks.signOut,
   useSession: mocks.useSession,
+}));
+vi.mock("sonner", () => ({
+  toast: {
+    error: mocks.toastError,
+    success: mocks.toastSuccess,
+  },
 }));
 
 function mockMe(role: string | undefined) {
@@ -97,5 +105,41 @@ describe("AppShell", () => {
     await waitFor(() => expect(screen.getByText("LOGIN-CONTENT")).toBeInTheDocument());
     expect(queryClient.getQueryData(["guided-setup"])).toBeUndefined();
     expect(queryClient.getQueryData(["dogs"])).toBeUndefined();
+  });
+
+  it("clears owner caches and navigates when Better Auth returns a sign-out error", async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(["dogs"], [{ id: "dog-1" }]);
+    mocks.signOut.mockResolvedValue({ data: null, error: { message: "server rejected" } });
+    mockMe("user");
+    setup(queryClient);
+
+    await user.click(screen.getByRole("button", { name: /sign out/i }));
+
+    await waitFor(() => expect(screen.getByText("LOGIN-CONTENT")).toBeInTheDocument());
+    expect(queryClient.getQueryData(["dogs"])).toBeUndefined();
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      "Couldn't complete sign out. Your local data was cleared.",
+    );
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it("clears owner caches and navigates when sign-out transport rejects", async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(["dogs"], [{ id: "dog-1" }]);
+    mocks.signOut.mockRejectedValue(new Error("network down"));
+    mockMe("user");
+    setup(queryClient);
+
+    await user.click(screen.getByRole("button", { name: /sign out/i }));
+
+    await waitFor(() => expect(screen.getByText("LOGIN-CONTENT")).toBeInTheDocument());
+    expect(queryClient.getQueryData(["dogs"])).toBeUndefined();
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      "Couldn't complete sign out. Your local data was cleared.",
+    );
+    expect(mocks.toastSuccess).not.toHaveBeenCalled();
   });
 });

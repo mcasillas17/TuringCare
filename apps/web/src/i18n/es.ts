@@ -175,6 +175,7 @@ export const es = {
     loading: "Cargando…",
     signOut: "Cerrar sesión",
     signedOut: "Sesión cerrada",
+    signOutFailed: "No se pudo completar el cierre de sesión. Tus datos locales se borraron.",
   },
   dogs: {
     listTitle: "Tus perros",
