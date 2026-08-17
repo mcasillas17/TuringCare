@@ -318,6 +318,9 @@ export const es = {
     requiredField: "Este campo es obligatorio.",
     selectionRequired: "Elige una opción para continuar.",
     loadError: "No se pudo cargar la configuración guiada. Inténtalo de nuevo.",
+    overviewWarning:
+      "La configuración guiada no está disponible temporalmente. Puedes seguir usando tu resumen.",
+    retry: "Reintentar configuración guiada",
     startError: "No se pudo iniciar la configuración guiada. Tus datos siguen aquí.",
     intentError: "No se pudo guardar tu elección. Inténtalo de nuevo.",
     abandonError: "No se pudo salir de la configuración. Inténtalo de nuevo.",

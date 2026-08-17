@@ -24,22 +24,39 @@ export function Overview() {
     data: guidedSetup,
     isLoading: isGuidedSetupLoading,
     isError: isGuidedSetupError,
+    isFetching: isGuidedSetupFetching,
+    refetch: refetchGuidedSetup,
   } = useGuidedSetup();
 
   if (isLoading || isGuidedSetupLoading) return <p>{t("common.loading")}</p>;
   if (isError || !o) return <p className="text-red-600">{t("dogs.loadError")}</p>;
-  if (isGuidedSetupError || !guidedSetup) {
-    return <p className="text-red-600">{t("guidedSetup.loadError")}</p>;
-  }
-  if (guidedSetup.autoStartEligible || guidedSetup.active) {
+  const guidedSetupUnavailable = isGuidedSetupError || !guidedSetup;
+  if (!guidedSetupUnavailable && (guidedSetup.autoStartEligible || guidedSetup.active)) {
     return <Navigate to="/my/setup" replace />;
   }
 
   const stage = deriveStage(o.dogCount, o.journalEntryCount, o.latestBrief?.status ?? null);
+  const guidedSetupWarning = guidedSetupUnavailable ? (
+    <section
+      role="alert"
+      className="flex flex-wrap items-center justify-between gap-3 rounded border border-copper bg-cream p-4"
+    >
+      <p className="text-sm text-slate">{t("guidedSetup.overviewWarning")}</p>
+      <button
+        type="button"
+        onClick={() => void refetchGuidedSetup()}
+        disabled={isGuidedSetupFetching}
+        className="rounded bg-slate px-3 py-1 text-sm text-cream disabled:opacity-60"
+      >
+        {t("guidedSetup.retry")}
+      </button>
+    </section>
+  ) : null;
 
   if (stage === "new") {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
+        {guidedSetupWarning}
         <OnboardingChecklist />
       </div>
     );
@@ -47,6 +64,7 @@ export function Overview() {
 
   return (
     <div className="space-y-6">
+      {guidedSetupWarning}
       <div className="mx-auto max-w-2xl">
         <OnboardingChecklist />
       </div>

@@ -99,6 +99,8 @@ describe("GuidedSetup", () => {
     const active = record();
     mocks.start.mockResolvedValue({ setup: active });
     renderRoute("/my/setup", status());
+    const stepAnnouncement = screen.getByRole("status");
+    expect(stepAnnouncement).toHaveTextContent("Now on step 1 of 3");
 
     await user.type(screen.getByLabelText("Name"), "Biscuit");
     await user.selectOptions(screen.getByLabelText("Size"), "medium");
@@ -108,6 +110,7 @@ describe("GuidedSetup", () => {
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
     await waitFor(() => expect(screen.getByRole("radiogroup")).toBeInTheDocument());
+    expect(stepAnnouncement).toHaveTextContent("Now on step 2 of 3");
     expect(mocks.start).toHaveBeenCalledWith({
       name: "Biscuit",
       size: "medium",

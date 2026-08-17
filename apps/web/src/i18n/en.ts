@@ -315,6 +315,8 @@ export const en = {
     requiredField: "This field is required.",
     selectionRequired: "Choose one option to continue.",
     loadError: "Couldn't load guided setup. Please try again.",
+    overviewWarning: "Guided setup is temporarily unavailable. You can still use your dashboard.",
+    retry: "Retry guided setup",
     startError: "Couldn't start guided setup. Your entries are still here.",
     intentError: "Couldn't save your choice. Please try again.",
     abandonError: "Couldn't exit setup. Please try again.",

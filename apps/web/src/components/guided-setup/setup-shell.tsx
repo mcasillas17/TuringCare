@@ -26,9 +26,6 @@ export function SetupShell({ step, title, description, children }: SetupShellPro
         <p className="text-sm font-semibold text-copper">
           {t("guidedSetup.stepOfThree", { step })}
         </p>
-        <output aria-live="polite" className="sr-only">
-          {t("guidedSetup.stepAnnouncement", { step })}
-        </output>
         <h1
           id="guided-setup-heading"
           ref={headingRef}

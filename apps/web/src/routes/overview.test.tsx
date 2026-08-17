@@ -191,7 +191,7 @@ describe("Overview", () => {
     await waitFor(() => expect(screen.getByText("guided setup destination")).toBeInTheDocument());
   });
 
-  it("shows a localized error when guided setup loading fails", async () => {
+  it("keeps the dashboard available with a localized guided setup warning", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -210,7 +210,11 @@ describe("Overview", () => {
     setup();
 
     await waitFor(() =>
-      expect(screen.getByText("Couldn't load guided setup. Please try again.")).toBeInTheDocument(),
+      expect(screen.getByRole("heading", { name: /Welcome back/i })).toBeInTheDocument(),
     );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Guided setup is temporarily unavailable. You can still use your dashboard.",
+    );
+    expect(screen.getByRole("button", { name: "Retry guided setup" })).toBeInTheDocument();
   });
 });

@@ -23,31 +23,34 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
 
   const active = startedSetup ?? setupQuery.data.active;
   if (!active) {
-    if (setupQuery.data.autoStartEligible || allowNewDog) {
-      return <DogBasicsStep onStarted={setStartedSetup} />;
-    }
-    return <Navigate to="/my" replace />;
+    if (!setupQuery.data.autoStartEligible && !allowNewDog) return <Navigate to="/my" replace />;
   }
 
-  if (active.currentStep === "intent") {
-    return <IntentStep setup={active} onSaved={setStartedSetup} />;
-  }
+  const step = active ? (active.currentStep === "intent" ? 2 : 3) : 1;
 
   return (
-    <SetupShell
-      step={3}
-      title={t("guidedSetup.actionTitle")}
-      description={t("guidedSetup.actionDescription", { dog: active.dogName ?? "" })}
-    >
-      <div className="space-y-6">
-        <section
-          aria-live="polite"
-          className="rounded border border-silver bg-white p-5 text-slate-soft"
+    <>
+      <output aria-live="polite" className="sr-only">
+        {t("guidedSetup.stepAnnouncement", { step })}
+      </output>
+      {!active ? (
+        <DogBasicsStep onStarted={setStartedSetup} />
+      ) : active.currentStep === "intent" ? (
+        <IntentStep setup={active} onSaved={setStartedSetup} />
+      ) : (
+        <SetupShell
+          step={3}
+          title={t("guidedSetup.actionTitle")}
+          description={t("guidedSetup.actionDescription", { dog: active.dogName ?? "" })}
         >
-          {t("guidedSetup.actionHandoff")}
-        </section>
-        <AbandonSetupButton setupId={active.id} />
-      </div>
-    </SetupShell>
+          <div className="space-y-6">
+            <section className="rounded border border-silver bg-white p-5 text-slate-soft">
+              {t("guidedSetup.actionHandoff")}
+            </section>
+            <AbandonSetupButton setupId={active.id} />
+          </div>
+        </SetupShell>
+      )}
+    </>
   );
 }
