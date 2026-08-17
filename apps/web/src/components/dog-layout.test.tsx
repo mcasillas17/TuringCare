@@ -2,13 +2,17 @@ import { LocaleProvider } from "@/i18n";
 import * as dogsLib from "@/lib/dogs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DogLayout } from "./dog-layout";
 
-const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
+const { toastError, toastSuccess } = vi.hoisted(() => ({
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+}));
 vi.mock("sonner", () => ({
-  toast: { success: vi.fn(), error: toastError },
+  toast: { success: toastSuccess, error: toastError },
 }));
 vi.mock("@/lib/dogs", () => ({
   useDog: vi.fn(),
@@ -34,13 +38,14 @@ function setDog(
   } as unknown as ReturnType<typeof dogsLib.useDeleteDog>);
 }
 
-function renderLayoutAt(path: string) {
+function renderLayoutAt(path: string, strictMode = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const tree = (
     <QueryClientProvider client={qc}>
       <LocaleProvider>
         <MemoryRouter initialEntries={[path]}>
           <Routes>
+            <Route path="/my/dogs" element={<p>DOGS LIST</p>} />
             <Route path="/my/dogs/:id" element={<DogLayout />}>
               <Route path="journal" element={<p>JOURNAL</p>} />
               <Route path="training" element={<p>TRAINING</p>} />
@@ -50,14 +55,26 @@ function renderLayoutAt(path: string) {
           </Routes>
         </MemoryRouter>
       </LocaleProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  return render(strictMode ? <StrictMode>{tree}</StrictMode> : tree);
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 beforeEach(() => {
   deleteDog.mockReset();
   deleteDog.mockResolvedValue({});
   toastError.mockReset();
+  toastSuccess.mockReset();
   setDog({
     dog: { id: "d1", name: "Biscuit", breed: "Aussie", size: "medium", sex: "female" },
   } as never);
@@ -129,6 +146,32 @@ describe("DogLayout", () => {
     expect(toastError).not.toHaveBeenCalled();
   });
 
+  it("navigates to the dogs list after a successful deletion on the current route", async () => {
+    renderLayoutAt("/my/dogs/d1/journal", true);
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+
+    await waitFor(() => expect(screen.getByText("DOGS LIST")).toBeInTheDocument());
+    expect(toastSuccess).toHaveBeenCalledWith("Dog deleted");
+  });
+
+  it("ignores a late successful deletion after navigating to another dog tab", async () => {
+    const pending = deferred<unknown>();
+    deleteDog.mockReturnValueOnce(pending.promise);
+    renderLayoutAt("/my/dogs/d1/journal");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+    fireEvent.click(screen.getByRole("link", { name: /training/i }));
+    expect(screen.getByText("TRAINING")).toBeInTheDocument();
+
+    pending.resolve({});
+    await waitFor(() => expect(screen.getByText("TRAINING")).toBeInTheDocument());
+    expect(screen.queryByText("DOGS LIST")).not.toBeInTheDocument();
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
   it("clears the stale guided setup conflict after navigating to another dog tab", async () => {
     deleteDog.mockRejectedValueOnce(new Error("active_guided_setup"));
     renderLayoutAt("/my/dogs/d1/journal");
@@ -141,6 +184,21 @@ describe("DogLayout", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 
+  it("ignores a late active guided setup failure after navigating to another dog tab", async () => {
+    const pending = deferred<never>();
+    deleteDog.mockReturnValueOnce(pending.promise);
+    renderLayoutAt("/my/dogs/d1/journal");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+    fireEvent.click(screen.getByRole("link", { name: /training/i }));
+
+    pending.reject(new Error("active_guided_setup"));
+    await waitFor(() => expect(screen.getByText("TRAINING")).toBeInTheDocument());
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
   it("keeps the generic error toast for unrelated deletion failures", async () => {
     deleteDog.mockRejectedValueOnce(new Error("delete_failed"));
     renderLayoutAt("/my/dogs/d1/journal");
@@ -150,5 +208,19 @@ describe("DogLayout", () => {
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("Save failed"));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("ignores a late generic deletion failure after navigating to another dog tab", async () => {
+    const pending = deferred<never>();
+    deleteDog.mockReturnValueOnce(pending.promise);
+    renderLayoutAt("/my/dogs/d1/journal");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+    fireEvent.click(screen.getByRole("link", { name: /training/i }));
+
+    pending.reject(new Error("delete_failed"));
+    await waitFor(() => expect(screen.getByText("TRAINING")).toBeInTheDocument());
+    expect(toastError).not.toHaveBeenCalled();
   });
 });

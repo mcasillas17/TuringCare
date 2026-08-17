@@ -1,19 +1,43 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useDeleteDog, useDog } from "@/lib/dogs";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+
+type DeleteRequest = {
+  token: number;
+  dogId: string;
+  pathname: string;
+  locationKey: string;
+  lifecycle: symbol;
+};
 
 export function DogLayout() {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, key: locationKey } = useLocation();
   const { id = "" } = useParams();
   const { data, isLoading, isError } = useDog(id);
   const del = useDeleteDog();
   const [confirming, setConfirming] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const routeRef = useRef({ dogId: id, pathname, locationKey });
+  const deleteTokenRef = useRef(0);
+  const deleteRequestRef = useRef<DeleteRequest | null>(null);
+  const lifecycleRef = useRef<symbol | null>(null);
+
+  routeRef.current = { dogId: id, pathname, locationKey };
+
+  useEffect(() => {
+    const lifecycle = Symbol();
+    lifecycleRef.current = lifecycle;
+    return () => {
+      if (lifecycleRef.current === lifecycle) {
+        lifecycleRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!pathname) return;
@@ -45,6 +69,16 @@ export function DogLayout() {
     female: t("dogs.sexFemale"),
   };
   const subtitle = [dog.breed, sizeLabel[dog.size], sexLabel[dog.sex]].filter(Boolean).join(" · ");
+  const isCurrentDeleteRequest = (request: DeleteRequest) => {
+    const route = routeRef.current;
+    return (
+      deleteRequestRef.current?.token === request.token &&
+      lifecycleRef.current === request.lifecycle &&
+      route.dogId === request.dogId &&
+      route.pathname === request.pathname &&
+      route.locationKey === request.locationKey
+    );
+  };
 
   const tabs = [
     { to: `/my/dogs/${dog.id}/journal`, label: t("dogHub.tabJournal"), end: false },
@@ -75,13 +109,27 @@ export function DogLayout() {
                 <Button
                   variant="outline"
                   onClick={async () => {
+                    const lifecycle = lifecycleRef.current;
+                    if (!lifecycle) return;
+                    const request: DeleteRequest = {
+                      token: ++deleteTokenRef.current,
+                      dogId: dog.id,
+                      pathname,
+                      locationKey,
+                      lifecycle,
+                    };
+                    deleteRequestRef.current = request;
                     try {
                       await del.mutateAsync(dog.id);
+                      if (!isCurrentDeleteRequest(request)) return;
+                      deleteRequestRef.current = null;
                       setDeleteError(null);
                       setConfirming(false);
                       toast.success(t("dogs.deleted"));
                       navigate("/my/dogs");
                     } catch (error) {
+                      if (!isCurrentDeleteRequest(request)) return;
+                      deleteRequestRef.current = null;
                       if (error instanceof Error && error.message === "active_guided_setup") {
                         setConfirming(false);
                         setDeleteError(error.message);
