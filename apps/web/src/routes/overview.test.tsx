@@ -1,18 +1,28 @@
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Overview } from "./overview";
 
 afterEach(() => vi.unstubAllGlobals());
 
-function stub(over: unknown, dogs: unknown) {
+function stub(
+  over: unknown,
+  dogs: unknown,
+  guidedSetup: unknown = { active: null, latest: null, autoStartEligible: false },
+) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
       const p = new URL(url, "http://x").pathname;
-      const body = p.includes("/api/overview") ? over : p.includes("/api/dogs") ? { dogs } : {};
+      const body = p.includes("/api/overview")
+        ? over
+        : p.includes("/api/dogs")
+          ? { dogs }
+          : p.includes("/api/guided-setup")
+            ? guidedSetup
+            : {};
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -27,7 +37,10 @@ function setup() {
     <QueryClientProvider client={qc}>
       <LocaleProvider>
         <MemoryRouter>
-          <Overview />
+          <Routes>
+            <Route path="*" element={<Overview />} />
+            <Route path="/my/setup" element={<p>guided setup destination</p>} />
+          </Routes>
         </MemoryRouter>
       </LocaleProvider>
     </QueryClientProvider>,
@@ -125,6 +138,79 @@ describe("Overview", () => {
       expect(
         screen.getByRole("heading", { name: /Generate your first Brief/i }),
       ).toBeInTheDocument(),
+    );
+  });
+
+  it("redirects an eligible owner to guided setup", async () => {
+    stub({ dogCount: 0, journalEntryCount: 0, latestBrief: null, recentActivity: [] }, [], {
+      active: null,
+      latest: null,
+      autoStartEligible: true,
+    });
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <LocaleProvider>
+          <MemoryRouter initialEntries={["/my"]}>
+            <Routes>
+              <Route path="/my" element={<Overview />} />
+              <Route path="/my/setup" element={<p>guided setup destination</p>} />
+            </Routes>
+          </MemoryRouter>
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText("guided setup destination")).toBeInTheDocument());
+  });
+
+  it("redirects an owner with an active setup", async () => {
+    stub(
+      { dogCount: 1, journalEntryCount: 0, latestBrief: null, recentActivity: [] },
+      [{ id: "d1", name: "Biscuit" }],
+      {
+        active: {
+          id: "00000000-0000-4000-8000-000000000001",
+          dogId: "d1",
+          dogName: "Biscuit",
+          currentStep: "intent",
+          intent: null,
+          startedAt: "2026-08-16T00:00:00.000Z",
+          completedAt: null,
+          completionReason: null,
+          firstActionType: null,
+          firstActionId: null,
+        },
+        latest: null,
+        autoStartEligible: false,
+      },
+    );
+    setup();
+
+    await waitFor(() => expect(screen.getByText("guided setup destination")).toBeInTheDocument());
+  });
+
+  it("shows a localized error when guided setup loading fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const p = new URL(url, "http://x").pathname;
+        const body = p.includes("/api/overview")
+          ? { dogCount: 1, journalEntryCount: 0, latestBrief: null, recentActivity: [] }
+          : p.includes("/api/guided-setup")
+            ? { error: "load_failed" }
+            : { dogs: [] };
+        return new Response(JSON.stringify(body), {
+          status: p.includes("/api/guided-setup") ? 500 : 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+    setup();
+
+    await waitFor(() =>
+      expect(screen.getByText("Couldn't load guided setup. Please try again.")).toBeInTheDocument(),
     );
   });
 });

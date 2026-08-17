@@ -1,7 +1,8 @@
 import { OnboardingChecklist } from "@/components/onboarding/checklist";
 import { useI18n } from "@/i18n";
+import { useGuidedSetup } from "@/lib/guided-setup";
 import { useOverview } from "@/lib/overview";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
 type FirstRunStage = "new" | "noEntries" | "noBrief" | "ready";
 
@@ -19,9 +20,20 @@ function deriveStage(
 export function Overview() {
   const { t } = useI18n();
   const { data: o, isLoading, isError } = useOverview();
+  const {
+    data: guidedSetup,
+    isLoading: isGuidedSetupLoading,
+    isError: isGuidedSetupError,
+  } = useGuidedSetup();
 
-  if (isLoading) return <p>{t("common.loading")}</p>;
+  if (isLoading || isGuidedSetupLoading) return <p>{t("common.loading")}</p>;
   if (isError || !o) return <p className="text-red-600">{t("dogs.loadError")}</p>;
+  if (isGuidedSetupError || !guidedSetup) {
+    return <p className="text-red-600">{t("guidedSetup.loadError")}</p>;
+  }
+  if (guidedSetup.autoStartEligible || guidedSetup.active) {
+    return <Navigate to="/my/setup" replace />;
+  }
 
   const stage = deriveStage(o.dogCount, o.journalEntryCount, o.latestBrief?.status ?? null);
 
