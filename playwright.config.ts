@@ -83,6 +83,7 @@ export default defineConfig({
       timeout: 120_000,
       reuseExistingServer: false,
       env: {
+        VITE_API_URL: "",
         VITE_API_PROXY_TARGET: apiOrigin,
       },
     },
