@@ -57,7 +57,7 @@ export function Overview() {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
         {guidedSetupWarning}
-        <OnboardingChecklist />
+        <OnboardingChecklist guidedSetup={guidedSetup} />
       </div>
     );
   }
@@ -66,7 +66,7 @@ export function Overview() {
     <div className="space-y-6">
       {guidedSetupWarning}
       <div className="mx-auto max-w-2xl">
-        <OnboardingChecklist />
+        <OnboardingChecklist guidedSetup={guidedSetup} />
       </div>
       <h1 className="text-2xl font-bold text-slate">{t("overview.greeting")} 👋</h1>
       <div className="grid grid-cols-3 gap-3">

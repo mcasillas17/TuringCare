@@ -1,14 +1,18 @@
 import { useTuring } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { useGuidedSetup } from "@/lib/guided-setup";
 import { type OnboardingStatus, useOnboardingStatus } from "@/lib/onboarding";
+import type { GuidedSetupStatus } from "@turingcare/shared";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 const DISMISSED_KEY = "turingcare.onboarding.celebrationDismissed";
 
 type ItemKey = "addDog" | "logMoments" | "setGoal" | "finalizeBrief" | "shareWithTrainer";
+
+type OnboardingChecklistProps = {
+  guidedSetup: GuidedSetupStatus | undefined;
+};
 
 function readDismissed(): boolean {
   if (typeof window === "undefined") return false;
@@ -50,16 +54,15 @@ function buildItems(status: OnboardingStatus): { key: ItemKey; done: boolean; hr
   ];
 }
 
-export function OnboardingChecklist() {
+export function OnboardingChecklist({ guidedSetup }: OnboardingChecklistProps) {
   const { t } = useI18n();
   const { data: status } = useOnboardingStatus();
-  const guidedSetupQuery = useGuidedSetup();
   const { celebrate } = useTuring();
   const [dismissed, setDismissed] = useState<boolean>(readDismissed);
 
   const items = status ? buildItems(status) : [];
   const allDone = !!status && items.every((item) => item.done);
-  const guidedSetupActive = guidedSetupQuery.data?.active != null;
+  const guidedSetupActive = guidedSetup?.active != null;
 
   const prevAllDone = useRef<boolean | undefined>(undefined);
   // Derived-state trigger: onboarding completion spans multiple mutations across

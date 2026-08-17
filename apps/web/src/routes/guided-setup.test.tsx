@@ -255,6 +255,39 @@ describe("GuidedSetup", () => {
   });
 
   describe("CompletionStep", () => {
+    it("renders Spanish deletion completion copy", () => {
+      const languages = navigator.languages;
+      try {
+        Object.defineProperty(navigator, "languages", {
+          configurable: true,
+          value: ["es-MX"],
+        });
+        renderCompletion(
+          record({
+            dogId: null,
+            dogName: null,
+            intent: "understand_behavior",
+            completionReason: "first_action_completed",
+            completedAt: "2026-08-16T01:00:00Z",
+          }),
+          { actionDeleted: true },
+        );
+
+        expect(screen.getByRole("status")).toHaveTextContent(
+          "El registro de tu primer paso ya no está disponible.",
+        );
+        expect(screen.getByRole("link", { name: "Continuar a tu resumen" })).toHaveAttribute(
+          "href",
+          "/my",
+        );
+      } finally {
+        Object.defineProperty(navigator, "languages", {
+          configurable: true,
+          value: languages,
+        });
+      }
+    });
+
     it.each([
       ["behavior", "journal"],
       ["progress", "journal"],

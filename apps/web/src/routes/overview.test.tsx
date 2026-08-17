@@ -11,6 +11,14 @@ function stub(
   over: unknown,
   dogs: unknown,
   guidedSetup: unknown = { active: null, latest: null, autoStartEligible: false },
+  onboarding: unknown = {
+    hasDog: false,
+    momentsCount: 0,
+    hasGoal: false,
+    hasFinalizedBrief: false,
+    hasSentBrief: false,
+    mostRecentDogId: null,
+  },
 ) {
   vi.stubGlobal(
     "fetch",
@@ -22,7 +30,9 @@ function stub(
           ? { dogs }
           : p.includes("/api/guided-setup")
             ? guidedSetup
-            : {};
+            : p.includes("/api/onboarding")
+              ? onboarding
+              : {};
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -230,6 +240,7 @@ describe("Overview", () => {
   });
 
   it("keeps the dashboard available with a localized guided setup warning", async () => {
+    let guidedSetupRequests = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -238,7 +249,17 @@ describe("Overview", () => {
           ? { dogCount: 1, journalEntryCount: 0, latestBrief: null, recentActivity: [] }
           : p.includes("/api/guided-setup")
             ? { error: "load_failed" }
-            : { dogs: [] };
+            : p.includes("/api/onboarding")
+              ? {
+                  hasDog: true,
+                  momentsCount: 0,
+                  hasGoal: false,
+                  hasFinalizedBrief: false,
+                  hasSentBrief: false,
+                  mostRecentDogId: "d1",
+                }
+              : { dogs: [] };
+        if (p.includes("/api/guided-setup")) guidedSetupRequests += 1;
         return new Response(JSON.stringify(body), {
           status: p.includes("/api/guided-setup") ? 500 : 200,
           headers: { "Content-Type": "application/json" },
@@ -248,11 +269,86 @@ describe("Overview", () => {
     setup();
 
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: /Welcome back/i })).toBeInTheDocument(),
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Guided setup is temporarily unavailable. You can still use your dashboard.",
+      ),
     );
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Guided setup is temporarily unavailable. You can still use your dashboard.",
-    );
+    expect(screen.getByRole("heading", { name: /Welcome back/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry guided setup" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Log 3 moments/i)).toBeInTheDocument());
+    expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+
+    const stableRequestCount = guidedSetupRequests;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(guidedSetupRequests).toBe(stableRequestCount);
+  });
+
+  it("hides the onboarding checklist while guided setup is active", async () => {
+    stub(
+      { dogCount: 1, journalEntryCount: 0, latestBrief: null, recentActivity: [] },
+      [{ id: "d1", name: "Biscuit" }],
+      {
+        active: {
+          id: "setup-1",
+          dogId: "d1",
+          dogName: "Biscuit",
+          currentStep: "action",
+          intent: "understand_behavior",
+          startedAt: "2026-08-16T00:00:00Z",
+          completedAt: null,
+          completionReason: null,
+          firstActionType: null,
+          firstActionId: null,
+        },
+        latest: null,
+        autoStartEligible: false,
+      },
+      {
+        hasDog: true,
+        momentsCount: 0,
+        hasGoal: false,
+        hasFinalizedBrief: false,
+        hasSentBrief: false,
+        mostRecentDogId: "d1",
+      },
+    );
+    setup();
+
+    await waitFor(() => expect(screen.getByText("guided setup destination")).toBeInTheDocument());
+    expect(screen.queryByRole("heading", { name: /Get started/i })).not.toBeInTheDocument();
+  });
+
+  it("restores the completed checklist after guided setup has no active setup", async () => {
+    stub(
+      { dogCount: 1, journalEntryCount: 0, latestBrief: null, recentActivity: [] },
+      [{ id: "d1", name: "Biscuit" }],
+      {
+        active: null,
+        latest: {
+          id: "setup-1",
+          dogId: "d1",
+          dogName: "Biscuit",
+          currentStep: "action",
+          intent: "understand_behavior",
+          startedAt: "2026-08-16T00:00:00Z",
+          completedAt: "2026-08-16T01:00:00Z",
+          completionReason: "first_action_completed",
+          firstActionType: "behavior",
+          firstActionId: "concern-1",
+        },
+        autoStartEligible: false,
+      },
+      {
+        hasDog: true,
+        momentsCount: 7,
+        hasGoal: true,
+        hasFinalizedBrief: true,
+        hasSentBrief: true,
+        mostRecentDogId: "d1",
+      },
+    );
+    setup();
+
+    await waitFor(() => expect(screen.getByText(/all set up/i)).toBeInTheDocument());
   });
 });

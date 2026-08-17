@@ -1,5 +1,4 @@
 import { LocaleProvider } from "@/i18n";
-import * as guidedSetupLib from "@/lib/guided-setup";
 import * as onboardingLib from "@/lib/onboarding";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -10,9 +9,6 @@ import { OnboardingChecklist } from "./checklist";
 
 vi.mock("@/lib/onboarding", () => ({
   useOnboardingStatus: vi.fn(),
-}));
-vi.mock("@/lib/guided-setup", () => ({
-  useGuidedSetup: vi.fn(),
 }));
 
 // celebrate spy — used in the Turing hop tests below
@@ -47,24 +43,13 @@ function setStatus(data: onboardingLib.OnboardingStatus | null) {
   } as unknown as ReturnType<typeof onboardingLib.useOnboardingStatus>);
 }
 
-function setGuidedSetup(
-  data: GuidedSetupStatus | undefined,
-  opts: { isLoading?: boolean; isError?: boolean } = {},
-) {
-  vi.mocked(guidedSetupLib.useGuidedSetup).mockReturnValue({
-    data,
-    isLoading: opts.isLoading ?? false,
-    isError: opts.isError ?? false,
-  } as unknown as ReturnType<typeof guidedSetupLib.useGuidedSetup>);
-}
-
-function renderChecklist() {
+function renderChecklist(guidedSetup?: GuidedSetupStatus) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
         <MemoryRouter>
-          <OnboardingChecklist />
+          <OnboardingChecklist guidedSetup={guidedSetup} />
         </MemoryRouter>
       </LocaleProvider>
     </QueryClientProvider>,
@@ -84,7 +69,6 @@ beforeEach(() => {
     });
   }
   window.localStorage.clear();
-  setGuidedSetup({ active: null, latest: null, autoStartEligible: true });
 });
 
 afterEach(() => {
@@ -140,7 +124,7 @@ describe("OnboardingChecklist", () => {
 
   it("hides while guided setup is active", () => {
     setStatus(fresh);
-    setGuidedSetup({
+    const guidedSetup = {
       active: {
         id: "setup-1",
         dogId: "dog-1",
@@ -155,14 +139,14 @@ describe("OnboardingChecklist", () => {
       },
       latest: null,
       autoStartEligible: false,
-    });
-    const { container } = renderChecklist();
+    } satisfies GuidedSetupStatus;
+    const { container } = renderChecklist(guidedSetup);
     expect(container.firstChild).toBeNull();
   });
 
   it("restores the completed checklist when guided setup has no active setup", () => {
     setStatus(complete);
-    setGuidedSetup({
+    const guidedSetup = {
       active: null,
       latest: {
         id: "setup-1",
@@ -177,19 +161,13 @@ describe("OnboardingChecklist", () => {
         firstActionId: "concern-1",
       },
       autoStartEligible: false,
-    });
-    renderChecklist();
+    } satisfies GuidedSetupStatus;
+    renderChecklist(guidedSetup);
     expect(screen.getByText(/all set up/i)).toBeInTheDocument();
   });
 
-  it.each([
-    ["loading", { data: undefined, isLoading: true, isError: false }],
-    ["error", { data: undefined, isLoading: false, isError: true }],
-  ])("does not break the dashboard when guided setup is %s", (_state, query) => {
+  it("does not break the dashboard when guided setup is unavailable", () => {
     setStatus(fresh);
-    vi.mocked(guidedSetupLib.useGuidedSetup).mockReturnValue(
-      query as unknown as ReturnType<typeof guidedSetupLib.useGuidedSetup>,
-    );
     renderChecklist();
     expect(screen.getByText(/Add your first dog/i)).toBeInTheDocument();
   });
@@ -213,7 +191,7 @@ describe("OnboardingChecklist — Turing hop", () => {
       >
         <LocaleProvider>
           <MemoryRouter>
-            <OnboardingChecklist />
+            <OnboardingChecklist guidedSetup={undefined} />
           </MemoryRouter>
         </LocaleProvider>
       </QueryClientProvider>,
@@ -239,7 +217,7 @@ describe("OnboardingChecklist — Turing hop", () => {
       >
         <LocaleProvider>
           <MemoryRouter>
-            <OnboardingChecklist />
+            <OnboardingChecklist guidedSetup={undefined} />
           </MemoryRouter>
         </LocaleProvider>
       </QueryClientProvider>,
