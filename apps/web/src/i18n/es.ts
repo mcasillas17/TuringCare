@@ -395,9 +395,12 @@ export const es = {
     intentError: "No se pudo guardar tu elección. Inténtalo de nuevo.",
     abandonError: "No se pudo salir de la configuración. Inténtalo de nuevo.",
     genericError: "No se pudo completar la solicitud. Inténtalo de nuevo.",
-    activeSetupExists: "Ya hay otra configuración guiada activa. La actualizamos; continúa allí.",
-    setupAlreadyCompleted: "Esta configuración guiada ya está completa. Actualizamos su estado.",
-    intentMismatch: "Esta acción ya no coincide con tu enfoque. Actualizamos la configuración.",
+    activeSetupExists:
+      "Ya hay otra configuración guiada activa. Continúa con ella o sal antes de iniciar otra.",
+    setupAlreadyCompleted:
+      "Esta configuración guiada ya está completa. Ve a tu resumen para revisar el resultado guardado.",
+    intentMismatch:
+      "Esta acción ya no coincide con el enfoque seleccionado. Vuelve al paso actual y elige la acción correspondiente.",
     setupNotFound: "Esta configuración guiada ya no está disponible. Vuelve a tu resumen.",
     setupNotReady: "Guarda tu enfoque antes de completar este paso.",
     validationError: "Revisa los campos marcados e inténtalo de nuevo.",

@@ -702,10 +702,10 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       return c.json(result.response);
     }
 
-    for (let index = 0; index < result.reportedSignals.length; index += 1) {
+    for (const signal of result.reportedSignals) {
       await recordEvent("safety.signal_reported", {
         userId,
-        props: { source: "guided_setup" },
+        props: { signal, source: "behavior_concern" },
       });
     }
     await recordEvent("guided_setup.first_action_completed", {

@@ -24,9 +24,7 @@ export function SetupShell({ step, title, description, children }: SetupShellPro
       className="motion-safe:transition-opacity motion-safe:duration-200 motion-reduce:transition-none"
     >
       <div className="mb-8 space-y-2">
-        <p aria-label={stepLabel} className="text-sm font-semibold text-copper">
-          {stepLabel}
-        </p>
+        <p className="text-sm font-semibold text-copper">{stepLabel}</p>
         <h1
           id="guided-setup-heading"
           ref={headingRef}

@@ -390,9 +390,12 @@ export const en = {
     intentError: "Couldn't save your choice. Please try again.",
     abandonError: "Couldn't exit setup. Please try again.",
     genericError: "We couldn't complete that request. Please try again.",
-    activeSetupExists: "Another guided setup is already active. We refreshed it; continue there.",
-    setupAlreadyCompleted: "This guided setup is already complete. We refreshed its status.",
-    intentMismatch: "This action no longer matches your selected focus. We refreshed setup.",
+    activeSetupExists:
+      "Another guided setup is already active. Continue with that setup or exit it before starting another.",
+    setupAlreadyCompleted:
+      "This guided setup is already complete. Go to your dashboard to review the saved result.",
+    intentMismatch:
+      "This action no longer matches the selected focus. Return to the current setup step and choose the matching action.",
     setupNotFound: "This guided setup is no longer available. Please return to your dashboard.",
     setupNotReady: "Save your focus before completing this step.",
     validationError: "Check the highlighted fields and try again.",

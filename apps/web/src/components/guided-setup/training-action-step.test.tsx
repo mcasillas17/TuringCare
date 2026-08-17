@@ -12,20 +12,16 @@ vi.mock("@/lib/training-catalog", () => ({
   useTrainingCatalog: vi.fn(),
 }));
 
-vi.mock("@/lib/guided-setup", () => ({
-  guidedSetupErrorMessageKey: (error: unknown) =>
-    error instanceof Error && error.message === "invalid_template"
-      ? "guidedSetup.trainingInvalidTemplate"
-      : error instanceof Error && error.message === "historical_suggestion_unavailable"
-        ? "guidedSetup.trainingHistoricalUnavailable"
-        : error instanceof Error && error.message === "setup_already_completed"
-          ? "guidedSetup.setupAlreadyCompleted"
-          : "guidedSetup.genericError",
-  isGuidedSetupReconciliationConflict: vi.fn(() => false),
-  useCompleteTrainingSetup: vi.fn(),
-  useAbandonGuidedSetup: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
-  useGuidedSetup: vi.fn(() => ({ refetch: vi.fn() })),
-}));
+vi.mock("@/lib/guided-setup", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/guided-setup")>();
+  return {
+    ...actual,
+    isGuidedSetupReconciliationConflict: vi.fn(() => false),
+    useCompleteTrainingSetup: vi.fn(),
+    useAbandonGuidedSetup: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+    useGuidedSetup: vi.fn(() => ({ refetch: vi.fn() })),
+  };
+});
 
 const templates = ["basic-manners", "puppy-fundamentals", "recall-reliability", "nonstarter"].map(
   (key) => ({
@@ -207,7 +203,7 @@ describe("TrainingActionStep", () => {
 
     await waitFor(() => expect(onReconcile).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "This guided setup is already complete. We refreshed its status.",
+      "This guided setup is already complete. Go to your dashboard to review the saved result.",
     );
     expect(screen.getByRole("radio", { name: /basic-manners/ })).toBeChecked();
   });

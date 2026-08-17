@@ -23,79 +23,53 @@ const mocks = vi.hoisted(() => ({
   useSession: vi.fn(),
 }));
 
-vi.mock("@/lib/guided-setup", () => ({
-  guidedSetupKey: ["guided-setup"],
-  guidedSetupErrorMessageKey: (error: unknown) => {
-    const code = error instanceof Error ? error.message : "";
-    const keys: Record<string, string> = {
-      active_setup_exists: "guidedSetup.activeSetupExists",
-      setup_already_completed: "guidedSetup.setupAlreadyCompleted",
-      intent_mismatch: "guidedSetup.intentMismatch",
-      invalid_template: "guidedSetup.trainingInvalidTemplate",
-      historical_suggestion_unavailable: "guidedSetup.trainingHistoricalUnavailable",
-      active_guided_setup: "guidedSetup.activeDeleteExplanation",
-      not_found: "guidedSetup.setupNotFound",
-      setup_not_ready_for_completion: "guidedSetup.setupNotReady",
-      start_failed: "guidedSetup.startError",
-      intent_failed: "guidedSetup.intentError",
-      behavior_failed: "guidedSetup.behaviorError",
-      progress_failed: "guidedSetup.progressError",
-      training_failed: "guidedSetup.trainingError",
-      skip_failed: "guidedSetup.skipError",
-      abandon_failed: "guidedSetup.abandonError",
-      load_failed: "guidedSetup.loadError",
-    };
-    return keys[code] ?? "guidedSetup.genericError";
-  },
-  isGuidedSetupConflict: (error: unknown, code: string) =>
-    error instanceof Error && error.message === code,
-  isGuidedSetupReconciliationConflict: (error: unknown) =>
-    error instanceof Error &&
-    ["intent_mismatch", "setup_already_completed", "setup_not_ready_for_completion"].includes(
-      error.message,
-    ),
-  useGuidedSetup: mocks.useGuidedSetup,
-  useStartGuidedSetup: () => ({ mutateAsync: mocks.start, isPending: false }),
-  useSaveGuidedSetupIntent: () => ({ mutateAsync: mocks.saveIntent, isPending: false }),
-  useCompleteBehaviorSetup: (options?: { onCompleted?: (response: unknown) => void }) => {
-    mocks.onBehaviorCompleted = options?.onCompleted;
-    return {
+vi.mock("@/lib/guided-setup", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/guided-setup")>();
+  return {
+    ...actual,
+    useGuidedSetup: mocks.useGuidedSetup,
+    useStartGuidedSetup: () => ({ mutateAsync: mocks.start, isPending: false }),
+    useSaveGuidedSetupIntent: () => ({ mutateAsync: mocks.saveIntent, isPending: false }),
+    useCompleteBehaviorSetup: (options?: { onCompleted?: (response: unknown) => void }) => {
+      mocks.onBehaviorCompleted = options?.onCompleted;
+      return {
+        mutateAsync: async (body: unknown) => {
+          const response = await mocks.completeBehavior(body);
+          options?.onCompleted?.(response);
+          mocks.afterComplete();
+          return response;
+        },
+        isPending: false,
+      };
+    },
+    useCompleteProgressSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
       mutateAsync: async (body: unknown) => {
-        const response = await mocks.completeBehavior(body);
+        const response = await mocks.completeProgress(body);
         options?.onCompleted?.(response);
         mocks.afterComplete();
         return response;
       },
       isPending: false,
-    };
-  },
-  useCompleteProgressSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
-    mutateAsync: async (body: unknown) => {
-      const response = await mocks.completeProgress(body);
-      options?.onCompleted?.(response);
-      mocks.afterComplete();
-      return response;
-    },
-    isPending: false,
-  }),
-  useCompleteTrainingSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
-    mutateAsync: async (body: unknown) => {
-      const response = await mocks.completeTraining(body);
-      options?.onCompleted?.(response);
-      return response;
-    },
-    isPending: false,
-  }),
-  useSkipGuidedSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
-    mutateAsync: async (body: unknown) => {
-      const response = await mocks.skip(body);
-      options?.onCompleted?.(response);
-      return response;
-    },
-    isPending: false,
-  }),
-  useAbandonGuidedSetup: () => ({ mutateAsync: mocks.abandon, isPending: false }),
-}));
+    }),
+    useCompleteTrainingSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
+      mutateAsync: async (body: unknown) => {
+        const response = await mocks.completeTraining(body);
+        options?.onCompleted?.(response);
+        return response;
+      },
+      isPending: false,
+    }),
+    useSkipGuidedSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
+      mutateAsync: async (body: unknown) => {
+        const response = await mocks.skip(body);
+        options?.onCompleted?.(response);
+        return response;
+      },
+      isPending: false,
+    }),
+    useAbandonGuidedSetup: () => ({ mutateAsync: mocks.abandon, isPending: false }),
+  };
+});
 
 vi.mock("@/lib/auth-client", () => ({
   signOut: mocks.signOut,
@@ -268,13 +242,31 @@ describe("GuidedSetup", () => {
 
     expect(screen.getByRole("heading", { name: /Tell us about your dog/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toBeInTheDocument();
-    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
-    expect(screen.getByLabelText("Step 1 of 3")).toBeInTheDocument();
+    const stepIndicator = screen.getByText("Step 1 of 3");
+    expect(stepIndicator.tagName).toBe("P");
+    expect(stepIndicator.closest("section")).toHaveAttribute(
+      "aria-labelledby",
+      "guided-setup-heading",
+    );
     expect(screen.getByRole("status")).toHaveTextContent("Now on step 1 of 3");
     expect(screen.queryByRole("button", { name: /Exit setup/i })).not.toBeInTheDocument();
     expect(document.activeElement).toBe(
       screen.getByRole("heading", { name: /Tell us about your dog/i }),
     );
+  });
+
+  it("keeps guided transitions motion-safe and disables them for reduced motion", () => {
+    renderRoute("/my/setup", status());
+
+    const shell = screen.getByRole("region", {
+      name: /Tell us about your dog/i,
+    });
+    expect(shell).toHaveClass(
+      "motion-safe:transition-opacity",
+      "motion-safe:duration-200",
+      "motion-reduce:transition-none",
+    );
+    expect(shell.className).not.toMatch(/(?:^|\s)(?:transition|animate-)/);
   });
 
   describe("CompletionStep", () => {
@@ -438,6 +430,74 @@ describe("GuidedSetup", () => {
     expect(mocks.start).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/What would help most with Biscuit/i)).toBeInTheDocument();
     expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+  });
+
+  it("completes a realistic setup with keyboard-only navigation", async () => {
+    const user = userEvent.setup();
+    const intentSetup = record({ currentStep: "intent" });
+    const actionSetup = record({ currentStep: "action", intent: "track_progress" });
+    const completedSetup = record({
+      currentStep: "action",
+      intent: "track_progress",
+      completedAt: "2026-08-16T01:00:00Z",
+      completionReason: "first_action_completed",
+      firstActionType: "progress",
+      firstActionId: "entry-1",
+    });
+    mocks.start.mockResolvedValue({ setup: intentSetup });
+    mocks.saveIntent.mockResolvedValue({ setup: actionSetup });
+    mocks.completeProgress.mockResolvedValue({
+      setup: completedSetup,
+      entry: { id: "entry-1" },
+      actionDeleted: false,
+    });
+    renderRoute("/my/setup", status());
+
+    await user.tab();
+    expect(screen.getByLabelText("Name")).toHaveFocus();
+    await user.type(screen.getByLabelText("Name"), "Biscuit");
+    for (let index = 0; index < 6; index += 1) await user.keyboard("{Tab}");
+    expect(screen.getByRole("button", { name: "Continue" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: /Understand behavior/i })).toBeInTheDocument(),
+    );
+    const understand = screen.getByRole("radio", { name: /Understand behavior/i });
+    const track = screen.getByRole("radio", { name: /Track progress/i });
+    await user.tab();
+    expect(understand).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard(" ");
+    await user.keyboard("{Tab}");
+    expect(screen.getByRole("button", { name: "Continue" })).toHaveFocus();
+    await user.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(track).toHaveFocus();
+    await user.keyboard("{Tab}");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Better" })).toBeInTheDocument());
+    await user.tab();
+    expect(screen.getByRole("radio", { name: "Better" })).toHaveFocus();
+    await user.keyboard(" ");
+    await user.keyboard("{Tab}");
+    await user.type(screen.getByRole("textbox", { name: "Short note" }), "Settled faster.");
+    await user.keyboard("{Tab}");
+    expect(screen.getByRole("button", { name: "Save first step" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Your first step was saved."),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole("heading", { name: "Your guided setup is complete" }),
+    );
+    expect(mocks.completeProgress).toHaveBeenCalledWith({
+      setupId,
+      trend: "better",
+      note: "Settled faster.",
+    });
   });
 
   it("shows a localized name length error and preserves the value without starting setup", async () => {
@@ -790,7 +850,7 @@ describe("GuidedSetup", () => {
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
-        /This action no longer matches your selected focus/i,
+        /This action no longer matches the selected focus/i,
       ),
     );
     expect(concern).toHaveValue("Barking at visitors");
