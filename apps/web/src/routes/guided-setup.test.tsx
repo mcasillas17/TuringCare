@@ -56,6 +56,21 @@ function status(overrides: Partial<GuidedSetupStatus> = {}): GuidedSetupStatus {
   return { active: null, latest: null, autoStartEligible: true, ...overrides };
 }
 
+function routeTree(initialEntry: string, allowNewDog: boolean) {
+  return (
+    <LocaleProvider>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route path="/my/setup" element={<GuidedSetup allowNewDog={allowNewDog} />} />
+          <Route path="/my/setup/new" element={<GuidedSetup allowNewDog />} />
+          <Route path="/my" element={<p>overview destination</p>} />
+          <Route path="/my/dogs/:id" element={<p>dog destination</p>} />
+        </Routes>
+      </MemoryRouter>
+    </LocaleProvider>
+  );
+}
+
 function renderRoute(
   initialEntry: string,
   setupStatus: GuidedSetupStatus,
@@ -69,20 +84,10 @@ function renderRoute(
     refetch: vi.fn(),
     ...queryOverrides,
   });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      <LocaleProvider>
-        <MemoryRouter initialEntries={[initialEntry]}>
-          <Routes>
-            <Route path="/my/setup" element={<GuidedSetup allowNewDog={allowNewDog} />} />
-            <Route path="/my/setup/new" element={<GuidedSetup allowNewDog />} />
-            <Route path="/my" element={<p>overview destination</p>} />
-            <Route path="/my/dogs/:id" element={<p>dog destination</p>} />
-          </Routes>
-        </MemoryRouter>
-      </LocaleProvider>
+    <QueryClientProvider client={queryClient}>
+      {routeTree(initialEntry, allowNewDog)}
     </QueryClientProvider>,
   );
 }
@@ -460,6 +465,89 @@ describe("GuidedSetup", () => {
     await waitFor(() => expect(screen.getByText("overview destination")).toBeInTheDocument());
   });
 
+  it("keeps dog basics mounted with its values during a retained-data refetch error", async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn();
+    renderRoute("/my/setup", status(), false, {
+      isError: true,
+      refetch,
+    });
+
+    const name = screen.getByLabelText("Name");
+    await user.type(name, "Biscuit");
+
+    expect(name).toHaveValue("Biscuit");
+    expect(screen.getByText(/temporarily unavailable/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Retry guided setup/i }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps intent selection mounted during a retained-data refetch error", async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn();
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "intent" }),
+        autoStartEligible: false,
+      }),
+      false,
+      { isError: true, refetch },
+    );
+
+    const radio = screen.getByRole("radio", { name: /Track progress/i });
+    await user.click(radio);
+
+    expect(radio).toBeChecked();
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Retry guided setup/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Retry guided setup/i }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a child conflict error visible when status refetch loses its data", async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let queryState: Record<string, unknown>;
+    const renderResult: { current?: ReturnType<typeof render> } = {};
+    const refetch = vi.fn().mockImplementation(async () => {
+      queryState = {
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        isFetching: false,
+        refetch,
+      };
+      renderResult.current?.rerender(
+        <QueryClientProvider client={queryClient}>
+          {routeTree("/my/setup", false)}
+        </QueryClientProvider>,
+      );
+      throw new Error("load_failed");
+    });
+    queryState = {
+      data: status(),
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch,
+    };
+    mocks.useGuidedSetup.mockImplementation(() => queryState);
+    mocks.start.mockRejectedValue(new Error("active_setup_exists"));
+    renderResult.current = render(
+      <QueryClientProvider client={queryClient}>
+        {routeTree("/my/setup", false)}
+      </QueryClientProvider>,
+    );
+
+    await user.type(screen.getByLabelText("Name"), "Biscuit");
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    await waitFor(() => expect(screen.getByText(/Couldn't start/i)).toBeInTheDocument());
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
+    expect(screen.getByText(/temporarily unavailable/i)).toBeInTheDocument();
+  });
+
   it("shows a localized loading and load-failure state", () => {
     mocks.useGuidedSetup.mockReturnValue({ isLoading: true, isError: false });
     render(
@@ -471,7 +559,13 @@ describe("GuidedSetup", () => {
     );
     expect(screen.getByText("Loading…")).toBeInTheDocument();
 
-    mocks.useGuidedSetup.mockReturnValue({ isLoading: false, isError: true, data: undefined });
+    const refetch = vi.fn();
+    mocks.useGuidedSetup.mockReturnValue({
+      isLoading: false,
+      isError: true,
+      data: undefined,
+      refetch,
+    });
     render(
       <LocaleProvider>
         <MemoryRouter>
@@ -480,6 +574,7 @@ describe("GuidedSetup", () => {
       </LocaleProvider>,
     );
     expect(screen.getByText(/Couldn't load guided setup/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Retry guided setup/i })).toBeInTheDocument();
   });
 
   it("renders Spanish guided setup copy", () => {
