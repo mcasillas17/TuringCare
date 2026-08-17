@@ -26,7 +26,9 @@ export function AbandonSetupButton({
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
   const restoreExitFocusRef = useRef(false);
   const mountedRef = useRef(true);
+  const onPendingChangeRef = useRef(onPendingChange);
   const reportedPendingRef = useRef(false);
+  onPendingChangeRef.current = onPendingChange;
 
   useEffect(() => {
     if (confirming) confirmButtonRef.current?.focus();
@@ -37,11 +39,11 @@ export function AbandonSetupButton({
   }, [confirming]);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      onPendingChange?.(false);
     };
-  }, [onPendingChange]);
+  }, []);
 
   const pending = submitting || abandon.isPending;
   useEffect(() => {
@@ -49,8 +51,8 @@ export function AbandonSetupButton({
       return;
     }
     reportedPendingRef.current = pending;
-    onPendingChange?.(pending);
-  }, [onPendingChange, pending]);
+    onPendingChangeRef.current?.(pending);
+  }, [pending]);
 
   const busy = disabled || submitting || abandon.isPending;
 
@@ -59,7 +61,7 @@ export function AbandonSetupButton({
     setSubmitError(false);
     setSubmitting(true);
     reportedPendingRef.current = true;
-    onPendingChange?.(true);
+    onPendingChangeRef.current?.(true);
     try {
       const response = await abandon.mutateAsync({ setupId });
       if (mountedRef.current && (canNavigate?.() ?? true)) {
@@ -89,7 +91,7 @@ export function AbandonSetupButton({
       if (mountedRef.current) {
         setSubmitting(false);
         reportedPendingRef.current = false;
-        onPendingChange?.(false);
+        onPendingChangeRef.current?.(false);
       }
     }
   }

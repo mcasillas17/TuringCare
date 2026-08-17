@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { GuidedSetupRecord, GuidedSetupStatus } from "@turingcare/shared";
+import { StrictMode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -115,6 +116,7 @@ function renderRoute(
   setupStatus: GuidedSetupStatus,
   allowNewDog = false,
   queryOverrides: Record<string, unknown> = {},
+  strictMode = false,
 ) {
   mocks.useGuidedSetup.mockReturnValue({
     data: setupStatus,
@@ -124,11 +126,21 @@ function renderRoute(
     ...queryOverrides,
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const tree = (
     <QueryClientProvider client={queryClient}>
       {routeTree(initialEntry, allowNewDog)}
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  return render(strictMode ? <StrictMode>{tree}</StrictMode> : tree);
+}
+
+function renderStrictRoute(
+  initialEntry: string,
+  setupStatus: GuidedSetupStatus,
+  allowNewDog = false,
+  queryOverrides: Record<string, unknown> = {},
+) {
+  return renderRoute(initialEntry, setupStatus, allowNewDog, queryOverrides, true);
 }
 
 afterEach(() => {
@@ -974,6 +986,93 @@ describe("GuidedSetup", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't exit/i));
     expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+  });
+
+  it("navigates after a successful abandon under StrictMode", async () => {
+    let resolveAbandon!: (response: unknown) => void;
+    const user = userEvent.setup();
+    mocks.abandon.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAbandon = resolve;
+      }),
+    );
+    renderStrictRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Exit setup" }));
+    await user.click(screen.getByRole("button", { name: "Confirm exit" }));
+    await waitFor(() => expect(mocks.abandon).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+
+    resolveAbandon({ setup: record({ completedAt: "2026-08-16T01:00:00Z" }) });
+    await waitFor(() => expect(screen.getByText("dog destination")).toBeInTheDocument());
+  });
+
+  it("shows the abandon error and re-enables controls under StrictMode", async () => {
+    let rejectAbandon!: (error: Error) => void;
+    const user = userEvent.setup();
+    mocks.abandon.mockReturnValue(
+      new Promise((_, reject) => {
+        rejectAbandon = reject;
+      }),
+    );
+    renderStrictRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Exit setup" }));
+    await user.click(screen.getByRole("button", { name: "Confirm exit" }));
+    await waitFor(() => expect(mocks.abandon).toHaveBeenCalledTimes(1));
+
+    rejectAbandon(new Error("abandon_failed"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't exit/i));
+    expect(screen.getByRole("button", { name: "Back" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Skip this step" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Confirm exit" })).not.toBeDisabled();
+  });
+
+  it("blocks action, skip, and back while abandon is pending under StrictMode", async () => {
+    let resolveAbandon!: (response: unknown) => void;
+    const user = userEvent.setup();
+    mocks.abandon.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAbandon = resolve;
+      }),
+    );
+    renderStrictRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Exit setup" }));
+    await user.click(screen.getByRole("button", { name: "Confirm exit" }));
+    await waitFor(() => expect(mocks.abandon).toHaveBeenCalledTimes(1));
+
+    const saveButton = screen.getAllByRole("button", { name: "Saving…" })[0];
+    if (!saveButton) throw new Error("Expected the action save button to be present");
+    expect(saveButton).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Skip this step" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skip this step" }));
+    fireEvent.submit(saveButton.closest("form") as HTMLFormElement);
+    expect(mocks.skip).not.toHaveBeenCalled();
+    expect(mocks.completeBehavior).not.toHaveBeenCalled();
+
+    resolveAbandon({ setup: record({ completedAt: "2026-08-16T01:00:00Z" }) });
+    await waitFor(() => expect(screen.getByText("dog destination")).toBeInTheDocument());
   });
 
   it("blocks action controls while abandon is pending and restores values after failure", async () => {

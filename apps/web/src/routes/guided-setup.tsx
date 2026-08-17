@@ -79,6 +79,7 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
   const abandonPendingRef = useRef(false);
   const mountedRef = useRef(true);
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
