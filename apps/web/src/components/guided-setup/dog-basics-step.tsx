@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 type DogBasicsStepProps = {
-  onStarted: (setup: GuidedSetupRecord) => void;
+  onStarted: (setup: GuidedSetupRecord | null) => void;
 };
 
 const inputClassName =
@@ -54,17 +54,19 @@ export function DogBasicsStep({ onStarted }: DogBasicsStepProps) {
     } catch (error) {
       if (isGuidedSetupConflict(error, "active_setup_exists")) {
         try {
-          const reconciled = await refetchGuidedSetup();
-          if (reconciled.data) {
-            if (reconciled.data.active) onStarted(reconciled.data.active);
+          const reconciled = await refetchGuidedSetup({ throwOnError: true });
+          if (reconciled.isError || reconciled.error || !reconciled.data?.active) {
+            setSubmitError(true);
             return;
           }
-          setSubmitError(true);
+          onStarted(reconciled.data.active);
+          return;
         } catch {
           setSubmitError(true);
+          return;
         }
       }
-      if (!isGuidedSetupConflict(error, "active_setup_exists")) setSubmitError(true);
+      setSubmitError(true);
     } finally {
       setSubmitting(false);
     }

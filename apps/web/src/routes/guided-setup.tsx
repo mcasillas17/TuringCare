@@ -12,6 +12,7 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
   const { t } = useI18n();
   const setupQuery = useGuidedSetup();
   const [startedSetup, setStartedSetup] = useState<GuidedSetupRecord | null>(null);
+  const [hasStartedSetup, setHasStartedSetup] = useState(false);
 
   if (setupQuery.isLoading) {
     return <p>{t("common.loading")}</p>;
@@ -21,12 +22,18 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
     return <p className="text-red-600">{t("guidedSetup.loadError")}</p>;
   }
 
-  const active = startedSetup ?? setupQuery.data.active;
+  const active = hasStartedSetup ? startedSetup : setupQuery.data.active;
   if (!active) {
-    if (!setupQuery.data.autoStartEligible && !allowNewDog) return <Navigate to="/my" replace />;
+    if (!allowNewDog && (!setupQuery.data.autoStartEligible || hasStartedSetup)) {
+      return <Navigate to="/my" replace />;
+    }
   }
 
   const step = active ? (active.currentStep === "intent" ? 2 : 3) : 1;
+  const onStarted = (setup: GuidedSetupRecord | null) => {
+    setStartedSetup(setup);
+    setHasStartedSetup(true);
+  };
 
   return (
     <>
@@ -34,9 +41,9 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
         {t("guidedSetup.stepAnnouncement", { step })}
       </output>
       {!active ? (
-        <DogBasicsStep onStarted={setStartedSetup} />
+        <DogBasicsStep onStarted={onStarted} />
       ) : active.currentStep === "intent" ? (
-        <IntentStep setup={active} onSaved={setStartedSetup} />
+        <IntentStep setup={active} onSaved={onStarted} />
       ) : (
         <SetupShell
           step={3}

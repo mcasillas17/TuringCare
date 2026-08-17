@@ -12,7 +12,7 @@ import { type FormEvent, useState } from "react";
 
 type IntentStepProps = {
   setup: GuidedSetupRecord;
-  onSaved: (setup: GuidedSetupRecord) => void;
+  onSaved: (setup: GuidedSetupRecord | null) => void;
 };
 
 const intents: ReadonlyArray<{
@@ -68,17 +68,19 @@ export function IntentStep({ setup, onSaved }: IntentStepProps) {
     } catch (error) {
       if (isGuidedSetupConflict(error, "setup_already_completed")) {
         try {
-          const reconciled = await refetchGuidedSetup();
-          if (reconciled.data) {
-            if (reconciled.data.active) onSaved(reconciled.data.active);
+          const reconciled = await refetchGuidedSetup({ throwOnError: true });
+          if (reconciled.isError || reconciled.error || !reconciled.data) {
+            setSaveError(true);
             return;
           }
-          setSaveError(true);
+          onSaved(reconciled.data.active);
+          return;
         } catch {
           setSaveError(true);
+          return;
         }
       }
-      if (!isGuidedSetupConflict(error, "setup_already_completed")) setSaveError(true);
+      setSaveError(true);
     } finally {
       setSubmitting(false);
     }

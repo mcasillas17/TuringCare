@@ -250,9 +250,56 @@ describe("GuidedSetup", () => {
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
     await waitFor(() => expect(screen.getByRole("radiogroup")).toBeInTheDocument());
-    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(refetch).toHaveBeenCalledWith({ throwOnError: true });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(mocks.start).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the start error when active setup reconciliation returns an error result", async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn().mockResolvedValue({
+      data: status({ active: record({ currentStep: "intent" }), autoStartEligible: false }),
+      isError: true,
+      error: new Error("load_failed"),
+    });
+    mocks.start.mockRejectedValue(new Error("active_setup_exists"));
+    renderRoute("/my/setup", status(), false, { refetch });
+
+    await user.type(screen.getByLabelText("Name"), "Biscuit");
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't start/i));
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
+    expect(refetch).toHaveBeenCalledWith({ throwOnError: true });
+  });
+
+  it("shows the start error when active setup reconciliation rejects", async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn().mockRejectedValue(new Error("load_failed"));
+    mocks.start.mockRejectedValue(new Error("active_setup_exists"));
+    renderRoute("/my/setup", status(), false, { refetch });
+
+    await user.type(screen.getByLabelText("Name"), "Biscuit");
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't start/i));
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
+  });
+
+  it("shows the start error when active setup reconciliation returns no active setup", async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn().mockResolvedValue({
+      data: status({ active: null, autoStartEligible: true }),
+      isError: false,
+    });
+    mocks.start.mockRejectedValue(new Error("active_setup_exists"));
+    renderRoute("/my/setup", status(), false, { refetch });
+
+    await user.type(screen.getByLabelText("Name"), "Biscuit");
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't start/i));
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
   });
 
   it("retains intent selection and shows an error when intent save is rejected", async () => {
@@ -294,8 +341,78 @@ describe("GuidedSetup", () => {
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
     await waitFor(() => expect(screen.getByText("Step 3 of 3")).toBeInTheDocument());
-    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(refetch).toHaveBeenCalledWith({ throwOnError: true });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows the intent error when completed setup reconciliation returns an error result", async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn().mockResolvedValue({
+      data: status({
+        active: record({ currentStep: "action", intent: "track_progress" }),
+        autoStartEligible: false,
+      }),
+      isError: true,
+      error: new Error("load_failed"),
+    });
+    mocks.saveIntent.mockRejectedValue(new Error("setup_already_completed"));
+    renderRoute(
+      "/my/setup",
+      status({ active: record({ currentStep: "intent" }), autoStartEligible: false }),
+      false,
+      { refetch },
+    );
+
+    await user.click(screen.getByRole("radio", { name: /Track progress/i }));
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't save/i));
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+    expect(refetch).toHaveBeenCalledWith({ throwOnError: true });
+  });
+
+  it("shows the intent error when completed setup reconciliation rejects", async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn().mockRejectedValue(new Error("load_failed"));
+    mocks.saveIntent.mockRejectedValue(new Error("setup_already_completed"));
+    renderRoute(
+      "/my/setup",
+      status({ active: record({ currentStep: "intent" }), autoStartEligible: false }),
+      false,
+      { refetch },
+    );
+
+    await user.click(screen.getByRole("radio", { name: /Track progress/i }));
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't save/i));
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+  });
+
+  it("clears an in-session setup after completed intent reconciliation returns no active setup", async () => {
+    const user = userEvent.setup();
+    const active = record({ currentStep: "intent" });
+    const refetch = vi.fn().mockResolvedValue({
+      data: status({
+        active: null,
+        latest: record({ completedAt: "2026-08-16T01:00:00Z" }),
+        autoStartEligible: false,
+      }),
+      isError: false,
+    });
+    mocks.start.mockResolvedValue({ setup: active });
+    mocks.saveIntent.mockRejectedValue(new Error("setup_already_completed"));
+    renderRoute("/my/setup", status(), false, { refetch });
+
+    await user.type(screen.getByLabelText("Name"), "Biscuit");
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+    await waitFor(() => expect(screen.getByRole("radiogroup")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("radio", { name: /Track progress/i }));
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    await waitFor(() => expect(screen.getByText("overview destination")).toBeInTheDocument());
+    expect(screen.queryByText("Step 2 of 3")).not.toBeInTheDocument();
   });
 
   it("allows an explicit new dog setup when there is no active setup", () => {
@@ -472,8 +589,60 @@ describe("GuidedSetup", () => {
     await user.click(screen.getByRole("button", { name: /Confirm exit/i }));
 
     await waitFor(() => expect(screen.getByText("overview destination")).toBeInTheDocument());
-    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(refetch).toHaveBeenCalledWith({ throwOnError: true });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows the abandon error when completed setup reconciliation returns an error result", async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn().mockResolvedValue({
+      data: status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+      isError: true,
+      error: new Error("load_failed"),
+    });
+    mocks.abandon.mockRejectedValue(new Error("setup_already_completed"));
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+      false,
+      { refetch },
+    );
+
+    await user.click(screen.getByRole("button", { name: /Exit setup/i }));
+    await user.click(screen.getByRole("button", { name: /Confirm exit/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't exit/i));
+    expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+    expect(refetch).toHaveBeenCalledWith({ throwOnError: true });
+    expect(screen.queryByText("overview destination")).not.toBeInTheDocument();
+  });
+
+  it("shows the abandon error when completed setup reconciliation rejects", async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn().mockRejectedValue(new Error("load_failed"));
+    mocks.abandon.mockRejectedValue(new Error("setup_already_completed"));
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+      false,
+      { refetch },
+    );
+
+    await user.click(screen.getByRole("button", { name: /Exit setup/i }));
+    await user.click(screen.getByRole("button", { name: /Confirm exit/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't exit/i));
+    expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+    expect(screen.queryByText("overview destination")).not.toBeInTheDocument();
   });
 
   it("keeps the minimal setup layout free of the main nav and companion", () => {

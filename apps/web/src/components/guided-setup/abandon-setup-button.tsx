@@ -35,17 +35,19 @@ export function AbandonSetupButton({ setupId }: { setupId: string }) {
     } catch (error) {
       if (isGuidedSetupConflict(error, "setup_already_completed")) {
         try {
-          const reconciled = await refetchGuidedSetup();
-          if (reconciled.data) {
-            navigate(reconciled.data.active ? "/my/setup" : "/my", { replace: true });
+          const reconciled = await refetchGuidedSetup({ throwOnError: true });
+          if (reconciled.isError || reconciled.error || !reconciled.data) {
+            setSubmitError(true);
             return;
           }
-          setSubmitError(true);
+          navigate(reconciled.data.active ? "/my/setup" : "/my", { replace: true });
+          return;
         } catch {
           setSubmitError(true);
+          return;
         }
       }
-      if (!isGuidedSetupConflict(error, "setup_already_completed")) setSubmitError(true);
+      setSubmitError(true);
     } finally {
       setSubmitting(false);
     }
