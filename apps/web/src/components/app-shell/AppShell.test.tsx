@@ -107,7 +107,7 @@ describe("AppShell", () => {
     expect(queryClient.getQueryData(["dogs"])).toBeUndefined();
   });
 
-  it("clears owner caches and navigates when Better Auth returns a sign-out error", async () => {
+  it("clears owner caches, stays in place, and shows a localized error when sign-out returns an error", async () => {
     const user = userEvent.setup();
     const queryClient = new QueryClient();
     queryClient.setQueryData(["dogs"], [{ id: "dog-1" }]);
@@ -117,15 +117,18 @@ describe("AppShell", () => {
 
     await user.click(screen.getByRole("button", { name: /sign out/i }));
 
-    await waitFor(() => expect(screen.getByText("LOGIN-CONTENT")).toBeInTheDocument());
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce());
+    expect(screen.getByText("OVERVIEW-CONTENT")).toBeInTheDocument();
+    expect(screen.queryByText("LOGIN-CONTENT")).toBeNull();
     expect(queryClient.getQueryData(["dogs"])).toBeUndefined();
     expect(mocks.toastError).toHaveBeenCalledWith(
       "Couldn't complete sign out. Your local data was cleared.",
     );
     expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /sign out/i })).not.toBeDisabled();
   });
 
-  it("clears owner caches and navigates when sign-out transport rejects", async () => {
+  it("clears owner caches, stays in place, and shows a localized error when sign-out throws", async () => {
     const user = userEvent.setup();
     const queryClient = new QueryClient();
     queryClient.setQueryData(["dogs"], [{ id: "dog-1" }]);
@@ -135,11 +138,14 @@ describe("AppShell", () => {
 
     await user.click(screen.getByRole("button", { name: /sign out/i }));
 
-    await waitFor(() => expect(screen.getByText("LOGIN-CONTENT")).toBeInTheDocument());
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce());
+    expect(screen.getByText("OVERVIEW-CONTENT")).toBeInTheDocument();
+    expect(screen.queryByText("LOGIN-CONTENT")).toBeNull();
     expect(queryClient.getQueryData(["dogs"])).toBeUndefined();
     expect(mocks.toastError).toHaveBeenCalledWith(
       "Couldn't complete sign out. Your local data was cleared.",
     );
     expect(mocks.toastSuccess).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /sign out/i })).not.toBeDisabled();
   });
 });

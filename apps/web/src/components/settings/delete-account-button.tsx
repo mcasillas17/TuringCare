@@ -36,7 +36,7 @@ export function DeleteAccountButton() {
       toast.error(t("settings.deleteFailed"));
       return;
     }
-    await signOutAndNavigate("/");
+    await signOutAndNavigate({ destination: "/", navigateOnFailure: true });
     setSubmitting(false);
     toast.success(t("settings.accountDeleted"));
   }

@@ -1,33 +1,34 @@
-import { useI18n } from "@/i18n";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { signOut } from "./auth-client";
 
-type SignOutResult = {
-  ok: boolean;
+export type SignOutResult = { ok: true } | { ok: false; error: unknown };
+
+export type SignOutOptions = {
+  destination?: string;
+  navigateOnFailure?: boolean;
 };
 
 export function useSignOut() {
-  const { t } = useI18n();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  return async (destination = "/login"): Promise<SignOutResult> => {
-    let failed = false;
+  return async ({
+    destination = "/login",
+    navigateOnFailure = false,
+  }: SignOutOptions = {}): Promise<SignOutResult> => {
+    let result: SignOutResult;
     try {
-      const result = await signOut();
-      failed = Boolean(result?.error);
-    } catch {
-      failed = true;
+      const response = await signOut();
+      result = response?.error ? { ok: false, error: response.error } : { ok: true };
+    } catch (error) {
+      result = { ok: false, error };
     }
 
     queryClient.clear();
-    navigate(destination);
-
-    if (failed) {
-      toast.error(t("app.signOutFailed"));
+    if (result.ok || navigateOnFailure) {
+      navigate(destination);
     }
-    return { ok: !failed };
+    return result;
   };
 }

@@ -119,17 +119,11 @@ it("finishes account deletion when sign out rejects", async () => {
 
   await waitFor(() => expect(screen.getByText("landing-page")).toBeInTheDocument());
   expect(queryClient.getQueryData(["dogs"])).toBeUndefined();
-  expect(toastErrorMock).toHaveBeenCalledTimes(1);
-  expect(toastErrorMock).toHaveBeenCalledWith(
-    "Couldn't complete sign out. Your local data was cleared.",
-  );
+  expect(toastErrorMock).not.toHaveBeenCalled();
   expect(toastSuccessMock).toHaveBeenCalledWith("Account deleted");
-  const errorCall = toastErrorMock.mock.invocationCallOrder[0];
   const successCall = toastSuccessMock.mock.invocationCallOrder[0];
-  expect(errorCall).toBeDefined();
   expect(successCall).toBeDefined();
-  if (errorCall === undefined || successCall === undefined) throw new Error("Missing toast call");
-  expect(errorCall).toBeLessThan(successCall);
+  if (successCall === undefined) throw new Error("Missing success toast call");
 });
 
 it("On API failure stays expanded and toasts the error", async () => {

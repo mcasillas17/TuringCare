@@ -45,7 +45,11 @@ export function Settings() {
           variant="outline"
           onClick={async () => {
             const result = await signOutAndNavigate();
-            if (result.ok) toast.success(t("app.signedOut"));
+            if (result.ok) {
+              toast.success(t("app.signedOut"));
+            } else {
+              toast.error(t("app.signOutFailed"));
+            }
           }}
         >
           {t("settings.signOut")}
