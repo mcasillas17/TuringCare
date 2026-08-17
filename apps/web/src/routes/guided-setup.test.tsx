@@ -1,6 +1,6 @@
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { GuidedSetupRecord, GuidedSetupStatus } from "@turingcare/shared";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -87,6 +87,8 @@ describe("GuidedSetup", () => {
     expect(screen.getByRole("heading", { name: /Tell us about your dog/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toBeInTheDocument();
     expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Now on step 1 of 3");
+    expect(screen.queryByRole("button", { name: /Exit setup/i })).not.toBeInTheDocument();
     expect(document.activeElement).toBe(
       screen.getByRole("heading", { name: /Tell us about your dog/i }),
     );
@@ -119,6 +121,67 @@ describe("GuidedSetup", () => {
     expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
   });
 
+  it("uses native radio arrow navigation through all three intents", async () => {
+    const user = userEvent.setup();
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "intent" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    const understand = screen.getByRole("radio", { name: /Understand behavior/i });
+    const train = screen.getByRole("radio", { name: /Train a skill/i });
+    const track = screen.getByRole("radio", { name: /Track progress/i });
+
+    understand.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(train).toHaveFocus();
+    expect(train).toBeChecked();
+
+    await user.keyboard("{ArrowDown}");
+    expect(track).toHaveFocus();
+    expect(track).toBeChecked();
+  });
+
+  it("shows a localized required error for an empty intent submission", async () => {
+    const user = userEvent.setup();
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "intent" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose one option to continue.");
+    expect(
+      screen.queryByText("Couldn't save your choice. Please try again."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("clears the required error when an intent is selected", async () => {
+    const user = userEvent.setup();
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "intent" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+    await user.click(screen.getByRole("radio", { name: /Track progress/i }));
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Couldn't save your choice. Please try again."),
+    ).not.toBeInTheDocument();
+  });
+
   it("resumes an active intent step and saves a keyboard-selected intent", async () => {
     const user = userEvent.setup();
     mocks.saveIntent.mockResolvedValue({
@@ -134,7 +197,7 @@ describe("GuidedSetup", () => {
 
     const radio = screen.getByRole("radio", { name: /Train a skill/i });
     radio.focus();
-    fireEvent.keyDown(radio, { key: " " });
+    await user.keyboard(" ");
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
     await waitFor(() =>
@@ -177,6 +240,7 @@ describe("GuidedSetup", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't save/i));
     expect(radio).toBeChecked();
+    expect(screen.queryByText("Choose one option to continue.")).not.toBeInTheDocument();
     expect(mocks.saveIntent).toHaveBeenCalledTimes(1);
   });
 
@@ -228,6 +292,7 @@ describe("GuidedSetup", () => {
 
     expect(screen.getByRole("heading", { name: /Cuéntanos sobre tu perro/i })).toBeInTheDocument();
     expect(screen.getByText("Paso 1 de 3")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Ahora estás en el paso 1 de 3");
     Object.defineProperty(navigator, "languages", {
       configurable: true,
       value: languages,
@@ -307,6 +372,6 @@ describe("GuidedSetup", () => {
     expect(screen.getByText("TuringCare")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Menu" })).not.toBeInTheDocument();
-    expect(screen.queryByText(/Turing — tap/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Turing/i })).not.toBeInTheDocument();
   });
 });
