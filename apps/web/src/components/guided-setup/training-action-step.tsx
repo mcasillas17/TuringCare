@@ -3,7 +3,9 @@ import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import {
+  type GuidedSetupErrorMessageKey,
   type GuidedTrainingActionResponse,
+  guidedSetupErrorMessageKey,
   isGuidedSetupReconciliationConflict,
   useCompleteTrainingSetup,
 } from "@/lib/guided-setup";
@@ -27,21 +29,11 @@ type TrainingActionStepProps = {
   onBack: () => void;
   onSkip: () => void;
   skipPending: boolean;
-  skipError: boolean;
+  skipError: GuidedSetupErrorMessageKey | null;
   abandonPending: boolean;
   onAbandonPendingChange: (pending: boolean) => void;
   canNavigateAfterAbandon: () => boolean;
 };
-
-type SubmitError =
-  | "invalid_template"
-  | "historical_suggestion_unavailable"
-  | "stale_conflict"
-  | "generic";
-
-function errorCode(error: unknown): string | null {
-  return error instanceof Error ? error.message : null;
-}
 
 function isStaleConflict(error: unknown): boolean {
   return isGuidedSetupReconciliationConflict(error);
@@ -67,7 +59,7 @@ export function TrainingActionStep({
   const catalogQuery = useTrainingCatalog();
   const templates = allowedTemplates(catalogQuery.data);
   const [templateKey, setTemplateKey] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<SubmitError | null>(null);
+  const [submitError, setSubmitError] = useState<GuidedSetupErrorMessageKey | null>(null);
   const submitLock = useRef(false);
   const complete = useCompleteTrainingSetup({ onCompleted });
   const busy = complete.isPending || skipPending || abandonPending;
@@ -93,13 +85,9 @@ export function TrainingActionStep({
         } catch {
           // Keep the stale-state message below when reconciliation cannot load status.
         }
-        setSubmitError("stale_conflict");
-      } else if (errorCode(error) === "invalid_template") {
-        setSubmitError("invalid_template");
-      } else if (errorCode(error) === "historical_suggestion_unavailable") {
-        setSubmitError("historical_suggestion_unavailable");
+        setSubmitError(guidedSetupErrorMessageKey(error));
       } else {
-        setSubmitError("generic");
+        setSubmitError(guidedSetupErrorMessageKey(error));
       }
     } finally {
       submitLock.current = false;
@@ -107,16 +95,7 @@ export function TrainingActionStep({
   }
 
   const controlsBusy = busy || submitLock.current;
-  const errorMessage =
-    submitError === "invalid_template"
-      ? t("guidedSetup.trainingInvalidTemplate")
-      : submitError === "historical_suggestion_unavailable"
-        ? t("guidedSetup.trainingHistoricalUnavailable")
-        : submitError === "stale_conflict"
-          ? t("guidedSetup.trainingStaleConflict")
-          : submitError === "generic"
-            ? t("guidedSetup.trainingError")
-            : null;
+  const errorMessage = submitError ? t(submitError) : null;
 
   return (
     <SetupShell
@@ -187,7 +166,7 @@ export function TrainingActionStep({
         )}
         {skipError && (
           <p role="alert" className="text-sm text-red-600">
-            {t("guidedSetup.skipError")}
+            {t(skipError)}
           </p>
         )}
         <div className="flex flex-wrap items-center gap-3">

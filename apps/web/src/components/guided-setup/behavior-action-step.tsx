@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import {
   type GuidedBehaviorActionResponse,
+  type GuidedSetupErrorMessageKey,
+  guidedSetupErrorMessageKey,
   isGuidedSetupReconciliationConflict,
   useCompleteBehaviorSetup,
 } from "@/lib/guided-setup";
@@ -30,7 +32,7 @@ type BehaviorActionStepProps = {
   onBack: () => void;
   onSkip: () => void;
   skipPending: boolean;
-  skipError: boolean;
+  skipError: GuidedSetupErrorMessageKey | null;
   abandonPending: boolean;
   onAbandonPendingChange: (pending: boolean) => void;
   canNavigateAfterAbandon: () => boolean;
@@ -49,7 +51,7 @@ export function BehaviorActionStep({
   canNavigateAfterAbandon,
 }: BehaviorActionStepProps) {
   const { t } = useI18n();
-  const [submitError, setSubmitError] = useState(false);
+  const [submitError, setSubmitError] = useState<GuidedSetupErrorMessageKey | null>(null);
   const submitLock = useRef(false);
   const {
     register,
@@ -76,7 +78,7 @@ export function BehaviorActionStep({
   async function submit(values: GuidedSetupBehaviorAction) {
     if (submitLock.current || abandonPending) return;
     submitLock.current = true;
-    setSubmitError(false);
+    setSubmitError(null);
     try {
       await complete.mutateAsync(values);
     } catch (error) {
@@ -84,7 +86,7 @@ export function BehaviorActionStep({
         const reconciled = await onReconcile();
         if (reconciled) return;
       }
-      setSubmitError(true);
+      setSubmitError(guidedSetupErrorMessageKey(error));
     } finally {
       submitLock.current = false;
     }
@@ -227,12 +229,12 @@ export function BehaviorActionStep({
         )}
         {submitError && (
           <p role="alert" className="text-sm text-red-600">
-            {t("guidedSetup.behaviorError")}
+            {t(submitError)}
           </p>
         )}
         {skipError && (
           <p role="alert" className="text-sm text-red-600">
-            {t("guidedSetup.skipError")}
+            {t(skipError)}
           </p>
         )}
         <div className="flex flex-wrap items-center gap-3">

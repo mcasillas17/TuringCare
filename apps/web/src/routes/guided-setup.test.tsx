@@ -25,6 +25,28 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/guided-setup", () => ({
   guidedSetupKey: ["guided-setup"],
+  guidedSetupErrorMessageKey: (error: unknown) => {
+    const code = error instanceof Error ? error.message : "";
+    const keys: Record<string, string> = {
+      active_setup_exists: "guidedSetup.activeSetupExists",
+      setup_already_completed: "guidedSetup.setupAlreadyCompleted",
+      intent_mismatch: "guidedSetup.intentMismatch",
+      invalid_template: "guidedSetup.trainingInvalidTemplate",
+      historical_suggestion_unavailable: "guidedSetup.trainingHistoricalUnavailable",
+      active_guided_setup: "guidedSetup.activeDeleteExplanation",
+      not_found: "guidedSetup.setupNotFound",
+      setup_not_ready_for_completion: "guidedSetup.setupNotReady",
+      start_failed: "guidedSetup.startError",
+      intent_failed: "guidedSetup.intentError",
+      behavior_failed: "guidedSetup.behaviorError",
+      progress_failed: "guidedSetup.progressError",
+      training_failed: "guidedSetup.trainingError",
+      skip_failed: "guidedSetup.skipError",
+      abandon_failed: "guidedSetup.abandonError",
+      load_failed: "guidedSetup.loadError",
+    };
+    return keys[code] ?? "guidedSetup.genericError";
+  },
   isGuidedSetupConflict: (error: unknown, code: string) =>
     error instanceof Error && error.message === code,
   isGuidedSetupReconciliationConflict: (error: unknown) =>
@@ -247,6 +269,7 @@ describe("GuidedSetup", () => {
     expect(screen.getByRole("heading", { name: /Tell us about your dog/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toBeInTheDocument();
     expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
+    expect(screen.getByLabelText("Step 1 of 3")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Now on step 1 of 3");
     expect(screen.queryByRole("button", { name: /Exit setup/i })).not.toBeInTheDocument();
     expect(document.activeElement).toBe(
@@ -483,6 +506,11 @@ describe("GuidedSetup", () => {
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
     expect(screen.getByRole("alert")).toHaveTextContent("Choose one option to continue.");
+    expect(screen.getByRole("radio", { name: /Understand behavior/i })).toHaveFocus();
+    expect(screen.getByRole("radiogroup")).toHaveAttribute(
+      "aria-describedby",
+      "guided-setup-intent-error",
+    );
     expect(
       screen.queryByText("Couldn't save your choice. Please try again."),
     ).not.toBeInTheDocument();
@@ -566,7 +594,7 @@ describe("GuidedSetup", () => {
     expect(mocks.start).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the start error when active setup reconciliation returns an error result", async () => {
+  it("shows the active setup error when reconciliation returns an error result", async () => {
     const user = userEvent.setup();
     const refetch = vi.fn().mockResolvedValue({
       data: status({ active: record({ currentStep: "intent" }), autoStartEligible: false }),
@@ -579,12 +607,16 @@ describe("GuidedSetup", () => {
     await user.type(screen.getByLabelText("Name"), "Biscuit");
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't start/i));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /Another guided setup is already active/i,
+      ),
+    );
     expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
     expect(refetch).toHaveBeenCalledWith({ throwOnError: true });
   });
 
-  it("shows the start error when active setup reconciliation rejects", async () => {
+  it("preserves the active setup conflict when reconciliation rejects", async () => {
     const user = userEvent.setup();
     const refetch = vi.fn().mockRejectedValue(new Error("load_failed"));
     mocks.start.mockRejectedValue(new Error("active_setup_exists"));
@@ -593,11 +625,15 @@ describe("GuidedSetup", () => {
     await user.type(screen.getByLabelText("Name"), "Biscuit");
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't start/i));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /Another guided setup is already active/i,
+      ),
+    );
     expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
   });
 
-  it("shows the start error when active setup reconciliation returns no active setup", async () => {
+  it("shows the active setup error when reconciliation returns no active setup", async () => {
     const user = userEvent.setup();
     const refetch = vi.fn().mockResolvedValue({
       data: status({ active: null, autoStartEligible: true }),
@@ -609,7 +645,11 @@ describe("GuidedSetup", () => {
     await user.type(screen.getByLabelText("Name"), "Biscuit");
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't start/i));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /Another guided setup is already active/i,
+      ),
+    );
     expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
   });
 
@@ -748,7 +788,11 @@ describe("GuidedSetup", () => {
     await user.type(concern, "Barking at visitors");
     await user.click(screen.getByRole("button", { name: "Save first step" }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /This action no longer matches your selected focus/i,
+      ),
+    );
     expect(concern).toHaveValue("Barking at visitors");
     expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
     expect(refetch).toHaveBeenCalledWith({ throwOnError: true });
@@ -879,7 +923,7 @@ describe("GuidedSetup", () => {
     );
   });
 
-  it("shows the intent error when completed setup reconciliation returns an error result", async () => {
+  it("shows the completion conflict when reconciliation returns an error result", async () => {
     const user = userEvent.setup();
     const refetch = vi.fn().mockResolvedValue({
       data: status({
@@ -900,12 +944,14 @@ describe("GuidedSetup", () => {
     await user.click(screen.getByRole("radio", { name: /Track progress/i }));
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't save/i));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/This guided setup is already complete/i),
+    );
     expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
     expect(refetch).toHaveBeenCalledWith({ throwOnError: true });
   });
 
-  it("shows the intent error when completed setup reconciliation rejects", async () => {
+  it("shows the completion conflict when reconciliation rejects", async () => {
     const user = userEvent.setup();
     const refetch = vi.fn().mockRejectedValue(new Error("load_failed"));
     mocks.saveIntent.mockRejectedValue(new Error("setup_already_completed"));
@@ -919,7 +965,9 @@ describe("GuidedSetup", () => {
     await user.click(screen.getByRole("radio", { name: /Track progress/i }));
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't save/i));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/This guided setup is already complete/i),
+    );
     expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
   });
 
@@ -1043,7 +1091,9 @@ describe("GuidedSetup", () => {
     await user.type(screen.getByLabelText("Name"), "Biscuit");
     await user.click(screen.getByRole("button", { name: /Continue/i }));
 
-    await waitFor(() => expect(screen.getByText(/Couldn't start/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Another guided setup is already active/i)).toBeInTheDocument(),
+    );
     expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
     expect(screen.getByText(/temporarily unavailable/i)).toBeInTheDocument();
   });
@@ -1499,7 +1549,7 @@ describe("GuidedSetup", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("shows the abandon error when completed setup reconciliation returns an error result", async () => {
+  it("shows the completion conflict when abandon reconciliation returns an error result", async () => {
     const user = userEvent.setup();
     const refetch = vi.fn().mockResolvedValue({
       data: status({
@@ -1523,13 +1573,15 @@ describe("GuidedSetup", () => {
     await user.click(screen.getByRole("button", { name: /Exit setup/i }));
     await user.click(screen.getByRole("button", { name: /Confirm exit/i }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't exit/i));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/This guided setup is already complete/i),
+    );
     expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
     expect(refetch).toHaveBeenCalledWith({ throwOnError: true });
     expect(screen.queryByText("overview destination")).not.toBeInTheDocument();
   });
 
-  it("shows the abandon error when completed setup reconciliation rejects", async () => {
+  it("shows the completion conflict when abandon reconciliation rejects", async () => {
     const user = userEvent.setup();
     const refetch = vi.fn().mockRejectedValue(new Error("load_failed"));
     mocks.abandon.mockRejectedValue(new Error("setup_already_completed"));
@@ -1546,7 +1598,9 @@ describe("GuidedSetup", () => {
     await user.click(screen.getByRole("button", { name: /Exit setup/i }));
     await user.click(screen.getByRole("button", { name: /Confirm exit/i }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't exit/i));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/This guided setup is already complete/i),
+    );
     expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
     expect(screen.queryByText("overview destination")).not.toBeInTheDocument();
   });

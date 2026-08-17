@@ -48,6 +48,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import {
+  guidedSetupErrorMessageKey,
   guidedSetupKey,
   isGuidedSetupConflict,
   isGuidedSetupReconciliationConflict,
@@ -110,6 +111,34 @@ function expectAggregateInvalidations(invalidateQueries: unknown) {
 afterEach(() => vi.clearAllMocks());
 
 describe("guided setup hooks", () => {
+  it("maps known API errors to typed localized messages and hides unknown server text", () => {
+    expect(guidedSetupErrorMessageKey(new Error("active_setup_exists"))).toBe(
+      "guidedSetup.activeSetupExists",
+    );
+    expect(guidedSetupErrorMessageKey(new Error("setup_already_completed"))).toBe(
+      "guidedSetup.setupAlreadyCompleted",
+    );
+    expect(guidedSetupErrorMessageKey(new Error("intent_mismatch"))).toBe(
+      "guidedSetup.intentMismatch",
+    );
+    expect(guidedSetupErrorMessageKey(new Error("invalid_template"))).toBe(
+      "guidedSetup.trainingInvalidTemplate",
+    );
+    expect(guidedSetupErrorMessageKey(new Error("historical_suggestion_unavailable"))).toBe(
+      "guidedSetup.trainingHistoricalUnavailable",
+    );
+    expect(guidedSetupErrorMessageKey(new Error("active_guided_setup"))).toBe(
+      "guidedSetup.activeDeleteExplanation",
+    );
+    expect(guidedSetupErrorMessageKey(new Error("not_found"))).toBe("guidedSetup.setupNotFound");
+    expect(guidedSetupErrorMessageKey(new Error("setup_not_ready_for_completion"))).toBe(
+      "guidedSetup.setupNotReady",
+    );
+    expect(guidedSetupErrorMessageKey(new Error("raw database details"))).toBe(
+      "guidedSetup.genericError",
+    );
+  });
+
   it("recognizes only the requested structured conflict code", () => {
     expect(isGuidedSetupConflict(new Error("active_setup_exists"), "active_setup_exists")).toBe(
       true,
@@ -152,7 +181,7 @@ describe("guided setup hooks", () => {
     expect(getGuidedSetup).toHaveBeenCalledWith();
   });
 
-  it("loads guided setup status and preserves structured errors", async () => {
+  it("sanitizes unknown guided setup errors to the safe load fallback", async () => {
     getGuidedSetup.mockResolvedValue({
       ok: false,
       json: async () => ({ error: "unauthorized" }),
@@ -162,7 +191,7 @@ describe("guided setup hooks", () => {
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.error).toEqual(new Error("unauthorized"));
+    expect(result.current.error).toEqual(new Error("load_failed"));
     expect(getGuidedSetup).toHaveBeenCalledWith();
   });
 

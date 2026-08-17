@@ -1,3 +1,4 @@
+import type { MessageKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -17,6 +18,60 @@ import { focusKey } from "./weekly-focus";
 export const guidedSetupKey = ["guided-setup"] as const;
 
 const guidedSetup = api.api["guided-setup"];
+
+const guidedSetupErrorCodes = [
+  "active_setup_exists",
+  "setup_already_completed",
+  "intent_mismatch",
+  "invalid_template",
+  "historical_suggestion_unavailable",
+  "active_guided_setup",
+  "not_found",
+  "setup_not_ready_for_completion",
+  "load_failed",
+  "start_failed",
+  "intent_failed",
+  "behavior_failed",
+  "progress_failed",
+  "training_failed",
+  "skip_failed",
+  "abandon_failed",
+  "validation_failed",
+] as const;
+
+export type GuidedSetupErrorCode = (typeof guidedSetupErrorCodes)[number];
+export type GuidedSetupErrorMessageKey = Extract<MessageKey, `guidedSetup.${string}`>;
+
+const guidedSetupErrorMessageKeys: Record<GuidedSetupErrorCode, GuidedSetupErrorMessageKey> = {
+  active_setup_exists: "guidedSetup.activeSetupExists",
+  setup_already_completed: "guidedSetup.setupAlreadyCompleted",
+  intent_mismatch: "guidedSetup.intentMismatch",
+  invalid_template: "guidedSetup.trainingInvalidTemplate",
+  historical_suggestion_unavailable: "guidedSetup.trainingHistoricalUnavailable",
+  active_guided_setup: "guidedSetup.activeDeleteExplanation",
+  not_found: "guidedSetup.setupNotFound",
+  setup_not_ready_for_completion: "guidedSetup.setupNotReady",
+  load_failed: "guidedSetup.loadError",
+  start_failed: "guidedSetup.startError",
+  intent_failed: "guidedSetup.intentError",
+  behavior_failed: "guidedSetup.behaviorError",
+  progress_failed: "guidedSetup.progressError",
+  training_failed: "guidedSetup.trainingError",
+  skip_failed: "guidedSetup.skipError",
+  abandon_failed: "guidedSetup.abandonError",
+  validation_failed: "guidedSetup.validationError",
+};
+
+function isGuidedSetupErrorCode(value: string): value is GuidedSetupErrorCode {
+  return (guidedSetupErrorCodes as readonly string[]).includes(value);
+}
+
+export function guidedSetupErrorMessageKey(error: unknown): GuidedSetupErrorMessageKey {
+  const code = error instanceof Error ? error.message : null;
+  return code !== null && isGuidedSetupErrorCode(code)
+    ? guidedSetupErrorMessageKeys[code]
+    : "guidedSetup.genericError";
+}
 
 export type GuidedBehaviorActionResponse = InferResponseType<
   typeof guidedSetup.action.behavior.$post,
@@ -75,7 +130,8 @@ function parseResponse<T>(response: ResponseWithJson, fallback: string): Promise
 async function parseResponse(response: ResponseWithJson, fallback: string): Promise<unknown> {
   const body = await response.json();
   if (!response.ok) {
-    throw new Error(isErrorBody(body) ? (body.error ?? fallback) : fallback);
+    const code = isErrorBody(body) ? body.error : undefined;
+    throw new Error(code && isGuidedSetupErrorCode(code) ? code : fallback);
   }
   return body;
 }

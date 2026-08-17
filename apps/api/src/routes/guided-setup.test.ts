@@ -59,6 +59,7 @@ import {
 } from "../db/schema";
 import { currentWeekKey } from "../lib/suggestion";
 import { type TestUser, createTestUser } from "../test-helpers";
+import { durationBucket } from "./guided-setup";
 
 const validDog = {
   name: "Sensitive Biscuit",
@@ -326,6 +327,164 @@ describe("guided setup lifecycle", () => {
     suggestionLoadControl.pauseLoad = false;
     suggestionLoadControl.releaseLoad?.();
     for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
+  });
+
+  it.each([
+    ["under_2m", 0],
+    ["under_2m", 1.999],
+    ["2_to_5m", 2],
+    ["2_to_5m", 4.999],
+    ["5_to_10m", 5],
+    ["5_to_10m", 9.999],
+    ["over_10m", 10],
+  ] as const)("buckets a %s duration at %s minutes", (expected, minutes) => {
+    const startedAt = new Date("2026-08-16T00:00:00.000Z");
+    const completedAt = new Date(startedAt.getTime() + minutes * 60_000);
+    expect(durationBucket(startedAt, completedAt)).toBe(expected);
+  });
+
+  it("rejects a completed event duration derived from client input", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    expect(started.status).toBe(201);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "track_progress")).status).toBe(200);
+    expect((await skipSetup(user, setup.id)).status).toBe(200);
+
+    const rows = await setupEvents(user.userId);
+    const completed = rows.find(({ name }) => name === "guided_setup.completed");
+    expect(completed).toEqual({
+      name: "guided_setup.completed",
+      props: {
+        intent: "track_progress",
+        step: "action",
+        completionReason: "skipped",
+        durationBucket: expect.stringMatching(/^(under_2m|2_to_5m|5_to_10m|over_10m)$/),
+      },
+    });
+    expect(JSON.stringify(completed?.props)).not.toContain("startedAt");
+    expect(JSON.stringify(completed?.props)).not.toContain("completedAt");
+    expect(completed?.props).not.toHaveProperty("duration");
+    expect(completed?.props).not.toHaveProperty("durationMinutes");
+  });
+
+  it("keeps every guided lifecycle, action, and replay telemetry prop scalar and private", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const forbidden = new Set<string>([
+      validDog.name,
+      validDog.breed,
+      validDog.notes,
+      "Snapped when touched",
+      "Settled after dinner",
+      "setupId",
+    ]);
+    const setupTimestamps: string[] = [];
+
+    const skippedStart = await startSetup(user);
+    const skipped = ((await skippedStart.json()) as SetupBody).setup;
+    setupTimestamps.push(skipped.startedAt);
+    expect((await saveIntent(user, skipped.id, "track_progress")).status).toBe(200);
+    expect((await skipSetup(user, skipped.id)).status).toBe(200);
+    expect((await skipSetup(user, skipped.id)).status).toBe(200);
+
+    const abandonedStart = await startSetup(user);
+    const abandoned = ((await abandonedStart.json()) as SetupBody).setup;
+    setupTimestamps.push(abandoned.startedAt);
+    expect((await abandonSetup(user, abandoned.id)).status).toBe(200);
+    expect((await abandonSetup(user, abandoned.id)).status).toBe(200);
+
+    const behaviorStart = await startSetup(user);
+    const behavior = ((await behaviorStart.json()) as SetupBody).setup;
+    setupTimestamps.push(behavior.startedAt);
+    expect((await saveIntent(user, behavior.id, "understand_behavior")).status).toBe(200);
+    expect(
+      (
+        await createBehaviorAction(user, {
+          setupId: behavior.id,
+          concern: "Snapped when touched",
+          severity: "mild",
+          safetyConfirmed: false,
+        })
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await createBehaviorAction(user, {
+          setupId: behavior.id,
+          concern: "A different concern",
+          severity: "mild",
+          safetyConfirmed: false,
+        })
+      ).status,
+    ).toBe(200);
+
+    const progressStart = await startSetup(user);
+    const progress = ((await progressStart.json()) as SetupBody).setup;
+    setupTimestamps.push(progress.startedAt);
+    expect((await saveIntent(user, progress.id, "track_progress")).status).toBe(200);
+    expect(
+      (
+        await createProgressAction(user, {
+          setupId: progress.id,
+          trend: "better",
+          note: "Settled after dinner",
+        })
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await createProgressAction(user, {
+          setupId: progress.id,
+          trend: "harder",
+          note: "Another private note",
+        })
+      ).status,
+    ).toBe(200);
+
+    const trainingStart = await startSetup(user);
+    const training = ((await trainingStart.json()) as SetupBody).setup;
+    setupTimestamps.push(training.startedAt);
+    expect((await saveIntent(user, training.id, "train_skill")).status).toBe(200);
+    const trainingInput = {
+      setupId: training.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: currentWeekKey(new Date(), 420),
+      timezoneOffsetMinutes: 420,
+    } as const;
+    expect((await createTrainingAction(user, trainingInput)).status).toBe(201);
+    expect((await createTrainingAction(user, trainingInput)).status).toBe(200);
+
+    const rows = await db
+      .select({ name: events.name, props: events.props })
+      .from(events)
+      .where(eq(events.userId, user.userId));
+    const completedRows = rows.filter(({ name }) => name === "guided_setup.completed");
+    expect(completedRows).toHaveLength(5);
+
+    for (const row of rows) {
+      const props = row.props as Record<string, unknown>;
+      expect(
+        Object.values(props).every((value) => {
+          const type = typeof value;
+          return type === "string" || type === "number" || type === "boolean";
+        }),
+      ).toBe(true);
+      expect(props).not.toHaveProperty("setupId");
+      expect(props).not.toHaveProperty("startedAt");
+      expect(props).not.toHaveProperty("completedAt");
+      expect(props).not.toHaveProperty("duration");
+      expect(props).not.toHaveProperty("durationMinutes");
+      for (const value of [...forbidden, ...setupTimestamps]) {
+        expect(JSON.stringify(props)).not.toContain(value);
+      }
+      if (row.name === "guided_setup.completed") {
+        expect(props.durationBucket).toMatch(/^(under_2m|2_to_5m|5_to_10m|over_10m)$/);
+      }
+    }
   });
 
   it("returns fresh status only when the owner has no dogs and no setup history", async () => {
@@ -678,6 +837,7 @@ describe("guided setup lifecycle", () => {
           intent: "track_progress",
           step: "action",
           completionReason: "skipped",
+          durationBucket: expect.stringMatching(/^(under_2m|2_to_5m|5_to_10m|over_10m)$/),
         },
       },
     ]);
@@ -868,7 +1028,7 @@ describe("guided setup lifecycle", () => {
     expect(rows).toEqual([
       {
         name: "safety.signal_reported",
-        props: { signal: "severe_behavior_concern", source: "behavior_concern" },
+        props: { source: "guided_setup" },
       },
       {
         name: "guided_setup.first_action_completed",
@@ -880,6 +1040,7 @@ describe("guided setup lifecycle", () => {
           intent: "understand_behavior",
           actionType: "behavior",
           completionReason: "first_action_completed",
+          durationBucket: expect.stringMatching(/^(under_2m|2_to_5m|5_to_10m|over_10m)$/),
         },
       },
     ]);
@@ -1316,6 +1477,7 @@ describe("guided setup lifecycle", () => {
           intent: "track_progress",
           actionType: "progress",
           completionReason: "first_action_completed",
+          durationBucket: expect.stringMatching(/^(under_2m|2_to_5m|5_to_10m|over_10m)$/),
         },
       },
     ]);
@@ -1384,6 +1546,7 @@ describe("guided setup lifecycle", () => {
           intent: "train_skill",
           actionType: "training",
           completionReason: "first_action_completed",
+          durationBucket: expect.stringMatching(/^(under_2m|2_to_5m|5_to_10m|over_10m)$/),
         },
       },
       {

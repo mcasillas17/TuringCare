@@ -12,6 +12,7 @@ type SetupShellProps = {
 export function SetupShell({ step, title, description, children }: SetupShellProps) {
   const { t } = useI18n();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const stepLabel = t("guidedSetup.stepOfThree", { step });
 
   useEffect(() => {
     if (step > 0) headingRef.current?.focus();
@@ -23,8 +24,8 @@ export function SetupShell({ step, title, description, children }: SetupShellPro
       className="motion-safe:transition-opacity motion-safe:duration-200 motion-reduce:transition-none"
     >
       <div className="mb-8 space-y-2">
-        <p className="text-sm font-semibold text-copper">
-          {t("guidedSetup.stepOfThree", { step })}
+        <p aria-label={stepLabel} className="text-sm font-semibold text-copper">
+          {stepLabel}
         </p>
         <h1
           id="guided-setup-heading"

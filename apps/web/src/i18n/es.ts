@@ -394,6 +394,13 @@ export const es = {
     startError: "No se pudo iniciar la configuración guiada. Tus datos siguen aquí.",
     intentError: "No se pudo guardar tu elección. Inténtalo de nuevo.",
     abandonError: "No se pudo salir de la configuración. Inténtalo de nuevo.",
+    genericError: "No se pudo completar la solicitud. Inténtalo de nuevo.",
+    activeSetupExists: "Ya hay otra configuración guiada activa. La actualizamos; continúa allí.",
+    setupAlreadyCompleted: "Esta configuración guiada ya está completa. Actualizamos su estado.",
+    intentMismatch: "Esta acción ya no coincide con tu enfoque. Actualizamos la configuración.",
+    setupNotFound: "Esta configuración guiada ya no está disponible. Vuelve a tu resumen.",
+    setupNotReady: "Guarda tu enfoque antes de completar este paso.",
+    validationError: "Revisa los campos marcados e inténtalo de nuevo.",
   },
   journal: {
     title: "Diario de conducta",

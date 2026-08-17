@@ -389,6 +389,13 @@ export const en = {
     startError: "Couldn't start guided setup. Your entries are still here.",
     intentError: "Couldn't save your choice. Please try again.",
     abandonError: "Couldn't exit setup. Please try again.",
+    genericError: "We couldn't complete that request. Please try again.",
+    activeSetupExists: "Another guided setup is already active. We refreshed it; continue there.",
+    setupAlreadyCompleted: "This guided setup is already complete. We refreshed its status.",
+    intentMismatch: "This action no longer matches your selected focus. We refreshed setup.",
+    setupNotFound: "This guided setup is no longer available. Please return to your dashboard.",
+    setupNotReady: "Save your focus before completing this step.",
+    validationError: "Check the highlighted fields and try again.",
   },
   journal: {
     title: "Behavior Journal",

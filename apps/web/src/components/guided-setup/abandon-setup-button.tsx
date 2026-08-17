@@ -1,6 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { isGuidedSetupConflict, useAbandonGuidedSetup, useGuidedSetup } from "@/lib/guided-setup";
+import {
+  type GuidedSetupErrorMessageKey,
+  guidedSetupErrorMessageKey,
+  isGuidedSetupConflict,
+  useAbandonGuidedSetup,
+  useGuidedSetup,
+} from "@/lib/guided-setup";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -20,7 +26,7 @@ export function AbandonSetupButton({
   const abandon = useAbandonGuidedSetup();
   const { refetch: refetchGuidedSetup } = useGuidedSetup();
   const [confirming, setConfirming] = useState(false);
-  const [submitError, setSubmitError] = useState(false);
+  const [submitError, setSubmitError] = useState<GuidedSetupErrorMessageKey | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const exitButtonRef = useRef<HTMLButtonElement>(null);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
@@ -58,7 +64,7 @@ export function AbandonSetupButton({
 
   async function handleConfirm() {
     if (busy) return;
-    setSubmitError(false);
+    setSubmitError(null);
     setSubmitting(true);
     reportedPendingRef.current = true;
     onPendingChangeRef.current?.(true);
@@ -74,7 +80,9 @@ export function AbandonSetupButton({
         try {
           const reconciled = await refetchGuidedSetup({ throwOnError: true });
           if (reconciled.isError || reconciled.error || !reconciled.data) {
-            if (mountedRef.current) setSubmitError(true);
+            if (mountedRef.current) {
+              setSubmitError(guidedSetupErrorMessageKey(error));
+            }
             return;
           }
           if (mountedRef.current && (canNavigate?.() ?? true)) {
@@ -82,11 +90,15 @@ export function AbandonSetupButton({
           }
           return;
         } catch {
-          if (mountedRef.current) setSubmitError(true);
+          if (mountedRef.current) {
+            setSubmitError(guidedSetupErrorMessageKey(error));
+          }
           return;
         }
       }
-      if (mountedRef.current) setSubmitError(true);
+      if (mountedRef.current) {
+        setSubmitError(guidedSetupErrorMessageKey(error));
+      }
     } finally {
       if (mountedRef.current) {
         setSubmitting(false);
@@ -117,7 +129,7 @@ export function AbandonSetupButton({
       <p className="font-medium text-slate">{t("guidedSetup.confirmExitPrompt")}</p>
       {submitError && (
         <p role="alert" className="text-sm text-red-600">
-          {t("guidedSetup.abandonError")}
+          {t(submitError)}
         </p>
       )}
       <div className="flex flex-wrap gap-2">

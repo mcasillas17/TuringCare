@@ -84,6 +84,16 @@ type GuidedTrainingActionResponse =
     };
 type CompletedActionReplay<T> = { kind: "already_completed" } | { kind: "idempotent"; response: T };
 
+export type GuidedSetupDurationBucket = "under_2m" | "2_to_5m" | "5_to_10m" | "over_10m";
+
+export function durationBucket(startedAt: Date, completedAt: Date): GuidedSetupDurationBucket {
+  const minutes = (completedAt.getTime() - startedAt.getTime()) / 60_000;
+  if (minutes < 2) return "under_2m";
+  if (minutes < 5) return "2_to_5m";
+  if (minutes < 10) return "5_to_10m";
+  return "over_10m";
+}
+
 function toSetupDto(row: SetupDogJoinRow): GuidedSetupRecord {
   if (row.setup.completedAt === null && (row.setup.dogId === null || row.dogName === null)) {
     throw new Error("active guided setup has no dog");
@@ -334,6 +344,17 @@ async function completeSetup(
   return toSetupDto({ setup, dogName: active.dogName });
 }
 
+function completionTelemetryProps(
+  setup: GuidedSetupRecord,
+  props: Record<string, string>,
+): Record<string, string> {
+  if (setup.completedAt === null) throw new Error("completed guided setup has no completedAt");
+  return {
+    ...props,
+    durationBucket: durationBucket(new Date(setup.startedAt), new Date(setup.completedAt)),
+  };
+}
+
 export const guidedSetupApp = new Hono<{ Variables: Vars }>()
   .use("*", requireUser)
   .get("/", async (c) => c.json(await loadStatus(c.get("userId"))))
@@ -465,11 +486,11 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
     });
     await recordEvent("guided_setup.completed", {
       userId,
-      props: {
+      props: completionTelemetryProps(result.setup, {
         intent: result.intent,
         step: "action",
         completionReason: "skipped",
-      },
+      }),
     });
     return c.json({ setup: result.setup });
   })
@@ -507,7 +528,10 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       completionReason: "abandoned",
     };
     if (result.setup.intent) props.intent = result.setup.intent;
-    await recordEvent("guided_setup.completed", { userId, props });
+    await recordEvent("guided_setup.completed", {
+      userId,
+      props: completionTelemetryProps(result.setup, props),
+    });
     return c.json({ setup: result.setup });
   })
   .post("/action/training", zValidator("json", guidedSetupTrainingActionSchema), async (c) => {
@@ -603,11 +627,11 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       });
       await recordEvent("guided_setup.completed", {
         userId,
-        props: {
+        props: completionTelemetryProps(result.setup, {
           intent: "train_skill",
           actionType: "training",
           completionReason: "first_action_completed",
-        },
+        }),
       });
     }
 
@@ -678,10 +702,10 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       return c.json(result.response);
     }
 
-    for (const signal of result.reportedSignals) {
+    for (let index = 0; index < result.reportedSignals.length; index += 1) {
       await recordEvent("safety.signal_reported", {
         userId,
-        props: { signal, source: "behavior_concern" },
+        props: { source: "guided_setup" },
       });
     }
     await recordEvent("guided_setup.first_action_completed", {
@@ -693,11 +717,11 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
     });
     await recordEvent("guided_setup.completed", {
       userId,
-      props: {
+      props: completionTelemetryProps(result.setup, {
         intent: "understand_behavior",
         actionType: "behavior",
         completionReason: "first_action_completed",
-      },
+      }),
     });
     return c.json(
       {
@@ -764,11 +788,11 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
     });
     await recordEvent("guided_setup.completed", {
       userId,
-      props: {
+      props: completionTelemetryProps(result.setup, {
         intent: "track_progress",
         actionType: "progress",
         completionReason: "first_action_completed",
-      },
+      }),
     });
     return c.json(
       {

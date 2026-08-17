@@ -8,8 +8,10 @@ import { useI18n } from "@/i18n";
 import {
   type GuidedBehaviorActionResponse,
   type GuidedProgressActionResponse,
+  type GuidedSetupErrorMessageKey,
   type GuidedSkipResponse,
   type GuidedTrainingActionResponse,
+  guidedSetupErrorMessageKey,
   isGuidedSetupReconciliationConflict,
   useGuidedSetup,
   useSkipGuidedSetup,
@@ -37,7 +39,7 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
   const [startedSetup, setStartedSetup] = useState<GuidedSetupRecord | null>(null);
   const [hasStartedSetup, setHasStartedSetup] = useState(false);
   const [completion, setCompletion] = useState<CompletionState | null>(null);
-  const [skipError, setSkipError] = useState(false);
+  const [skipError, setSkipError] = useState<GuidedSetupErrorMessageKey | null>(null);
   const [skipSubmitting, setSkipSubmitting] = useState(false);
   const [abandonPending, setAbandonPending] = useState(false);
   const abandonPendingRef = useRef(false);
@@ -119,7 +121,7 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
 
   const step = active ? (active.currentStep === "intent" ? 2 : 3) : 1;
   const onStarted = (setup: GuidedSetupRecord | null) => {
-    setSkipError(false);
+    setSkipError(null);
     setStartedSetup(setup);
     setHasStartedSetup(true);
   };
@@ -135,7 +137,7 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
   };
   const onBack = () => {
     if (abandonPendingRef.current) return;
-    setSkipError(false);
+    setSkipError(null);
     if (active) {
       setStartedSetup({ ...active, currentStep: "intent" });
       setHasStartedSetup(true);
@@ -145,7 +147,7 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
     if (abandonPendingRef.current || skipLock.current || !active) return;
     skipLock.current = true;
     setSkipSubmitting(true);
-    setSkipError(false);
+    setSkipError(null);
     try {
       await skip.mutateAsync({ setupId: active.id });
     } catch (error) {
@@ -153,7 +155,7 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
         const reconciled = await reconcileSetup();
         if (reconciled) return;
       }
-      setSkipError(true);
+      setSkipError(guidedSetupErrorMessageKey(error));
     } finally {
       skipLock.current = false;
       setSkipSubmitting(false);

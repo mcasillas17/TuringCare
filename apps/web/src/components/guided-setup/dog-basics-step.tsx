@@ -1,7 +1,13 @@
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { isGuidedSetupConflict, useGuidedSetup, useStartGuidedSetup } from "@/lib/guided-setup";
+import {
+  type GuidedSetupErrorMessageKey,
+  guidedSetupErrorMessageKey,
+  isGuidedSetupConflict,
+  useGuidedSetup,
+  useStartGuidedSetup,
+} from "@/lib/guided-setup";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type DogProfile, type GuidedSetupRecord, dogProfileSchema } from "@turingcare/shared";
 import { useState } from "react";
@@ -20,7 +26,7 @@ export function DogBasicsStep({ onStarted }: DogBasicsStepProps) {
   const { t } = useI18n();
   const start = useStartGuidedSetup();
   const { refetch: refetchGuidedSetup } = useGuidedSetup();
-  const [submitError, setSubmitError] = useState(false);
+  const [submitError, setSubmitError] = useState<GuidedSetupErrorMessageKey | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const {
     register,
@@ -38,7 +44,7 @@ export function DogBasicsStep({ onStarted }: DogBasicsStepProps) {
   });
 
   const onSubmit = handleSubmit(async (values) => {
-    setSubmitError(false);
+    setSubmitError(null);
     setSubmitting(true);
     try {
       const breed = values.breed?.trim();
@@ -58,17 +64,17 @@ export function DogBasicsStep({ onStarted }: DogBasicsStepProps) {
         try {
           const reconciled = await refetchGuidedSetup({ throwOnError: true });
           if (reconciled.isError || reconciled.error || !reconciled.data?.active) {
-            setSubmitError(true);
+            setSubmitError(guidedSetupErrorMessageKey(error));
             return;
           }
           onStarted(reconciled.data.active);
           return;
         } catch {
-          setSubmitError(true);
+          setSubmitError(guidedSetupErrorMessageKey(error));
           return;
         }
       }
-      setSubmitError(true);
+      setSubmitError(guidedSetupErrorMessageKey(error));
     } finally {
       setSubmitting(false);
     }
@@ -229,7 +235,7 @@ export function DogBasicsStep({ onStarted }: DogBasicsStepProps) {
         </div>
         {submitError && (
           <p role="alert" className="text-sm text-red-600">
-            {t("guidedSetup.startError")}
+            {t(submitError)}
           </p>
         )}
         <Button type="submit" disabled={busy} className="bg-slate text-cream">

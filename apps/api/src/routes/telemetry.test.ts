@@ -45,6 +45,26 @@ describe("server-side telemetry emission", () => {
     expect(await countEvents(u.userId, "dog.created")).toBe(1);
   });
 
+  it("rejects guided setup events from the client telemetry endpoint", async () => {
+    const u = await createTestUser();
+    users.push(u);
+
+    const response = await app.request("/api/events", {
+      method: "POST",
+      headers: {
+        ...u.authHeaders,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "guided_setup.completed",
+        props: { durationBucket: "under_2m" },
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await countEvents(u.userId, "guided_setup.completed")).toBe(0);
+  });
+
   it("records journal.entry_created", async () => {
     const u = await createTestUser();
     users.push(u);
