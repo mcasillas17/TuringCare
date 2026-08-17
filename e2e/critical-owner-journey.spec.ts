@@ -8,6 +8,29 @@ import { type APIRequestContext, type Page, expect, test } from "@playwright/tes
 
 const PASSWORD = "Maple2024!xQ"; // satisfies min-8 + mixed-case + digit + special
 const API_BASE_URL = process.env.PLAYWRIGHT_API_BASE_URL ?? "http://localhost:3311";
+const WEB_ORIGIN = "http://localhost:3310";
+
+function captureApiClientRequests(page: Page): string[] {
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    if (request.isNavigationRequest()) return;
+    const url = new URL(request.url());
+    if (url.pathname.startsWith("/api/")) requests.push(request.url());
+  });
+  return requests;
+}
+
+function expectApiClientRequestsUseViteProxy(requests: string[]): void {
+  expect(requests.length, "the browser made API requests").toBeGreaterThan(0);
+  expect(
+    requests.every((requestUrl) => new URL(requestUrl).origin === WEB_ORIGIN),
+    "browser /api/* requests use the web origin and Vite proxy",
+  ).toBe(true);
+  const paths = [...new Set(requests.map((requestUrl) => new URL(requestUrl).pathname))].sort();
+  console.info(
+    `[proxy] ${requests.length} browser API requests via ${WEB_ORIGIN}: ${paths.join(", ")}`,
+  );
+}
 
 function makeEmail(project: string): string {
   const ts = Date.now();
@@ -44,6 +67,7 @@ test("[desktop] full owner journey: register → guided setup → training → b
   request,
 }, testInfo) => {
   test.setTimeout(120_000);
+  const apiClientRequests = captureApiClientRequests(page);
 
   const email = makeEmail(testInfo.project.name);
 
@@ -181,10 +205,12 @@ test("[desktop] full owner journey: register → guided setup → training → b
     // Sheet already closed or Close button not present
   }
   await expect(page.getByText("Final · v1")).toBeVisible({ timeout: 10_000 });
+  expectApiClientRequestsUseViteProxy(apiClientRequests);
 });
 
 test("[phone] guided training setup resumes after reload", async ({ page, request }, testInfo) => {
   test.setTimeout(120_000);
+  const apiClientRequests = captureApiClientRequests(page);
 
   const email = makeEmail(testInfo.project.name);
 
@@ -256,4 +282,5 @@ test("[phone] guided training setup resumes after reload", async ({ page, reques
   await expect(page).toHaveURL(/\/my\/dogs\/[^/]+\/week$/, { timeout: 10_000 });
   await expect(page.getByRole("heading", { name: "This week", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Juniper", exact: true })).toBeVisible();
+  expectApiClientRequestsUseViteProxy(apiClientRequests);
 });
