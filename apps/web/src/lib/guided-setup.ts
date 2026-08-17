@@ -18,6 +18,10 @@ export const guidedSetupKey = ["guided-setup"] as const;
 
 const guidedSetup = api.api["guided-setup"];
 
+export function isGuidedSetupConflict(error: unknown, code: string): boolean {
+  return error instanceof Error && error.message === code;
+}
+
 const aggregateKeys = [
   guidedSetupKey,
   ["dogs"],

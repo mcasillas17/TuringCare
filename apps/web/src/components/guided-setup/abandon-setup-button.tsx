@@ -1,16 +1,28 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { useAbandonGuidedSetup } from "@/lib/guided-setup";
-import { useState } from "react";
+import { isGuidedSetupConflict, useAbandonGuidedSetup, useGuidedSetup } from "@/lib/guided-setup";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export function AbandonSetupButton({ setupId }: { setupId: string }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const abandon = useAbandonGuidedSetup();
+  const { refetch: refetchGuidedSetup } = useGuidedSetup();
   const [confirming, setConfirming] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const exitButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreExitFocusRef = useRef(false);
+
+  useEffect(() => {
+    if (confirming) confirmButtonRef.current?.focus();
+    if (!confirming && restoreExitFocusRef.current) {
+      restoreExitFocusRef.current = false;
+      exitButtonRef.current?.focus();
+    }
+  }, [confirming]);
 
   async function handleConfirm() {
     setSubmitError(false);
@@ -20,8 +32,20 @@ export function AbandonSetupButton({ setupId }: { setupId: string }) {
       navigate(response.setup.dogId ? `/my/dogs/${response.setup.dogId}` : "/my", {
         replace: true,
       });
-    } catch {
-      setSubmitError(true);
+    } catch (error) {
+      if (isGuidedSetupConflict(error, "setup_already_completed")) {
+        try {
+          const reconciled = await refetchGuidedSetup();
+          if (reconciled.data) {
+            navigate(reconciled.data.active ? "/my/setup" : "/my", { replace: true });
+            return;
+          }
+          setSubmitError(true);
+        } catch {
+          setSubmitError(true);
+        }
+      }
+      if (!isGuidedSetupConflict(error, "setup_already_completed")) setSubmitError(true);
     } finally {
       setSubmitting(false);
     }
@@ -29,7 +53,12 @@ export function AbandonSetupButton({ setupId }: { setupId: string }) {
 
   if (!confirming) {
     return (
-      <Button type="button" variant="outline" onClick={() => setConfirming(true)}>
+      <Button
+        ref={exitButtonRef}
+        type="button"
+        variant="outline"
+        onClick={() => setConfirming(true)}
+      >
         {t("guidedSetup.exitSetup")}
       </Button>
     );
@@ -46,6 +75,7 @@ export function AbandonSetupButton({ setupId }: { setupId: string }) {
       )}
       <div className="flex flex-wrap gap-2">
         <Button
+          ref={confirmButtonRef}
           type="button"
           disabled={busy}
           onClick={handleConfirm}
@@ -57,7 +87,10 @@ export function AbandonSetupButton({ setupId }: { setupId: string }) {
           type="button"
           variant="outline"
           disabled={busy}
-          onClick={() => setConfirming(false)}
+          onClick={() => {
+            restoreExitFocusRef.current = true;
+            setConfirming(false);
+          }}
         >
           {t("guidedSetup.cancelExit")}
         </Button>

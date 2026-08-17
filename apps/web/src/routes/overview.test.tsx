@@ -191,6 +191,44 @@ describe("Overview", () => {
     await waitFor(() => expect(screen.getByText("guided setup destination")).toBeInTheDocument());
   });
 
+  it("redirects an eligible owner before showing an overview error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const p = new URL(url, "http://x").pathname;
+        const guided = p.includes("/api/guided-setup");
+        return new Response(
+          JSON.stringify(
+            guided
+              ? { active: null, latest: null, autoStartEligible: true }
+              : { error: "load_failed" },
+          ),
+          {
+            status: guided ? 200 : 500,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <LocaleProvider>
+          <MemoryRouter initialEntries={["/my"]}>
+            <Routes>
+              <Route path="/my" element={<Overview />} />
+              <Route path="/my/setup" element={<p>guided setup destination</p>} />
+            </Routes>
+          </MemoryRouter>
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText("guided setup destination")).toBeInTheDocument());
+    expect(screen.queryByText("Couldn't load your dogs.")).not.toBeInTheDocument();
+  });
+
   it("keeps the dashboard available with a localized guided setup warning", async () => {
     vi.stubGlobal(
       "fetch",

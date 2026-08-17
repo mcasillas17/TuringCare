@@ -49,6 +49,7 @@ vi.mock("@/lib/api", () => ({
 
 import {
   guidedSetupKey,
+  isGuidedSetupConflict,
   useAbandonGuidedSetup,
   useCompleteBehaviorSetup,
   useCompleteProgressSetup,
@@ -108,6 +109,16 @@ function expectAggregateInvalidations(invalidateQueries: unknown) {
 afterEach(() => vi.clearAllMocks());
 
 describe("guided setup hooks", () => {
+  it("recognizes only the requested structured conflict code", () => {
+    expect(isGuidedSetupConflict(new Error("active_setup_exists"), "active_setup_exists")).toBe(
+      true,
+    );
+    expect(isGuidedSetupConflict(new Error("setup_already_completed"), "active_setup_exists")).toBe(
+      false,
+    );
+    expect(isGuidedSetupConflict("active_setup_exists", "active_setup_exists")).toBe(false);
+  });
+
   it("loads valid guided setup status and caches it under the stable query key", async () => {
     const body = {
       active: setupRecord(),

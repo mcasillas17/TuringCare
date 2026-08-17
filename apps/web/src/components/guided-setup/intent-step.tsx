@@ -2,7 +2,11 @@ import { AbandonSetupButton } from "@/components/guided-setup/abandon-setup-butt
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { useSaveGuidedSetupIntent } from "@/lib/guided-setup";
+import {
+  isGuidedSetupConflict,
+  useGuidedSetup,
+  useSaveGuidedSetupIntent,
+} from "@/lib/guided-setup";
 import type { GuidedSetupIntent, GuidedSetupRecord } from "@turingcare/shared";
 import { type FormEvent, useState } from "react";
 
@@ -42,6 +46,7 @@ const intents: ReadonlyArray<{
 export function IntentStep({ setup, onSaved }: IntentStepProps) {
   const { t } = useI18n();
   const saveIntent = useSaveGuidedSetupIntent();
+  const { refetch: refetchGuidedSetup } = useGuidedSetup();
   const [intent, setIntent] = useState<GuidedSetupIntent | "">(setup.intent ?? "");
   const [requiredError, setRequiredError] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -60,8 +65,20 @@ export function IntentStep({ setup, onSaved }: IntentStepProps) {
     try {
       const response = await saveIntent.mutateAsync({ setupId: setup.id, intent });
       onSaved(response.setup);
-    } catch {
-      setSaveError(true);
+    } catch (error) {
+      if (isGuidedSetupConflict(error, "setup_already_completed")) {
+        try {
+          const reconciled = await refetchGuidedSetup();
+          if (reconciled.data) {
+            if (reconciled.data.active) onSaved(reconciled.data.active);
+            return;
+          }
+          setSaveError(true);
+        } catch {
+          setSaveError(true);
+        }
+      }
+      if (!isGuidedSetupConflict(error, "setup_already_completed")) setSaveError(true);
     } finally {
       setSubmitting(false);
     }

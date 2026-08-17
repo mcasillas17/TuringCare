@@ -1,7 +1,7 @@
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { useStartGuidedSetup } from "@/lib/guided-setup";
+import { isGuidedSetupConflict, useGuidedSetup, useStartGuidedSetup } from "@/lib/guided-setup";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type DogProfile, type GuidedSetupRecord, dogProfileSchema } from "@turingcare/shared";
 import { useState } from "react";
@@ -17,6 +17,7 @@ const inputClassName =
 export function DogBasicsStep({ onStarted }: DogBasicsStepProps) {
   const { t } = useI18n();
   const start = useStartGuidedSetup();
+  const { refetch: refetchGuidedSetup } = useGuidedSetup();
   const [submitError, setSubmitError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const {
@@ -50,8 +51,20 @@ export function DogBasicsStep({ onStarted }: DogBasicsStepProps) {
       };
       const response = await start.mutateAsync(profile);
       onStarted(response.setup);
-    } catch {
-      setSubmitError(true);
+    } catch (error) {
+      if (isGuidedSetupConflict(error, "active_setup_exists")) {
+        try {
+          const reconciled = await refetchGuidedSetup();
+          if (reconciled.data) {
+            if (reconciled.data.active) onStarted(reconciled.data.active);
+            return;
+          }
+          setSubmitError(true);
+        } catch {
+          setSubmitError(true);
+        }
+      }
+      if (!isGuidedSetupConflict(error, "active_setup_exists")) setSubmitError(true);
     } finally {
       setSubmitting(false);
     }

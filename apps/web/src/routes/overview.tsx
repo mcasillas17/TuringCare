@@ -29,11 +29,11 @@ export function Overview() {
   } = useGuidedSetup();
 
   if (isLoading || isGuidedSetupLoading) return <p>{t("common.loading")}</p>;
-  if (isError || !o) return <p className="text-red-600">{t("dogs.loadError")}</p>;
   const guidedSetupUnavailable = isGuidedSetupError || !guidedSetup;
   if (!guidedSetupUnavailable && (guidedSetup.autoStartEligible || guidedSetup.active)) {
     return <Navigate to="/my/setup" replace />;
   }
+  if (isError || !o) return <p className="text-red-600">{t("dogs.loadError")}</p>;
 
   const stage = deriveStage(o.dogCount, o.journalEntryCount, o.latestBrief?.status ?? null);
   const guidedSetupWarning = guidedSetupUnavailable ? (

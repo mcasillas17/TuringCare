@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/guided-setup", () => ({
+  guidedSetupKey: ["guided-setup"],
+  isGuidedSetupConflict: (error: unknown, code: string) =>
+    error instanceof Error && error.message === code,
   useGuidedSetup: mocks.useGuidedSetup,
   useStartGuidedSetup: () => ({ mutateAsync: mocks.start, isPending: false }),
   useSaveGuidedSetupIntent: () => ({ mutateAsync: mocks.saveIntent, isPending: false }),
@@ -28,6 +31,7 @@ vi.mock("@/lib/auth-client", () => ({
 }));
 
 import { GuidedSetupLayout } from "@/components/guided-setup/guided-setup-layout";
+import { guidedSetupKey } from "@/lib/guided-setup";
 import { GuidedSetup } from "./guided-setup";
 
 const setupId = "00000000-0000-4000-8000-000000000001";
@@ -52,11 +56,18 @@ function status(overrides: Partial<GuidedSetupStatus> = {}): GuidedSetupStatus {
   return { active: null, latest: null, autoStartEligible: true, ...overrides };
 }
 
-function renderRoute(initialEntry: string, setupStatus: GuidedSetupStatus, allowNewDog = false) {
+function renderRoute(
+  initialEntry: string,
+  setupStatus: GuidedSetupStatus,
+  allowNewDog = false,
+  queryOverrides: Record<string, unknown> = {},
+) {
   mocks.useGuidedSetup.mockReturnValue({
     data: setupStatus,
     isLoading: false,
     isError: false,
+    refetch: vi.fn(),
+    ...queryOverrides,
   });
   return render(
     <QueryClientProvider
@@ -226,6 +237,24 @@ describe("GuidedSetup", () => {
     expect(mocks.start).toHaveBeenCalledTimes(1);
   });
 
+  it("reconciles an active setup conflict to the server intent step", async () => {
+    const user = userEvent.setup();
+    const active = record({ currentStep: "intent" });
+    const refetch = vi.fn().mockResolvedValue({
+      data: status({ active, autoStartEligible: false }),
+    });
+    mocks.start.mockRejectedValue(new Error("active_setup_exists"));
+    renderRoute("/my/setup", status(), false, { refetch });
+
+    await user.type(screen.getByLabelText("Name"), "Biscuit");
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    await waitFor(() => expect(screen.getByRole("radiogroup")).toBeInTheDocument());
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(mocks.start).toHaveBeenCalledTimes(1);
+  });
+
   it("retains intent selection and shows an error when intent save is rejected", async () => {
     const user = userEvent.setup();
     mocks.saveIntent.mockRejectedValue(new Error("intent_failed"));
@@ -245,6 +274,28 @@ describe("GuidedSetup", () => {
     expect(radio).toBeChecked();
     expect(screen.queryByText("Choose one option to continue.")).not.toBeInTheDocument();
     expect(mocks.saveIntent).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconciles a completed intent conflict to the server action step", async () => {
+    const user = userEvent.setup();
+    const active = record({ currentStep: "action", intent: "track_progress" });
+    const refetch = vi.fn().mockResolvedValue({
+      data: status({ active, autoStartEligible: false }),
+    });
+    mocks.saveIntent.mockRejectedValue(new Error("setup_already_completed"));
+    renderRoute(
+      "/my/setup",
+      status({ active: record({ currentStep: "intent" }), autoStartEligible: false }),
+      false,
+      { refetch },
+    );
+
+    await user.click(screen.getByRole("radio", { name: /Track progress/i }));
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    await waitFor(() => expect(screen.getByText("Step 3 of 3")).toBeInTheDocument());
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("allows an explicit new dog setup when there is no active setup", () => {
@@ -287,19 +338,24 @@ describe("GuidedSetup", () => {
 
   it("renders Spanish guided setup copy", () => {
     const languages = navigator.languages;
-    Object.defineProperty(navigator, "languages", {
-      configurable: true,
-      value: ["es-MX"],
-    });
-    renderRoute("/my/setup", status());
+    try {
+      Object.defineProperty(navigator, "languages", {
+        configurable: true,
+        value: ["es-MX"],
+      });
+      renderRoute("/my/setup", status());
 
-    expect(screen.getByRole("heading", { name: /Cuéntanos sobre tu perro/i })).toBeInTheDocument();
-    expect(screen.getByText("Paso 1 de 3")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Ahora estás en el paso 1 de 3");
-    Object.defineProperty(navigator, "languages", {
-      configurable: true,
-      value: languages,
-    });
+      expect(
+        screen.getByRole("heading", { name: /Cuéntanos sobre tu perro/i }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Paso 1 de 3")).toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent("Ahora estás en el paso 1 de 3");
+    } finally {
+      Object.defineProperty(navigator, "languages", {
+        configurable: true,
+        value: languages,
+      });
+    }
   });
 
   it("resumes action at step 3 and offers a two-step abandon flow", async () => {
@@ -320,6 +376,25 @@ describe("GuidedSetup", () => {
 
     await waitFor(() => expect(mocks.abandon).toHaveBeenCalledWith({ setupId }));
     expect(screen.getByText("dog destination")).toBeInTheDocument();
+  });
+
+  it("moves focus into abandon confirmation and restores it on cancel", async () => {
+    const user = userEvent.setup();
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "track_progress" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    const exitButton = screen.getByRole("button", { name: /Exit setup/i });
+    await user.click(exitButton);
+    const confirmButton = screen.getByRole("button", { name: /Confirm exit/i });
+    await waitFor(() => expect(confirmButton).toHaveFocus());
+
+    await user.click(screen.getByRole("button", { name: /Keep setup/i }));
+    expect(screen.getByRole("button", { name: /Exit setup/i })).toHaveFocus();
   });
 
   it("abandons from intent and stays on step 2 when abandon fails", async () => {
@@ -359,22 +434,100 @@ describe("GuidedSetup", () => {
     expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
   });
 
+  it("redirects after reconciling a completed abandon conflict", async () => {
+    const user = userEvent.setup();
+    const refetch = vi.fn().mockResolvedValue({
+      data: status({
+        active: null,
+        latest: record({ completedAt: "2026-08-16T01:00:00Z" }),
+        autoStartEligible: false,
+      }),
+    });
+    mocks.useGuidedSetup.mockReturnValue({
+      data: status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+      isLoading: false,
+      isError: false,
+      refetch,
+    });
+    mocks.abandon.mockRejectedValue(new Error("setup_already_completed"));
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <LocaleProvider>
+          <MemoryRouter initialEntries={["/my/setup"]}>
+            <Routes>
+              <Route path="/my/setup" element={<GuidedSetup allowNewDog={false} />} />
+              <Route path="/my" element={<p>overview destination</p>} />
+            </Routes>
+          </MemoryRouter>
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Exit setup/i }));
+    await user.click(screen.getByRole("button", { name: /Confirm exit/i }));
+
+    await waitFor(() => expect(screen.getByText("overview destination")).toBeInTheDocument());
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("keeps the minimal setup layout free of the main nav and companion", () => {
     mocks.useSession.mockReturnValue({
       data: { user: { email: "owner@example.com", emailVerified: true } },
       isPending: false,
     });
     render(
-      <LocaleProvider>
-        <MemoryRouter>
-          <GuidedSetupLayout />
-        </MemoryRouter>
-      </LocaleProvider>,
+      <QueryClientProvider client={new QueryClient()}>
+        <LocaleProvider>
+          <MemoryRouter>
+            <GuidedSetupLayout />
+          </MemoryRouter>
+        </LocaleProvider>
+      </QueryClientProvider>,
     );
 
     expect(screen.getByText("TuringCare")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Menu" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Turing/i })).not.toBeInTheDocument();
+  });
+
+  it("clears owner-scoped query cache after a successful sign out", async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(guidedSetupKey, { active: record() });
+    queryClient.setQueryData(["dogs"], [{ id: "dog-1", name: "Biscuit" }]);
+    mocks.signOut.mockImplementation(async () => {
+      expect(queryClient.getQueryData(guidedSetupKey)).toBeDefined();
+    });
+    mocks.useSession.mockReturnValue({
+      data: { user: { email: "owner@example.com", emailVerified: true } },
+      isPending: false,
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <LocaleProvider>
+          <MemoryRouter initialEntries={["/my/setup"]}>
+            <Routes>
+              <Route path="/my/setup" element={<GuidedSetupLayout />} />
+              <Route path="/login" element={<p>login destination</p>} />
+            </Routes>
+          </MemoryRouter>
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+
+    await waitFor(() => expect(screen.getByText("login destination")).toBeInTheDocument());
+    expect(mocks.signOut).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryData(guidedSetupKey)).toBeUndefined();
+    expect(queryClient.getQueryData(["dogs"])).toBeUndefined();
   });
 });
