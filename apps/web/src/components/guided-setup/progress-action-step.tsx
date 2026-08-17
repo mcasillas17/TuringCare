@@ -30,6 +30,9 @@ type ProgressActionStepProps = {
   onSkip: () => void;
   skipPending: boolean;
   skipError: boolean;
+  abandonPending: boolean;
+  onAbandonPendingChange: (pending: boolean) => void;
+  canNavigateAfterAbandon: () => boolean;
 };
 
 const trendLabels = {
@@ -46,6 +49,9 @@ export function ProgressActionStep({
   onSkip,
   skipPending,
   skipError,
+  abandonPending,
+  onAbandonPendingChange,
+  canNavigateAfterAbandon,
 }: ProgressActionStepProps) {
   const { t } = useI18n();
   const [submitError, setSubmitError] = useState(false);
@@ -63,10 +69,10 @@ export function ProgressActionStep({
     },
   });
   const complete = useCompleteProgressSetup({ onCompleted });
-  const busy = isSubmitting || complete.isPending || skipPending;
+  const busy = isSubmitting || complete.isPending || skipPending || abandonPending;
 
   async function submit(values: GuidedSetupProgressAction) {
-    if (submitLock.current) return;
+    if (submitLock.current || abandonPending) return;
     submitLock.current = true;
     setSubmitError(false);
     try {
@@ -178,7 +184,12 @@ export function ProgressActionStep({
           <Button type="button" variant="outline" onClick={onSkip} disabled={busy}>
             {skipPending ? t("guidedSetup.saving") : t("guidedSetup.skip")}
           </Button>
-          <AbandonSetupButton setupId={setup.id} disabled={busy} />
+          <AbandonSetupButton
+            setupId={setup.id}
+            disabled={busy}
+            onPendingChange={onAbandonPendingChange}
+            canNavigate={canNavigateAfterAbandon}
+          />
         </div>
       </form>
     </SetupShell>

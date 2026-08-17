@@ -15,7 +15,7 @@ import {
   useSkipGuidedSetup,
 } from "@/lib/guided-setup";
 import type { GuidedSetupRecord, GuidedSetupStatus } from "@turingcare/shared";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 
 type CompletionState =
@@ -75,6 +75,20 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
   const [completion, setCompletion] = useState<CompletionState | null>(null);
   const [skipError, setSkipError] = useState(false);
   const [skipSubmitting, setSkipSubmitting] = useState(false);
+  const [abandonPending, setAbandonPending] = useState(false);
+  const abandonPendingRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  const onAbandonPendingChange = useCallback((pending: boolean) => {
+    if (!mountedRef.current) return;
+    abandonPendingRef.current = pending;
+    setAbandonPending(pending);
+  }, []);
+  const canNavigateAfterAbandon = useCallback(() => completionRef.current === null, []);
   const skip = useSkipGuidedSetup({
     onCompleted: (response: GuidedSkipResponse) => {
       const nextCompletion = { kind: "skipped" as const, setup: response.setup };
@@ -141,6 +155,7 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
     }
   };
   const onBack = () => {
+    if (abandonPendingRef.current) return;
     setSkipError(false);
     if (active) {
       setStartedSetup({ ...active, currentStep: "intent" });
@@ -148,7 +163,7 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
     }
   };
   const onSkip = async () => {
-    if (skipLock.current || !active) return;
+    if (abandonPendingRef.current || skipLock.current || !active) return;
     skipLock.current = true;
     setSkipSubmitting(true);
     setSkipError(false);
@@ -206,9 +221,18 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
       {!active ? (
         <DogBasicsStep onStarted={onStarted} />
       ) : active.currentStep === "intent" ? (
-        <IntentStep setup={active} onSaved={onStarted} onReconcile={reconcileSetup} />
+        <IntentStep
+          key={active.id}
+          setup={active}
+          onSaved={onStarted}
+          onReconcile={reconcileSetup}
+          abandonPending={abandonPending}
+          onAbandonPendingChange={onAbandonPendingChange}
+          canNavigateAfterAbandon={canNavigateAfterAbandon}
+        />
       ) : active.intent === "understand_behavior" ? (
         <BehaviorActionStep
+          key={active.id}
           setup={active}
           onCompleted={onBehaviorCompleted}
           onReconcile={reconcileSetup}
@@ -216,9 +240,13 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
           onSkip={() => void onSkip()}
           skipPending={skipSubmitting || skip.isPending}
           skipError={skipError}
+          abandonPending={abandonPending}
+          onAbandonPendingChange={onAbandonPendingChange}
+          canNavigateAfterAbandon={canNavigateAfterAbandon}
         />
       ) : active.intent === "track_progress" ? (
         <ProgressActionStep
+          key={active.id}
           setup={active}
           onCompleted={onProgressCompleted}
           onReconcile={reconcileSetup}
@@ -226,9 +254,13 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
           onSkip={() => void onSkip()}
           skipPending={skipSubmitting || skip.isPending}
           skipError={skipError}
+          abandonPending={abandonPending}
+          onAbandonPendingChange={onAbandonPendingChange}
+          canNavigateAfterAbandon={canNavigateAfterAbandon}
         />
       ) : (
         <SetupShell
+          key={active.id}
           step={3}
           title={t("guidedSetup.actionTitle")}
           description={t("guidedSetup.actionDescription", { dog: active.dogName ?? "" })}
@@ -246,11 +278,16 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
               <Button
                 type="button"
                 onClick={() => void onSkip()}
-                disabled={skipSubmitting || skip.isPending}
+                disabled={abandonPending || skipSubmitting || skip.isPending}
               >
                 {skipSubmitting || skip.isPending ? t("guidedSetup.saving") : t("guidedSetup.skip")}
               </Button>
-              <AbandonSetupButton setupId={active.id} disabled={skipSubmitting || skip.isPending} />
+              <AbandonSetupButton
+                setupId={active.id}
+                disabled={abandonPending || skipSubmitting || skip.isPending}
+                onPendingChange={onAbandonPendingChange}
+                canNavigate={canNavigateAfterAbandon}
+              />
             </div>
           </div>
         </SetupShell>

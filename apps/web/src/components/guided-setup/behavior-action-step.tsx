@@ -31,6 +31,9 @@ type BehaviorActionStepProps = {
   onSkip: () => void;
   skipPending: boolean;
   skipError: boolean;
+  abandonPending: boolean;
+  onAbandonPendingChange: (pending: boolean) => void;
+  canNavigateAfterAbandon: () => boolean;
 };
 
 export function BehaviorActionStep({
@@ -41,6 +44,9 @@ export function BehaviorActionStep({
   onSkip,
   skipPending,
   skipError,
+  abandonPending,
+  onAbandonPendingChange,
+  canNavigateAfterAbandon,
 }: BehaviorActionStepProps) {
   const { t } = useI18n();
   const [submitError, setSubmitError] = useState(false);
@@ -65,10 +71,10 @@ export function BehaviorActionStep({
   const severity = watch("severity");
   const safetySignal = watch("safetySignal");
   const safetyRequired = severity === "severe" || safetySignal != null;
-  const busy = isSubmitting || complete.isPending || skipPending;
+  const busy = isSubmitting || complete.isPending || skipPending || abandonPending;
 
   async function submit(values: GuidedSetupBehaviorAction) {
-    if (submitLock.current) return;
+    if (submitLock.current || abandonPending) return;
     submitLock.current = true;
     setSubmitError(false);
     try {
@@ -239,7 +245,12 @@ export function BehaviorActionStep({
           <Button type="button" variant="outline" onClick={onSkip} disabled={busy}>
             {skipPending ? t("guidedSetup.saving") : t("guidedSetup.skip")}
           </Button>
-          <AbandonSetupButton setupId={setup.id} disabled={busy} />
+          <AbandonSetupButton
+            setupId={setup.id}
+            disabled={busy}
+            onPendingChange={onAbandonPendingChange}
+            canNavigate={canNavigateAfterAbandon}
+          />
         </div>
       </form>
     </SetupShell>

@@ -10,6 +10,9 @@ type IntentStepProps = {
   setup: GuidedSetupRecord;
   onSaved: (setup: GuidedSetupRecord | null) => void;
   onReconcile: () => Promise<boolean>;
+  abandonPending: boolean;
+  onAbandonPendingChange: (pending: boolean) => void;
+  canNavigateAfterAbandon: () => boolean;
 };
 
 const intents: ReadonlyArray<{
@@ -40,7 +43,14 @@ const intents: ReadonlyArray<{
   },
 ];
 
-export function IntentStep({ setup, onSaved, onReconcile }: IntentStepProps) {
+export function IntentStep({
+  setup,
+  onSaved,
+  onReconcile,
+  abandonPending,
+  onAbandonPendingChange,
+  canNavigateAfterAbandon,
+}: IntentStepProps) {
   const { t } = useI18n();
   const saveIntent = useSaveGuidedSetupIntent();
   const [intent, setIntent] = useState<GuidedSetupIntent | "">(setup.intent ?? "");
@@ -50,6 +60,7 @@ export function IntentStep({ setup, onSaved, onReconcile }: IntentStepProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (abandonPending) return;
     if (!intent) {
       setRequiredError(true);
       setSaveError(false);
@@ -72,7 +83,7 @@ export function IntentStep({ setup, onSaved, onReconcile }: IntentStepProps) {
     }
   }
 
-  const busy = submitting || saveIntent.isPending;
+  const busy = submitting || saveIntent.isPending || abandonPending;
 
   return (
     <SetupShell
@@ -129,7 +140,12 @@ export function IntentStep({ setup, onSaved, onReconcile }: IntentStepProps) {
           <Button type="submit" disabled={busy} className="bg-slate text-cream">
             {busy ? t("guidedSetup.saving") : t("guidedSetup.continue")}
           </Button>
-          <AbandonSetupButton setupId={setup.id} disabled={busy} />
+          <AbandonSetupButton
+            setupId={setup.id}
+            disabled={busy}
+            onPendingChange={onAbandonPendingChange}
+            canNavigate={canNavigateAfterAbandon}
+          />
         </div>
       </form>
     </SetupShell>

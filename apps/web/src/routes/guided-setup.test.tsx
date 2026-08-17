@@ -1,6 +1,6 @@
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { GuidedSetupRecord, GuidedSetupStatus } from "@turingcare/shared";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   completeBehavior: vi.fn(),
   completeProgress: vi.fn(),
   afterComplete: vi.fn(),
+  onBehaviorCompleted: undefined as ((response: unknown) => void) | undefined,
   skip: vi.fn(),
   abandon: vi.fn(),
   signOut: vi.fn(),
@@ -31,15 +32,18 @@ vi.mock("@/lib/guided-setup", () => ({
   useGuidedSetup: mocks.useGuidedSetup,
   useStartGuidedSetup: () => ({ mutateAsync: mocks.start, isPending: false }),
   useSaveGuidedSetupIntent: () => ({ mutateAsync: mocks.saveIntent, isPending: false }),
-  useCompleteBehaviorSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
-    mutateAsync: async (body: unknown) => {
-      const response = await mocks.completeBehavior(body);
-      options?.onCompleted?.(response);
-      mocks.afterComplete();
-      return response;
-    },
-    isPending: false,
-  }),
+  useCompleteBehaviorSetup: (options?: { onCompleted?: (response: unknown) => void }) => {
+    mocks.onBehaviorCompleted = options?.onCompleted;
+    return {
+      mutateAsync: async (body: unknown) => {
+        const response = await mocks.completeBehavior(body);
+        options?.onCompleted?.(response);
+        mocks.afterComplete();
+        return response;
+      },
+      isPending: false,
+    };
+  },
   useCompleteProgressSetup: (options?: { onCompleted?: (response: unknown) => void }) => ({
     mutateAsync: async (body: unknown) => {
       const response = await mocks.completeProgress(body);
@@ -130,6 +134,7 @@ function renderRoute(
 afterEach(() => {
   vi.clearAllMocks();
   mocks.afterComplete.mockReset();
+  mocks.onBehaviorCompleted = undefined;
 });
 
 describe("GuidedSetup", () => {
@@ -399,6 +404,69 @@ describe("GuidedSetup", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("remounts action state when conflict reconciliation selects a different setup", async () => {
+    const user = userEvent.setup();
+    const nextSetupId = "00000000-0000-4000-8000-000000000002";
+    const refetch = vi.fn().mockResolvedValue({
+      data: status({
+        active: record({
+          id: nextSetupId,
+          dogId: "dog-2",
+          dogName: "Clover",
+          currentStep: "action",
+          intent: "understand_behavior",
+        }),
+        autoStartEligible: false,
+      }),
+    });
+    mocks.completeBehavior
+      .mockRejectedValueOnce(new Error("intent_mismatch"))
+      .mockResolvedValueOnce({
+        setup: record({
+          id: nextSetupId,
+          dogId: "dog-2",
+          dogName: "Clover",
+          completedAt: "2026-08-16T01:00:00Z",
+          completionReason: "first_action_completed",
+        }),
+        concern: { id: "concern-2" },
+        actionDeleted: false,
+      });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+      false,
+      { refetch },
+    );
+
+    const concern = screen.getByLabelText("What concern would you like to understand?");
+    await user.type(concern, "Barking at visitors");
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    await waitFor(() => expect(screen.getByDisplayValue(nextSetupId)).toBeInTheDocument());
+    expect(screen.getByLabelText("What concern would you like to understand?")).toHaveValue("");
+
+    await user.type(
+      screen.getByLabelText("What concern would you like to understand?"),
+      "Jumping on guests",
+    );
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    await waitFor(() =>
+      expect(mocks.completeBehavior).toHaveBeenLastCalledWith({
+        setupId: nextSetupId,
+        concern: "Jumping on guests",
+        severity: "mild",
+        safetySignal: null,
+        safetyConfirmed: false,
+      }),
+    );
+    expect(mocks.completeBehavior).toHaveBeenCalledTimes(2);
+  });
+
   it("redirects after a behavior conflict finds a completed setup", async () => {
     const user = userEvent.setup();
     const refetch = vi.fn().mockResolvedValue({
@@ -521,6 +589,58 @@ describe("GuidedSetup", () => {
     await waitFor(() => expect(screen.getByText("Step 3 of 3")).toBeInTheDocument());
     expect(refetch).toHaveBeenCalledWith({ throwOnError: true });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("remounts intent state when conflict reconciliation selects a different dog", async () => {
+    const user = userEvent.setup();
+    const nextSetupId = "00000000-0000-4000-8000-000000000003";
+    const refetch = vi.fn().mockResolvedValue({
+      data: status({
+        active: record({
+          id: nextSetupId,
+          dogId: "dog-2",
+          dogName: "Clover",
+          currentStep: "intent",
+          intent: null,
+        }),
+        autoStartEligible: false,
+      }),
+    });
+    mocks.saveIntent.mockRejectedValueOnce(new Error("intent_mismatch")).mockResolvedValueOnce({
+      setup: record({
+        id: nextSetupId,
+        dogId: "dog-2",
+        dogName: "Clover",
+        currentStep: "action",
+        intent: "track_progress",
+      }),
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "intent" }),
+        autoStartEligible: false,
+      }),
+      false,
+      { refetch },
+    );
+
+    await user.click(screen.getByRole("radio", { name: /Track progress/i }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("What would help most with Clover?")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("radio", { name: /Track progress/i })).not.toBeChecked();
+
+    await user.click(screen.getByRole("radio", { name: /Track progress/i }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(mocks.saveIntent).toHaveBeenLastCalledWith({
+        setupId: nextSetupId,
+        intent: "track_progress",
+      }),
+    );
   });
 
   it("shows the intent error when completed setup reconciliation returns an error result", async () => {
@@ -801,6 +921,43 @@ describe("GuidedSetup", () => {
     expect(mocks.abandon).toHaveBeenCalledWith({ setupId });
   });
 
+  it("keeps a completion handoff when abandon resolves after completion", async () => {
+    let resolveAbandon!: (response: unknown) => void;
+    const user = userEvent.setup();
+    mocks.abandon.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAbandon = resolve;
+      }),
+    );
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Exit setup" }));
+    await user.click(screen.getByRole("button", { name: "Confirm exit" }));
+    await waitFor(() => expect(mocks.abandon).toHaveBeenCalledWith({ setupId }));
+
+    await act(async () => {
+      mocks.onBehaviorCompleted?.({
+        setup: record({
+          completedAt: "2026-08-16T01:00:00Z",
+          completionReason: "first_action_completed",
+        }),
+        concern: { id: "concern-1" },
+        actionDeleted: false,
+      });
+    });
+    await waitFor(() => expect(screen.getByText("Your first step was saved.")).toBeInTheDocument());
+
+    resolveAbandon({ setup: record({ completedAt: "2026-08-16T01:01:00Z" }) });
+    await waitFor(() => expect(screen.getByText("Your first step was saved.")).toBeInTheDocument());
+    expect(screen.queryByText("dog destination")).not.toBeInTheDocument();
+  });
+
   it("keeps the action handoff on failure to abandon", async () => {
     const user = userEvent.setup();
     mocks.abandon.mockRejectedValue(new Error("abandon_failed"));
@@ -817,6 +974,99 @@ describe("GuidedSetup", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't exit/i));
     expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+  });
+
+  it("blocks action controls while abandon is pending and restores values after failure", async () => {
+    let rejectAbandon!: (error: Error) => void;
+    const user = userEvent.setup();
+    mocks.abandon.mockReturnValue(
+      new Promise((_, reject) => {
+        rejectAbandon = reject;
+      }),
+    );
+    mocks.completeBehavior.mockRejectedValue(new Error("behavior_failed"));
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    const concern = screen.getByLabelText("What concern would you like to understand?");
+    await user.type(concern, "Barking at visitors");
+    await user.click(screen.getByRole("button", { name: "Exit setup" }));
+    await user.click(screen.getByRole("button", { name: "Confirm exit" }));
+    await waitFor(() => expect(mocks.abandon).toHaveBeenCalledTimes(1));
+
+    const saveButton = screen.getAllByRole("button", { name: "Saving…" })[0];
+    const form = saveButton?.closest("form");
+    expect(form).not.toBeNull();
+    expect(saveButton).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Skip this step" })).toBeDisabled();
+    fireEvent.submit(form as HTMLFormElement);
+    expect(mocks.completeBehavior).not.toHaveBeenCalled();
+    expect(mocks.skip).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("What concern would you like to understand?")).toHaveValue(
+      "Barking at visitors",
+    );
+
+    rejectAbandon(new Error("abandon_failed"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't exit/i));
+    expect(screen.getByRole("button", { name: "Save first step" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Back" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Skip this step" })).not.toBeDisabled();
+    expect(screen.getByLabelText("What concern would you like to understand?")).toHaveValue(
+      "Barking at visitors",
+    );
+  });
+
+  it("blocks intent saves while abandon is pending and preserves the selection after failure", async () => {
+    let rejectAbandon!: (error: Error) => void;
+    const user = userEvent.setup();
+    mocks.abandon.mockReturnValue(
+      new Promise((_, reject) => {
+        rejectAbandon = reject;
+      }),
+    );
+    mocks.saveIntent.mockResolvedValue({
+      setup: record({ currentStep: "action", intent: "track_progress" }),
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "intent" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    const track = screen.getByRole("radio", { name: /Track progress/i });
+    await user.click(track);
+    await user.click(screen.getByRole("button", { name: "Exit setup" }));
+    await user.click(screen.getByRole("button", { name: "Confirm exit" }));
+    await waitFor(() => expect(mocks.abandon).toHaveBeenCalledTimes(1));
+
+    const continueButton = screen.getAllByRole("button", { name: "Saving…" })[0];
+    const form = continueButton?.closest("form");
+    expect(form).not.toBeNull();
+    expect(continueButton).toBeDisabled();
+    fireEvent.submit(form as HTMLFormElement);
+    expect(mocks.saveIntent).not.toHaveBeenCalled();
+    expect(track).toBeChecked();
+
+    rejectAbandon(new Error("abandon_failed"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't exit/i));
+    expect(screen.getByRole("button", { name: "Continue" })).not.toBeDisabled();
+    expect(track).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() =>
+      expect(mocks.saveIntent).toHaveBeenCalledWith({
+        setupId,
+        intent: "track_progress",
+      }),
+    );
   });
 
   it("serializes abandon behind a pending behavior action and recovers after rejection", async () => {
@@ -1706,6 +1956,36 @@ describe("GuidedSetup", () => {
     rejectSkip(new Error("skip_failed"));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/couldn't skip/i));
     expect(exitButton).not.toBeDisabled();
+  });
+
+  it("blocks the train placeholder skip while abandon is pending and recovers after failure", async () => {
+    let rejectAbandon!: (error: Error) => void;
+    const user = userEvent.setup();
+    mocks.abandon.mockReturnValue(
+      new Promise((_, reject) => {
+        rejectAbandon = reject;
+      }),
+    );
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "train_skill" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Exit setup" }));
+    await user.click(screen.getByRole("button", { name: "Confirm exit" }));
+    await waitFor(() => expect(mocks.abandon).toHaveBeenCalledTimes(1));
+
+    const skipButton = screen.getByRole("button", { name: "Skip this step" });
+    expect(skipButton).toBeDisabled();
+    fireEvent.click(skipButton);
+    expect(mocks.skip).not.toHaveBeenCalled();
+
+    rejectAbandon(new Error("abandon_failed"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't exit/i));
+    expect(skipButton).not.toBeDisabled();
   });
 
   it("renders Spanish behavior action copy", () => {

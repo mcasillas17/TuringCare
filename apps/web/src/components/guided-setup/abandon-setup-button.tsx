@@ -7,9 +7,13 @@ import { useNavigate } from "react-router-dom";
 export function AbandonSetupButton({
   setupId,
   disabled = false,
+  onPendingChange,
+  canNavigate,
 }: {
   setupId: string;
   disabled?: boolean;
+  onPendingChange?: (pending: boolean) => void;
+  canNavigate?: () => boolean;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -21,6 +25,8 @@ export function AbandonSetupButton({
   const exitButtonRef = useRef<HTMLButtonElement>(null);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
   const restoreExitFocusRef = useRef(false);
+  const mountedRef = useRef(true);
+  const reportedPendingRef = useRef(false);
 
   useEffect(() => {
     if (confirming) confirmButtonRef.current?.focus();
@@ -30,35 +36,61 @@ export function AbandonSetupButton({
     }
   }, [confirming]);
 
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      onPendingChange?.(false);
+    };
+  }, [onPendingChange]);
+
+  const pending = submitting || abandon.isPending;
+  useEffect(() => {
+    if (!mountedRef.current || pending === reportedPendingRef.current) {
+      return;
+    }
+    reportedPendingRef.current = pending;
+    onPendingChange?.(pending);
+  }, [onPendingChange, pending]);
+
   const busy = disabled || submitting || abandon.isPending;
 
   async function handleConfirm() {
     if (busy) return;
     setSubmitError(false);
     setSubmitting(true);
+    reportedPendingRef.current = true;
+    onPendingChange?.(true);
     try {
       const response = await abandon.mutateAsync({ setupId });
-      navigate(response.setup.dogId ? `/my/dogs/${response.setup.dogId}` : "/my", {
-        replace: true,
-      });
+      if (mountedRef.current && (canNavigate?.() ?? true)) {
+        navigate(response.setup.dogId ? `/my/dogs/${response.setup.dogId}` : "/my", {
+          replace: true,
+        });
+      }
     } catch (error) {
       if (isGuidedSetupConflict(error, "setup_already_completed")) {
         try {
           const reconciled = await refetchGuidedSetup({ throwOnError: true });
           if (reconciled.isError || reconciled.error || !reconciled.data) {
-            setSubmitError(true);
+            if (mountedRef.current) setSubmitError(true);
             return;
           }
-          navigate(reconciled.data.active ? "/my/setup" : "/my", { replace: true });
+          if (mountedRef.current && (canNavigate?.() ?? true)) {
+            navigate(reconciled.data.active ? "/my/setup" : "/my", { replace: true });
+          }
           return;
         } catch {
-          setSubmitError(true);
+          if (mountedRef.current) setSubmitError(true);
           return;
         }
       }
-      setSubmitError(true);
+      if (mountedRef.current) setSubmitError(true);
     } finally {
-      setSubmitting(false);
+      if (mountedRef.current) {
+        setSubmitting(false);
+        reportedPendingRef.current = false;
+        onPendingChange?.(false);
+      }
     }
   }
 
