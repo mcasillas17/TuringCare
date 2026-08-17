@@ -124,10 +124,12 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
 
   const step = active ? (active.currentStep === "intent" ? 2 : 3) : 1;
   const onStarted = (setup: GuidedSetupRecord | null) => {
+    setSkipError(false);
     setStartedSetup(setup);
     setHasStartedSetup(true);
   };
   const onBack = () => {
+    setSkipError(false);
     if (active) {
       setStartedSetup({ ...active, currentStep: "intent" });
       setHasStartedSetup(true);

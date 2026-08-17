@@ -1121,6 +1121,41 @@ describe("GuidedSetup", () => {
     expect(screen.getByText("Your first step was saved.")).toBeInTheDocument();
   });
 
+  it("retains progress values and shows a localized error when progress mutation is rejected", async () => {
+    const user = userEvent.setup();
+    mocks.completeProgress.mockRejectedValue(new Error("progress_failed"));
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "track_progress" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    expect(screen.getByRole("radiogroup", { name: "How are things going?" })).toBeInTheDocument();
+    const better = screen.getByRole("radio", { name: "Better" });
+    expect(screen.getByRole("radio", { name: "Same" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Harder" })).toBeInTheDocument();
+
+    await user.click(better);
+    const note = screen.getByRole("textbox", { name: "Short note" });
+    await user.type(note, "Settled faster.");
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Couldn't save your first step. Your entries are still here.",
+      ),
+    );
+    expect(better).toBeChecked();
+    expect(note).toHaveValue("Settled faster.");
+    expect(mocks.completeProgress).toHaveBeenCalledWith({
+      setupId,
+      trend: "better",
+      note: "Settled faster.",
+    });
+  });
+
   it("requires a progress trend and note with accessible errors", async () => {
     const user = userEvent.setup();
     renderRoute(
@@ -1224,6 +1259,37 @@ describe("GuidedSetup", () => {
     expect(severity).toHaveValue("moderate");
     expect(screen.queryByText("You skipped your first step.")).not.toBeInTheDocument();
     expect(mocks.skip).toHaveBeenCalledWith({ setupId });
+  });
+
+  it("clears a failed skip after going back and saving a different intent", async () => {
+    const user = userEvent.setup();
+    mocks.skip.mockRejectedValue(new Error("skip_failed"));
+    mocks.saveIntent.mockResolvedValue({
+      setup: record({ currentStep: "action", intent: "track_progress" }),
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Skip this step" }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Couldn't skip this step. Please try again.",
+      ),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await user.click(screen.getByRole("radio", { name: /Track progress/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Better" })).toBeInTheDocument());
+    expect(
+      screen.queryByText("Couldn't skip this step. Please try again."),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps progress values and shows a localized skip error when skip is rejected", async () => {
