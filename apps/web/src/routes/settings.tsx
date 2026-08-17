@@ -4,13 +4,13 @@ import { DeleteAccountButton } from "@/components/settings/delete-account-button
 import { useTuring } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { signOut } from "@/lib/auth-client";
-import { Link, useNavigate } from "react-router-dom";
+import { useSignOut } from "@/lib/sign-out";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 export function Settings() {
   const { t } = useI18n();
-  const navigate = useNavigate();
+  const signOutAndNavigate = useSignOut();
   const { hidden, setHidden } = useTuring();
   return (
     <div className="mx-auto max-w-md space-y-8">
@@ -44,9 +44,8 @@ export function Settings() {
         <Button
           variant="outline"
           onClick={async () => {
-            await signOut();
+            await signOutAndNavigate();
             toast.success(t("app.signedOut"));
-            navigate("/login");
           }}
         >
           {t("settings.signOut")}

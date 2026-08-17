@@ -135,6 +135,35 @@ describe("GuidedSetup", () => {
     expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
   });
 
+  it("shows a localized name length error and preserves the value without starting setup", async () => {
+    const user = userEvent.setup();
+    const name = "B".repeat(101);
+    renderRoute("/my/setup", status());
+
+    const nameInput = screen.getByLabelText("Name");
+    await user.type(nameInput, name);
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Name must be 100 characters or fewer.");
+    expect(nameInput).toHaveValue(name);
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it("shows a localized breed length error and preserves the value without starting setup", async () => {
+    const user = userEvent.setup();
+    const breed = "B".repeat(101);
+    renderRoute("/my/setup", status());
+
+    await user.type(screen.getByLabelText("Name"), "Biscuit");
+    const breedInput = screen.getByLabelText("Breed");
+    await user.type(breedInput, breed);
+    await user.click(screen.getByRole("button", { name: /Continue/i }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Breed must be 100 characters or fewer.");
+    expect(breedInput).toHaveValue(breed);
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
   it("uses native radio arrow navigation through all three intents", async () => {
     const user = userEvent.setup();
     renderRoute(

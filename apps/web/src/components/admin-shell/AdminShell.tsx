@@ -1,18 +1,20 @@
 import { BrandMark } from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
-import { signOut } from "@/lib/auth-client";
+import { useI18n } from "@/i18n";
+import { useSignOut } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Suspense, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { ADMIN_NAV_ITEMS } from "./admin-nav-items";
 
 const STORAGE_KEY = "tc-admin-nav-expanded";
 
 export function AdminShell() {
-  const navigate = useNavigate();
+  const { t } = useI18n();
   const location = useLocation();
+  const signOutAndNavigate = useSignOut();
   const [expanded, setExpanded] = useState<boolean>(() => {
     try {
       return localStorage.getItem(STORAGE_KEY) !== "false";
@@ -115,12 +117,11 @@ export function AdminShell() {
           <Button
             variant="outline"
             onClick={async () => {
-              await signOut();
-              toast.success("Signed out");
-              navigate("/login");
+              await signOutAndNavigate();
+              toast.success(t("app.signedOut"));
             }}
           >
-            Sign out
+            {t("app.signOut")}
           </Button>
         </div>
       </header>

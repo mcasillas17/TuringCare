@@ -3,16 +3,14 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { useI18n } from "@/i18n";
-import { signOut } from "@/lib/auth-client";
+import { useSignOut } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
-import { Link, Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 import { toast } from "sonner";
 
 export function GuidedSetupLayout() {
   const { t } = useI18n();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const signOutAndNavigate = useSignOut();
 
   return (
     <div className="min-h-screen bg-cream">
@@ -24,10 +22,8 @@ export function GuidedSetupLayout() {
           <Button
             variant="outline"
             onClick={async () => {
-              await signOut();
-              queryClient.clear();
+              await signOutAndNavigate();
               toast.success(t("app.signedOut"));
-              navigate("/login");
             }}
           >
             {t("app.signOut")}

@@ -1,4 +1,5 @@
 import { LocaleProvider } from "@/i18n";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -29,14 +30,16 @@ afterEach(() => vi.restoreAllMocks());
 
 function setup() {
   return render(
-    <LocaleProvider>
-      <MemoryRouter initialEntries={["/my/settings"]}>
-        <Routes>
-          <Route path="/my/settings" element={<DeleteAccountButton />} />
-          <Route path="/" element={<div>landing-page</div>} />
-        </Routes>
-      </MemoryRouter>
-    </LocaleProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/settings"]}>
+          <Routes>
+            <Route path="/my/settings" element={<DeleteAccountButton />} />
+            <Route path="/" element={<div>landing-page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </LocaleProvider>
+    </QueryClientProvider>,
   );
 }
 
