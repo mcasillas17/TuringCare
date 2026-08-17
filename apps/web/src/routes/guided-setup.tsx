@@ -1,10 +1,9 @@
 import { BehaviorActionStep } from "@/components/guided-setup/behavior-action-step";
+import { CompletionStep } from "@/components/guided-setup/completion-step";
 import { DogBasicsStep } from "@/components/guided-setup/dog-basics-step";
 import { IntentStep } from "@/components/guided-setup/intent-step";
 import { ProgressActionStep } from "@/components/guided-setup/progress-action-step";
-import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { TrainingActionStep } from "@/components/guided-setup/training-action-step";
-import { SuggestionCard } from "@/components/training/suggestion-card";
 import { useI18n } from "@/i18n";
 import {
   type GuidedBehaviorActionResponse,
@@ -17,7 +16,7 @@ import {
 } from "@/lib/guided-setup";
 import type { GuidedSetupRecord, GuidedSetupStatus, TrainingSuggestion } from "@turingcare/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 
 type CompletionState =
   | {
@@ -28,52 +27,6 @@ type CompletionState =
     }
   | { kind: "skipped"; setup: GuidedSetupRecord; actionDeleted: false }
   | { kind: "deleted"; setup: GuidedSetupRecord; actionDeleted: true; suggestion: null };
-
-function CompletionHandoff({ completion }: { completion: CompletionState }) {
-  const { t } = useI18n();
-  const message =
-    completion.kind === "saved"
-      ? t("guidedSetup.completionSaved")
-      : completion.kind === "skipped"
-        ? t("guidedSetup.completionSkipped")
-        : t("guidedSetup.completionDeleted");
-
-  return (
-    <SetupShell
-      step={3}
-      title={t("guidedSetup.completionTitle")}
-      description={t(
-        completion.setup.dogId
-          ? "guidedSetup.completionDescription"
-          : "guidedSetup.completionNoWorkspaceDescription",
-      )}
-    >
-      <div className="space-y-5">
-        <output className="space-y-4 rounded border border-silver bg-white p-5 text-slate">
-          <p>{message}</p>
-          <div className="flex flex-wrap gap-3">
-            {completion.setup.dogId && (
-              <Link
-                className="rounded bg-slate px-3 py-2 text-sm text-cream"
-                to={`/my/dogs/${completion.setup.dogId}`}
-              >
-                {t("guidedSetup.openDogWorkspace", {
-                  dog: completion.setup.dogName ?? "",
-                })}
-              </Link>
-            )}
-            <Link className="rounded border border-slate px-3 py-2 text-sm text-slate" to="/my">
-              {t("guidedSetup.returnToDashboard")}
-            </Link>
-          </div>
-        </output>
-        {completion.kind === "saved" && completion.suggestion && (
-          <SuggestionCard mode="preview" suggestion={completion.suggestion} />
-        )}
-      </div>
-    </SetupShell>
-  );
-}
 
 export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) {
   const { t } = useI18n();
@@ -121,7 +74,17 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
 
   const visibleCompletion = completion ?? completionRef.current;
   if (visibleCompletion) {
-    return <CompletionHandoff completion={visibleCompletion} />;
+    return (
+      <CompletionStep
+        setup={visibleCompletion.setup}
+        suggestion={
+          "suggestion" in visibleCompletion
+            ? (visibleCompletion.suggestion ?? undefined)
+            : undefined
+        }
+        actionDeleted={visibleCompletion.actionDeleted}
+      />
+    );
   }
 
   if (setupQuery.isLoading && !usableStatus) {

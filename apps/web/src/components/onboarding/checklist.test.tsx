@@ -1,13 +1,18 @@
 import { LocaleProvider } from "@/i18n";
+import * as guidedSetupLib from "@/lib/guided-setup";
 import * as onboardingLib from "@/lib/onboarding";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { GuidedSetupStatus } from "@turingcare/shared";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OnboardingChecklist } from "./checklist";
 
 vi.mock("@/lib/onboarding", () => ({
   useOnboardingStatus: vi.fn(),
+}));
+vi.mock("@/lib/guided-setup", () => ({
+  useGuidedSetup: vi.fn(),
 }));
 
 // celebrate spy — used in the Turing hop tests below
@@ -42,6 +47,17 @@ function setStatus(data: onboardingLib.OnboardingStatus | null) {
   } as unknown as ReturnType<typeof onboardingLib.useOnboardingStatus>);
 }
 
+function setGuidedSetup(
+  data: GuidedSetupStatus | undefined,
+  opts: { isLoading?: boolean; isError?: boolean } = {},
+) {
+  vi.mocked(guidedSetupLib.useGuidedSetup).mockReturnValue({
+    data,
+    isLoading: opts.isLoading ?? false,
+    isError: opts.isError ?? false,
+  } as unknown as ReturnType<typeof guidedSetupLib.useGuidedSetup>);
+}
+
 function renderChecklist() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -56,7 +72,19 @@ function renderChecklist() {
 }
 
 beforeEach(() => {
+  if (!window.localStorage) {
+    const values = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    });
+  }
   window.localStorage.clear();
+  setGuidedSetup({ active: null, latest: null, autoStartEligible: true });
 });
 
 afterEach(() => {
@@ -109,12 +137,68 @@ describe("OnboardingChecklist", () => {
     const { container } = renderChecklist();
     expect(container.firstChild).toBeNull();
   });
+
+  it("hides while guided setup is active", () => {
+    setStatus(fresh);
+    setGuidedSetup({
+      active: {
+        id: "setup-1",
+        dogId: "dog-1",
+        dogName: "Biscuit",
+        currentStep: "action",
+        intent: "understand_behavior",
+        startedAt: "2026-08-16T00:00:00Z",
+        completedAt: null,
+        completionReason: null,
+        firstActionType: null,
+        firstActionId: null,
+      },
+      latest: null,
+      autoStartEligible: false,
+    });
+    const { container } = renderChecklist();
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("restores the completed checklist when guided setup has no active setup", () => {
+    setStatus(complete);
+    setGuidedSetup({
+      active: null,
+      latest: {
+        id: "setup-1",
+        dogId: "d1",
+        dogName: "Biscuit",
+        currentStep: "action",
+        intent: "understand_behavior",
+        startedAt: "2026-08-16T00:00:00Z",
+        completedAt: "2026-08-16T01:00:00Z",
+        completionReason: "first_action_completed",
+        firstActionType: "behavior",
+        firstActionId: "concern-1",
+      },
+      autoStartEligible: false,
+    });
+    renderChecklist();
+    expect(screen.getByText(/all set up/i)).toBeInTheDocument();
+  });
+
+  it.each([
+    ["loading", { data: undefined, isLoading: true, isError: false }],
+    ["error", { data: undefined, isLoading: false, isError: true }],
+  ])("does not break the dashboard when guided setup is %s", (_state, query) => {
+    setStatus(fresh);
+    vi.mocked(guidedSetupLib.useGuidedSetup).mockReturnValue(
+      query as unknown as ReturnType<typeof guidedSetupLib.useGuidedSetup>,
+    );
+    renderChecklist();
+    expect(screen.getByText(/Add your first dog/i)).toBeInTheDocument();
+  });
 });
 
 describe("OnboardingChecklist — Turing hop", () => {
   afterEach(() => {
     vi.clearAllMocks();
-    window.localStorage.clear();
+    window.localStorage?.clear();
   });
 
   it("hops once when onboarding flips incomplete→complete", () => {

@@ -1,6 +1,7 @@
 import { useTuring } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useGuidedSetup } from "@/lib/guided-setup";
 import { type OnboardingStatus, useOnboardingStatus } from "@/lib/onboarding";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -52,11 +53,13 @@ function buildItems(status: OnboardingStatus): { key: ItemKey; done: boolean; hr
 export function OnboardingChecklist() {
   const { t } = useI18n();
   const { data: status } = useOnboardingStatus();
+  const guidedSetupQuery = useGuidedSetup();
   const { celebrate } = useTuring();
   const [dismissed, setDismissed] = useState<boolean>(readDismissed);
 
   const items = status ? buildItems(status) : [];
   const allDone = !!status && items.every((item) => item.done);
+  const guidedSetupActive = guidedSetupQuery.data?.active != null;
 
   const prevAllDone = useRef<boolean | undefined>(undefined);
   // Derived-state trigger: onboarding completion spans multiple mutations across
@@ -67,6 +70,8 @@ export function OnboardingChecklist() {
     if (prevAllDone.current === false && allDone) celebrate(true, "turing.celebrateOnboarding");
     prevAllDone.current = allDone;
   }, [status, allDone, celebrate]);
+
+  if (guidedSetupActive) return null;
 
   if (!status) return null;
 

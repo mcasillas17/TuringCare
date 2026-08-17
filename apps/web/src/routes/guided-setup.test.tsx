@@ -1,3 +1,4 @@
+import { CompletionStep } from "@/components/guided-setup/completion-step";
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -173,6 +174,19 @@ function trainingSuggestion(): TrainingSuggestion {
   };
 }
 
+function renderCompletion(
+  setup: GuidedSetupRecord,
+  options: { suggestion?: TrainingSuggestion; actionDeleted?: boolean } = {},
+) {
+  return render(
+    <LocaleProvider>
+      <MemoryRouter>
+        <CompletionStep setup={setup} {...options} />
+      </MemoryRouter>
+    </LocaleProvider>,
+  );
+}
+
 function routeTree(initialEntry: string, allowNewDog: boolean) {
   return (
     <LocaleProvider>
@@ -238,6 +252,106 @@ describe("GuidedSetup", () => {
     expect(document.activeElement).toBe(
       screen.getByRole("heading", { name: /Tell us about your dog/i }),
     );
+  });
+
+  describe("CompletionStep", () => {
+    it.each([
+      ["behavior", "journal"],
+      ["progress", "journal"],
+      ["training", "week"],
+    ] as const)("links a saved %s action to the next step", (actionType, destination) => {
+      renderCompletion(
+        record({
+          intent:
+            actionType === "behavior"
+              ? "understand_behavior"
+              : actionType === "progress"
+                ? "track_progress"
+                : "train_skill",
+          firstActionType: actionType,
+          completionReason: "first_action_completed",
+          completedAt: "2026-08-16T01:00:00Z",
+        }),
+      );
+
+      expect(screen.getByRole("status")).toHaveTextContent("Your first step was saved.");
+      expect(screen.getByRole("link", { name: /Continue/i })).toHaveAttribute(
+        "href",
+        `/my/dogs/dog-1/${destination}`,
+      );
+      expect(screen.queryByRole("button", { name: /Back|Exit/i })).not.toBeInTheDocument();
+    });
+
+    it("links a skipped setup to the dog workspace", () => {
+      renderCompletion(
+        record({
+          intent: "train_skill",
+          completionReason: "skipped",
+          completedAt: "2026-08-16T01:00:00Z",
+        }),
+      );
+
+      expect(screen.getByRole("status")).toHaveTextContent("You skipped your first step.");
+      expect(screen.getByRole("link", { name: /Continue/i })).toHaveAttribute(
+        "href",
+        "/my/dogs/dog-1",
+      );
+    });
+
+    it("shows a preview suggestion and keeps the safety notice visible", () => {
+      const suggestion = trainingSuggestion();
+      renderCompletion(
+        record({
+          intent: "train_skill",
+          firstActionType: "training",
+          completionReason: "first_action_completed",
+          completedAt: "2026-08-16T01:00:00Z",
+        }),
+        { suggestion },
+      );
+
+      expect(screen.getAllByText("Lure into a sit in a quiet room.")).toHaveLength(2);
+      expect(screen.queryByText("We did this")).not.toBeInTheDocument();
+      expect(screen.queryByText("Choose a different focus")).not.toBeInTheDocument();
+
+      const safetySuggestion = {
+        ...suggestion,
+        safety: {
+          suppressed: true,
+          ruleId: "reported_injury_or_pain",
+          referral: "veterinarian",
+        },
+      } satisfies TrainingSuggestion;
+      renderCompletion(
+        record({
+          intent: "train_skill",
+          firstActionType: "training",
+          completionReason: "first_action_completed",
+          completedAt: "2026-08-16T01:00:00Z",
+        }),
+        { suggestion: safetySuggestion },
+      );
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+    });
+
+    it("uses a safe dashboard fallback for deleted or dogless completions", () => {
+      renderCompletion(
+        record({
+          dogId: null,
+          dogName: null,
+          completionReason: "first_action_completed",
+          completedAt: "2026-08-16T01:00:00Z",
+        }),
+        { actionDeleted: true, suggestion: trainingSuggestion() },
+      );
+
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Your first-step record is no longer available.",
+      );
+      expect(screen.getByRole("link", { name: /Continue/i })).toHaveAttribute("href", "/my");
+      expect(screen.queryByText("Lure into a sit in a quiet room.")).not.toBeInTheDocument();
+      expect(screen.queryByText("Barking at visitors")).not.toBeInTheDocument();
+    });
   });
 
   it("starts basics with the exact profile and advances without recreating the setup", async () => {

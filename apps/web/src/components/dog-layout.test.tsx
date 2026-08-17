@@ -1,15 +1,21 @@
 import { LocaleProvider } from "@/i18n";
 import * as dogsLib from "@/lib/dogs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DogLayout } from "./dog-layout";
 
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: toastError },
+}));
 vi.mock("@/lib/dogs", () => ({
   useDog: vi.fn(),
   useDeleteDog: vi.fn(),
 }));
+
+const deleteDog = vi.fn();
 
 function setDog(
   data: {
@@ -23,7 +29,7 @@ function setDog(
     isError: opts.isError ?? false,
   } as unknown as ReturnType<typeof dogsLib.useDog>);
   vi.mocked(dogsLib.useDeleteDog).mockReturnValue({
-    mutateAsync: vi.fn().mockResolvedValue({}),
+    mutateAsync: deleteDog,
     isPending: false,
   } as unknown as ReturnType<typeof dogsLib.useDeleteDog>);
 }
@@ -49,6 +55,9 @@ function renderLayoutAt(path: string) {
 }
 
 beforeEach(() => {
+  deleteDog.mockReset();
+  deleteDog.mockResolvedValue({});
+  toastError.mockReset();
   setDog({
     dog: { id: "d1", name: "Biscuit", breed: "Aussie", size: "medium", sex: "female" },
   } as never);
@@ -103,5 +112,43 @@ describe("DogLayout", () => {
     setDog(null, { isLoading: true });
     renderLayoutAt("/my/dogs/d1/journal");
     expect(screen.queryByText("Biscuit")).not.toBeInTheDocument();
+  });
+
+  it("shows inline recovery for an active guided setup deletion conflict", async () => {
+    deleteDog.mockRejectedValueOnce(new Error("active_guided_setup"));
+    renderLayoutAt("/my/dogs/d1/journal");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.getByRole("alert")).toHaveTextContent(/guided setup/i);
+    expect(screen.getByRole("link", { name: /resume/i })).toHaveAttribute("href", "/my/setup");
+    expect(screen.getByRole("button", { name: /try deletion again/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /yes, delete/i })).not.toBeInTheDocument();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("clears the stale guided setup conflict after navigating to another dog tab", async () => {
+    deleteDog.mockRejectedValueOnce(new Error("active_guided_setup"));
+    renderLayoutAt("/my/dogs/d1/journal");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("link", { name: /training/i }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+
+  it("keeps the generic error toast for unrelated deletion failures", async () => {
+    deleteDog.mockRejectedValueOnce(new Error("delete_failed"));
+    renderLayoutAt("/my/dogs/d1/journal");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Save failed"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
