@@ -2,7 +2,11 @@ import { AbandonSetupButton } from "@/components/guided-setup/abandon-setup-butt
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { type GuidedProgressActionResponse, useCompleteProgressSetup } from "@/lib/guided-setup";
+import {
+  type GuidedProgressActionResponse,
+  isGuidedSetupReconciliationConflict,
+  useCompleteProgressSetup,
+} from "@/lib/guided-setup";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   type GuidedSetupProgressAction,
@@ -21,6 +25,7 @@ type ProgressActionStepProps = {
     dogName: string | null;
   };
   onCompleted: (response: GuidedProgressActionResponse) => void;
+  onReconcile: () => Promise<boolean>;
   onBack: () => void;
   onSkip: () => void;
   skipPending: boolean;
@@ -36,6 +41,7 @@ const trendLabels = {
 export function ProgressActionStep({
   setup,
   onCompleted,
+  onReconcile,
   onBack,
   onSkip,
   skipPending,
@@ -65,7 +71,11 @@ export function ProgressActionStep({
     setSubmitError(false);
     try {
       await complete.mutateAsync(values);
-    } catch {
+    } catch (error) {
+      if (isGuidedSetupReconciliationConflict(error)) {
+        const reconciled = await onReconcile();
+        if (reconciled) return;
+      }
       setSubmitError(true);
     } finally {
       submitLock.current = false;
@@ -168,7 +178,7 @@ export function ProgressActionStep({
           <Button type="button" variant="outline" onClick={onSkip} disabled={busy}>
             {skipPending ? t("guidedSetup.saving") : t("guidedSetup.skip")}
           </Button>
-          <AbandonSetupButton setupId={setup.id} />
+          <AbandonSetupButton setupId={setup.id} disabled={busy} />
         </div>
       </form>
     </SetupShell>

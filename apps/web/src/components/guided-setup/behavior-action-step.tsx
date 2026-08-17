@@ -2,7 +2,11 @@ import { AbandonSetupButton } from "@/components/guided-setup/abandon-setup-butt
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { type GuidedBehaviorActionResponse, useCompleteBehaviorSetup } from "@/lib/guided-setup";
+import {
+  type GuidedBehaviorActionResponse,
+  isGuidedSetupReconciliationConflict,
+  useCompleteBehaviorSetup,
+} from "@/lib/guided-setup";
 import { SAFETY_SIGNAL_KEYS } from "@/lib/practice-options";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -22,6 +26,7 @@ type BehaviorActionStepProps = {
     dogName: string | null;
   };
   onCompleted: (response: GuidedBehaviorActionResponse) => void;
+  onReconcile: () => Promise<boolean>;
   onBack: () => void;
   onSkip: () => void;
   skipPending: boolean;
@@ -31,6 +36,7 @@ type BehaviorActionStepProps = {
 export function BehaviorActionStep({
   setup,
   onCompleted,
+  onReconcile,
   onBack,
   onSkip,
   skipPending,
@@ -67,7 +73,11 @@ export function BehaviorActionStep({
     setSubmitError(false);
     try {
       await complete.mutateAsync(values);
-    } catch {
+    } catch (error) {
+      if (isGuidedSetupReconciliationConflict(error)) {
+        const reconciled = await onReconcile();
+        if (reconciled) return;
+      }
       setSubmitError(true);
     } finally {
       submitLock.current = false;
@@ -229,7 +239,7 @@ export function BehaviorActionStep({
           <Button type="button" variant="outline" onClick={onSkip} disabled={busy}>
             {skipPending ? t("guidedSetup.saving") : t("guidedSetup.skip")}
           </Button>
-          <AbandonSetupButton setupId={setup.id} />
+          <AbandonSetupButton setupId={setup.id} disabled={busy} />
         </div>
       </form>
     </SetupShell>

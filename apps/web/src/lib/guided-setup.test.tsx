@@ -50,6 +50,7 @@ vi.mock("@/lib/api", () => ({
 import {
   guidedSetupKey,
   isGuidedSetupConflict,
+  isGuidedSetupReconciliationConflict,
   useAbandonGuidedSetup,
   useCompleteBehaviorSetup,
   useCompleteProgressSetup,
@@ -117,6 +118,16 @@ describe("guided setup hooks", () => {
       false,
     );
     expect(isGuidedSetupConflict("active_setup_exists", "active_setup_exists")).toBe(false);
+  });
+
+  it("recognizes only guided setup stale-state conflicts", () => {
+    expect(isGuidedSetupReconciliationConflict(new Error("intent_mismatch"))).toBe(true);
+    expect(isGuidedSetupReconciliationConflict(new Error("setup_already_completed"))).toBe(true);
+    expect(isGuidedSetupReconciliationConflict(new Error("setup_not_ready_for_completion"))).toBe(
+      true,
+    );
+    expect(isGuidedSetupReconciliationConflict(new Error("validation_failed"))).toBe(false);
+    expect(isGuidedSetupReconciliationConflict(new Error("network_failed"))).toBe(false);
   });
 
   it("loads valid guided setup status and caches it under the stable query key", async () => {

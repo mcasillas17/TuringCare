@@ -4,7 +4,13 @@ import { isGuidedSetupConflict, useAbandonGuidedSetup, useGuidedSetup } from "@/
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-export function AbandonSetupButton({ setupId }: { setupId: string }) {
+export function AbandonSetupButton({
+  setupId,
+  disabled = false,
+}: {
+  setupId: string;
+  disabled?: boolean;
+}) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const abandon = useAbandonGuidedSetup();
@@ -24,7 +30,10 @@ export function AbandonSetupButton({ setupId }: { setupId: string }) {
     }
   }, [confirming]);
 
+  const busy = disabled || submitting || abandon.isPending;
+
   async function handleConfirm() {
+    if (busy) return;
     setSubmitError(false);
     setSubmitting(true);
     try {
@@ -59,14 +68,16 @@ export function AbandonSetupButton({ setupId }: { setupId: string }) {
         ref={exitButtonRef}
         type="button"
         variant="outline"
-        onClick={() => setConfirming(true)}
+        disabled={busy}
+        onClick={() => {
+          if (!busy) setConfirming(true);
+        }}
       >
         {t("guidedSetup.exitSetup")}
       </Button>
     );
   }
 
-  const busy = submitting || abandon.isPending;
   return (
     <div className="space-y-3 rounded border border-silver bg-white p-4">
       <p className="font-medium text-slate">{t("guidedSetup.confirmExitPrompt")}</p>

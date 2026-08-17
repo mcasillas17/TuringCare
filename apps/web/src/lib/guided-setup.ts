@@ -36,6 +36,14 @@ export function isGuidedSetupConflict(error: unknown, code: string): boolean {
   return error instanceof Error && error.message === code;
 }
 
+export function isGuidedSetupReconciliationConflict(error: unknown): boolean {
+  return (
+    isGuidedSetupConflict(error, "intent_mismatch") ||
+    isGuidedSetupConflict(error, "setup_already_completed") ||
+    isGuidedSetupConflict(error, "setup_not_ready_for_completion")
+  );
+}
+
 const aggregateKeys = [
   guidedSetupKey,
   ["dogs"],

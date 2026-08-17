@@ -10,6 +10,7 @@ import {
   type GuidedBehaviorActionResponse,
   type GuidedProgressActionResponse,
   type GuidedSkipResponse,
+  isGuidedSetupReconciliationConflict,
   useGuidedSetup,
   useSkipGuidedSetup,
 } from "@/lib/guided-setup";
@@ -73,6 +74,7 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
   const [hasStartedSetup, setHasStartedSetup] = useState(false);
   const [completion, setCompletion] = useState<CompletionState | null>(null);
   const [skipError, setSkipError] = useState(false);
+  const [skipSubmitting, setSkipSubmitting] = useState(false);
   const skip = useSkipGuidedSetup({
     onCompleted: (response: GuidedSkipResponse) => {
       const nextCompletion = { kind: "skipped" as const, setup: response.setup };
@@ -128,6 +130,16 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
     setStartedSetup(setup);
     setHasStartedSetup(true);
   };
+  const reconcileSetup = async () => {
+    try {
+      const reconciled = await setupQuery.refetch({ throwOnError: true });
+      if (reconciled.isError || reconciled.error || !reconciled.data) return false;
+      onStarted(reconciled.data.active);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const onBack = () => {
     setSkipError(false);
     if (active) {
@@ -138,13 +150,19 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
   const onSkip = async () => {
     if (skipLock.current || !active) return;
     skipLock.current = true;
+    setSkipSubmitting(true);
     setSkipError(false);
     try {
       await skip.mutateAsync({ setupId: active.id });
-    } catch {
+    } catch (error) {
+      if (isGuidedSetupReconciliationConflict(error)) {
+        const reconciled = await reconcileSetup();
+        if (reconciled) return;
+      }
       setSkipError(true);
     } finally {
       skipLock.current = false;
+      setSkipSubmitting(false);
     }
   };
   const onBehaviorCompleted = (response: GuidedBehaviorActionResponse) => {
@@ -188,23 +206,25 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
       {!active ? (
         <DogBasicsStep onStarted={onStarted} />
       ) : active.currentStep === "intent" ? (
-        <IntentStep setup={active} onSaved={onStarted} />
+        <IntentStep setup={active} onSaved={onStarted} onReconcile={reconcileSetup} />
       ) : active.intent === "understand_behavior" ? (
         <BehaviorActionStep
           setup={active}
           onCompleted={onBehaviorCompleted}
+          onReconcile={reconcileSetup}
           onBack={onBack}
           onSkip={() => void onSkip()}
-          skipPending={skip.isPending}
+          skipPending={skipSubmitting || skip.isPending}
           skipError={skipError}
         />
       ) : active.intent === "track_progress" ? (
         <ProgressActionStep
           setup={active}
           onCompleted={onProgressCompleted}
+          onReconcile={reconcileSetup}
           onBack={onBack}
           onSkip={() => void onSkip()}
-          skipPending={skip.isPending}
+          skipPending={skipSubmitting || skip.isPending}
           skipError={skipError}
         />
       ) : (
@@ -223,10 +243,14 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
               </p>
             )}
             <div className="flex flex-wrap gap-3">
-              <Button type="button" onClick={() => void onSkip()} disabled={skip.isPending}>
-                {skip.isPending ? t("guidedSetup.saving") : t("guidedSetup.skip")}
+              <Button
+                type="button"
+                onClick={() => void onSkip()}
+                disabled={skipSubmitting || skip.isPending}
+              >
+                {skipSubmitting || skip.isPending ? t("guidedSetup.saving") : t("guidedSetup.skip")}
               </Button>
-              <AbandonSetupButton setupId={active.id} />
+              <AbandonSetupButton setupId={active.id} disabled={skipSubmitting || skip.isPending} />
             </div>
           </div>
         </SetupShell>

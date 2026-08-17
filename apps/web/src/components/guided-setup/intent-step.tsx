@@ -2,17 +2,14 @@ import { AbandonSetupButton } from "@/components/guided-setup/abandon-setup-butt
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import {
-  isGuidedSetupConflict,
-  useGuidedSetup,
-  useSaveGuidedSetupIntent,
-} from "@/lib/guided-setup";
+import { isGuidedSetupReconciliationConflict, useSaveGuidedSetupIntent } from "@/lib/guided-setup";
 import type { GuidedSetupIntent, GuidedSetupRecord } from "@turingcare/shared";
 import { type FormEvent, useState } from "react";
 
 type IntentStepProps = {
   setup: GuidedSetupRecord;
   onSaved: (setup: GuidedSetupRecord | null) => void;
+  onReconcile: () => Promise<boolean>;
 };
 
 const intents: ReadonlyArray<{
@@ -43,10 +40,9 @@ const intents: ReadonlyArray<{
   },
 ];
 
-export function IntentStep({ setup, onSaved }: IntentStepProps) {
+export function IntentStep({ setup, onSaved, onReconcile }: IntentStepProps) {
   const { t } = useI18n();
   const saveIntent = useSaveGuidedSetupIntent();
-  const { refetch: refetchGuidedSetup } = useGuidedSetup();
   const [intent, setIntent] = useState<GuidedSetupIntent | "">(setup.intent ?? "");
   const [requiredError, setRequiredError] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -66,19 +62,9 @@ export function IntentStep({ setup, onSaved }: IntentStepProps) {
       const response = await saveIntent.mutateAsync({ setupId: setup.id, intent });
       onSaved(response.setup);
     } catch (error) {
-      if (isGuidedSetupConflict(error, "setup_already_completed")) {
-        try {
-          const reconciled = await refetchGuidedSetup({ throwOnError: true });
-          if (reconciled.isError || reconciled.error || !reconciled.data) {
-            setSaveError(true);
-            return;
-          }
-          onSaved(reconciled.data.active);
-          return;
-        } catch {
-          setSaveError(true);
-          return;
-        }
+      if (isGuidedSetupReconciliationConflict(error)) {
+        const reconciled = await onReconcile();
+        if (reconciled) return;
       }
       setSaveError(true);
     } finally {
@@ -143,7 +129,7 @@ export function IntentStep({ setup, onSaved }: IntentStepProps) {
           <Button type="submit" disabled={busy} className="bg-slate text-cream">
             {busy ? t("guidedSetup.saving") : t("guidedSetup.continue")}
           </Button>
-          <AbandonSetupButton setupId={setup.id} />
+          <AbandonSetupButton setupId={setup.id} disabled={busy} />
         </div>
       </form>
     </SetupShell>
