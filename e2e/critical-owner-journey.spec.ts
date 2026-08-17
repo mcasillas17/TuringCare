@@ -1,8 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { type APIRequestContext, type Page, expect, test } from "@playwright/test";
 
 /**
  * Critical Owner Journey — end-to-end happy-path covering:
- * registration → email verification → dog creation → moment logging →
+ * registration → email verification → guided setup → moment logging →
  * training template → practice session → Brief generation → share link.
  */
 
@@ -14,27 +14,7 @@ function makeEmail(project: string): string {
   return `e2e+${slug}${ts}@turingcare.test`;
 }
 
-test("full owner journey: register → verify → dog → moment → training → brief → share", async ({
-  page,
-  request,
-}, testInfo) => {
-  test.setTimeout(120_000);
-
-  const email = makeEmail(testInfo.project.name);
-
-  // ─── 1. Register ────────────────────────────────────────────────────────
-  await page.goto("/register");
-  await page.getByLabel("Name").fill("E2E Owner");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(PASSWORD);
-  await page.getByRole("button", { name: "Create account" }).click();
-
-  // Redirect to /my and verification banner visible
-  await page.waitForURL("**/my", { timeout: 15_000 });
-  const banner = page.getByRole("alert");
-  await expect(banner).toContainText("verify your email");
-
-  // ─── 2. Email verification via test outbox ──────────────────────────────
+async function verifyEmail(page: Page, request: APIRequestContext, email: string) {
   const outboxUrl = `http://127.0.0.1:3001/api/test/emails/latest?to=${encodeURIComponent(email)}`;
   let emailBody = "";
   await expect
@@ -50,31 +30,65 @@ test("full owner journey: register → verify → dog → moment → training �
     )
     .toBeTruthy();
 
-  // Extract verification URL — handle trailing punctuation/HTML
   const urlMatch = emailBody.match(/https?:\/\/[^\s"<>)]+\/api\/auth\/verify[^\s"<>)]*/);
   expect(urlMatch, "verification URL found in email").toBeTruthy();
   if (!urlMatch) throw new Error("verification URL not found in email");
   const verifyUrl = urlMatch[0].replace(/[.,;!?)>]+$/, "");
-
-  // Visit verification link
   await page.goto(verifyUrl);
-  // Return to dashboard
+}
+
+test("[desktop] full owner journey: register → guided setup → training → brief → share", async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(120_000);
+
+  const email = makeEmail(testInfo.project.name);
+
+  // ─── 1. Register ────────────────────────────────────────────────────────
+  await page.goto("/register");
+  await page.getByLabel("Name").fill("E2E Owner");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  // Redirect to guided setup and verification banner visible
+  await page.waitForURL("**/my/setup", { timeout: 15_000 });
+  const banner = page.getByRole("alert");
+  await expect(banner).toContainText("verify your email");
+
+  // ─── 2. Email verification via test outbox ──────────────────────────────
+  await verifyEmail(page, request, email);
+
+  // Return to dashboard; eligible owners are redirected back to guided setup.
   await page.goto("/my");
-  await page.waitForURL("**/my");
+  await page.waitForURL("**/my/setup");
+  await expect(page).toHaveURL(/\/my\/setup$/);
   // Banner should be gone
   await expect(banner).not.toBeVisible({ timeout: 10_000 });
 
-  // ─── 3. Create dog ─────────────────────────────────────────────────────
-  await page.goto("/my/dogs/new");
+  // ─── 3. Guided setup ────────────────────────────────────────────────────
   await page.getByLabel("Name").fill("Maple");
   await page.getByLabel("Breed", { exact: true }).fill("Australian Shepherd");
   await page.getByLabel("Size").selectOption("medium");
   await page.getByLabel("Sex").selectOption("female");
   await page.getByLabel("Source").selectOption("rescue");
-  await page.getByLabel("Vaccination").selectOption("complete");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByLabel("Vaccination").selectOption("unknown");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Choose your first focus" })).toBeVisible();
 
-  // Wait for the create route to redirect to this dog's journal.
+  await page.getByRole("radio", { name: /Understand behavior/ }).check();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /understanding behavior/i })).toBeVisible();
+  await page
+    .getByLabel("What concern would you like to understand?")
+    .fill("Barking at the doorbell");
+  await page.getByLabel("Severity").selectOption("mild");
+  await page.getByRole("button", { name: "Save first step", exact: true }).click();
+
+  const completion = page.getByRole("status");
+  await expect(completion).toContainText("Your first step was saved.");
+  await completion.getByRole("link", { name: "Continue to the journal" }).click();
   await expect(page).toHaveURL(/\/my\/dogs\/[^/]+\/journal$/, { timeout: 10_000 });
 
   // ─── 4. Log a quick moment ─────────────────────────────────────────────
@@ -165,4 +179,79 @@ test("full owner journey: register → verify → dog → moment → training �
     // Sheet already closed or Close button not present
   }
   await expect(page.getByText("Final · v1")).toBeVisible({ timeout: 10_000 });
+});
+
+test("[phone] guided training setup resumes after reload", async ({ page, request }, testInfo) => {
+  test.setTimeout(120_000);
+
+  const email = makeEmail(testInfo.project.name);
+
+  await page.goto("/register");
+  await page.getByLabel("Name").fill("E2E Phone Owner");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.waitForURL("**/my/setup", { timeout: 15_000 });
+
+  await verifyEmail(page, request, email);
+  await page.goto("/my/setup");
+  await expect(page.getByRole("heading", { name: "Tell us about your dog" })).toBeVisible();
+
+  await page.getByLabel("Name").fill("Juniper");
+  await page.getByLabel("Breed", { exact: true }).fill("Australian Shepherd");
+  await page.getByLabel("Size").selectOption("medium");
+  await page.getByLabel("Sex").selectOption("female");
+  await page.getByLabel("Source").selectOption("rescue");
+  await page.getByLabel("Vaccination").selectOption("unknown");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Choose your first focus" })).toBeVisible();
+  await page.reload();
+  await expect(page).toHaveURL(/\/my\/setup$/);
+  await expect(page.getByRole("heading", { name: "Choose your first focus" })).toBeVisible();
+  await expect(page.getByText("What would help most with Juniper?")).toBeVisible();
+
+  await page.getByRole("radio", { name: /Train a skill/ }).check();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /training a skill/i })).toBeVisible();
+
+  await page.getByRole("radio", { name: /Basic Manners/ }).check();
+  await page.getByRole("button", { name: "Save first step", exact: true }).click();
+
+  const completion = page.getByRole("status");
+  await expect(completion).toContainText("Your first step was saved.");
+
+  const authoredPreview = page.getByText("Lures into a sit with food in a quiet room", {
+    exact: true,
+  });
+  const safetyNotice = page.getByRole("alert", { name: "Let's pause training suggestions" });
+  await expect
+    .poll(async () => {
+      const authored = (await authoredPreview.count()) > 0;
+      const safety = (await safetyNotice.count()) > 0;
+      return Number(authored) + Number(safety);
+    })
+    .toBe(1);
+  const authoredCount = await authoredPreview.count();
+  const safetyCount = await safetyNotice.count();
+  expect(Boolean(authoredCount) !== Boolean(safetyCount)).toBe(true);
+
+  const preview = authoredCount
+    ? page.locator("section").filter({
+        has: page.getByRole("heading", { name: "This week's suggestion" }),
+      })
+    : safetyNotice;
+  await expect(preview.getByRole("button")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "We did this", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Skip today", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Helpful", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Not helpful", exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Choose a different focus", exact: true }),
+  ).toHaveCount(0);
+
+  await completion.getByRole("link", { name: "Continue to This Week" }).click();
+  await expect(page).toHaveURL(/\/my\/dogs\/[^/]+\/week$/, { timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "This Week", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Juniper", exact: true })).toBeVisible();
 });
