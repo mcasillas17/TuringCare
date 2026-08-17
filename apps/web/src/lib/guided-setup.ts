@@ -11,6 +11,8 @@ import type {
 } from "@turingcare/shared";
 import type { InferResponseType } from "hono/client";
 import type { z } from "zod";
+import { suggestionKey } from "./suggestion-key";
+import { focusKey } from "./weekly-focus";
 
 export const guidedSetupKey = ["guided-setup"] as const;
 
@@ -65,8 +67,8 @@ function invalidateActionCaches(
     );
     if (weekKey !== undefined) {
       invalidations.push(
-        queryClient.invalidateQueries({ queryKey: ["focus", dogId, weekKey] }),
-        queryClient.invalidateQueries({ queryKey: ["suggestion", dogId, weekKey] }),
+        queryClient.invalidateQueries({ queryKey: focusKey(dogId, weekKey) }),
+        queryClient.invalidateQueries({ queryKey: suggestionKey(dogId, weekKey) }),
       );
     }
   }

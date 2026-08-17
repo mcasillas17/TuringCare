@@ -38,6 +38,11 @@ vi.mock("@/lib/api", () => ({
           progress: { $post: completeProgress },
         },
       },
+      dogs: {
+        ":id": {
+          focus: {},
+        },
+      },
     },
   },
 }));
@@ -53,6 +58,8 @@ import {
   useSkipGuidedSetup,
   useStartGuidedSetup,
 } from "@/lib/guided-setup";
+import * as suggestionKeyModule from "@/lib/suggestion-key";
+import * as weeklyFocusModule from "@/lib/weekly-focus";
 
 const setupId = "00000000-0000-4000-8000-000000000001";
 const dogId = "dog-1";
@@ -101,6 +108,28 @@ function expectAggregateInvalidations(invalidateQueries: unknown) {
 afterEach(() => vi.clearAllMocks());
 
 describe("guided setup hooks", () => {
+  it("loads valid guided setup status and caches it under the stable query key", async () => {
+    const body = {
+      active: setupRecord(),
+      latest: null,
+      autoStartEligible: false,
+    };
+    getGuidedSetup.mockResolvedValue({
+      ok: true,
+      json: async () => body,
+    });
+    const queryClient = makeQueryClient();
+    const { result } = renderHook(() => useGuidedSetup(), {
+      wrapper: makeWrapper(queryClient),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data).toStrictEqual(body);
+    expect(queryClient.getQueryData(guidedSetupKey)).toStrictEqual(body);
+    expect(getGuidedSetup).toHaveBeenCalledWith();
+  });
+
   it("loads guided setup status and preserves structured errors", async () => {
     getGuidedSetup.mockResolvedValue({
       ok: false,
@@ -113,6 +142,19 @@ describe("guided setup hooks", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toEqual(new Error("unauthorized"));
     expect(getGuidedSetup).toHaveBeenCalledWith();
+  });
+
+  it("falls back to load_failed for an unstructured GET error body", async () => {
+    getGuidedSetup.mockResolvedValue({
+      ok: false,
+      json: async () => ({}),
+    });
+    const { result } = renderHook(() => useGuidedSetup(), {
+      wrapper: makeWrapper(makeQueryClient()),
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toEqual(new Error("load_failed"));
   });
 
   it("propagates invalid JSON instead of swallowing the parser error", async () => {
@@ -334,6 +376,12 @@ describe("guided setup hooks", () => {
     });
     const queryClient = makeQueryClient();
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+    const expectedFocusKey = weeklyFocusModule.focusKey(dogId, weekKey);
+    const expectedSuggestionKey = suggestionKeyModule.suggestionKey(dogId, weekKey);
+    expect(expectedFocusKey).toStrictEqual(["focus", dogId, weekKey]);
+    expect(expectedSuggestionKey).toStrictEqual(["suggestion", dogId, weekKey]);
+    const focusKeySpy = vi.spyOn(weeklyFocusModule, "focusKey");
+    const suggestionKeySpy = vi.spyOn(suggestionKeyModule, "suggestionKey");
     const { result } = renderHook(() => useCompleteTrainingSetup(), {
       wrapper: makeWrapper(queryClient),
     });
@@ -359,9 +407,13 @@ describe("guided setup hooks", () => {
     expectAggregateInvalidations(invalidateQueries);
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["dog-journal", dogId] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["progress", dogId] });
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["focus", dogId, weekKey] });
+    expect(focusKeySpy).toHaveBeenCalledWith(dogId, weekKey);
+    expect(suggestionKeySpy).toHaveBeenCalledWith(dogId, weekKey);
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["suggestion", dogId, weekKey],
+      queryKey: expectedFocusKey,
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: expectedSuggestionKey,
     });
   });
 
@@ -427,5 +479,26 @@ describe("guided setup hooks", () => {
         timezoneOffsetMinutes: 420,
       }),
     ).rejects.toThrow("historical_suggestion_unavailable");
+  });
+
+  it("falls back to start_failed for a non-string mutation error body", async () => {
+    startGuidedSetup.mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: { code: "unexpected_shape" } }),
+    });
+    const { result } = renderHook(() => useStartGuidedSetup(), {
+      wrapper: makeWrapper(makeQueryClient()),
+    });
+
+    await expect(
+      result.current.mutateAsync({
+        name: "Biscuit",
+        size: "medium",
+        sex: "female",
+        spayedNeutered: false,
+        source: "rescue",
+        vaccineStage: "in_progress",
+      }),
+    ).rejects.toThrow("start_failed");
   });
 });
