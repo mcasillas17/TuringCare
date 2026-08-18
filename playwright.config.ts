@@ -92,12 +92,11 @@ export default defineConfig({
     {
       name: "desktop-chromium",
       use: { ...devices["Desktop Chrome"] },
-      grep: /\[desktop\]/,
+      grepInvert: /\[phone\]/,
     },
     {
       name: "phone-chromium",
       use: { ...devices["Pixel 7"], browserName: "chromium" },
-      grep: /\[phone\]/,
     },
   ],
 });

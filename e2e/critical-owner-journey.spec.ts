@@ -15,7 +15,9 @@ function captureApiClientRequests(page: Page): string[] {
   page.on("request", (request) => {
     if (request.isNavigationRequest()) return;
     const url = new URL(request.url());
-    if (url.pathname.startsWith("/api/")) requests.push(request.url());
+    if (url.pathname.startsWith("/api/") || url.pathname === "/me" || url.pathname === "/health") {
+      requests.push(request.url());
+    }
   });
   return requests;
 }
@@ -24,7 +26,7 @@ function expectApiClientRequestsUseViteProxy(requests: string[]): void {
   expect(requests.length, "the browser made API requests").toBeGreaterThan(0);
   expect(
     requests.every((requestUrl) => new URL(requestUrl).origin === WEB_ORIGIN),
-    "browser /api/* requests use the web origin and Vite proxy",
+    "browser API requests use the web origin and Vite proxy",
   ).toBe(true);
   const paths = [...new Set(requests.map((requestUrl) => new URL(requestUrl).pathname))].sort();
   console.info(
@@ -62,7 +64,7 @@ async function verifyEmail(page: Page, request: APIRequestContext, email: string
   await page.goto(verifyUrl);
 }
 
-test("[desktop] full owner journey: register → guided setup → training → brief → share", async ({
+test("full owner journey: register → guided setup → training → brief → share", async ({
   page,
   request,
 }, testInfo) => {
@@ -249,26 +251,15 @@ test("[phone] guided training setup resumes after reload", async ({ page, reques
   const completion = page.getByRole("status");
   await expect(completion).toContainText("Your first step was saved.");
 
-  const authoredPreview = page.getByText("Lures into a sit with food in a quiet room", {
-    exact: true,
-  });
+  const preview = page
+    .getByRole("heading", { name: "This week's suggestion" })
+    .locator("xpath=ancestor::section[1]");
   const safetyNotice = page.getByRole("alert", { name: "Let's pause training suggestions" });
-  await expect
-    .poll(async () => {
-      const authored = (await authoredPreview.count()) > 0;
-      const safety = (await safetyNotice.count()) > 0;
-      return Number(authored) + Number(safety);
-    })
-    .toBe(1);
-  const authoredCount = await authoredPreview.count();
-  const safetyCount = await safetyNotice.count();
-  expect(Boolean(authoredCount) !== Boolean(safetyCount)).toBe(true);
-
-  const preview = authoredCount
-    ? page.locator("section").filter({
-        has: page.getByRole("heading", { name: "This week's suggestion" }),
-      })
-    : safetyNotice;
+  await expect(preview).toBeVisible();
+  await expect(
+    preview.getByText("Lures into a sit with food in a quiet room", { exact: true }),
+  ).toHaveCount(2);
+  await expect(safetyNotice).toHaveCount(0);
   await expect(preview.getByRole("button")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "We did this", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Skip today", exact: true })).toHaveCount(0);
