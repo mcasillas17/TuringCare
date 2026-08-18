@@ -1,15 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { deleteUser, signOut } from "@/lib/auth-client";
+import { deleteUser } from "@/lib/auth-client";
+import { useSignOut } from "@/lib/sign-out";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 const inputCls = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
 
 export function DeleteAccountButton() {
   const { t } = useI18n();
-  const navigate = useNavigate();
+  const signOutAndNavigate = useSignOut();
   const [expanded, setExpanded] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -23,15 +23,22 @@ export function DeleteAccountButton() {
 
   async function onConfirm() {
     setSubmitting(true);
-    const result = await deleteUser({});
+    let result: Awaited<ReturnType<typeof deleteUser>>;
+    try {
+      result = await deleteUser({});
+    } catch {
+      setSubmitting(false);
+      toast.error(t("settings.deleteFailed"));
+      return;
+    }
     if (result?.error) {
       setSubmitting(false);
       toast.error(t("settings.deleteFailed"));
       return;
     }
-    await signOut();
+    await signOutAndNavigate({ destination: "/", navigateOnFailure: true });
+    setSubmitting(false);
     toast.success(t("settings.accountDeleted"));
-    navigate("/");
   }
 
   if (!expanded) {

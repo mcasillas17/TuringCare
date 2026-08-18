@@ -1,8 +1,9 @@
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { db } from "../db";
-import { practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
+import { guidedSetups, practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
 import { createMonitoringErrorHandler } from "../monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "../monitoring/request-id";
 import { type TestUser, createTestUser } from "../test-helpers";
@@ -62,8 +63,23 @@ describe("dogs: list & create", () => {
       body: JSON.stringify(validDog),
     });
     expect(created.status).toBe(201);
-    const { dog } = (await created.json()) as { dog: { id: string; name: string } };
-    expect(dog.name).toBe("Biscuit");
+    const body = (await created.json()) as {
+      dog: { id: string; ownerId: string; name: string; weightLbs: string | null };
+    };
+    expect(body).toEqual({
+      dog: expect.objectContaining({
+        id: expect.any(String),
+        ownerId: u.userId,
+        name: "Biscuit",
+        size: "medium",
+        sex: "female",
+        source: "rescue",
+        vaccineStage: "in_progress",
+        spayedNeutered: true,
+        weightLbs: null,
+      }),
+    });
+    const { dog } = body;
 
     const list = await app.request("/api/dogs", { headers: u.authHeaders });
     expect(((await list.json()) as { dogs: unknown[] }).dogs).toHaveLength(1);
@@ -148,6 +164,55 @@ describe("dogs: get/update/delete", () => {
     expect(after.status).toBe(404);
   });
 
+  it("DELETE returns 409 when an active guided setup still references the dog", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await db.insert(guidedSetups).values({ userId: u.userId, dogId: dog.id });
+
+    const del = await app.request(`/api/dogs/${dog.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+
+    expect(del.status).toBe(409);
+    expect(await del.json()).toEqual({ error: "active_guided_setup" });
+    expect((await app.request(`/api/dogs/${dog.id}`, { headers: u.authHeaders })).status).toBe(200);
+  });
+
+  it("DELETE preserves completed guided setup history with dogId null", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await db.insert(guidedSetups).values({
+      userId: u.userId,
+      dogId: dog.id,
+      currentStep: "action",
+      intent: "train_skill",
+      completedAt: new Date(),
+      completionReason: "skipped",
+    });
+
+    const del = await app.request(`/api/dogs/${dog.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+
+    expect(del.status).toBe(200);
+    const [historical] = await db
+      .select()
+      .from(guidedSetups)
+      .where(eq(guidedSetups.userId, u.userId));
+    expect(historical).toMatchObject({
+      userId: u.userId,
+      dogId: null,
+      currentStep: "action",
+      intent: "train_skill",
+      completionReason: "skipped",
+    });
+    expect(historical?.completedAt).toBeInstanceOf(Date);
+  });
+
   it("owner isolation: another user gets 404 on get/put/delete", async () => {
     const a = await createTestUser();
     const b = await createTestUser();
@@ -194,7 +259,18 @@ describe("dogs: concerns & goals", () => {
       body: JSON.stringify({ concern: "Leash reactivity", severity: "moderate" }),
     });
     expect(add.status).toBe(201);
-    const { concern } = (await add.json()) as { concern: { id: string } };
+    const addBody = (await add.json()) as {
+      concern: { id: string; dogId: string; concern: string; severity: string };
+    };
+    expect(addBody).toEqual({
+      concern: expect.objectContaining({
+        id: expect.any(String),
+        dogId: dog.id,
+        concern: "Leash reactivity",
+        severity: "moderate",
+      }),
+    });
+    const { concern } = addBody;
 
     const got = await app.request(`/api/dogs/${dog.id}`, { headers: u.authHeaders });
     expect(((await got.json()) as { concerns: unknown[] }).concerns).toHaveLength(1);

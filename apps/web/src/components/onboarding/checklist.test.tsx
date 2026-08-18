@@ -2,6 +2,7 @@ import { LocaleProvider } from "@/i18n";
 import * as onboardingLib from "@/lib/onboarding";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { GuidedSetupStatus } from "@turingcare/shared";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OnboardingChecklist } from "./checklist";
@@ -42,13 +43,13 @@ function setStatus(data: onboardingLib.OnboardingStatus | null) {
   } as unknown as ReturnType<typeof onboardingLib.useOnboardingStatus>);
 }
 
-function renderChecklist() {
+function renderChecklist(guidedSetup?: GuidedSetupStatus) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
         <MemoryRouter>
-          <OnboardingChecklist />
+          <OnboardingChecklist guidedSetup={guidedSetup} />
         </MemoryRouter>
       </LocaleProvider>
     </QueryClientProvider>,
@@ -56,6 +57,17 @@ function renderChecklist() {
 }
 
 beforeEach(() => {
+  if (!window.localStorage) {
+    const values = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    });
+  }
   window.localStorage.clear();
 });
 
@@ -109,12 +121,62 @@ describe("OnboardingChecklist", () => {
     const { container } = renderChecklist();
     expect(container.firstChild).toBeNull();
   });
+
+  it("hides while guided setup is active", () => {
+    setStatus(fresh);
+    const guidedSetup = {
+      active: {
+        id: "setup-1",
+        dogId: "dog-1",
+        dogName: "Biscuit",
+        currentStep: "action",
+        intent: "understand_behavior",
+        startedAt: "2026-08-16T00:00:00Z",
+        completedAt: null,
+        completionReason: null,
+        firstActionType: null,
+        firstActionId: null,
+      },
+      latest: null,
+      autoStartEligible: false,
+    } satisfies GuidedSetupStatus;
+    const { container } = renderChecklist(guidedSetup);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("restores the completed checklist when guided setup has no active setup", () => {
+    setStatus(complete);
+    const guidedSetup = {
+      active: null,
+      latest: {
+        id: "setup-1",
+        dogId: "d1",
+        dogName: "Biscuit",
+        currentStep: "action",
+        intent: "understand_behavior",
+        startedAt: "2026-08-16T00:00:00Z",
+        completedAt: "2026-08-16T01:00:00Z",
+        completionReason: "first_action_completed",
+        firstActionType: "behavior",
+        firstActionId: "concern-1",
+      },
+      autoStartEligible: false,
+    } satisfies GuidedSetupStatus;
+    renderChecklist(guidedSetup);
+    expect(screen.getByText(/all set up/i)).toBeInTheDocument();
+  });
+
+  it("does not break the dashboard when guided setup is unavailable", () => {
+    setStatus(fresh);
+    renderChecklist();
+    expect(screen.getByText(/Add your first dog/i)).toBeInTheDocument();
+  });
 });
 
 describe("OnboardingChecklist — Turing hop", () => {
   afterEach(() => {
     vi.clearAllMocks();
-    window.localStorage.clear();
+    window.localStorage?.clear();
   });
 
   it("hops once when onboarding flips incomplete→complete", () => {
@@ -129,7 +191,7 @@ describe("OnboardingChecklist — Turing hop", () => {
       >
         <LocaleProvider>
           <MemoryRouter>
-            <OnboardingChecklist />
+            <OnboardingChecklist guidedSetup={undefined} />
           </MemoryRouter>
         </LocaleProvider>
       </QueryClientProvider>,
@@ -155,7 +217,7 @@ describe("OnboardingChecklist — Turing hop", () => {
       >
         <LocaleProvider>
           <MemoryRouter>
-            <OnboardingChecklist />
+            <OnboardingChecklist guidedSetup={undefined} />
           </MemoryRouter>
         </LocaleProvider>
       </QueryClientProvider>,

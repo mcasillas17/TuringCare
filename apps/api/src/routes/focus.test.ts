@@ -199,13 +199,75 @@ describe("dogs: weekly focus", () => {
       });
     const initial = await add(skill.id);
     expect(initial.status).toBe(201);
-    const { focus } = (await initial.json()) as { focus: { skillId: string; dogId: string } };
-    expect(focus.skillId).toBe(skill.id);
-    expect(focus.dogId).toBe(dog.id);
-    expect((await add(replacement.id)).status).toBe(200);
+    expect(await initial.json()).toEqual({
+      focus: expect.objectContaining({
+        id: expect.any(String),
+        dogId: dog.id,
+        skillId: skill.id,
+        weekStart: WEEK_KEY,
+        position: 0,
+      }),
+    });
+    const replaced = await add(replacement.id);
+    expect(replaced.status).toBe(200);
+    expect(await replaced.json()).toEqual({
+      focus: expect.objectContaining({
+        id: expect.any(String),
+        dogId: dog.id,
+        skillId: replacement.id,
+        weekStart: WEEK_KEY,
+        position: 0,
+      }),
+    });
     const duplicate = await add(replacement.id);
     expect(duplicate.status).toBe(200);
     expect(await duplicate.json()).toEqual({ ok: true, unchanged: true });
+  });
+
+  it("setWeeklyFocus returns the existing row for unchanged writes", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    const focusModule = await import("../lib/focus");
+    const setWeeklyFocus = (
+      focusModule as {
+        setWeeklyFocus?: (
+          tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+          dogId: string,
+          skillId: string,
+          weekKey: string,
+        ) => Promise<unknown>;
+      }
+    ).setWeeklyFocus;
+
+    expect(setWeeklyFocus).toBeTypeOf("function");
+    if (!setWeeklyFocus) return;
+
+    const created = await db.transaction((tx) => setWeeklyFocus(tx, dog.id, skill.id, WEEK_KEY));
+    expect(created).toMatchObject({
+      kind: "created",
+      focus: { dogId: dog.id, skillId: skill.id, weekStart: WEEK_KEY, position: 0 },
+    });
+
+    const unchanged = await db.transaction((tx) => setWeeklyFocus(tx, dog.id, skill.id, WEEK_KEY));
+    expect(unchanged).toMatchObject({
+      kind: "unchanged",
+      focus: { dogId: dog.id, skillId: skill.id, weekStart: WEEK_KEY, position: 0 },
+    });
+  });
+
+  it("setWeeklyFocus rejects a skill from another dog and leaves focus empty", async () => {
+    const { dog } = await setupDogWithSkill(u);
+    const { dog: otherDog, skill: otherSkill } = await setupDogWithSkill(u, "Stay");
+    const focusModule = await import("../lib/focus");
+
+    await expect(
+      db.transaction((tx) => focusModule.setWeeklyFocus(tx, dog.id, otherSkill.id, WEEK_KEY)),
+    ).rejects.toMatchObject({ name: "FocusSkillDogMismatchError" });
+    expect(focusModule.FocusSkillDogMismatchError).toBeTypeOf("function");
+
+    expect(await db.select().from(weeklyFocus).where(eq(weeklyFocus.dogId, dog.id))).toEqual([]);
+    expect(await db.select().from(weeklyFocus).where(eq(weeklyFocus.dogId, otherDog.id))).toEqual(
+      [],
+    );
   });
 
   it("claims the exact earliest retained NULL row into the requested week only once", async () => {

@@ -1,4 +1,5 @@
 import { LocaleProvider } from "@/i18n";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -29,14 +30,16 @@ afterEach(() => vi.restoreAllMocks());
 
 function setup() {
   return render(
-    <LocaleProvider>
-      <MemoryRouter initialEntries={["/my/settings"]}>
-        <Routes>
-          <Route path="/my/settings" element={<DeleteAccountButton />} />
-          <Route path="/" element={<div>landing-page</div>} />
-        </Routes>
-      </MemoryRouter>
-    </LocaleProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/settings"]}>
+          <Routes>
+            <Route path="/my/settings" element={<DeleteAccountButton />} />
+            <Route path="/" element={<div>landing-page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </LocaleProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -91,6 +94,36 @@ it("Confirm calls deleteUser, signs out, toasts success, and navigates to /", as
   await waitFor(() => expect(signOutMock).toHaveBeenCalled());
   expect(toastSuccessMock).toHaveBeenCalled();
   expect(await screen.findByText("landing-page")).toBeInTheDocument();
+});
+
+it("finishes account deletion when sign out rejects", async () => {
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(["dogs"], [{ id: "dog-1" }]);
+  deleteUserMock.mockResolvedValue({ data: { success: true }, error: null });
+  signOutMock.mockRejectedValue(new Error("network down"));
+  render(
+    <QueryClientProvider client={queryClient}>
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/settings"]}>
+          <Routes>
+            <Route path="/my/settings" element={<DeleteAccountButton />} />
+            <Route path="/" element={<div>landing-page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </LocaleProvider>
+    </QueryClientProvider>,
+  );
+  await userEvent.click(screen.getByRole("button", { name: /delete account/i }));
+  await userEvent.type(screen.getByRole("textbox"), "delete");
+  await userEvent.click(screen.getByRole("button", { name: /i understand/i }));
+
+  await waitFor(() => expect(screen.getByText("landing-page")).toBeInTheDocument());
+  expect(queryClient.getQueryData(["dogs"])).toBeUndefined();
+  expect(toastErrorMock).not.toHaveBeenCalled();
+  expect(toastSuccessMock).toHaveBeenCalledWith("Account deleted");
+  const successCall = toastSuccessMock.mock.invocationCallOrder[0];
+  expect(successCall).toBeDefined();
+  if (successCall === undefined) throw new Error("Missing success toast call");
 });
 
 it("On API failure stays expanded and toasts the error", async () => {

@@ -1026,3 +1026,30 @@ advancement, and safety decisions, including legacy focus compatibility use.
 - Spec/plan: `specs/2026-08-11-personalized-training-progress-design.md`,
   `plans/2026-08-11-personalized-training-gate-1.md`.
 - Commits: `9095ed4..HEAD` on `feat/personalized-training-gate-1`.
+
+## 2026-08-15 — First-run guided setup — IMPLEMENTED
+A resumable three-step first-run flow now creates a dog, captures the owner's
+immediate intent, and completes one real platform action: record a behavior
+concern, log a progress check-in, or apply a starter training plan with a
+personalized weekly suggestion. Setup state persists across reloads and tabs,
+reconciles stale retries by owner-scoped setup ID, and hands owners into the
+normal journal or weekly workspace without duplicating domain logic.
+
+The API performs each first action and setup completion atomically, preserves
+privacy-safe deletion tombstones and idempotent replays, serializes concurrent
+submissions, and records scalar telemetry without owner prose or identifiers.
+Safety signals suppress training exercises through the normal policy path.
+Historical training replays remain idempotent without generating suggestion
+audits, telemetry, or stale exercise previews, and starter-template choices are
+enforced server-side.
+The localized English/Spanish UI includes keyboard/focus/reduced-motion
+coverage, active-dog deletion recovery, checklist suppression, and additional-
+dog entry. Status reads are bounded to one active setup, one latest setup, and
+one dog-existence row, backed by `dogs_owner_idx`.
+
+Playwright covers the complete owner journey at Desktop Chrome and Pixel 7
+viewports, plus a phone reload/resume training journey. Browser API traffic is
+verified through isolated same-origin Vite proxy servers on ports 3310/3311.
+- Spec/plan: `docs/superpowers/specs/2026-08-15-first-run-guided-setup-design.md`,
+  `docs/superpowers/plans/2026-08-15-first-run-guided-setup.md`
+- Commits: `d52d82b..34b25de` on `feat/first-run-guided-setup`.

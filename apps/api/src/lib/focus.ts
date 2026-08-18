@@ -8,6 +8,7 @@ import {
   trainingSkills,
   weeklyFocus,
 } from "../db/schema";
+import type { TransactionType } from "./safety-lock";
 
 export type FocusSession = {
   id: string;
@@ -23,6 +24,30 @@ export type FocusSkill = {
   position: number;
   sessions: FocusSession[];
 };
+
+export class FocusSkillDogMismatchError extends Error {
+  declare readonly dogId: string;
+  declare readonly skillId: string;
+
+  constructor(dogId: string, skillId: string) {
+    super("focus skill does not belong to dog");
+    this.name = "FocusSkillDogMismatchError";
+    Object.defineProperties(this, {
+      dogId: {
+        value: dogId,
+        enumerable: false,
+        configurable: false,
+        writable: false,
+      },
+      skillId: {
+        value: skillId,
+        enumerable: false,
+        configurable: false,
+        writable: false,
+      },
+    });
+  }
+}
 
 export function weekBoundsFromOffset(
   weekKey: string,
@@ -107,13 +132,52 @@ export async function loadFocusWeek(
   };
 }
 
-async function lockFocusWeek(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  dogId: string,
-  weekKey: string,
-) {
+async function lockFocusWeek(tx: Pick<typeof db, "execute">, dogId: string, weekKey: string) {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`legacy-focus:${dogId}`}))`);
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`${dogId}:${weekKey}`}))`);
+}
+
+export async function setWeeklyFocus(
+  executor: TransactionType,
+  dogId: string,
+  skillId: string,
+  weekKey: string,
+) {
+  const [ownedSkill] = await executor
+    .select({ id: trainingSkills.id })
+    .from(trainingSkills)
+    .innerJoin(trainingGoals, eq(trainingSkills.goalId, trainingGoals.id))
+    .where(and(eq(trainingSkills.id, skillId), eq(trainingGoals.dogId, dogId)))
+    .limit(1);
+  if (!ownedSkill) throw new FocusSkillDogMismatchError(dogId, skillId);
+
+  await lockFocusWeek(executor, dogId, weekKey);
+
+  const [existing] = await executor
+    .select()
+    .from(weeklyFocus)
+    .where(and(eq(weeklyFocus.dogId, dogId), eq(weeklyFocus.weekStart, weekKey)))
+    .for("update");
+
+  if (existing?.skillId === skillId) {
+    return { kind: "unchanged" as const, focus: existing };
+  }
+  if (existing) {
+    const [focus] = await executor
+      .update(weeklyFocus)
+      .set({ skillId, position: 0 })
+      .where(eq(weeklyFocus.id, existing.id))
+      .returning();
+    if (!focus) throw new Error("failed to replace focus skill");
+    return { kind: "replaced" as const, focus };
+  }
+
+  const [focus] = await executor
+    .insert(weeklyFocus)
+    .values({ dogId, skillId, weekStart: weekKey, position: 0 })
+    .returning();
+  if (!focus) throw new Error("failed to add focus skill");
+  return { kind: "created" as const, focus };
 }
 
 export async function claimLegacyFocus(dogId: string, weekKey: string): Promise<void> {
@@ -190,7 +254,7 @@ export async function legacyFocusWeekKey(dogId: string, sessionId: string): Prom
 export async function withFocusWeekLock<T>(
   dogId: string,
   weekKey: string,
-  callback: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>,
+  callback: (tx: TransactionType) => Promise<T>,
 ): Promise<T> {
   return db.transaction(async (tx) => {
     await lockFocusWeek(tx, dogId, weekKey);

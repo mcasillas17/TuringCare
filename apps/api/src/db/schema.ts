@@ -86,28 +86,92 @@ export const concernSeverityEnum = pgEnum("concern_severity", ["mild", "moderate
 export const briefStatusEnum = pgEnum("brief_status", ["draft", "finalized"]);
 export const journalEntryKindEnum = pgEnum("journal_entry_kind", ["moment", "daily_checkin"]);
 export const journalTrendEnum = pgEnum("journal_trend", ["better", "same", "harder"]);
+export const guidedSetupIntentEnum = pgEnum("guided_setup_intent", [
+  "understand_behavior",
+  "train_skill",
+  "track_progress",
+]);
+export const guidedSetupStepEnum = pgEnum("guided_setup_step", ["intent", "action"]);
+export const guidedSetupCompletionReasonEnum = pgEnum("guided_setup_completion_reason", [
+  "first_action_completed",
+  "skipped",
+  "abandoned",
+]);
+export const guidedSetupActionTypeEnum = pgEnum("guided_setup_action_type", [
+  "behavior",
+  "training",
+  "progress",
+]);
 
 /* ---------- Domain tables ---------- */
 
-export const dogs = pgTable("dogs", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  ownerId: text("owner_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  breed: text("breed"),
-  dateOfBirth: date("date_of_birth"),
-  size: dogSizeEnum("size").notNull(),
-  weightLbs: numeric("weight_lbs"),
-  sex: dogSexEnum("sex").notNull(),
-  spayedNeutered: boolean("spayed_neutered").notNull().default(false),
-  source: dogSourceEnum("source").notNull(),
-  adoptedAt: date("adopted_at"),
-  vaccineStage: vaccineStageEnum("vaccine_stage").notNull(),
-  notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const dogs = pgTable(
+  "dogs",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    breed: text("breed"),
+    dateOfBirth: date("date_of_birth"),
+    size: dogSizeEnum("size").notNull(),
+    weightLbs: numeric("weight_lbs"),
+    sex: dogSexEnum("sex").notNull(),
+    spayedNeutered: boolean("spayed_neutered").notNull().default(false),
+    source: dogSourceEnum("source").notNull(),
+    adoptedAt: date("adopted_at"),
+    vaccineStage: vaccineStageEnum("vaccine_stage").notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("dogs_owner_idx").on(t.ownerId)],
+);
+
+export const guidedSetups = pgTable(
+  "guided_setups",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    dogId: uuid("dog_id").references(() => dogs.id, { onDelete: "set null" }),
+    currentStep: guidedSetupStepEnum("current_step").notNull().default("intent"),
+    intent: guidedSetupIntentEnum("intent"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    completionReason: guidedSetupCompletionReasonEnum("completion_reason"),
+    firstActionType: guidedSetupActionTypeEnum("first_action_type"),
+    firstActionId: uuid("first_action_id"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("guided_setups_dog_unique").on(t.dogId),
+    uniqueIndex("guided_setups_one_active_owner").on(t.userId).where(sql`${t.completedAt} IS NULL`),
+    index("guided_setups_user_started_idx").on(t.userId, t.startedAt),
+    check(
+      "guided_setups_completion_consistent",
+      sql`(${t.completedAt} IS NULL AND ${t.completionReason} IS NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} IS NOT NULL)`,
+    ),
+    check(
+      "guided_setups_step_intent_consistent",
+      sql`(${t.currentStep} = 'intent' AND ${t.intent} IS NULL) OR (${t.currentStep} = 'action' AND ${t.intent} IS NOT NULL)`,
+    ),
+    check(
+      "guided_setups_action_matches_intent",
+      sql`${t.firstActionType} IS NULL OR (${t.intent} = 'understand_behavior' AND ${t.firstActionType} = 'behavior') OR (${t.intent} = 'train_skill' AND ${t.firstActionType} = 'training') OR (${t.intent} = 'track_progress' AND ${t.firstActionType} = 'progress')`,
+    ),
+    check(
+      "guided_setups_action_completion_consistent",
+      sql`(${t.completedAt} IS NULL AND ${t.firstActionType} IS NULL AND ${t.firstActionId} IS NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} = 'first_action_completed' AND ${t.currentStep} = 'action' AND ${t.intent} IS NOT NULL AND ${t.firstActionType} IS NOT NULL AND ${t.firstActionId} IS NOT NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} = 'skipped' AND ${t.currentStep} = 'action' AND ${t.intent} IS NOT NULL AND ${t.firstActionType} IS NULL AND ${t.firstActionId} IS NULL) OR (${t.completedAt} IS NOT NULL AND ${t.completionReason} = 'abandoned' AND ${t.firstActionType} IS NULL AND ${t.firstActionId} IS NULL)`,
+    ),
+    check(
+      "guided_setups_active_dog_required",
+      sql`${t.completedAt} IS NOT NULL OR ${t.dogId} IS NOT NULL`,
+    ),
+  ],
+);
 
 export const behaviorConcerns = pgTable("behavior_concerns", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -578,14 +642,21 @@ export const events = pgTable(
 
 export const userRelations = relations(user, ({ many }) => ({
   dogs: many(dogs),
+  guidedSetups: many(guidedSetups),
 }));
 
 export const dogsRelations = relations(dogs, ({ one, many }) => ({
   owner: one(user, { fields: [dogs.ownerId], references: [user.id] }),
+  guidedSetup: one(guidedSetups),
   behaviorConcerns: many(behaviorConcerns),
   trainingGoals: many(trainingGoals),
   journalEntries: many(journalEntries),
   briefs: many(briefs),
+}));
+
+export const guidedSetupsRelations = relations(guidedSetups, ({ one }) => ({
+  owner: one(user, { fields: [guidedSetups.userId], references: [user.id] }),
+  dog: one(dogs, { fields: [guidedSetups.dogId], references: [dogs.id] }),
 }));
 
 export const behaviorConcernsRelations = relations(behaviorConcerns, ({ one }) => ({

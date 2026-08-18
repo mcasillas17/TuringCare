@@ -221,7 +221,9 @@ async function finalizeUnderSafetyLock(input: {
       },
     );
     // The audit transaction committed, so telemetry cannot affect it.
-    if (inserted) await emitAfterCommit(input.userId, suggestion);
+    if (inserted) {
+      await emitAfterCommit(input.userId, suggestion);
+    }
     return suggestion;
   } catch (error) {
     const built = state.built;

@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -5,16 +6,18 @@ import { AdminShell } from "./AdminShell";
 
 function setup(path: string) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route element={<AdminShell />}>
-          <Route path="/admin" element={<div>DASH-CONTENT</div>} />
-          <Route path="/admin/trainers" element={<div>TRAINERS-CONTENT</div>} />
-          <Route path="/admin/courses" element={<div>COURSES-CONTENT</div>} />
-        </Route>
-        <Route path="/my" element={<div>APP-HOME</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route element={<AdminShell />}>
+            <Route path="/admin" element={<div>DASH-CONTENT</div>} />
+            <Route path="/admin/trainers" element={<div>TRAINERS-CONTENT</div>} />
+            <Route path="/admin/courses" element={<div>COURSES-CONTENT</div>} />
+          </Route>
+          <Route path="/my" element={<div>APP-HOME</div>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

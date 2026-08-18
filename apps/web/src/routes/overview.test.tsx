@@ -1,18 +1,38 @@
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Overview } from "./overview";
 
 afterEach(() => vi.unstubAllGlobals());
 
-function stub(over: unknown, dogs: unknown) {
+function stub(
+  over: unknown,
+  dogs: unknown,
+  guidedSetup: unknown = { active: null, latest: null, autoStartEligible: false },
+  onboarding: unknown = {
+    hasDog: false,
+    momentsCount: 0,
+    hasGoal: false,
+    hasFinalizedBrief: false,
+    hasSentBrief: false,
+    mostRecentDogId: null,
+  },
+) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
       const p = new URL(url, "http://x").pathname;
-      const body = p.includes("/api/overview") ? over : p.includes("/api/dogs") ? { dogs } : {};
+      const body = p.includes("/api/overview")
+        ? over
+        : p.includes("/api/dogs")
+          ? { dogs }
+          : p.includes("/api/guided-setup")
+            ? guidedSetup
+            : p.includes("/api/onboarding")
+              ? onboarding
+              : {};
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -27,7 +47,10 @@ function setup() {
     <QueryClientProvider client={qc}>
       <LocaleProvider>
         <MemoryRouter>
-          <Overview />
+          <Routes>
+            <Route path="*" element={<Overview />} />
+            <Route path="/my/setup" element={<p>guided setup destination</p>} />
+          </Routes>
         </MemoryRouter>
       </LocaleProvider>
     </QueryClientProvider>,
@@ -126,5 +149,206 @@ describe("Overview", () => {
         screen.getByRole("heading", { name: /Generate your first Brief/i }),
       ).toBeInTheDocument(),
     );
+  });
+
+  it("redirects an eligible owner to guided setup", async () => {
+    stub({ dogCount: 0, journalEntryCount: 0, latestBrief: null, recentActivity: [] }, [], {
+      active: null,
+      latest: null,
+      autoStartEligible: true,
+    });
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <LocaleProvider>
+          <MemoryRouter initialEntries={["/my"]}>
+            <Routes>
+              <Route path="/my" element={<Overview />} />
+              <Route path="/my/setup" element={<p>guided setup destination</p>} />
+            </Routes>
+          </MemoryRouter>
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText("guided setup destination")).toBeInTheDocument());
+  });
+
+  it("redirects an owner with an active setup", async () => {
+    stub(
+      { dogCount: 1, journalEntryCount: 0, latestBrief: null, recentActivity: [] },
+      [{ id: "d1", name: "Biscuit" }],
+      {
+        active: {
+          id: "00000000-0000-4000-8000-000000000001",
+          dogId: "d1",
+          dogName: "Biscuit",
+          currentStep: "intent",
+          intent: null,
+          startedAt: "2026-08-16T00:00:00.000Z",
+          completedAt: null,
+          completionReason: null,
+          firstActionType: null,
+          firstActionId: null,
+        },
+        latest: null,
+        autoStartEligible: false,
+      },
+    );
+    setup();
+
+    await waitFor(() => expect(screen.getByText("guided setup destination")).toBeInTheDocument());
+  });
+
+  it("redirects an eligible owner before showing an overview error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const p = new URL(url, "http://x").pathname;
+        const guided = p.includes("/api/guided-setup");
+        return new Response(
+          JSON.stringify(
+            guided
+              ? { active: null, latest: null, autoStartEligible: true }
+              : { error: "load_failed" },
+          ),
+          {
+            status: guided ? 200 : 500,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <LocaleProvider>
+          <MemoryRouter initialEntries={["/my"]}>
+            <Routes>
+              <Route path="/my" element={<Overview />} />
+              <Route path="/my/setup" element={<p>guided setup destination</p>} />
+            </Routes>
+          </MemoryRouter>
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText("guided setup destination")).toBeInTheDocument());
+    expect(screen.queryByText("Couldn't load your dogs.")).not.toBeInTheDocument();
+  });
+
+  it("keeps the dashboard available with a localized guided setup warning", async () => {
+    let guidedSetupRequests = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const p = new URL(url, "http://x").pathname;
+        const body = p.includes("/api/overview")
+          ? { dogCount: 1, journalEntryCount: 0, latestBrief: null, recentActivity: [] }
+          : p.includes("/api/guided-setup")
+            ? { error: "load_failed" }
+            : p.includes("/api/onboarding")
+              ? {
+                  hasDog: true,
+                  momentsCount: 0,
+                  hasGoal: false,
+                  hasFinalizedBrief: false,
+                  hasSentBrief: false,
+                  mostRecentDogId: "d1",
+                }
+              : { dogs: [] };
+        if (p.includes("/api/guided-setup")) guidedSetupRequests += 1;
+        return new Response(JSON.stringify(body), {
+          status: p.includes("/api/guided-setup") ? 500 : 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+    setup();
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Guided setup is temporarily unavailable. You can still use your dashboard.",
+      ),
+    );
+    expect(screen.getByRole("heading", { name: /Welcome back/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry guided setup" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Log 3 moments/i)).toBeInTheDocument());
+    expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+
+    const stableRequestCount = guidedSetupRequests;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(guidedSetupRequests).toBe(stableRequestCount);
+  });
+
+  it("hides the onboarding checklist while guided setup is active", async () => {
+    stub(
+      { dogCount: 1, journalEntryCount: 0, latestBrief: null, recentActivity: [] },
+      [{ id: "d1", name: "Biscuit" }],
+      {
+        active: {
+          id: "setup-1",
+          dogId: "d1",
+          dogName: "Biscuit",
+          currentStep: "action",
+          intent: "understand_behavior",
+          startedAt: "2026-08-16T00:00:00Z",
+          completedAt: null,
+          completionReason: null,
+          firstActionType: null,
+          firstActionId: null,
+        },
+        latest: null,
+        autoStartEligible: false,
+      },
+      {
+        hasDog: true,
+        momentsCount: 0,
+        hasGoal: false,
+        hasFinalizedBrief: false,
+        hasSentBrief: false,
+        mostRecentDogId: "d1",
+      },
+    );
+    setup();
+
+    await waitFor(() => expect(screen.getByText("guided setup destination")).toBeInTheDocument());
+    expect(screen.queryByRole("heading", { name: /Get started/i })).not.toBeInTheDocument();
+  });
+
+  it("restores the completed checklist after guided setup has no active setup", async () => {
+    stub(
+      { dogCount: 1, journalEntryCount: 0, latestBrief: null, recentActivity: [] },
+      [{ id: "d1", name: "Biscuit" }],
+      {
+        active: null,
+        latest: {
+          id: "setup-1",
+          dogId: "d1",
+          dogName: "Biscuit",
+          currentStep: "action",
+          intent: "understand_behavior",
+          startedAt: "2026-08-16T00:00:00Z",
+          completedAt: "2026-08-16T01:00:00Z",
+          completionReason: "first_action_completed",
+          firstActionType: "behavior",
+          firstActionId: "concern-1",
+        },
+        autoStartEligible: false,
+      },
+      {
+        hasDog: true,
+        momentsCount: 7,
+        hasGoal: true,
+        hasFinalizedBrief: true,
+        hasSentBrief: true,
+        mostRecentDogId: "d1",
+      },
+    );
+    setup();
+
+    await waitFor(() => expect(screen.getByText(/all set up/i)).toBeInTheDocument());
   });
 });

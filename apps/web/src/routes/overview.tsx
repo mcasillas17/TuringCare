@@ -1,7 +1,8 @@
 import { OnboardingChecklist } from "@/components/onboarding/checklist";
 import { useI18n } from "@/i18n";
+import { useGuidedSetup } from "@/lib/guided-setup";
 import { useOverview } from "@/lib/overview";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
 type FirstRunStage = "new" | "noEntries" | "noBrief" | "ready";
 
@@ -19,24 +20,53 @@ function deriveStage(
 export function Overview() {
   const { t } = useI18n();
   const { data: o, isLoading, isError } = useOverview();
+  const {
+    data: guidedSetup,
+    isLoading: isGuidedSetupLoading,
+    isError: isGuidedSetupError,
+    isFetching: isGuidedSetupFetching,
+    refetch: refetchGuidedSetup,
+  } = useGuidedSetup();
 
-  if (isLoading) return <p>{t("common.loading")}</p>;
+  if (isLoading || isGuidedSetupLoading) return <p>{t("common.loading")}</p>;
+  const guidedSetupUnavailable = isGuidedSetupError || !guidedSetup;
+  if (!guidedSetupUnavailable && (guidedSetup.autoStartEligible || guidedSetup.active)) {
+    return <Navigate to="/my/setup" replace />;
+  }
   if (isError || !o) return <p className="text-red-600">{t("dogs.loadError")}</p>;
 
   const stage = deriveStage(o.dogCount, o.journalEntryCount, o.latestBrief?.status ?? null);
+  const guidedSetupWarning = guidedSetupUnavailable ? (
+    <section
+      role="alert"
+      className="flex flex-wrap items-center justify-between gap-3 rounded border border-copper bg-cream p-4"
+    >
+      <p className="text-sm text-slate">{t("guidedSetup.overviewWarning")}</p>
+      <button
+        type="button"
+        onClick={() => void refetchGuidedSetup()}
+        disabled={isGuidedSetupFetching}
+        className="rounded bg-slate px-3 py-1 text-sm text-cream disabled:opacity-60"
+      >
+        {t("guidedSetup.retry")}
+      </button>
+    </section>
+  ) : null;
 
   if (stage === "new") {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
-        <OnboardingChecklist />
+        {guidedSetupWarning}
+        <OnboardingChecklist guidedSetup={guidedSetup} />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {guidedSetupWarning}
       <div className="mx-auto max-w-2xl">
-        <OnboardingChecklist />
+        <OnboardingChecklist guidedSetup={guidedSetup} />
       </div>
       <h1 className="text-2xl font-bold text-slate">{t("overview.greeting")} 👋</h1>
       <div className="grid grid-cols-3 gap-3">

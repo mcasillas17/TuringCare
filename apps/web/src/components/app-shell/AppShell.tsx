@@ -5,12 +5,12 @@ import { TuringProvider } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { useI18n } from "@/i18n";
-import { signOut } from "@/lib/auth-client";
 import { useMe } from "@/lib/me";
+import { useSignOut } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
 import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { NAV_ITEMS } from "./nav-items";
 
@@ -18,8 +18,8 @@ const STORAGE_KEY = "tc-nav-expanded";
 
 export function AppShell() {
   const { t } = useI18n();
-  const navigate = useNavigate();
   const location = useLocation();
+  const signOutAndNavigate = useSignOut();
   const { data: me } = useMe();
   const [expanded, setExpanded] = useState<boolean>(() => {
     try {
@@ -112,9 +112,12 @@ export function AppShell() {
             <Button
               variant="outline"
               onClick={async () => {
-                await signOut();
-                toast.success(t("app.signedOut"));
-                navigate("/login");
+                const result = await signOutAndNavigate();
+                if (result.ok) {
+                  toast.success(t("app.signedOut"));
+                } else {
+                  toast.error(t("app.signOutFailed"));
+                }
               }}
             >
               {t("app.signOut")}

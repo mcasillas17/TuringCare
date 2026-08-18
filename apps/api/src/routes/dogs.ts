@@ -20,12 +20,11 @@ import {
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
-import { and, count, desc, eq, gte, lt, max, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNull, lt, max, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import { trainingCatalog } from "../data/training-catalog";
 import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
 import { findOwnedSkill } from "../db/owned-skill";
@@ -36,6 +35,7 @@ import {
   briefs,
   dogSafetySignals,
   dogs,
+  guidedSetups,
   journalEntries,
   practiceSessions,
   trainingGoals,
@@ -47,16 +47,20 @@ import { renderBriefEmail } from "../email/brief-email";
 import { sendEmail } from "../email/send-email";
 import { env } from "../env";
 import { decideAdvancementProposal } from "../lib/advancement";
+import { createBehaviorConcern } from "../lib/behavior-concern-writes";
 import { composeBrief } from "../lib/brief";
+import { createDog } from "../lib/dog-writes";
 import { loadDogsOverview } from "../lib/dogs-overview";
 import {
   claimLegacyFocus,
   legacyFocusWeekKey,
   loadFocusWeek,
   rememberLegacyFocusWeek,
+  setWeeklyFocus,
   weekBoundsFromOffset,
   withFocusWeekLock,
 } from "../lib/focus";
+import { InvalidJournalOccurredAtError, createJournalEntry } from "../lib/journal-writes";
 import {
   isSuggestionSkipped,
   lockSuggestionAnchor,
@@ -66,6 +70,7 @@ import { loadProgress } from "../lib/progress";
 import { lockDogSafety, withDogSafetyLock } from "../lib/safety-lock";
 import { setSkillLevel } from "../lib/skill-level";
 import { currentWeekKey, loadSuggestion, recordSuggestionAction } from "../lib/suggestion";
+import { applyTrainingTemplate } from "../lib/training-template-writes";
 import { type Vars, requireUser } from "../middleware/require-user";
 import { recordEvent } from "../telemetry/record-event";
 
@@ -76,6 +81,12 @@ const invalidJournalField = (path: "occurredAt" | "trend", message: string) =>
       issues: [{ code: "custom", path: [path], message }],
     },
   }) as const;
+
+function hasConstraint(error: unknown, constraint: string): boolean {
+  if (!error || typeof error !== "object") return false;
+  if ("constraint" in error && error.constraint === constraint) return true;
+  return "cause" in error && hasConstraint(error.cause, constraint);
+}
 
 const legacyFocusWeekQuerySchema = z
   .object({
@@ -194,15 +205,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     return c.json({ dogs: rows });
   })
   .post("/", zValidator("json", dogProfileSchema), async (c) => {
-    const { weightLbs, ...body } = c.req.valid("json");
-    const [dog] = await db
-      .insert(dogs)
-      .values({
-        ...body,
-        ownerId: c.get("userId"),
-        weightLbs: weightLbs == null ? weightLbs : String(weightLbs),
-      })
-      .returning();
+    const dog = await createDog(db, c.get("userId"), c.req.valid("json"));
     await recordEvent("dog.created", { userId: c.get("userId") });
     return c.json({ dog }, 201);
   })
@@ -236,34 +239,50 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   .delete("/:id", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    await db.delete(dogs).where(eq(dogs.id, dog.id));
+    try {
+      const result = await db.transaction(async (tx) => {
+        await lockDogSafety(tx, dog.id);
+
+        const [ownedDog] = await tx
+          .select({ id: dogs.id })
+          .from(dogs)
+          .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
+          .for("update")
+          .limit(1);
+        if (!ownedDog) return { kind: "not_found" } as const;
+
+        const [activeGuidedSetup] = await tx
+          .select({ id: guidedSetups.id })
+          .from(guidedSetups)
+          .where(and(eq(guidedSetups.dogId, dog.id), isNull(guidedSetups.completedAt)))
+          .for("update")
+          .limit(1);
+        if (activeGuidedSetup) return { kind: "active_guided_setup" } as const;
+
+        const [deleted] = await tx
+          .delete(dogs)
+          .where(eq(dogs.id, dog.id))
+          .returning({ id: dogs.id });
+        return deleted ? ({ kind: "deleted" } as const) : ({ kind: "not_found" } as const);
+      });
+      if (result.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
+      if (result.kind === "active_guided_setup") {
+        return c.json({ error: "active_guided_setup" } as const, 409);
+      }
+    } catch (error) {
+      if (hasConstraint(error, "guided_setups_active_dog_required")) {
+        return c.json({ error: "active_guided_setup" } as const, 409);
+      }
+      throw error;
+    }
     return c.json({ ok: true } as const);
   })
   .post("/:id/concerns", zValidator("json", behaviorConcernSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const { safetySignal, ...input } = c.req.valid("json");
-    const reportedSignals = [
-      ...(input.severity === "severe" ? ["severe_behavior_concern"] : []),
-      ...(safetySignal ? [safetySignal] : []),
-    ];
-    const concern = await db.transaction(async (tx) => {
-      await lockDogSafety(tx, dog.id);
-      const [created] = await tx
-        .insert(behaviorConcerns)
-        .values({ ...input, dogId: dog.id })
-        .returning();
-      if (!created) throw new Error("failed to create behavior concern");
-      if (safetySignal) {
-        await tx.insert(dogSafetySignals).values({
-          dogId: dog.id,
-          type: safetySignal,
-          source: "behavior_concern",
-          reportedAt: new Date(),
-        });
-      }
-      return created;
-    });
+    const { concern, reportedSignals } = await db.transaction((tx) =>
+      createBehaviorConcern(tx, dog.id, c.req.valid("json")),
+    );
     for (const signal of reportedSignals) {
       await recordEvent("safety.signal_reported", {
         userId: c.get("userId"),
@@ -301,29 +320,9 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { templateKey } = c.req.valid("json");
-    const template = trainingCatalog.find((t) => t.key === templateKey);
-    if (!template) return c.json({ error: "invalid_template" } as const, 400);
-
-    const { goal, skills } = await db.transaction(async (tx) => {
-      const [createdGoal] = await tx
-        .insert(trainingGoals)
-        .values({ dogId: dog.id, goal: template.name, catalogGoalKey: template.key })
-        .returning();
-      if (!createdGoal) throw new Error("failed to create template goal");
-      const createdSkills = await tx
-        .insert(trainingSkills)
-        .values(
-          template.skills.map((skill, index) => ({
-            goalId: createdGoal.id,
-            name: skill.name,
-            confidence: 1,
-            position: index,
-            catalogSkillKey: skill.key,
-          })),
-        )
-        .returning();
-      return { goal: createdGoal, skills: createdSkills };
-    });
+    const applied = await db.transaction((tx) => applyTrainingTemplate(tx, dog.id, templateKey));
+    if (!applied) return c.json({ error: "invalid_template" } as const, 400);
+    const { goal, skills } = applied;
 
     await recordEvent("training.goal_added", {
       userId: c.get("userId"),
@@ -770,29 +769,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     }
     const skill = await findOwnedSkill(c.get("userId"), dog.id, body.skillId);
     if (!skill) return c.json({ error: "not_found" } as const, 404);
-    const result = await withFocusWeekLock(dog.id, weekKey, async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(weeklyFocus)
-        .where(and(eq(weeklyFocus.dogId, dog.id), eq(weeklyFocus.weekStart, weekKey)))
-        .for("update");
-      if (existing?.skillId === skill.id) return { kind: "unchanged" as const };
-      if (existing) {
-        const [focus] = await tx
-          .update(weeklyFocus)
-          .set({ skillId: skill.id, position: 0 })
-          .where(eq(weeklyFocus.id, existing.id))
-          .returning();
-        if (!focus) throw new Error("failed to replace focus skill");
-        return { kind: "replaced" as const, focus };
-      }
-      const [focus] = await tx
-        .insert(weeklyFocus)
-        .values({ dogId: dog.id, skillId: skill.id, weekStart: weekKey, position: 0 })
-        .returning();
-      if (!focus) throw new Error("failed to add focus skill");
-      return { kind: "created" as const, focus };
-    });
+    const result = await db.transaction((tx) => setWeeklyFocus(tx, dog.id, skill.id, weekKey));
     if (result.kind === "unchanged") return c.json({ ok: true, unchanged: true } as const);
     await recordEvent("focus.week_set", {
       userId: c.get("userId"),
@@ -940,32 +917,15 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const b = c.req.valid("json");
-    const occurredAt = b.occurredAt ? new Date(b.occurredAt) : new Date();
-    if (Number.isNaN(occurredAt.getTime())) {
-      return c.json(invalidJournalField("occurredAt", "Invalid date"), 400);
+    let entry: typeof journalEntries.$inferSelect;
+    try {
+      entry = await db.transaction((tx) => createJournalEntry(tx, dog.id, b));
+    } catch (error) {
+      if (error instanceof InvalidJournalOccurredAtError) {
+        return c.json(invalidJournalField("occurredAt", "Invalid date"), 400);
+      }
+      throw error;
     }
-    const [entry] = await withDogSafetyLock(dog.id, (tx) =>
-      tx
-        .insert(journalEntries)
-        .values({
-          dogId: dog.id,
-          kind: b.kind,
-          occurredAt,
-          note: b.note,
-          trend: b.kind === "daily_checkin" ? b.trend : null,
-          antecedent: b.kind === "moment" ? (b.antecedent ?? null) : null,
-          behavior: b.kind === "moment" ? (b.behavior ?? null) : null,
-          consequence: b.kind === "moment" ? (b.consequence ?? null) : null,
-          intensity: b.kind === "moment" ? (b.intensity ?? null) : null,
-          location: b.kind === "moment" ? (b.location ?? null) : null,
-          notes: b.kind === "moment" ? (b.notes ?? null) : null,
-          durationSeconds: b.kind === "moment" ? (b.durationSeconds ?? null) : null,
-          recoverySeconds: b.kind === "moment" ? (b.recoverySeconds ?? null) : null,
-          peoplePresent: b.kind === "moment" ? (b.peoplePresent ?? null) : null,
-          ownerResponse: b.kind === "moment" ? (b.ownerResponse ?? null) : null,
-        })
-        .returning(),
-    );
     await recordEvent("journal.entry_created", {
       userId: c.get("userId"),
       props: { kind: b.kind },

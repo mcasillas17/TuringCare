@@ -1,0 +1,1 @@
+CREATE INDEX "dogs_owner_idx" ON "dogs" USING btree ("owner_id");

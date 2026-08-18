@@ -94,7 +94,24 @@ export function useDeleteDog() {
   return useMutation({
     mutationFn: async (id: string) => {
       const res = await dogs[":id"].$delete({ param: { id } });
-      if (!res.ok) throw new Error("delete_failed");
+      if (!res.ok) {
+        let body: unknown;
+        try {
+          body = await res.json();
+        } catch (error) {
+          throw new Error("delete_failed", { cause: error });
+        }
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          "error" in body &&
+          typeof body.error === "string" &&
+          body.error.length > 0
+        ) {
+          throw new Error(body.error);
+        }
+        throw new Error("delete_failed");
+      }
       return res.json();
     },
     onSuccess: () => {

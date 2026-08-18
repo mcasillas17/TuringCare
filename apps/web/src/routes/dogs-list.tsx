@@ -2,7 +2,7 @@ import { DogCard } from "@/components/dogs/dog-card";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useDogsOverview } from "@/lib/dogs";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export function DogsList() {
   const { t } = useI18n();
@@ -41,6 +41,12 @@ export function DogsList() {
           {t("dogs.add")}
         </Button>
       )}
+      <Link
+        to="/my/setup/new"
+        className="block text-center text-sm text-slate-soft underline-offset-2 hover:text-slate hover:underline"
+      >
+        {t("guidedSetup.startAnother")}
+      </Link>
     </div>
   );
 }
