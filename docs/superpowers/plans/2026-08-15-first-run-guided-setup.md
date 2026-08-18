@@ -101,7 +101,7 @@
 - Create: `packages/shared/src/guided-setup.test.ts`
 - Modify: `packages/shared/src/index.ts`
 
-- [ ] **Step 1: Write failing contract tests**
+- [x] **Step 1: Write failing contract tests**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -162,7 +162,7 @@ describe("guided setup contracts", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and confirm the missing module failure**
+- [x] **Step 2: Run the test and confirm the missing module failure**
 
 Run:
 
@@ -172,7 +172,7 @@ pnpm --filter @turingcare/shared exec vitest run src/guided-setup.test.ts
 
 Expected: FAIL because `./guided-setup` does not exist.
 
-- [ ] **Step 3: Implement the contracts**
+- [x] **Step 3: Implement the contracts**
 
 Create `packages/shared/src/guided-setup.ts`:
 
@@ -263,7 +263,7 @@ Export it from `packages/shared/src/index.ts`:
 export * from "./guided-setup";
 ```
 
-- [ ] **Step 4: Run shared tests**
+- [x] **Step 4: Run shared tests**
 
 Run:
 
@@ -273,7 +273,7 @@ pnpm --filter @turingcare/shared exec vitest run src/guided-setup.test.ts src/do
 
 Expected: PASS with all selected tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/shared/src/guided-setup.ts packages/shared/src/guided-setup.test.ts packages/shared/src/index.ts
@@ -291,7 +291,7 @@ git commit -m "feat: define guided setup contracts"
 - Create: `apps/api/drizzle/meta/0018_snapshot.json`
 - Modify: `apps/api/drizzle/meta/_journal.json`
 
-- [ ] **Step 1: Add a failing schema test**
+- [x] **Step 1: Add a failing schema test**
 
 Add to `apps/api/src/db/schema.test.ts`:
 
@@ -307,7 +307,7 @@ it("enforces one active guided setup per owner", () => {
 });
 ```
 
-- [ ] **Step 2: Run the schema test**
+- [x] **Step 2: Run the schema test**
 
 Run:
 
@@ -317,7 +317,7 @@ pnpm --filter @turingcare/api exec vitest run src/db/schema.test.ts
 
 Expected: FAIL because `guidedSetups` is not exported.
 
-- [ ] **Step 3: Add enums and table**
+- [x] **Step 3: Add enums and table**
 
 Add domain enums near the existing domain enums in `apps/api/src/db/schema.ts`:
 
@@ -388,7 +388,7 @@ export const guidedSetupsRelations = relations(guidedSetups, ({ one }) => ({
 }));
 ```
 
-- [ ] **Step 4: Generate and inspect the migration**
+- [x] **Step 4: Generate and inspect the migration**
 
 Run:
 
@@ -420,7 +420,7 @@ Inspect the SQL and confirm it creates all four enums, the table, foreign keys w
 user/start index, RLS enablement, and guarded PostgREST-role revocation. Do not hand-edit
 the generated snapshot.
 
-- [ ] **Step 5: Run schema and type checks**
+- [x] **Step 5: Run schema and type checks**
 
 Run:
 
@@ -431,7 +431,7 @@ pnpm --filter @turingcare/api typecheck
 
 Expected: both commands PASS.
 
-- [ ] **Step 6: Prepare the API integration-test database**
+- [x] **Step 6: Prepare the API integration-test database**
 
 Run from the worktree root:
 
@@ -445,7 +445,7 @@ pnpm --filter @turingcare/api db:migrate
 Expected: Postgres is healthy and migration `0018_guided_setup` is applied before any
 guided-setup integration test runs.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/api/src/db/schema.ts apps/api/src/db/schema.test.ts apps/api/drizzle
@@ -467,7 +467,7 @@ git commit -m "feat: persist guided setup progress"
 - Test: `apps/api/src/routes/journal.test.ts`
 - Test: `apps/api/src/routes/focus.test.ts`
 
-- [ ] **Step 1: Add route regression assertions**
+- [x] **Step 1: Add route regression assertions**
 
 Extend the existing route tests to assert:
 
@@ -486,7 +486,7 @@ Add a dog-delete regression: deleting a dog linked to an active setup returns
 `409 active_guided_setup`; deleting a dog linked only to a completed setup succeeds and
 leaves the historical setup row with `dogId = null`.
 
-- [ ] **Step 2: Run the focused route suites before refactoring**
+- [x] **Step 2: Run the focused route suites before refactoring**
 
 Run:
 
@@ -497,7 +497,7 @@ pnpm --filter @turingcare/api exec vitest run \
 
 Expected: PASS. This is the behavior-preservation baseline.
 
-- [ ] **Step 3: Add a shared transaction type and dog writer**
+- [x] **Step 3: Add a shared transaction type and dog writer**
 
 Create `apps/api/src/lib/dog-writes.ts`:
 
@@ -528,7 +528,7 @@ export async function createDog(
 }
 ```
 
-- [ ] **Step 4: Extract concern, journal, template, and focus writers**
+- [x] **Step 4: Extract concern, journal, template, and focus writers**
 
 Implement these exact public signatures:
 
@@ -574,7 +574,7 @@ fields as the current route.
 same advisory locks currently used by `withFocusWeekLock`, then upserts the one focus row;
 the unchanged branch returns the existing focus row.
 
-- [ ] **Step 5: Refactor existing routes to call the helpers**
+- [x] **Step 5: Refactor existing routes to call the helpers**
 
 Keep ownership checks and response codes in `apps/api/src/routes/dogs.ts`. For example:
 
@@ -594,7 +594,7 @@ query for an incomplete linked setup and return `{ error: "active_guided_setup" 
 `guided_setups_active_dog_required` from the delete and map it to the same `409`, covering
 a concurrent state change between the guard query and delete.
 
-- [ ] **Step 6: Run focused route suites**
+- [x] **Step 6: Run focused route suites**
 
 Run:
 
@@ -606,7 +606,7 @@ pnpm --filter @turingcare/api exec vitest run \
 
 Expected: PASS with no response or telemetry regressions.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/api/src/lib/dog-writes.ts apps/api/src/lib/behavior-concern-writes.ts \
@@ -627,7 +627,7 @@ git commit -m "refactor: share guided setup domain writes"
 - Modify: `apps/api/src/app.ts`
 - Modify: `apps/api/src/telemetry/events.ts`
 
-- [ ] **Step 1: Write failing lifecycle integration tests**
+- [x] **Step 1: Write failing lifecycle integration tests**
 
 Create `apps/api/src/routes/guided-setup.test.ts` with real database users:
 
@@ -674,7 +674,7 @@ Add tests for:
 - abandon keeps the dog and records `abandoned`;
 - skip creates no concern, journal, goal, skill, focus, or practice row.
 
-- [ ] **Step 2: Run the lifecycle tests**
+- [x] **Step 2: Run the lifecycle tests**
 
 Run:
 
@@ -684,7 +684,7 @@ pnpm --filter @turingcare/api exec vitest run src/routes/guided-setup.test.ts
 
 Expected: FAIL because the route is not mounted.
 
-- [ ] **Step 3: Implement status loading and DTO mapping**
+- [x] **Step 3: Implement status loading and DTO mapping**
 
 In `apps/api/src/routes/guided-setup.ts`, add:
 
@@ -714,7 +714,7 @@ Convert timestamps with `.toISOString()` and never return `userId`. If an active
 `dogId === null`, fail loudly because the database check should make that state
 impossible; completed historical rows may return null dog fields.
 
-- [ ] **Step 4: Implement lifecycle routes**
+- [x] **Step 4: Implement lifecycle routes**
 
 Use this route surface:
 
@@ -740,7 +740,7 @@ setup, and return `201`. For every later mutation, load the requested `setupId` 
 requested setup is incomplete and set `currentStep: "action"`. Skip and abandon set
 `completedAt`, `completionReason`, and `updatedAt` while leaving action fields null.
 
-- [ ] **Step 5: Add server-only event names and route telemetry**
+- [x] **Step 5: Add server-only event names and route telemetry**
 
 Add to `KNOWN_EVENTS` but not `CLIENT_EVENTS`:
 
@@ -761,7 +761,7 @@ props: { intent, step: "action", completionReason: "skipped" }
 
 Do not include names, breed, concern text, journal text, or safety details.
 
-- [ ] **Step 6: Mount and test**
+- [x] **Step 6: Mount and test**
 
 Add to `apps/api/src/app.ts`:
 
@@ -780,7 +780,7 @@ pnpm --filter @turingcare/api exec vitest run src/routes/guided-setup.test.ts
 
 Expected: lifecycle and isolation tests PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/api/src/app.ts apps/api/src/routes/guided-setup.ts \
@@ -796,7 +796,7 @@ git commit -m "feat: add guided setup lifecycle api"
 - Modify: `apps/api/src/routes/guided-setup.ts`
 - Modify: `apps/api/src/routes/guided-setup.test.ts`
 
-- [ ] **Step 1: Write failing action tests**
+- [x] **Step 1: Write failing action tests**
 
 Add integration tests:
 
@@ -856,7 +856,7 @@ Also assert:
   setup history with `dogId` and `dogName` set to `null`, and returns the same
   tombstone contract on replay without setup/domain mutation telemetry.
 
-- [ ] **Step 2: Run the action tests**
+- [x] **Step 2: Run the action tests**
 
 Run:
 
@@ -867,7 +867,7 @@ pnpm --filter @turingcare/api exec vitest run src/routes/guided-setup.test.ts \
 
 Expected: FAIL with route not found.
 
-- [ ] **Step 3: Reuse serialized setup lookup helpers**
+- [x] **Step 3: Reuse serialized setup lookup helpers**
 
 ```ts
 async function lockSetupFlow(tx: TransactionType, userId: string) {
@@ -921,7 +921,7 @@ telemetry remains deduped for live training replays. Skipped, abandoned, and
 different-action replays remain `409`. Future hooks and UI must check `actionDeleted` before
 rendering `concern` or `entry`.
 
-- [ ] **Step 4: Implement both action routes**
+- [x] **Step 4: Implement both action routes**
 
 Add:
 
@@ -966,7 +966,7 @@ createJournalEntry(tx, setup.dogId, {
 
 Emit domain telemetry and guided-setup telemetry only after commit.
 
-- [ ] **Step 5: Run behavior and progress tests**
+- [x] **Step 5: Run behavior and progress tests**
 
 Run:
 
@@ -977,7 +977,7 @@ pnpm --filter @turingcare/api exec vitest run src/routes/guided-setup.test.ts \
 
 Expected: PASS, including safety suppression coverage.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api/src/routes/guided-setup.ts apps/api/src/routes/guided-setup.test.ts
@@ -992,7 +992,7 @@ git commit -m "feat: complete guided behavior and progress actions"
 - Modify: `apps/api/src/routes/guided-setup.ts`
 - Modify: `apps/api/src/routes/guided-setup.test.ts`
 
-- [ ] **Step 1: Write failing training tests**
+- [x] **Step 1: Write failing training tests**
 
 ```ts
 it("applies a starter template, focuses its first skill, and returns a suggestion", async () => {
@@ -1031,7 +1031,7 @@ Add tests for:
 - stale retries use the original completed setup rather than a newer active setup;
 - telemetry contains only the bounded normal template/focus and guided completion props.
 
-- [ ] **Step 2: Run training tests**
+- [x] **Step 2: Run training tests**
 
 Run:
 
@@ -1041,7 +1041,7 @@ pnpm --filter @turingcare/api exec vitest run src/routes/guided-setup.test.ts -t
 
 Expected: FAIL with route not found.
 
-- [ ] **Step 3: Implement the training transaction**
+- [x] **Step 3: Implement the training transaction**
 
 Add the route:
 
@@ -1093,7 +1093,7 @@ data.
 Future web consumers must branch on `actionDeleted` before rendering the goal, skills,
 focus, or suggestion.
 
-- [ ] **Step 4: Emit existing and setup telemetry**
+- [x] **Step 4: Emit existing and setup telemetry**
 
 After commit:
 
@@ -1120,7 +1120,7 @@ await recordEvent("guided_setup.completed", {
 });
 ```
 
-- [ ] **Step 5: Run training and safety suites**
+- [x] **Step 5: Run training and safety suites**
 
 Run:
 
@@ -1131,7 +1131,7 @@ pnpm --filter @turingcare/api exec vitest run \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api/src/routes/guided-setup.ts apps/api/src/routes/guided-setup.test.ts
@@ -1146,7 +1146,7 @@ git commit -m "feat: complete guided training action"
 - Create: `apps/web/src/lib/guided-setup.ts`
 - Create: `apps/web/src/lib/guided-setup.test.tsx`
 
-- [ ] **Step 1: Write failing hook tests**
+- [x] **Step 1: Write failing hook tests**
 
 Mock `@/lib/api` and test:
 
@@ -1173,7 +1173,7 @@ Assert successful actions invalidate:
 ["focus", dogId, weekKey], ["suggestion", dogId, weekKey]
 ```
 
-- [ ] **Step 2: Run the hook tests**
+- [x] **Step 2: Run the hook tests**
 
 Run:
 
@@ -1183,7 +1183,7 @@ pnpm --filter @turingcare/web exec vitest run src/lib/guided-setup.test.tsx
 
 Expected: FAIL because the hook module does not exist.
 
-- [ ] **Step 3: Implement query and mutations**
+- [x] **Step 3: Implement query and mutations**
 
 Create:
 
@@ -1247,7 +1247,7 @@ async function invalidateSetupCaches(
 }
 ```
 
-- [ ] **Step 4: Run hook tests and web typecheck**
+- [x] **Step 4: Run hook tests and web typecheck**
 
 Run:
 
@@ -1258,7 +1258,7 @@ pnpm --filter @turingcare/web typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/lib/guided-setup.ts apps/web/src/lib/guided-setup.test.tsx
@@ -1283,7 +1283,7 @@ git commit -m "feat: add guided setup web hooks"
 - Modify: `apps/web/src/i18n/en.ts`
 - Modify: `apps/web/src/i18n/es.ts`
 
-- [ ] **Step 1: Write failing route tests**
+- [x] **Step 1: Write failing route tests**
 
 Cover:
 
@@ -1311,7 +1311,7 @@ Also test loading, load failure, Spanish strings, visible labels, keyboard radio
 step announcement, retained form values after a rejected mutation, and abandonment from
 both intent and action steps.
 
-- [ ] **Step 2: Run the route tests**
+- [x] **Step 2: Run the route tests**
 
 Run:
 
@@ -1321,7 +1321,7 @@ pnpm --filter @turingcare/web exec vitest run src/routes/guided-setup.test.tsx
 
 Expected: FAIL because the route and components do not exist.
 
-- [ ] **Step 3: Build the setup shell**
+- [x] **Step 3: Build the setup shell**
 
 `SetupShell` accepts:
 
@@ -1342,7 +1342,7 @@ Render an `<h1 tabIndex={-1}>` and a visible progress string:
 
 Focus the heading on step change. Use only reduced-motion-safe CSS transitions.
 
-- [ ] **Step 4: Build dog basics using the existing profile contract**
+- [x] **Step 4: Build dog basics using the existing profile contract**
 
 Use `useForm<DogProfile>` with `zodResolver(dogProfileSchema)`. Render required name,
 size, sex, source, and vaccine-stage controls plus optional breed. Submit through
@@ -1352,7 +1352,7 @@ Use the same enum values and existing translation keys as `DogForm`:
 `small|medium|large|giant`, `male|female`, `breeder|rescue|shelter|other`, and
 `in_progress|complete|unknown`.
 
-- [ ] **Step 5: Build the intent radio group**
+- [x] **Step 5: Build the intent radio group**
 
 Render a `<fieldset>` with three radio inputs:
 
@@ -1366,7 +1366,7 @@ const intents: GuidedSetupIntent[] = [
 
 Save through `useSaveGuidedSetupIntent` and keep the selected value after errors.
 
-- [ ] **Step 6: Add explicit abandon control**
+- [x] **Step 6: Add explicit abandon control**
 
 Create `AbandonSetupButton` with an initial **Exit setup** action and a second explicit
 confirmation. On confirm, call `useAbandonGuidedSetup`; then navigate to
@@ -1374,7 +1374,7 @@ confirmation. On confirm, call `useAbandonGuidedSetup`; then navigate to
 Steps 2 and 3, never Step 1. A failed abandon keeps the owner on the current step and
 shows the localized structured error.
 
-- [ ] **Step 7: Add authenticated minimal layout, route composition, and overview guard**
+- [x] **Step 7: Add authenticated minimal layout, route composition, and overview guard**
 
 Create `GuidedSetupLayout` with a compact header containing `BrandMark`,
 `LanguageToggle`, and sign-out, followed by `VerifyEmailBanner` and `<Outlet />`. It must
@@ -1412,7 +1412,7 @@ In `GuidedSetup`, when there is no active setup:
 Refreshing after completion intentionally clears route-local handoff state and redirects
 to the normal owner experience, matching the completed-setup guard.
 
-- [ ] **Step 8: Add English and Spanish copy**
+- [x] **Step 8: Add English and Spanish copy**
 
 Add matching `guidedSetup` catalog objects for:
 
@@ -1424,7 +1424,7 @@ Add matching `guidedSetup` catalog objects for:
 
 Do not use English literals in components.
 
-- [ ] **Step 9: Run route tests and typecheck**
+- [x] **Step 9: Run route tests and typecheck**
 
 Run:
 
@@ -1436,7 +1436,7 @@ pnpm --filter @turingcare/web typecheck
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add apps/web/src/components/guided-setup apps/web/src/routes/guided-setup.tsx \
@@ -1458,7 +1458,7 @@ git commit -m "feat: add guided setup basics and intent"
 - Modify: `apps/web/src/i18n/en.ts`
 - Modify: `apps/web/src/i18n/es.ts`
 
-- [ ] **Step 1: Write failing component-route tests**
+- [x] **Step 1: Write failing component-route tests**
 
 Test:
 
@@ -1472,7 +1472,7 @@ Assert severe and signaled concerns require confirmation; mild concerns do not. 
 the progress path renders a three-option radio group and required note. For both paths,
 double-clicking submit calls the mutation once, and a rejected mutation preserves values.
 
-- [ ] **Step 2: Run focused tests**
+- [x] **Step 2: Run focused tests**
 
 Run:
 
@@ -1483,7 +1483,7 @@ pnpm --filter @turingcare/web exec vitest run src/routes/guided-setup.test.tsx \
 
 Expected: FAIL because action components do not exist.
 
-- [ ] **Step 3: Implement behavior action**
+- [x] **Step 3: Implement behavior action**
 
 Use `guidedSetupBehaviorActionSchema` with React Hook Form. Show safety confirmation only
 when severity is severe or a signal is selected. Render the options from
@@ -1494,13 +1494,13 @@ form field.
 On success, pass the returned setup and concern to route state. Do not render or cache
 owner prose outside the form and normal dog query.
 
-- [ ] **Step 4: Implement progress action**
+- [x] **Step 4: Implement progress action**
 
 Use `guidedSetupProgressActionSchema`. Render `better`, `same`, and `harder` as a real
 radio group and require the short note. Seed `setupId: setup.id` in `defaultValues`
 without rendering an editable field. Submit through `useCompleteProgressSetup`.
 
-- [ ] **Step 5: Wire intent dispatch**
+- [x] **Step 5: Wire intent dispatch**
 
 In `GuidedSetup`:
 
@@ -1516,7 +1516,7 @@ if (active.currentStep === "action" && active.intent === "track_progress") {
 Back returns to intent only before a domain action succeeds. Skip calls the server and
 goes directly to completion.
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 Run:
 
@@ -1526,7 +1526,7 @@ pnpm --filter @turingcare/web exec vitest run src/routes/guided-setup.test.tsx
 
 Expected: behavior and progress cases PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/src/components/guided-setup apps/web/src/routes/guided-setup.tsx \
@@ -1547,7 +1547,7 @@ git commit -m "feat: add guided behavior and progress actions"
 - Modify: `apps/web/src/i18n/en.ts`
 - Modify: `apps/web/src/i18n/es.ts`
 
-- [ ] **Step 1: Write failing training UI tests**
+- [x] **Step 1: Write failing training UI tests**
 
 Cover:
 
@@ -1561,7 +1561,7 @@ Cover:
 
 Use the real `TrainingSuggestion` fixtures from existing suggestion component tests.
 
-- [ ] **Step 2: Run training UI tests**
+- [x] **Step 2: Run training UI tests**
 
 Run:
 
@@ -1571,7 +1571,7 @@ pnpm --filter @turingcare/web exec vitest run src/routes/guided-setup.test.tsx -
 
 Expected: FAIL because the training action component does not exist.
 
-- [ ] **Step 3: Implement starter template selection**
+- [x] **Step 3: Implement starter template selection**
 
 Load `useTrainingCatalog()` and filter to a constant allowlist:
 
@@ -1597,7 +1597,7 @@ Submit:
 }
 ```
 
-- [ ] **Step 4: Add preview mode to the existing suggestion card**
+- [x] **Step 4: Add preview mode to the existing suggestion card**
 
 Add `mode?: "interactive" | "preview"` to `SuggestionCard`, defaulting to
 `"interactive"` through a discriminated props union:
@@ -1636,7 +1636,7 @@ Render:
 <SuggestionCard suggestion={suggestion} mode="preview" />
 ```
 
-- [ ] **Step 5: Run training and suggestion tests**
+- [x] **Step 5: Run training and suggestion tests**
 
 Run:
 
@@ -1647,7 +1647,7 @@ pnpm --filter @turingcare/web exec vitest run \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/components/guided-setup/training-action-step.tsx \
@@ -1675,7 +1675,7 @@ git commit -m "feat: add guided training first action"
 - Modify: `apps/web/src/i18n/en.ts`
 - Modify: `apps/web/src/i18n/es.ts`
 
-- [ ] **Step 1: Write failing handoff tests**
+- [x] **Step 1: Write failing handoff tests**
 
 Assert:
 
@@ -1690,7 +1690,7 @@ Assert:
 - deleting the active setup dog shows a localized link back to `/my/setup` instead of a
   generic save error.
 
-- [ ] **Step 2: Run focused tests**
+- [x] **Step 2: Run focused tests**
 
 Run:
 
@@ -1703,7 +1703,7 @@ pnpm --filter @turingcare/web exec vitest run \
 
 Expected: FAIL on missing handoff and integration behavior.
 
-- [ ] **Step 3: Implement completion handoff**
+- [x] **Step 3: Implement completion handoff**
 
 `CompletionStep` accepts:
 
@@ -1717,13 +1717,13 @@ type CompletionStepProps = {
 Map action type to destination and one translated next-step sentence. Never repeat concern
 or journal prose. Keep the saved-value confirmation generic.
 
-- [ ] **Step 4: Hide checklist during active setup**
+- [x] **Step 4: Hide checklist during active setup**
 
 In `OnboardingChecklist`, load `useGuidedSetup()` and return `null` when
 `guidedSetup.active !== null`. Preserve the existing checklist completion and celebration
 logic after setup ends.
 
-- [ ] **Step 5: Add explicit additional-dog entry**
+- [x] **Step 5: Add explicit additional-dog entry**
 
 Add a translated secondary link in `DogsList`:
 
@@ -1734,7 +1734,7 @@ Add a translated secondary link in `DogsList`:
 The explicit `/my/setup/new` route starts with dog basics when there is no active setup,
 regardless of an older completed setup.
 
-- [ ] **Step 6: Handle active-setup dog deletion**
+- [x] **Step 6: Handle active-setup dog deletion**
 
 In `useDeleteDog`, parse the structured API body and throw
 `new Error(body.error ?? "delete_failed")`. In `DogLayout`, when the error message is
@@ -1747,7 +1747,7 @@ message with:
 
 Keep the generic error toast for all other deletion failures.
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 Run:
 
@@ -1760,7 +1760,7 @@ pnpm --filter @turingcare/web exec vitest run \
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/web/src/components/guided-setup/completion-step.tsx \
@@ -1791,7 +1791,7 @@ git commit -m "feat: complete guided setup handoff"
 - Modify: `apps/web/src/components/guided-setup/progress-action-step.tsx`
 - Modify: `apps/web/src/components/guided-setup/completion-step.tsx`
 
-- [ ] **Step 1: Add privacy regression tests**
+- [x] **Step 1: Add privacy regression tests**
 
 Capture `recordEvent` rows for every lifecycle and action route. Assert:
 
@@ -1807,13 +1807,13 @@ expect(Object.values(event.props).every((value) =>
 Assert duration is a bounded bucket such as `under_2m`, `2_to_5m`, `5_to_10m`, or
 `over_10m`, never an exact timestamp delta.
 
-- [ ] **Step 2: Add accessibility and lifecycle tests**
+- [x] **Step 2: Add accessibility and lifecycle tests**
 
 Test keyboard-only completion, focus moving to each new heading, step label accessible
 name, error association, polite completion announcement, reduced-motion classes, refresh
 resume, duplicate submit, and active-setup conflict recovery.
 
-- [ ] **Step 3: Implement duration buckets and error mapping**
+- [x] **Step 3: Implement duration buckets and error mapping**
 
 Add:
 
@@ -1830,7 +1830,7 @@ function durationBucket(startedAt: Date, completedAt: Date) {
 Map API errors to specific i18n keys. Unknown errors use one generic retry message and
 remain logged through the repository's existing monitoring boundary.
 
-- [ ] **Step 4: Run privacy and accessibility tests**
+- [x] **Step 4: Run privacy and accessibility tests**
 
 Run:
 
@@ -1842,7 +1842,7 @@ pnpm --filter @turingcare/web exec vitest run src/routes/guided-setup.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/routes/guided-setup.test.ts \
@@ -1860,11 +1860,11 @@ git commit -m "test: harden guided setup privacy and recovery"
 - Modify: `e2e/critical-owner-journey.spec.ts`
 - Modify: `playwright.config.ts`
 
-- [ ] **Step 1: Reconcile the existing journey and add the desktop behavior path**
+- [x] **Step 1: Reconcile the existing journey and add the desktop behavior path**
 
 Change the existing test's first argument to
-`"[desktop] full owner journey: register → guided setup → training → brief → share"` and
-keep its existing callback body.
+`"full owner journey: register → guided setup → training → brief → share"` and keep its
+existing callback body. The untagged journey runs in both browser projects.
 
 Change the post-registration URL assertion from `/my` to `/my/setup`. Keep the
 verification-banner assertion there because `GuidedSetupLayout` renders
@@ -1893,7 +1893,7 @@ await expect(page.getByRole("status")).toContainText("saved");
 Continue into the journal workspace, log the journey's existing quick moment, and proceed
 through its remaining sections.
 
-- [ ] **Step 2: Add phone training and resume smoke in the same spec**
+- [x] **Step 2: Add phone training and resume smoke in the same spec**
 
 At the phone viewport:
 
@@ -1904,7 +1904,7 @@ At the phone viewport:
 5. verify Step 2 resumes;
 6. choose training;
 7. apply a starter template;
-8. assert either a real exercise or a safety notice, never both;
+8. assert the authored exercise renders and no safety notice appears for the fresh dog;
 9. follow the weekly workspace CTA.
 
 In `playwright.config.ts`, route tags to projects:
@@ -1912,17 +1912,19 @@ In `playwright.config.ts`, route tags to projects:
 ```ts
 {
   name: "desktop-chromium",
-  grep: /\[desktop\]/,
+  grepInvert: /\[phone\]/,
   use: { ...devices["Desktop Chrome"] },
 },
 {
   name: "phone-chromium",
-  grep: /\[phone\]/,
   use: { ...devices["Pixel 7"], browserName: "chromium" },
 },
 ```
 
-- [ ] **Step 3: Run Playwright journeys**
+This keeps `[phone]` tests phone-only while ensuring every untagged critical journey runs
+at both viewports instead of being silently filtered out.
+
+- [x] **Step 3: Run Playwright journeys**
 
 The Playwright config starts the local API and web apps. Run:
 
@@ -1931,9 +1933,10 @@ pnpm exec playwright test e2e/critical-owner-journey.spec.ts --project=desktop-c
 pnpm exec playwright test e2e/critical-owner-journey.spec.ts --project=phone-chromium
 ```
 
-Expected: desktop and phone journeys PASS with no retries required.
+Expected: the desktop project runs one journey and the phone project runs both journeys,
+all passing with no retries required.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add e2e/critical-owner-journey.spec.ts playwright.config.ts
@@ -1949,7 +1952,7 @@ git commit -m "test: cover guided first-run journeys"
 - Modify: `docs/superpowers/plans/2026-08-15-first-run-guided-setup.md` by checking completed task boxes.
 - Modify: `docs/PROJECT-LOG.md`
 
-- [ ] **Step 1: Apply the migration to the local test database**
+- [x] **Step 1: Apply the migration to the local test database**
 
 ```bash
 corepack enable
@@ -1959,9 +1962,9 @@ set -a && . ./.env && set +a
 pnpm --filter @turingcare/api db:migrate
 ```
 
-Expected: migration `0018_guided_setup` applies successfully.
+Expected: migrations `0018_guided_setup` and `0019_lovely_dormammu` apply successfully.
 
-- [ ] **Step 2: Run repository checks**
+- [x] **Step 2: Run repository checks**
 
 ```bash
 pnpm lint
@@ -1972,7 +1975,7 @@ pnpm build
 
 Expected: all commands exit `0`; API tests include real Postgres guided-setup coverage.
 
-- [ ] **Step 3: Run the focused Playwright journeys**
+- [x] **Step 3: Run the focused Playwright journeys**
 
 ```bash
 pnpm exec playwright test e2e/critical-owner-journey.spec.ts --project=desktop-chromium
@@ -1981,7 +1984,7 @@ pnpm exec playwright test e2e/critical-owner-journey.spec.ts --project=phone-chr
 
 Expected: all selected projects PASS.
 
-- [ ] **Step 4: Add the shipped phase to the project log**
+- [x] **Step 4: Add the shipped phase to the project log**
 
 Run:
 
@@ -1994,7 +1997,7 @@ the three-step flow, persisted resume state, three real first actions, safety be
 telemetry, accessibility/localization, and desktop/phone coverage. Record the actual first
 and last implementation commit hashes from the command, plus the exact spec and plan paths.
 
-- [ ] **Step 5: Inspect the final diff**
+- [x] **Step 5: Inspect the final diff**
 
 ```bash
 git diff origin/main...HEAD --check
@@ -2003,7 +2006,7 @@ git status --short
 
 Expected: no whitespace errors and no untracked implementation residue.
 
-- [ ] **Step 6: Commit final factual documentation adjustments**
+- [x] **Step 6: Commit final factual documentation adjustments**
 
 If no documentation changed, do not create an empty commit. Otherwise:
 
