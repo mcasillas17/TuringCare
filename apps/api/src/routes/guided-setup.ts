@@ -12,7 +12,7 @@ import {
   guidedSetupStartSchema,
   guidedSetupTrainingActionSchema,
 } from "@turingcare/shared";
-import { and, asc, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import {
@@ -117,7 +117,7 @@ async function lockSetupFlow(tx: Pick<TransactionType, "execute">, userId: strin
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`guided-setup:${userId}`}))`);
 }
 
-async function selectSetupRows(
+function selectSetupRows(
   executor: Pick<typeof db, "select">,
   userId: string,
   where = eq(guidedSetups.userId, userId),
@@ -127,7 +127,8 @@ async function selectSetupRows(
     .from(guidedSetups)
     .leftJoin(dogs, eq(guidedSetups.dogId, dogs.id))
     .where(where)
-    .orderBy(desc(guidedSetups.startedAt));
+    .orderBy(desc(guidedSetups.startedAt))
+    .limit(1);
 }
 
 async function loadActiveSetup(
@@ -171,18 +172,32 @@ function requireActiveSetupDog(row: SetupDogJoinRow): ActiveSetupWithDogRow {
   };
 }
 
+export function buildGuidedSetupStatusQueries(userId: string) {
+  return {
+    activeSetup: selectSetupRows(
+      db,
+      userId,
+      and(eq(guidedSetups.userId, userId), isNull(guidedSetups.completedAt)),
+    ),
+    latestSetup: selectSetupRows(db, userId),
+    existingDog: db.select({ id: dogs.id }).from(dogs).where(eq(dogs.ownerId, userId)).limit(1),
+  };
+}
+
 async function loadStatus(userId: string): Promise<GuidedSetupStatus> {
-  const [rows, dogCountRows] = await Promise.all([
-    selectSetupRows(db, userId),
-    db.select({ value: count() }).from(dogs).where(eq(dogs.ownerId, userId)),
+  const queries = buildGuidedSetupStatusQueries(userId);
+  const [activeRows, latestRows, existingDogRows] = await Promise.all([
+    queries.activeSetup,
+    queries.latestSetup,
+    queries.existingDog,
   ]);
-  const active = rows.find(({ setup }) => setup.completedAt === null) ?? null;
-  const dogCount = Number(dogCountRows[0]?.value ?? 0);
+  const active = activeRows[0] ?? null;
+  const latest = latestRows[0] ?? null;
 
   return {
     active: active ? toSetupDto(active) : null,
-    latest: rows[0] ? toSetupDto(rows[0]) : null,
-    autoStartEligible: dogCount === 0 && rows.length === 0 && active === null,
+    latest: latest ? toSetupDto(latest) : null,
+    autoStartEligible: existingDogRows.length === 0 && latest === null && active === null,
   };
 }
 

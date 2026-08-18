@@ -105,25 +105,29 @@ export const guidedSetupActionTypeEnum = pgEnum("guided_setup_action_type", [
 
 /* ---------- Domain tables ---------- */
 
-export const dogs = pgTable("dogs", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  ownerId: text("owner_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  breed: text("breed"),
-  dateOfBirth: date("date_of_birth"),
-  size: dogSizeEnum("size").notNull(),
-  weightLbs: numeric("weight_lbs"),
-  sex: dogSexEnum("sex").notNull(),
-  spayedNeutered: boolean("spayed_neutered").notNull().default(false),
-  source: dogSourceEnum("source").notNull(),
-  adoptedAt: date("adopted_at"),
-  vaccineStage: vaccineStageEnum("vaccine_stage").notNull(),
-  notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const dogs = pgTable(
+  "dogs",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    breed: text("breed"),
+    dateOfBirth: date("date_of_birth"),
+    size: dogSizeEnum("size").notNull(),
+    weightLbs: numeric("weight_lbs"),
+    sex: dogSexEnum("sex").notNull(),
+    spayedNeutered: boolean("spayed_neutered").notNull().default(false),
+    source: dogSourceEnum("source").notNull(),
+    adoptedAt: date("adopted_at"),
+    vaccineStage: vaccineStageEnum("vaccine_stage").notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("dogs_owner_idx").on(t.ownerId)],
+);
 
 export const guidedSetups = pgTable(
   "guided_setups",

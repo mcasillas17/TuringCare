@@ -6,6 +6,7 @@ import {
   advancementProposals,
   advancementStatusEnum,
   dogSafetySignals,
+  dogs,
   guidedSetups,
   journalEntries,
   journalEntryKindEnum,
@@ -63,6 +64,19 @@ describe("training progress tables", () => {
   it("exports the expected table names", () => {
     expect(getTableName(trainingSkills)).toBe("training_skills");
     expect(getTableName(practiceSessions)).toBe("practice_sessions");
+  });
+});
+
+describe("dogs schema", () => {
+  it("indexes owner-scoped existence reads", () => {
+    const index = getTableConfig(dogs).indexes.find(
+      ({ config }) => config.name === "dogs_owner_idx",
+    );
+
+    expect(index).toBeDefined();
+    expect(index?.config.columns.map((column) => ("name" in column ? column.name : null))).toEqual([
+      "owner_id",
+    ]);
   });
 });
 
