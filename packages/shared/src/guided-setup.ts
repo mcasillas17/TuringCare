@@ -14,6 +14,11 @@ export const guidedSetupCompletionReasonValues = [
   "abandoned",
 ] as const;
 export const guidedSetupActionTypeValues = ["behavior", "training", "progress"] as const;
+export const guidedSetupTrainingTemplateKeyValues = [
+  "basic-manners",
+  "puppy-fundamentals",
+  "recall-reliability",
+] as const;
 
 export const guidedSetupStartSchema = dogProfileSchema.strict();
 

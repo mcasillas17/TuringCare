@@ -452,7 +452,8 @@ describe("guided setup hooks", () => {
     } else {
       expect(response.goal.id).toBeDefined();
       expect(response.focus).not.toBeNull();
-      expect(response.suggestion.suggestionId).toBeDefined();
+      expect(response.suggestion).not.toBeNull();
+      expect(response.suggestion?.suggestionId).toBeDefined();
     }
     expect(completeTraining).toHaveBeenCalledWith({ json: body });
     expectAggregateInvalidations(invalidateQueries);

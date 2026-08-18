@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const behaviorConcernWriteControl = vi.hoisted(() => ({ fail: false }));
 const suggestionLoadControl = vi.hoisted(() => ({
+  currentWeekKeyOverride: undefined as string | undefined,
   pauseLoad: false,
   loadHold: Promise.resolve(),
   markLoadStarted: undefined as (() => void) | undefined,
@@ -30,6 +31,8 @@ vi.mock("../lib/suggestion", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/suggestion")>();
   return {
     ...actual,
+    currentWeekKey: (...args: Parameters<typeof actual.currentWeekKey>) =>
+      suggestionLoadControl.currentWeekKeyOverride ?? actual.currentWeekKey(...args),
     loadSuggestion: async (
       input: Parameters<typeof actual.loadSuggestion>[0],
     ): ReturnType<typeof actual.loadSuggestion> => {
@@ -55,6 +58,7 @@ import {
   practiceSessions,
   trainingGoals,
   trainingSkills,
+  trainingSuggestions,
   weeklyFocus,
 } from "../db/schema";
 import { currentWeekKey } from "../lib/suggestion";
@@ -319,11 +323,29 @@ async function waitForTrainingGoalLockWaiter() {
   throw new Error("timed out waiting for a training goal lock waiter");
 }
 
+async function waitForSetupAdvisoryLockWaiter() {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const result = await pool.query<{ waiting: boolean }>(
+      "select exists (" +
+        "select 1 from pg_locks l " +
+        "join pg_stat_activity a on a.pid = l.pid " +
+        "where not l.granted " +
+        "and l.locktype = 'advisory' " +
+        "and a.query ilike '%pg_advisory_xact_lock%'" +
+        ") as waiting",
+    );
+    if (result.rows[0]?.waiting) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error("timed out waiting for a guided setup advisory lock waiter");
+}
+
 describe("guided setup lifecycle", () => {
   const users: TestUser[] = [];
 
   afterEach(async () => {
     behaviorConcernWriteControl.fail = false;
+    suggestionLoadControl.currentWeekKeyOverride = undefined;
     suggestionLoadControl.pauseLoad = false;
     suggestionLoadControl.releaseLoad?.();
     for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
@@ -1730,6 +1752,35 @@ describe("guided setup lifecycle", () => {
     expect(await trainingActionEvents(user.userId)).toEqual([]);
   });
 
+  it("rejects catalog templates outside the guided starter set", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+
+    const response = await createTrainingAction(user, {
+      setupId: setup.id,
+      templateKey: "reactivity-work",
+      weekKey: currentWeekKey(new Date(), 0),
+      timezoneOffsetMinutes: 0,
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_template" });
+    expect((await readStatus(user)).active).toMatchObject({
+      id: setup.id,
+      completedAt: null,
+      intent: "train_skill",
+    });
+    expect(await countActionRows(setup.dogId as string)).toMatchObject({
+      goals: 0,
+      skills: 0,
+      focus: 0,
+    });
+  });
+
   it("rejects a historical training week before writing", async () => {
     const user = await createTestUser();
     users.push(user);
@@ -1757,6 +1808,122 @@ describe("guided setup lifecycle", () => {
       focus: 0,
     });
     expect(await trainingActionEvents(user.userId)).toEqual([]);
+  });
+
+  it("rechecks the training week after waiting for the setup lock", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    suggestionLoadControl.currentWeekKeyOverride = "2026-08-17";
+
+    const holder = await pool.connect();
+    let holderTransactionOpen = false;
+    try {
+      await holder.query("begin");
+      holderTransactionOpen = true;
+      await holder.query("select pg_advisory_xact_lock(hashtext($1))", [
+        `guided-setup:${user.userId}`,
+      ]);
+
+      const responsePromise = createTrainingAction(user, {
+        setupId: setup.id,
+        templateKey: "puppy-fundamentals",
+        weekKey: "2026-08-17",
+        timezoneOffsetMinutes: 0,
+      });
+      await waitForSetupAdvisoryLockWaiter();
+      suggestionLoadControl.currentWeekKeyOverride = "2026-08-24";
+      await holder.query("commit");
+      holderTransactionOpen = false;
+
+      const response = await responsePromise;
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({ error: "historical_suggestion_unavailable" });
+      expect(await countActionRows(setup.dogId as string)).toMatchObject({
+        goals: 0,
+        skills: 0,
+        focus: 0,
+      });
+      expect(await trainingActionEvents(user.userId)).toEqual([]);
+    } finally {
+      if (holderTransactionOpen) await holder.query("rollback");
+      holder.release();
+    }
+  });
+
+  it("replays a completed training action after its week becomes historical", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+    const current = currentWeekKey(new Date(), 0);
+    const created = await createTrainingAction(user, {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: current,
+      timezoneOffsetMinutes: 0,
+    });
+    const createdBody = (await created.json()) as { goal: { id: string } };
+    const [suggestionsBeforeReplay] = await db
+      .select({ value: count() })
+      .from(trainingSuggestions)
+      .where(eq(trainingSuggestions.dogId, setup.dogId as string));
+    const telemetryBeforeReplay = await suggestionTelemetryEvents(user.userId);
+    const historical = new Date(`${current}T00:00:00.000Z`);
+    historical.setUTCDate(historical.getUTCDate() - 7);
+    const historicalWeekKey = historical.toISOString().slice(0, 10);
+    await db
+      .update(weeklyFocus)
+      .set({ weekStart: historicalWeekKey })
+      .where(eq(weeklyFocus.dogId, setup.dogId as string));
+
+    const replay = await createTrainingAction(user, {
+      setupId: setup.id,
+      templateKey: "basic-manners",
+      weekKey: historicalWeekKey,
+      timezoneOffsetMinutes: 0,
+    });
+
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({
+      setup: { id: setup.id },
+      goal: { id: createdBody.goal.id },
+      suggestion: null,
+      actionDeleted: false,
+    });
+    const [suggestionsAfterReplay] = await db
+      .select({ value: count() })
+      .from(trainingSuggestions)
+      .where(eq(trainingSuggestions.dogId, setup.dogId as string));
+    expect(suggestionsAfterReplay?.value).toBe(suggestionsBeforeReplay?.value);
+    expect(await suggestionTelemetryEvents(user.userId)).toEqual(telemetryBeforeReplay);
+  });
+
+  it("returns not found for a cross-owner setup before historical-week validation", async () => {
+    const owner = await createTestUser();
+    const attacker = await createTestUser();
+    users.push(owner, attacker);
+
+    const started = await startSetup(owner);
+    const setup = ((await started.json()) as SetupBody).setup;
+    const current = currentWeekKey(new Date(), 0);
+    const historical = new Date(`${current}T00:00:00.000Z`);
+    historical.setUTCDate(historical.getUTCDate() - 7);
+
+    const response = await createTrainingAction(attacker, {
+      setupId: setup.id,
+      templateKey: "puppy-fundamentals",
+      weekKey: historical.toISOString().slice(0, 10),
+      timezoneOffsetMinutes: 0,
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "not_found" });
   });
 
   it("returns the normal safety suggestion instead of an exercise for a safety-suppressed dog", async () => {

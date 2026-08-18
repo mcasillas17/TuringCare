@@ -210,7 +210,8 @@ discriminated response contracts:
 
 - available behavior: `{ setup, concern, actionDeleted: false }`;
 - deleted behavior: `{ setup, concern: null, actionDeleted: true }`;
-- available training: `{ setup, goal, skills, focus: Focus | null, suggestion, actionDeleted: false }`;
+- available training:
+  `{ setup, goal, skills, focus: Focus | null, suggestion: TrainingSuggestion | null, actionDeleted: false }`;
 - deleted training: `{ setup, goal: null, skills: [], focus: null, suggestion: null, actionDeleted: true }`;
 - available progress: `{ setup, entry, actionDeleted: false }`;
 - deleted progress: `{ setup, entry: null, actionDeleted: true }`.

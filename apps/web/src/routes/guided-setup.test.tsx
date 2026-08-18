@@ -382,6 +382,21 @@ describe("GuidedSetup", () => {
       expect(screen.getByRole("alert")).toBeInTheDocument();
     });
 
+    it("does not render a training preview when a replay has no current suggestion", () => {
+      renderCompletion(
+        record({
+          intent: "train_skill",
+          firstActionType: "training",
+          completionReason: "first_action_completed",
+          completedAt: "2026-08-16T01:00:00Z",
+        }),
+      );
+
+      expect(
+        screen.queryByRole("heading", { name: "This week's suggestion" }),
+      ).not.toBeInTheDocument();
+    });
+
     it("uses a safe dashboard fallback for deleted or dogless completions", () => {
       renderCompletion(
         record({
@@ -1847,6 +1862,25 @@ describe("GuidedSetup", () => {
     expect(screen.getByRole("checkbox", { name: /confirm/i })).toBeInTheDocument();
   });
 
+  it("requires fresh safety confirmation after severity changes", async () => {
+    const user = userEvent.setup();
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "understand_behavior" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    const severity = screen.getByRole("combobox", { name: "Severity" });
+    await user.selectOptions(severity, "severe");
+    await user.click(screen.getByRole("checkbox", { name: /confirm/i }));
+    await user.selectOptions(severity, "moderate");
+    await user.selectOptions(severity, "severe");
+
+    expect(screen.getByRole("checkbox", { name: /confirm/i })).not.toBeChecked();
+  });
+
   it("shows accessible localized behavior validation errors", async () => {
     const user = userEvent.setup();
     renderRoute(
@@ -2354,6 +2388,43 @@ describe("GuidedSetup", () => {
     expect(screen.queryByText("We did this")).not.toBeInTheDocument();
     expect(screen.queryByText("Choose a different focus")).not.toBeInTheDocument();
     expect(mocks.completeTraining).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a saved training completion without a historical suggestion preview", async () => {
+    const user = userEvent.setup();
+    mocks.completeTraining.mockResolvedValue({
+      setup: record({
+        currentStep: "action",
+        intent: "train_skill",
+        completedAt: "2026-08-16T01:00:00Z",
+        completionReason: "first_action_completed",
+        firstActionType: "training",
+        firstActionId: "goal-1",
+      }),
+      goal: { id: "goal-1" },
+      skills: [],
+      focus: null,
+      suggestion: null,
+      actionDeleted: false,
+    });
+    renderRoute(
+      "/my/setup",
+      status({
+        active: record({ currentStep: "action", intent: "train_skill" }),
+        autoStartEligible: false,
+      }),
+    );
+
+    await user.click(screen.getByRole("radio", { name: /Basic Manners/ }));
+    await user.click(screen.getByRole("button", { name: "Save first step" }));
+
+    await waitFor(() => expect(screen.getByText("Your first step was saved.")).toBeInTheDocument());
+    expect(
+      screen.queryByRole("heading", { name: "This week's suggestion" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Your first-step record is no longer available."),
+    ).not.toBeInTheDocument();
   });
 
   it("renders a safe tombstone for a deleted training completion", async () => {

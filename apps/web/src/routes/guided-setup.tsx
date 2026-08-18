@@ -182,7 +182,7 @@ export function GuidedSetup({ allowNewDog = false }: { allowNewDog?: boolean }) 
           kind: "saved",
           setup: response.setup,
           actionDeleted: false,
-          suggestion: response.suggestion,
+          suggestion: response.suggestion ?? undefined,
         };
     completionRef.current = nextCompletion;
     setCompletion(nextCompletion);

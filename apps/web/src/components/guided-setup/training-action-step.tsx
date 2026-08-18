@@ -11,16 +11,14 @@ import {
 } from "@/lib/guided-setup";
 import { useTrainingCatalog } from "@/lib/training-catalog";
 import { weekKeyAtOffset } from "@/lib/week";
-import type { CatalogTemplate, GuidedSetupRecord } from "@turingcare/shared";
+import {
+  type CatalogTemplate,
+  type GuidedSetupRecord,
+  guidedSetupTrainingTemplateKeyValues,
+} from "@turingcare/shared";
 import { useRef, useState } from "react";
 
-export const TRAINING_TEMPLATE_KEYS = [
-  "basic-manners",
-  "puppy-fundamentals",
-  "recall-reliability",
-] as const;
-
-const allowedTemplateKeys = new Set<string>(TRAINING_TEMPLATE_KEYS);
+const allowedTemplateKeys = new Set<string>(guidedSetupTrainingTemplateKeyValues);
 
 type TrainingActionStepProps = {
   setup: Pick<GuidedSetupRecord, "id" | "dogName">;

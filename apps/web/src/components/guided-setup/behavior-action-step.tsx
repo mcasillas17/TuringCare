@@ -156,7 +156,9 @@ export function BehaviorActionStep({
             aria-invalid={severityError ? "true" : undefined}
             aria-labelledby="guided-setup-severity-label"
             aria-describedby={severityError ? "guided-setup-severity-error" : undefined}
-            {...register("severity")}
+            {...register("severity", {
+              onChange: () => setValue("safetyConfirmed", false),
+            })}
           >
             <option value="mild">{t("guidedSetup.severityMild")}</option>
             <option value="moderate">{t("guidedSetup.severityModerate")}</option>

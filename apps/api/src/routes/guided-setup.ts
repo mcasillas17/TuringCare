@@ -11,6 +11,7 @@ import {
   guidedSetupProgressActionSchema,
   guidedSetupStartSchema,
   guidedSetupTrainingActionSchema,
+  guidedSetupTrainingTemplateKeyValues,
 } from "@turingcare/shared";
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
@@ -33,6 +34,8 @@ import { currentWeekKey, loadSuggestion } from "../lib/suggestion";
 import { applyTrainingTemplate } from "../lib/training-template-writes";
 import { type Vars, requireUser } from "../middleware/require-user";
 import { recordEvent } from "../telemetry/record-event";
+
+const guidedSetupTrainingTemplateKeys = new Set<string>(guidedSetupTrainingTemplateKeyValues);
 
 type SetupRow = typeof guidedSetups.$inferSelect;
 type SetupDogJoinRow = {
@@ -71,7 +74,7 @@ type GuidedTrainingActionResponse =
       goal: typeof trainingGoals.$inferSelect;
       skills: (typeof trainingSkills.$inferSelect)[];
       focus: typeof weeklyFocus.$inferSelect | null;
-      suggestion: TrainingSuggestion;
+      suggestion: TrainingSuggestion | null;
       actionDeleted: false;
     }
   | {
@@ -552,9 +555,6 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
   .post("/action/training", zValidator("json", guidedSetupTrainingActionSchema), async (c) => {
     const userId = c.get("userId");
     const input = c.req.valid("json");
-    if (input.weekKey !== currentWeekKey(new Date(), input.timezoneOffsetMinutes)) {
-      return c.json({ error: "historical_suggestion_unavailable" } as const, 409);
-    }
 
     const result = await db.transaction(async (tx) => {
       await lockSetupFlow(tx, userId);
@@ -568,6 +568,12 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       const active = requireActiveSetupDog(row);
       if (active.setup.currentStep !== "action" || active.setup.intent !== "train_skill") {
         return { kind: "intent_mismatch" } as const;
+      }
+      if (input.weekKey !== currentWeekKey(new Date(), input.timezoneOffsetMinutes)) {
+        return { kind: "historical_week" } as const;
+      }
+      if (!guidedSetupTrainingTemplateKeys.has(input.templateKey)) {
+        return { kind: "invalid_template" } as const;
       }
 
       const applied = await applyTrainingTemplate(tx, active.setup.dogId, input.templateKey);
@@ -605,6 +611,9 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
     }
     if (result.kind === "intent_mismatch") {
       return c.json({ error: "intent_mismatch" } as const, 409);
+    }
+    if (result.kind === "historical_week") {
+      return c.json({ error: "historical_suggestion_unavailable" } as const, 409);
     }
     if (result.kind === "invalid_template") {
       return c.json({ error: "invalid_template" } as const, 400);
@@ -650,12 +659,16 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
       });
     }
 
-    const suggestion = await loadSuggestion({
-      userId,
-      dogId: result.dogId,
-      weekKey: input.weekKey,
-      timezoneOffsetMinutes: input.timezoneOffsetMinutes,
-    });
+    const isCurrentWeekResponse =
+      input.weekKey === currentWeekKey(new Date(), input.timezoneOffsetMinutes);
+    const suggestion = isCurrentWeekResponse
+      ? await loadSuggestion({
+          userId,
+          dogId: result.dogId,
+          weekKey: input.weekKey,
+          timezoneOffsetMinutes: input.timezoneOffsetMinutes,
+        })
+      : null;
     return c.json(
       {
         setup: result.setup,
