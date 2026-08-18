@@ -1039,6 +1039,9 @@ The API performs each first action and setup completion atomically, preserves
 privacy-safe deletion tombstones and idempotent replays, serializes concurrent
 submissions, and records scalar telemetry without owner prose or identifiers.
 Safety signals suppress training exercises through the normal policy path.
+Historical training replays remain idempotent without generating suggestion
+audits, telemetry, or stale exercise previews, and starter-template choices are
+enforced server-side.
 The localized English/Spanish UI includes keyboard/focus/reduced-motion
 coverage, active-dog deletion recovery, checklist suppression, and additional-
 dog entry. Status reads are bounded to one active setup, one latest setup, and
@@ -1049,4 +1052,4 @@ viewports, plus a phone reload/resume training journey. Browser API traffic is
 verified through isolated same-origin Vite proxy servers on ports 3310/3311.
 - Spec/plan: `docs/superpowers/specs/2026-08-15-first-run-guided-setup-design.md`,
   `docs/superpowers/plans/2026-08-15-first-run-guided-setup.md`
-- Commits: `d52d82b..11da423` on `feat/first-run-guided-setup`.
+- Commits: `d52d82b..34b25de` on `feat/first-run-guided-setup`.
