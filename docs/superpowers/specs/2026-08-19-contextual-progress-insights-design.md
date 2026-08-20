@@ -23,6 +23,8 @@ This slice includes:
 - a full exact-context evidence view on skill detail;
 - a conservative evidence-backed next-practice recommendation;
 - reuse of Gate 1's optional structured practice capture;
+- explicit owner confirmation when manual practice was performed at the
+  current level;
 - bilingual owner-facing copy;
 - server-side derivation, owner isolation, telemetry, and focused tests.
 
@@ -156,10 +158,28 @@ Gate 1 already lets the owner optionally record `went_well`, `mixed`, or
 band, and distraction values. This slice reuses those shared controlled
 vocabularies and does not add a second capture contract.
 
-The current quick log remains available. Free-text notes remain supplemental
-and are never parsed for contextual status. Saving a session is the primary
-action; a failure to derive or reload insights must never discard or block a
-valid practice-session save.
+Suggestion-linked sessions retain their audited level and curriculum anchors.
+For manual structured practice, the session form adds an optional positive
+confirmation:
+
+> I practiced this at the current Level {n}.
+
+The request sends `confirmCurrentLevel: true`; it never sends a numeric level or
+curriculum version. While holding the existing skill lock, the API stamps the
+skill's current owner-confirmed level and server curriculum version. The
+session remains without a suggestion ID or primary/fallback practice variant,
+so it may support contextual progress but cannot become advancement evidence.
+
+`confirmCurrentLevel` and `practicedTarget` are mutually exclusive. Once a
+session has a curriculum anchor, a later evidence edit cannot replace that
+anchor with a different manual or suggestion target. An unanchored historical
+session may be anchored when evidence is added only after the owner explicitly
+confirms the then-current level.
+
+The current quick log remains available without confirmation. Free-text notes
+remain supplemental and are never parsed for contextual status. Saving a
+session is the primary action; a failure to derive or reload insights must
+never discard or block a valid practice-session save.
 
 ## Next-Practice Policy
 
@@ -215,6 +235,8 @@ curriculum version, the explicit window, and policy version.
 The shared package exposes:
 
 - the existing practice outcome, context, and practice-session schemas;
+- a request-only `confirmCurrentLevel: true` option for session creation and
+  evidence updates, mutually exclusive with `practicedTarget`;
 - contextual status;
 - exact-context evidence;
 - contextual summary and next-practice action.
@@ -292,6 +314,11 @@ The data-access layer:
 - orders deterministically by occurrence and creation time;
 - keeps owner authorization outside the pure policy.
 
+Manual level anchoring reuses the transaction and skill row lock already used
+by practice creation and evidence updates. The server supplies both
+`curriculumLevel` and `curriculumVersion`; no client-supplied level or version
+is trusted. No database migration is required for this anchor.
+
 Expose `GET /api/dogs/:id/skills/:skillId/contextual-progress` beneath the
 existing owned dog and skill hierarchy. It returns the full contract and must
 call `findOwnedDog` and `findOwnedSkill`, returning `404` for cross-owner or
@@ -320,6 +347,7 @@ UI responsibilities remain separated:
 
 - a compact decision-first summary component for This Week;
 - a full contextual evidence component for skill detail;
+- the current-level confirmation in manual structured practice forms;
 - localized status and empty/error copy.
 
 All user-facing strings are added with matching keys to both typed i18n
@@ -330,6 +358,12 @@ catalogs.
 - Practice-session validation errors are explicit and do not save malformed
   controlled values.
 - A valid session may omit all structured evidence fields.
+- Manual structured evidence without `confirmCurrentLevel` remains valid
+  history but cannot support current contextual status.
+- Combining `confirmCurrentLevel` with `practicedTarget` fails validation
+  without mutating the session. Attempting to replace an existing curriculum
+  anchor returns the existing explicit anchor-rejection result and leaves that
+  anchor unchanged; other valid evidence fields may still be saved.
 - Insight query failures show a retryable, localized inline state while
   existing practice controls remain usable.
 - Sparse evidence shows a neutral capture prompt.
@@ -380,6 +414,11 @@ Cover:
 
 - optional structured session creation;
 - rejection of invalid controlled values;
+- manual current-level confirmation stamps the locked server level and
+  curriculum version but no suggestion or practice variant;
+- manual evidence without confirmation remains unanchored;
+- manual confirmation and `practicedTarget` cannot be combined;
+- existing curriculum anchors cannot be replaced;
 - old evidence excluded from current derivation;
 - earlier-level and obsolete-curriculum evidence excluded from current status;
 - owner isolation for dog, skill, context detail, and nested session IDs;
@@ -399,6 +438,7 @@ Cover:
 - Not observed never presented as failure;
 - inline insight errors preserving practice controls;
 - session form structured-field submission and optional omission;
+- current-level confirmation copy, submission, and conflict handling;
 - all affected query-key invalidations;
 - English and Spanish catalog parity;
 - keyboard, screen-reader, contrast, and mobile layout behavior.
@@ -407,8 +447,8 @@ Cover:
 
 Add one critical owner journey that:
 
-1. logs structured evidence at the current level for one focused skill on
-   distinct days;
+1. manually logs structured evidence on distinct days and confirms the current
+   level;
 2. sees the context become Reliable;
 3. sees the same decision-first summary on This Week;
 4. opens skill detail and verifies the supporting evidence;
@@ -421,6 +461,8 @@ This slice is complete when:
 
 - owners can optionally record structured outcome and context without losing
   the current quick-log path;
+- manual evidence only supports contextual status after explicit current-level
+  confirmation, stamped from server-owned level and curriculum data;
 - all current status derives from an explicit rolling 21-day window;
 - Reliable requires two successful distinct days in the exact context and no
   recent `too_hard`;
