@@ -1060,6 +1060,6 @@ Owners can manually confirm current-level practice; one evidence-derived adjacen
 next context is offered for the next attempt. This Week presents a decision-first
 summary, while expanded skill detail shows the supporting evidence. There is no
 universal completion score and no automatic advancement.
-- Spec/plan: `docs/superpowers/specs/2026-08-20-contextual-progress-insights-design.md`,
+- Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Commits: this branch.
+- Commits: `e46aeca..65d9b78` on `feat/contextual-progress-insights`.
