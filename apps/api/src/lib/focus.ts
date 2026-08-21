@@ -72,18 +72,15 @@ export function weekBoundsFromOffset(
   };
 }
 
-export async function loadFocusWeek(
+type FocusReadExecutor = Pick<typeof db, "select">;
+
+async function loadFocusSnapshot(
+  executor: FocusReadExecutor,
   dogId: string,
   weekKey: string,
-  timezoneOffsetMinutes: number,
-  weekEndTimezoneOffsetMinutes: number,
-): Promise<{ focusSkills: FocusSkill[] }> {
-  const { startISO, endISO } = weekBoundsFromOffset(
-    weekKey,
-    timezoneOffsetMinutes,
-    weekEndTimezoneOffsetMinutes,
-  );
-  const focus = await db
+  lock: "share" | undefined = undefined,
+) {
+  const query = executor
     .select({
       skillId: weeklyFocus.skillId,
       position: weeklyFocus.position,
@@ -99,34 +96,57 @@ export async function loadFocusWeek(
     .innerJoin(trainingGoals, eq(trainingSkills.goalId, trainingGoals.id))
     .where(and(eq(weeklyFocus.dogId, dogId), eq(weeklyFocus.weekStart, weekKey)))
     .orderBy(asc(weeklyFocus.position), asc(weeklyFocus.createdAt));
+  return lock === "share" ? query.for("share") : query;
+}
 
-  const skillIds = focus.map((f) => f.skillId);
-  const sessionsPromise =
-    skillIds.length === 0
-      ? Promise.resolve([])
-      : db
-          .select({
-            id: practiceSessions.id,
-            skillId: practiceSessions.skillId,
-            occurredAt: practiceSessions.occurredAt,
-            durationMinutes: practiceSessions.durationMinutes,
-          })
-          .from(practiceSessions)
-          .where(
-            and(
-              inArray(practiceSessions.skillId, skillIds),
-              gte(practiceSessions.occurredAt, new Date(startISO)),
-              lt(practiceSessions.occurredAt, new Date(endISO)),
-            ),
-          )
-          .orderBy(asc(practiceSessions.occurredAt));
-  const summariesPromise =
-    focus.length === 0
-      ? Promise.resolve(new Map<string, ContextualProgressSummary>())
-      : evaluateSafetyWithLock(dogId, async (safety, tx, lockedNow) => {
-          try {
-            // Keep a failed evidence read local so the outer safety lock can still commit.
-            return await tx.transaction((summaryTx) =>
+async function loadFocusSessions(
+  executor: FocusReadExecutor,
+  skillIds: string[],
+  startISO: string,
+  endISO: string,
+) {
+  if (skillIds.length === 0) return [];
+  return executor
+    .select({
+      id: practiceSessions.id,
+      skillId: practiceSessions.skillId,
+      occurredAt: practiceSessions.occurredAt,
+      durationMinutes: practiceSessions.durationMinutes,
+    })
+    .from(practiceSessions)
+    .where(
+      and(
+        inArray(practiceSessions.skillId, skillIds),
+        gte(practiceSessions.occurredAt, new Date(startISO)),
+        lt(practiceSessions.occurredAt, new Date(endISO)),
+      ),
+    )
+    .orderBy(asc(practiceSessions.occurredAt));
+}
+
+export async function loadFocusWeek(
+  dogId: string,
+  weekKey: string,
+  timezoneOffsetMinutes: number,
+  weekEndTimezoneOffsetMinutes: number,
+): Promise<{ focusSkills: FocusSkill[] }> {
+  const { startISO, endISO } = weekBoundsFromOffset(
+    weekKey,
+    timezoneOffsetMinutes,
+    weekEndTimezoneOffsetMinutes,
+  );
+  return evaluateSafetyWithLock(dogId, async (safety, tx, lockedNow) => {
+    await lockFocusWeek(tx, dogId, weekKey);
+    const focus = await loadFocusSnapshot(tx, dogId, weekKey, "share");
+    const skillIds = focus.map((f) => f.skillId);
+    const sessions = await loadFocusSessions(tx, skillIds, startISO, endISO);
+    let summaries: Map<string, ContextualProgressSummary> | null;
+    try {
+      // Keep a failed evidence read local so the outer safety lock can still commit.
+      summaries =
+        focus.length === 0
+          ? new Map<string, ContextualProgressSummary>()
+          : await tx.transaction((summaryTx) =>
               loadContextualProgressSummaries(
                 focus.map((focusedSkill) => ({
                   id: focusedSkill.skillId,
@@ -138,56 +158,59 @@ export async function loadFocusWeek(
                 summaryTx,
               ),
             );
-          } catch (error) {
-            const errorType = error instanceof Error ? error.constructor.name : undefined;
-            console.error("[contextual-progress] focus_summary_failed", {
-              dogId,
-              weekKey,
-              errorType: classifyExceptionValue(errorType),
-            });
-            return null;
-          }
-        });
-  const [sessions, summaries] = await Promise.all([sessionsPromise, summariesPromise]);
+    } catch (error) {
+      const errorType = error instanceof Error ? error.constructor.name : undefined;
+      console.error("[contextual-progress] focus_summary_failed", {
+        dogId,
+        weekKey,
+        errorType: classifyExceptionValue(errorType),
+      });
+      summaries = null;
+    }
 
-  const bySkill = new Map<string, FocusSession[]>();
-  for (const s of sessions) {
-    const arr = bySkill.get(s.skillId) ?? [];
-    arr.push({
-      id: s.id,
-      occurredAt: s.occurredAt.toISOString(),
-      durationMinutes: s.durationMinutes,
-    });
-    bySkill.set(s.skillId, arr);
-  }
+    const bySkill = new Map<string, FocusSession[]>();
+    for (const s of sessions) {
+      const arr = bySkill.get(s.skillId) ?? [];
+      arr.push({
+        id: s.id,
+        occurredAt: s.occurredAt.toISOString(),
+        durationMinutes: s.durationMinutes,
+      });
+      bySkill.set(s.skillId, arr);
+    }
 
-  return {
-    focusSkills: focus.map((f) => ({
-      skillId: f.skillId,
-      name: f.name,
-      goalId: f.goalId,
-      goalName: f.goalName,
-      position: f.position,
-      sessions: bySkill.get(f.skillId) ?? [],
-      currentLevel: f.confidence,
-      dimensions: f.catalogSkillKey
-        ? (skillDimensionMetadata[f.catalogSkillKey]?.dimensions ?? [])
-        : [],
-      contextualProgress: summaries
-        ? {
-            status: "ready" as const,
-            summary: summaries.get(f.skillId) ?? {
-              strongestContext: null,
-              nextPracticeAction: null,
-              safety: null,
-            },
-          }
-        : { status: "unavailable" as const },
-    })),
-  };
+    return {
+      focusSkills: focus.map((f) => ({
+        skillId: f.skillId,
+        name: f.name,
+        goalId: f.goalId,
+        goalName: f.goalName,
+        position: f.position,
+        sessions: bySkill.get(f.skillId) ?? [],
+        currentLevel: f.confidence,
+        dimensions: f.catalogSkillKey
+          ? (skillDimensionMetadata[f.catalogSkillKey]?.dimensions ?? [])
+          : [],
+        contextualProgress: summaries
+          ? {
+              status: "ready" as const,
+              summary: summaries.get(f.skillId) ?? {
+                strongestContext: null,
+                nextPracticeAction: null,
+                safety: null,
+              },
+            }
+          : { status: "unavailable" as const },
+      })),
+    };
+  });
 }
 
-async function lockFocusWeek(tx: Pick<typeof db, "execute">, dogId: string, weekKey: string) {
+export async function lockFocusWeek(
+  tx: Pick<typeof db, "execute">,
+  dogId: string,
+  weekKey: string,
+) {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`legacy-focus:${dogId}`}))`);
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`${dogId}:${weekKey}`}))`);
 }

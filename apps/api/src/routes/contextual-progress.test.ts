@@ -185,6 +185,24 @@ function beginHeldSafetyWrite(dogId: string, type: "injury_or_pain" | "aggressio
   return { ready, release: () => release?.(), write };
 }
 
+function beginHeldSafetyLock(dogId: string) {
+  let markReady: (() => void) | undefined;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve;
+  });
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const lock = db.transaction(async (tx) => {
+    await lockDogSafety(tx, dogId);
+    markReady?.();
+    await hold;
+  });
+
+  return { ready, release: () => release?.(), lock };
+}
+
 function beginHeldSafetyWorseningThresholdWrite(dogId: string) {
   let markReady: (() => void) | undefined;
   let release: (() => void) | undefined;
@@ -550,6 +568,48 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
     } finally {
       safetyWrite.release();
       await Promise.allSettled([safetyWrite.write, responsePromise]);
+    }
+  });
+
+  it("uses the new level when a level update commits while detail waits for safety", async () => {
+    const setupValue = await setup(users);
+    await seedReliableContext(setupValue.skillId);
+    const safetyLock = beginHeldSafetyLock(setupValue.dogId);
+    await safetyLock.ready;
+    let completed = false;
+    const responsePromise = getDetail(setupValue).then((response) => {
+      completed = true;
+      return response;
+    });
+
+    try {
+      await waitForAdvisoryLockWaiter();
+      expect(completed).toBe(false);
+
+      const levelUpdate = await app.request(
+        `/api/dogs/${setupValue.dogId}/skills/${setupValue.skillId}/level`,
+        {
+          method: "PUT",
+          headers: setupValue.user.authHeaders,
+          body: JSON.stringify({ level: 4 }),
+        },
+      );
+      expect(levelUpdate.status).toBe(200);
+
+      safetyLock.release();
+      await safetyLock.lock;
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        curriculumLevel: 4,
+        strongestContext: null,
+        nextPracticeAction: null,
+        exactContexts: [],
+      });
+    } finally {
+      safetyLock.release();
+      await Promise.allSettled([safetyLock.lock, responsePromise]);
     }
   });
 
@@ -940,6 +1000,32 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
       });
 
       expect(response.status).toBe(400);
+    });
+
+    it("rejects Not observed insight telemetry without recording an event", async () => {
+      const owner = await createTestUser();
+      users.push(owner);
+      const dog = await makeDog(owner);
+
+      const response = await app.request(eventPath(dog.id), {
+        method: "POST",
+        headers: owner.authHeaders,
+        body: JSON.stringify({
+          name: "training.context_insight_viewed",
+          surface: "week",
+          strongestStatus: "not_observed",
+          hasNextAction: false,
+        }),
+      });
+
+      expect(response.status).toBe(400);
+      const stored = await db
+        .select({ id: events.id })
+        .from(events)
+        .where(
+          and(eq(events.name, "training.context_insight_viewed"), eq(events.userId, owner.userId)),
+        );
+      expect(stored).toEqual([]);
     });
   });
 

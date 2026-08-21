@@ -387,11 +387,12 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     }
     const dog = await findOwnedDog(c.get("userId"), dogId);
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId);
-    if (!skill) return c.json({ error: "not_found" } as const, 404);
-    const progress = await evaluateSafetyWithLock(dog.id, (safety, tx, lockedNow) =>
-      loadContextualProgress(skill, lockedNow, safety, tx),
-    );
+    const progress = await evaluateSafetyWithLock(dog.id, async (safety, tx, lockedNow) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skillId}))`);
+      const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId, tx, "share");
+      return skill ? loadContextualProgress(skill, lockedNow, safety, tx) : null;
+    });
+    if (!progress) return c.json({ error: "not_found" } as const, 404);
     return c.json(progress);
   })
   .post(

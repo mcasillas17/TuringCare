@@ -87,7 +87,7 @@ export const contextualProgressEventSchema = z.discriminatedUnion("name", [
   z.object({
     name: z.literal("training.context_insight_viewed"),
     surface: z.enum(contextualProgressSurfaceValues),
-    strongestStatus: z.enum(contextualStatusValues).nullable(),
+    strongestStatus: z.enum(observedContextStatusValues).nullable(),
     hasNextAction: z.boolean(),
   }),
   z.object({

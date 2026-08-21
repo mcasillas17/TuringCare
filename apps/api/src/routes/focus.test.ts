@@ -250,6 +250,24 @@ function beginHeldSafetyWrite(dogId: string) {
   return { ready, release: () => release?.(), write };
 }
 
+function beginHeldSafetyLock(dogId: string) {
+  let markReady: (() => void) | undefined;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve;
+  });
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const lock = db.transaction(async (tx) => {
+    await lockDogSafety(tx, dogId);
+    markReady?.();
+    await hold;
+  });
+
+  return { ready, release: () => release?.(), lock };
+}
+
 function beginHeldSafetyWorseningThresholdWrite(dogId: string) {
   let markReady: (() => void) | undefined;
   let release: (() => void) | undefined;
@@ -1218,6 +1236,130 @@ describe("dogs: weekly focus", () => {
     } finally {
       safetyWrite.release();
       await Promise.allSettled([safetyWrite.write, responsePromise]);
+    }
+  });
+
+  it("uses the new level when a level update commits while focus waits for safety", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    const focusWindow = currentFocusWindow();
+    await db
+      .update(trainingSkills)
+      .set({ catalogSkillKey: "basic-manners.sit" })
+      .where(eq(trainingSkills.id, skill.id));
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: focusWindow.weekKey,
+      position: 0,
+    });
+    const now = new Date();
+    for (const daysAgo of [2, 1]) {
+      const occurredAt = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+      await db.insert(practiceSessions).values({
+        skillId: skill.id,
+        occurredAt,
+        outcome: "went_well",
+        practiceDay: occurredAt.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        cueSupport: "hand_signal",
+        environment: "home_quiet",
+        distance: "few_steps",
+        durationBand: "about_15_seconds",
+        distraction: "none",
+      });
+    }
+
+    const safetyLock = beginHeldSafetyLock(dog.id);
+    await safetyLock.ready;
+    let completed = false;
+    const responsePromise = Promise.resolve(
+      app.request(`/api/dogs/${dog.id}/focus?${focusWindow.query}`, {
+        headers: u.authHeaders,
+      }),
+    ).then((response) => {
+      completed = true;
+      return response;
+    });
+
+    try {
+      await waitForAdvisoryLockWaiter();
+      expect(completed).toBe(false);
+
+      const levelUpdate = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/level`, {
+        method: "PUT",
+        headers: u.authHeaders,
+        body: JSON.stringify({ level: 2 }),
+      });
+      expect(levelUpdate.status).toBe(200);
+
+      safetyLock.release();
+      await safetyLock.lock;
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        focusSkills: [
+          {
+            skillId: skill.id,
+            currentLevel: 2,
+            contextualProgress: {
+              status: "ready",
+              summary: {
+                strongestContext: null,
+                nextPracticeAction: null,
+                safety: null,
+              },
+            },
+          },
+        ],
+      });
+    } finally {
+      safetyLock.release();
+      await Promise.allSettled([safetyLock.lock, responsePromise]);
+    }
+  });
+
+  it("uses the focus replacement committed while focus waits for safety", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    const { skill: replacement } = await setupDogWithSkillForDog(u, dog.id, "Down");
+    const focusWindow = currentFocusWindow();
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: focusWindow.weekKey,
+      position: 0,
+    });
+
+    const safetyLock = beginHeldSafetyLock(dog.id);
+    await safetyLock.ready;
+    const responsePromise = Promise.resolve(
+      app.request(`/api/dogs/${dog.id}/focus?${focusWindow.query}`, {
+        headers: u.authHeaders,
+      }),
+    );
+
+    try {
+      await waitForAdvisoryLockWaiter();
+
+      const focusUpdate = await app.request(`/api/dogs/${dog.id}/focus`, {
+        method: "POST",
+        headers: u.authHeaders,
+        body: JSON.stringify({ skillId: replacement.id, weekKey: focusWindow.weekKey }),
+      });
+      expect(focusUpdate.status).toBe(200);
+
+      safetyLock.release();
+      await safetyLock.lock;
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        focusSkills: [expect.objectContaining({ skillId: replacement.id })],
+      });
+    } finally {
+      safetyLock.release();
+      await Promise.allSettled([safetyLock.lock, responsePromise]);
     }
   });
 

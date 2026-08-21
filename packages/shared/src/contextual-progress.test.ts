@@ -174,4 +174,15 @@ describe("contextualProgressEventSchema", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("rejects Not observed as an insight-view strongest status", () => {
+    expect(
+      contextualProgressEventSchema.safeParse({
+        name: "training.context_insight_viewed",
+        surface: "week",
+        strongestStatus: "not_observed",
+        hasNextAction: false,
+      }).success,
+    ).toBe(false);
+  });
 });
