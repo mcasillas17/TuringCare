@@ -59,6 +59,7 @@ export function DogWeek() {
     isError: suggestionError,
     isFetching: suggestionFetching,
     isLoading: suggestionLoading,
+    refetch: refetchSuggestion,
   } = useSuggestion(id, weekKey, currentTimezoneOffsetMinutes);
   const suggestionAction = useSuggestionAction(id, weekKey);
   const advancementDecision = useAdvancementDecision(id);
@@ -89,7 +90,11 @@ export function DogWeek() {
       : null;
   const activeSafety = suggestionSafety ?? summarySafety;
   const safetyDataFetching = suggestionFetching || focusFetching;
-  const recommendationsSuppressed = activeSafety !== null || safetyDataFetching;
+  const recommendationsSuppressed =
+    activeSafety !== null ||
+    safetyDataFetching ||
+    focusError ||
+    (weekKey === currentWeekKey && suggestionError);
   const canGoNext = !sameWeek(monday, today);
 
   const sessionCount = skills.reduce((sum, s) => sum + s.sessions.length, 0);
@@ -104,6 +109,39 @@ export function DogWeek() {
   const previousPendingScope = useRef(pendingScope);
   const activeScope = useRef(pendingScope);
   activeScope.current = pendingScope;
+  const suggestionEligibility =
+    weekKey === currentWeekKey &&
+    !suggestionLoading &&
+    !suggestionFetching &&
+    !suggestionError &&
+    !recommendationsSuppressed &&
+    suggestion?.type === "exercise" &&
+    !suggestion.dismissed &&
+    suggestion.weekKey === weekKey &&
+    Boolean(suggestion.suggestionId);
+  const recommendationStateRef = useRef<{
+    scope: string;
+    suggestion: typeof suggestion;
+    suggestionEligibility: boolean;
+    focusSkills: typeof skills;
+  }>({
+    scope: pendingScope,
+    suggestion: undefined,
+    suggestionEligibility: false,
+    focusSkills: [],
+  });
+  recommendationStateRef.current = {
+    scope: pendingScope,
+    suggestion,
+    suggestionEligibility,
+    focusSkills: skills,
+  };
+  const pendingAuditedSuggestionAllowed =
+    pendingOutcome?.usesAuditedSuggestion &&
+    recommendationStateRef.current.scope === pendingScope &&
+    recommendationStateRef.current.suggestionEligibility &&
+    recommendationStateRef.current.suggestion?.suggestionId === pendingOutcome.suggestionId &&
+    recommendationStateRef.current.suggestion?.skill?.id === pendingOutcome.skillId;
   // Derived-state trigger: week completion comes from the refetched focus query
   // (not the log-session mutation response), so we watch it here and hop once on
   // a real false->true transition for the current week (refs keep it idempotent).
@@ -127,6 +165,21 @@ export function DogWeek() {
     setPendingOutcome(null);
   }, [pendingScope]);
 
+  useEffect(() => {
+    if (!pendingOutcome?.usesAuditedSuggestion || pendingAuditedSuggestionAllowed) return;
+    setPendingOutcome((current) =>
+      current?.sessionId === pendingOutcome.sessionId
+        ? {
+            ...current,
+            suggestionId: null,
+            hasPrimary: false,
+            hasFallback: false,
+            usesAuditedSuggestion: false,
+          }
+        : current,
+    );
+  }, [pendingAuditedSuggestionAllowed, pendingOutcome]);
+
   const onLog = async (skillId: string, day: Date) => {
     const focusSkill = skills.find((skill) => skill.skillId === skillId);
     if (!focusSkill) {
@@ -147,14 +200,15 @@ export function DogWeek() {
       },
     });
     if (activeScope.current !== scopeAtStart) return;
+    const latestRecommendationState = recommendationStateRef.current;
+    const latestFocusSkill =
+      latestRecommendationState.focusSkills.find((skill) => skill.skillId === skillId) ??
+      focusSkill;
     const matchingSuggestion =
-      !suggestionError &&
-      weekKey === currentWeekKey &&
-      suggestion?.type === "exercise" &&
-      !suggestion.dismissed &&
-      suggestion.weekKey === weekKey &&
-      suggestion.skill?.id === skillId
-        ? suggestion
+      latestRecommendationState.scope === scopeAtStart &&
+      latestRecommendationState.suggestionEligibility &&
+      latestRecommendationState.suggestion?.skill?.id === skillId
+        ? latestRecommendationState.suggestion
         : null;
     const usesAuditedSuggestion = Boolean(matchingSuggestion);
     setPendingOutcome({
@@ -163,8 +217,8 @@ export function DogWeek() {
       suggestionId: matchingSuggestion?.suggestionId ?? null,
       hasPrimary: Boolean(matchingSuggestion?.primary),
       hasFallback: Boolean(matchingSuggestion?.fallback),
-      dimensions: matchingSuggestion?.requestedDimensions ?? focusSkill.dimensions,
-      currentLevel: focusSkill.currentLevel,
+      dimensions: matchingSuggestion?.requestedDimensions ?? latestFocusSkill.dimensions,
+      currentLevel: latestFocusSkill.currentLevel,
       usesAuditedSuggestion,
     });
   };
@@ -179,6 +233,16 @@ export function DogWeek() {
     if (!pendingOutcome) return;
     const target = pendingOutcome;
     const { variant, ...evidence } = input;
+    const latestRecommendationState = recommendationStateRef.current;
+    const auditedSuggestionId =
+      target.usesAuditedSuggestion &&
+      target.suggestionId !== null &&
+      latestRecommendationState.scope === pendingScope &&
+      latestRecommendationState.suggestionEligibility &&
+      latestRecommendationState.suggestion?.suggestionId === target.suggestionId &&
+      latestRecommendationState.suggestion?.skill?.id === target.skillId
+        ? target.suggestionId
+        : null;
     try {
       const result = await setEvidence.mutateAsync({
         skillId: target.skillId,
@@ -186,8 +250,8 @@ export function DogWeek() {
         body: {
           ...evidence,
           practicedTarget:
-            target.suggestionId && (variant === "fallback" ? target.hasFallback : target.hasPrimary)
-              ? { suggestionId: target.suggestionId, variant }
+            auditedSuggestionId && (variant === "fallback" ? target.hasFallback : target.hasPrimary)
+              ? { suggestionId: auditedSuggestionId, variant }
               : undefined,
         },
       });
@@ -207,11 +271,21 @@ export function DogWeek() {
   };
 
   const onSuggestionAction = async (action: SuggestionAction) => {
-    if (weekKey !== currentWeekKey || suggestion?.weekKey !== weekKey || !suggestion.suggestionId) {
+    const latestRecommendationState = recommendationStateRef.current;
+    const latestSuggestion = latestRecommendationState.suggestion;
+    if (
+      !latestRecommendationState.suggestionEligibility ||
+      !latestSuggestion ||
+      !latestSuggestion.suggestionId ||
+      latestSuggestion.suggestionId !== suggestion?.suggestionId
+    ) {
       return;
     }
     try {
-      await suggestionAction.mutateAsync({ suggestionId: suggestion.suggestionId, action });
+      await suggestionAction.mutateAsync({
+        suggestionId: latestSuggestion.suggestionId,
+        action,
+      });
       toast.success(t("suggestion.actionThanks"));
     } catch {
       toast.error(t("suggestion.actionFailed"));
@@ -249,6 +323,7 @@ export function DogWeek() {
       {activeSafety && <SafetyNotice safety={activeSafety} />}
 
       {weekKey === currentWeekKey &&
+        !suggestionLoading &&
         !suggestionError &&
         !recommendationsSuppressed &&
         suggestion &&
@@ -263,7 +338,12 @@ export function DogWeek() {
           />
         )}
       {weekKey === currentWeekKey && suggestionError && (
-        <output className="text-sm text-slate-soft">{t("suggestion.loadError")}</output>
+        <div className="space-y-2">
+          <output className="block text-sm text-slate-soft">{t("suggestion.loadError")}</output>
+          <Button type="button" variant="outline" onClick={() => void refetchSuggestion()}>
+            {t("contextProgress.retry")}
+          </Button>
+        </div>
       )}
       {focusError && (
         <div className="space-y-2">
@@ -325,7 +405,7 @@ export function DogWeek() {
         />
       )}
 
-      {!focusError && skills.length === 0 ? (
+      {!focusError && !focusLoading && skills.length === 0 ? (
         <section className="space-y-3 rounded border border-silver bg-white p-6 text-center">
           <p className="text-slate-soft">{t("week.pickFocus")}</p>
           <Button type="button" className="bg-slate text-cream" onClick={() => setPickerOpen(true)}>

@@ -154,6 +154,7 @@ export function ContextualProgressDetail({
   skillId,
   data,
   isLoading,
+  isFetching = false,
   isError,
   refetch,
   onUseNextAction,
@@ -162,6 +163,7 @@ export function ContextualProgressDetail({
   skillId: string;
   data: ContextualProgress | undefined;
   isLoading: boolean;
+  isFetching?: boolean;
   isError: boolean;
   refetch: () => unknown;
   onUseNextAction: (context: ExactPracticeContext) => boolean;
@@ -169,14 +171,22 @@ export function ContextualProgressDetail({
   const { t, locale } = useI18n();
   const recordEvent = useRecordContextualProgressEvent(dogId);
   const seenResultKeys = useRef(new Set<string>());
-  const availableNextPracticeAction = data?.safety ? null : (data?.nextPracticeAction ?? null);
+  const availableNextPracticeAction =
+    isFetching || isError || data?.safety ? null : (data?.nextPracticeAction ?? null);
 
   const resultKey = data
     ? `${data.policyVersion}|${data.curriculumLevel}|${serializeContext(data.strongestContext?.context)}|${data.strongestContext?.status ?? "null"}|${Boolean(availableNextPracticeAction)}|${data.safety?.ruleId ?? "none"}`
     : null;
 
   useEffect(() => {
-    if (isLoading || isError || !data || !resultKey || seenResultKeys.current.has(resultKey)) {
+    if (
+      isLoading ||
+      isFetching ||
+      isError ||
+      !data ||
+      !resultKey ||
+      seenResultKeys.current.has(resultKey)
+    ) {
       return;
     }
     seenResultKeys.current.add(resultKey);
@@ -186,7 +196,7 @@ export function ContextualProgressDetail({
       strongestStatus: data.strongestContext?.status ?? null,
       hasNextAction: Boolean(availableNextPracticeAction),
     });
-  }, [availableNextPracticeAction, data, isError, isLoading, recordEvent, resultKey]);
+  }, [availableNextPracticeAction, data, isError, isFetching, isLoading, recordEvent, resultKey]);
 
   const sectionId = `context-progress-${skillId}`;
 
@@ -203,7 +213,7 @@ export function ContextualProgressDetail({
     );
   }
 
-  if (isError || !data) {
+  if (!data) {
     return (
       <section aria-labelledby={sectionId}>
         <h5 id={sectionId} className="font-medium text-slate">
@@ -233,6 +243,14 @@ export function ContextualProgressDetail({
           })}
         </p>
       </div>
+      {isError && (
+        <div className="space-y-2 text-sm text-slate-soft">
+          <output>{t("contextProgress.loadError")}</output>
+          <Button type="button" variant="outline" onClick={() => void refetch()}>
+            {t("contextProgress.retry")}
+          </Button>
+        </div>
+      )}
       {data.safety && <SafetyNotice safety={data.safety} headingLevel="h6" />}
       <StrongestContext
         evidence={data.strongestContext}

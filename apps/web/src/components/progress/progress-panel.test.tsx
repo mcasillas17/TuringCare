@@ -184,11 +184,17 @@ function setup({
   customSkill = false,
   data = contextualData,
   withHashNavigator = false,
+  contextualFetching = false,
+  contextualError = false,
+  contextualLoading = false,
 }: {
   withContext?: boolean;
   customSkill?: boolean;
   data?: ContextualProgress;
   withHashNavigator?: boolean;
+  contextualFetching?: boolean;
+  contextualError?: boolean;
+  contextualLoading?: boolean;
 } = {}) {
   const renderedGoals =
     withContext && !customSkill
@@ -224,8 +230,9 @@ function setup({
   >);
   vi.mocked(contextualProgressLib.useContextualProgress).mockReturnValue({
     data: withContext || customSkill ? data : undefined,
-    isLoading: false,
-    isError: false,
+    isLoading: contextualLoading,
+    isFetching: contextualFetching,
+    isError: contextualError,
     refetch: vi.fn(),
   } as never);
   const mutateAsync = vi.fn().mockResolvedValue({});
@@ -301,6 +308,16 @@ describe("ProgressPanel", () => {
         name: "I practiced this at the current Level 3.",
       }),
     ).not.toBeChecked();
+  });
+
+  it("passes cached detail revalidation through without exposing a next-practice CTA", () => {
+    setup({ withContext: true, contextualFetching: true });
+    fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
+
+    expect(screen.getByText("Developing")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Use this practice plan" }),
+    ).not.toBeInTheDocument();
   });
 
   it("expands and scrolls to the owned skill named by the training hash", async () => {

@@ -289,6 +289,7 @@ function SkillCard({
             skillId={displaySkill.id}
             data={contextualProgress.data}
             isLoading={contextualProgress.isLoading}
+            isFetching={contextualProgress.isFetching}
             isError={contextualProgress.isError}
             refetch={contextualProgress.refetch}
             onUseNextAction={(context) => {

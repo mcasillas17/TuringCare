@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+/**
+ * Persisted controlled vocabularies. These values are version-compared in
+ * stored records and must not change after shipping.
+ */
 export const practiceOutcomeValues = ["went_well", "mixed", "too_hard"] as const;
 export type PracticeOutcome = (typeof practiceOutcomeValues)[number];
 
@@ -53,6 +57,7 @@ export type PracticeDurationBand = (typeof durationBandValues)[number];
 export const distractionValues = ["none", "mild", "moderate", "strong"] as const;
 export type PracticeDistraction = (typeof distractionValues)[number];
 
+/** Explicit, owner-answered safety inputs; never inferred from free text. */
 export const safetySignalValues = [
   "aggression_or_bite_risk",
   "injury_or_pain",

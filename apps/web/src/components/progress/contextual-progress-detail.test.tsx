@@ -76,7 +76,7 @@ function setup(
   vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
     mutate,
   } as never);
-  render(
+  const rendered = render(
     <LocaleProvider>
       <ContextualProgressDetail
         dogId="dog-1"
@@ -90,7 +90,7 @@ function setup(
       />
     </LocaleProvider>,
   );
-  return { onUseNextAction, refetch };
+  return { onUseNextAction, refetch, rendered };
 }
 
 describe("ContextualProgressDetail", () => {
@@ -302,6 +302,76 @@ describe("ContextualProgressDetail", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent("Loading…");
     expect(screen.queryByText("Reliable")).not.toBeInTheDocument();
+  });
+
+  it("keeps cached evidence but suppresses the CTA and telemetry during revalidation", () => {
+    const mutate = vi.fn();
+    const { rendered } = setup({ isFetching: true } as never, mutate);
+
+    expect(screen.getAllByText("Reliable").length).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("button", { name: "Use this practice plan" }),
+    ).not.toBeInTheDocument();
+    expect(mutate).not.toHaveBeenCalled();
+
+    rendered.rerender(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData()}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Use this practice plan" })).toBeInTheDocument();
+    expect(mutate).toHaveBeenCalledWith({
+      name: "training.context_insight_viewed",
+      surface: "skill_detail",
+      strongestStatus: "reliable",
+      hasNextAction: true,
+    });
+  });
+
+  it("keeps cached evidence visible but fails closed after a detail error", () => {
+    const mutate = vi.fn();
+    const { rendered, refetch } = setup({ isError: true }, mutate);
+
+    expect(screen.getAllByText("Reliable").length).toBeGreaterThan(0);
+    expect(screen.getByRole("status")).toHaveTextContent("Couldn't load context progress.");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Use this practice plan" }),
+    ).not.toBeInTheDocument();
+    expect(mutate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledOnce();
+
+    rendered.rerender(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData()}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Use this practice plan" })).toBeInTheDocument();
+    expect(mutate).toHaveBeenCalledWith({
+      name: "training.context_insight_viewed",
+      surface: "skill_detail",
+      strongestStatus: "reliable",
+      hasNextAction: true,
+    });
   });
 
   it("records the next-action event after the recommendation is applied", () => {

@@ -380,9 +380,14 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     return c.json(await loadProgress(dog.id));
   })
   .get("/:id/skills/:skillId/contextual-progress", async (c) => {
-    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    const dogId = c.req.param("id");
+    const skillId = c.req.param("skillId");
+    if (!uuidSchema.safeParse(dogId).success || !uuidSchema.safeParse(skillId).success) {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    const dog = await findOwnedDog(c.get("userId"), dogId);
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId);
     if (!skill) return c.json({ error: "not_found" } as const, 404);
     const now = new Date();
     const safety = await evaluateSafety(dog.id, now);
@@ -392,7 +397,11 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     "/:id/contextual-progress/events",
     zValidator("json", contextualProgressEventSchema),
     async (c) => {
-      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      const dogId = c.req.param("id");
+      if (!uuidSchema.safeParse(dogId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
+      const dog = await findOwnedDog(c.get("userId"), dogId);
       if (!dog) return c.json({ error: "not_found" } as const, 404);
       const event = c.req.valid("json");
       const { name, ...props } = event;

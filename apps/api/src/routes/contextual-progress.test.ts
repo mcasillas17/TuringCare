@@ -348,6 +348,29 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
     );
   });
 
+  it("returns the privacy-safe 404 for a malformed dog id", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const response = await app.request(detailPath("not-a-uuid", randomUUID()), {
+      headers: user.authHeaders,
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "not_found" });
+  });
+
+  it("returns the privacy-safe 404 for a malformed skill id", async () => {
+    const setupValue = await setup(users);
+
+    const response = await app.request(detailPath(setupValue.dogId, "not-a-uuid"), {
+      headers: setupValue.user.authHeaders,
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "not_found" });
+  });
+
   describe("POST /api/dogs/:id/contextual-progress/events", () => {
     const users: TestUser[] = [];
 
@@ -442,6 +465,31 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
             eq(events.userId, otherOwner.userId),
           ),
         );
+      expect(stored).toEqual([]);
+    });
+
+    it("returns the privacy-safe 404 for a malformed dog id without recording telemetry", async () => {
+      const owner = await createTestUser();
+      users.push(owner);
+      const body = {
+        name: "training.context_insight_viewed",
+        surface: "week",
+        strongestStatus: null,
+        hasNextAction: false,
+      } as const;
+
+      const response = await app.request(eventPath("not-a-uuid"), {
+        method: "POST",
+        headers: owner.authHeaders,
+        body: JSON.stringify(body),
+      });
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
+      const stored = await db
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.name, body.name), eq(events.userId, owner.userId)));
       expect(stored).toEqual([]);
     });
 

@@ -91,7 +91,7 @@ export function ContextualProgressSummaryCard({
   const detailHref = `/my/dogs/${dogId}/training#skill-${skill.skillId}`;
 
   useEffect(() => {
-    if (progress.status !== "ready" || viewRecorded.current) return;
+    if (progress.status !== "ready" || suppressActions || viewRecorded.current) return;
     viewRecorded.current = true;
     recordEvent.mutate({
       name: "training.context_insight_viewed",
@@ -99,7 +99,7 @@ export function ContextualProgressSummaryCard({
       strongestStatus: progress.summary.strongestContext?.status ?? null,
       hasNextAction: Boolean(availableNextPracticeAction),
     });
-  }, [availableNextPracticeAction, progress, recordEvent]);
+  }, [availableNextPracticeAction, progress, recordEvent, suppressActions]);
 
   return (
     <section

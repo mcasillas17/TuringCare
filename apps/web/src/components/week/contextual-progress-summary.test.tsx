@@ -142,7 +142,7 @@ describe("ContextualProgressSummaryCard", () => {
   });
 
   it("omits the next-practice heading when a reliable context has no action", () => {
-    renderSummary({
+    const { recordEvent } = renderSummary({
       status: "ready",
       summary: { ...reliableSummary, nextPracticeAction: null },
     });
@@ -151,6 +151,12 @@ describe("ContextualProgressSummaryCard", () => {
     expect(
       screen.queryByRole("heading", { name: "Practice next", level: 3 }),
     ).not.toBeInTheDocument();
+    expect(recordEvent).toHaveBeenCalledWith({
+      name: "training.context_insight_viewed",
+      surface: "week",
+      strongestStatus: "reliable",
+      hasNextAction: false,
+    });
   });
 
   it("uses the recent 21-day label for historical weekly summaries", () => {
@@ -302,14 +308,47 @@ describe("ContextualProgressSummaryCard", () => {
       screen.queryByRole("heading", { name: "Practice next", level: 3 }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Use this practice plan" })).not.toBeInTheDocument();
+    expect(recordEvent).not.toHaveBeenCalled();
+    expect(
+      recordEvent.mock.calls.some(([event]) => event.name === "training.context_next_action_used"),
+    ).toBe(false);
+  });
+
+  it("records the settled action availability after temporary fetching suppression", () => {
+    const { recordEvent, rerender } = renderSummary(
+      { status: "ready", summary: reliableSummary },
+      vi.fn(),
+      false,
+      true,
+    );
+
+    expect(recordEvent).not.toHaveBeenCalled();
+
+    rerender(
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/dogs/dog-1/week"]}>
+          <ContextualProgressSummaryCard
+            dogId="dog-1"
+            skill={{
+              skillId: "skill-1",
+              name: "Sit",
+              contextualProgress: {
+                status: "ready",
+                summary: reliableSummary,
+              },
+            }}
+            onRetry={vi.fn()}
+            suppressActions={false}
+          />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+
     expect(recordEvent).toHaveBeenCalledWith({
       name: "training.context_insight_viewed",
       surface: "week",
       strongestStatus: "reliable",
-      hasNextAction: false,
+      hasNextAction: true,
     });
-    expect(
-      recordEvent.mock.calls.some(([event]) => event.name === "training.context_next_action_used"),
-    ).toBe(false);
   });
 });
