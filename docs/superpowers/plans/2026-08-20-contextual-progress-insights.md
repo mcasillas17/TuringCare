@@ -149,9 +149,14 @@ plan before adding an index or migration.
   unreviewed or ambiguous distance direction are unsafe. An already Reliable
   adjacent target emits no support-oriented action, so it is never labeled
   Developing. Return no action when no safe action remains.
-- Safety reads sample one authoritative `lockedNow` immediately after acquiring
-  the dog safety lock. `loadSafetyInputs` and every protected contextual loader
-  use that same clock; callers never pass a pre-lock request clock.
+- Shared safety reads sample one authoritative `lockedNow` immediately after
+  acquiring `pg_advisory_xact_lock_shared`; contextual detail, focus, and
+  suggestion finalization use that shared evaluator, while safety-input writers
+  and action-use telemetry retain the conflicting exclusive lock.
+  `loadSafetyInputs` and every protected contextual loader use the same clock;
+  callers never pass a pre-lock request clock. Locked reads stay bounded to
+  keyed safety/ownership reads and the indexed 21-day evidence query; no timeout
+  may turn contention into unsafe ready data.
 - At most one Not observed row is derived from a real observed context by one
   reviewed adjacent change.
 - Contextual responses carry the server-owned active safety decision. When it
@@ -1076,11 +1081,12 @@ Add after the existing progress route:
   }
   const dog = await findOwnedDog(c.get("userId"), dogId);
   if (!dog) return c.json({ error: "not_found" } as const, 404);
-  const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId);
-  if (!skill) return c.json({ error: "not_found" } as const, 404);
-  const progress = await evaluateSafetyWithLock(dog.id, (safety, tx, lockedNow) =>
-    loadContextualProgress(skill, lockedNow, safety, tx),
-  );
+  const progress = await evaluateSafetyWithSharedLock(dog.id, async (safety, tx, lockedNow) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skillId}))`);
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId, tx, "share");
+    return skill ? loadContextualProgress(skill, lockedNow, safety, tx) : null;
+  });
+  if (!progress) return c.json({ error: "not_found" } as const, 404);
   return c.json(progress);
 })
 ```
@@ -1088,8 +1094,9 @@ Add after the existing progress route:
 The locked callback is the response linearization point: the helper samples
 `lockedNow` immediately after acquiring the advisory lock, passes it to
 `loadSafetyInputs` and the callback, and the callback must pass that same clock
-plus its transaction executor to the loader. It must not use global `db` or a
-pre-lock request clock for contextual evidence after the safety decision.
+plus its transaction executor to the loader. Preserve dog safety, skill advisory
+lock, then shared skill-row lock order. It must not use global `db` or a pre-lock
+request clock for contextual evidence after the safety decision.
 
 - [x] **Step 5: Inspect the query plan**
 
@@ -1197,7 +1204,7 @@ empty map without querying when `skills.length === 0`.
 - [x] **Step 4: Attach summaries in `loadFocusWeek`**
 
 Include `confidence` and `catalogSkillKey` in the focus select. Use
-`evaluateSafetyWithLock` once per dog/request and pass its post-lock
+`evaluateSafetyWithSharedLock` once per dog/request and pass its post-lock
 `lockedNow` plus transaction executor to the one batch loader, so the safety
 decision and contextual evidence/action share one linearization point. Isolate only the evidence read in a nested
 transaction/savepoint: log `[contextual-progress] focus_summary_failed`
@@ -1316,10 +1323,23 @@ Do not add them to `CLIENT_EVENTS`. Add a route UUID guard before `zValidator`, 
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const event = c.req.valid("json");
     if (event.name === "training.context_next_action_used") {
-      const actionUseAllowed = await evaluateSafetyWithLock(
-        dog.id,
-        async (safety) => safety === null,
-      );
+      const actionUseAllowed = await evaluateSafetyWithLock(dog.id, async (safety, tx) => {
+        if (safety) return false;
+        await recordEvent(
+          event.name,
+          {
+            userId: c.get("userId"),
+            sessionId: c.get("sessionId"),
+            props: {
+              surface: event.surface,
+              ruleId: event.ruleId,
+              direction: event.direction,
+            },
+          },
+          tx,
+        );
+        return true;
+      });
       if (!actionUseAllowed) return c.json({ ok: true } as const, 202);
     }
     const { name, ...props } = event;
@@ -1670,7 +1690,8 @@ Cover:
   error, with Retry restoring the CTA only after a successful result;
 - CTA calls the telemetry mutation then opens the existing session form
   prefilled with the recommended context;
-- one view event per mounted detail result, not per rerender.
+- one view event per distinct settled detail result, not per rerender; raw
+  detail counts are not comparable to weekly mount counts.
 
 - [x] **Step 2: Run and confirm RED**
 
@@ -1833,7 +1854,7 @@ Cover:
 - action link points to `/my/dogs/:id/training#skill-:skillId`;
 - “Practice this next” records `training.context_next_action_used`;
 - “View all context evidence” does not record action-use telemetry;
-- one `training.context_insight_viewed` event per mounted weekly summary;
+- one `training.context_insight_viewed` event per settled weekly mount;
 - focus response/query failure does not remove or disable week-grid practice.
 - an unavailable contextual summary shows an inline insight error while the
   week grid remains usable.
@@ -2124,3 +2145,75 @@ Skip this commit when reviewers are clean and no files changed.
 Invoke `finishing-a-development-branch`. Preserve the approved spec and plan,
 include the requested Copilot trailers on commits, and never reset or overwrite
 the unpublished planning commits on the original local `main`.
+
+---
+
+### Task 14: Round-four launch-hardening minors
+
+**Files:**
+
+- Modify: `apps/api/src/lib/safety-lock.ts`
+- Modify: `apps/api/src/lib/safety-policy.ts`
+- Modify: `apps/api/src/lib/focus.ts`
+- Modify: `apps/api/src/lib/suggestion.ts`
+- Modify: `apps/api/src/routes/dogs.ts`
+- Modify: `apps/api/src/routes/contextual-progress.test.ts`
+- Modify: `apps/api/src/lib/safety-lock.test.ts`
+- Modify: `apps/api/src/telemetry/record-event.ts`
+- Modify: `apps/web/src/components/progress/session-form.tsx`
+- Modify: `apps/web/src/components/progress/session-form.test.tsx`
+- Modify: `apps/web/src/routes/dog-week.tsx`
+- Modify: `apps/web/src/routes/dog-week.test.tsx`
+- Modify: `apps/web/src/routes/dog-week.cache-authority.test.tsx`
+- Modify: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`
+- Modify: `docs/PROJECT-LOG.md`
+
+- [x] **Step 1: Write and observe the red locking and feedback cases**
+
+Add deterministic tests proving two contextual detail reads for different
+skills on one dog proceed concurrently under a shared safety lock, while
+exclusive safety writers still block shared readers and shared readers block
+exclusive writers. Add an action-use test that probes the lock while the event
+row is inserted. Add web tests for warning-level partial saves and for an
+enabled suggestion action whose audited target has disappeared.
+
+Run:
+
+```bash
+pnpm --filter @turingcare/api exec vitest run \
+  src/lib/safety-lock.test.ts src/routes/contextual-progress.test.ts
+pnpm --filter @turingcare/web exec vitest run \
+  src/components/progress/session-form.test.tsx src/routes/dog-week.test.tsx
+```
+
+Expected before implementation: missing shared-lock behavior, serialized
+readers, an unlocked action-use event write, success-level partial feedback, and
+silent invalidated actions fail their new assertions.
+
+- [x] **Step 2: Implement shared safety readers without weakening writers**
+
+Add `pg_advisory_xact_lock_shared` helpers and
+`evaluateSafetyWithSharedLock`. Use them for contextual detail, focus, and
+suggestion finalization, preserving dog-safety before existing skill/focus
+locks and the authoritative post-lock clock. Keep action-use exclusive and
+insert its event through the same transaction. Do not add a timeout; the
+critical section remains bounded by keyed safety/ownership reads, the 14-day
+journal aggregate, and the indexed 21-day evidence read.
+
+- [x] **Step 3: Surface partial and invalidated outcomes accurately**
+
+Use `toast.warning` for every server anchor rejection and client audited-anchor
+omission. Keep complete saves as `toast.success` and failed mutations as
+`toast.error`. When an enabled suggestion action lacks an eligible audited
+target, show the existing localized failure feedback and send neither mutation
+nor telemetry.
+
+- [x] **Step 4: Refresh telemetry documentation and verify**
+
+Document view `strongestStatus` and `hasNextAction` as bounded validated client
+assertions rather than server-recomputed properties. Document action-use as
+server safety-gated and view counts as one settled weekly mount versus one
+distinct settled detail result; dashboards segment surfaces and never compare
+raw counts as equivalent. Run the targeted lock/API/web cases, all shared/API/web
+Node 22 suites, typechecks, and lint before committing code/tests and then
+documentation.

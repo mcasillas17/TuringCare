@@ -1104,6 +1104,21 @@ rejections. Training progress now coordinates one page-level referral alert
 from expanded contextual details while retaining each detail's evidence and
 controls. Telemetry documentation distinguishes weekly recommendation
 intent/navigation from skill-detail application of a recommended context.
+
+Round-four launch hardening replaces the exclusive dog-safety lock on
+contextual detail, focus, and suggestion safety derivation with a PostgreSQL
+shared transaction advisory lock, so compatible readers proceed concurrently
+while safety writers remain exclusive. The locked clock and dog-safety-to-skill
+or-focus lock ordering remain authoritative; critical sections stay bounded to
+keyed safety/ownership work and indexed evidence reads rather than introducing
+a lock timeout. Action-use telemetry remains exclusive and records its event in
+the same safety transaction. Partial server anchor rejections and
+client-detected audited-anchor omissions now use warning feedback, while an
+enabled suggestion action with no valid audited target shows localized retry
+feedback without a mutation. View telemetry explicitly treats
+`strongestStatus` and `hasNextAction` as validated bounded client assertions,
+not server recomputation; dashboards segment weekly settled-mount views from
+distinct settled skill-detail results and never compare their raw counts.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Commits: `59c26a2..62d1569` on `feat/contextual-progress-insights`.
+- Code commits: `59c26a2..7f659d9` on `feat/contextual-progress-insights`.

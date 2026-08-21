@@ -362,22 +362,42 @@ call `findOwnedDog` and `findOwnedSkill`, returning `404` for cross-owner or
 missing resources. Validate both route parameters with the repository UUID
 schema before either ownership query; malformed IDs use the same
 `{ error: "not_found" }` `404` response and must not reach Drizzle. The route
-uses `evaluateSafetyWithLock` to derive the safety decision and full contextual
-evidence/action through the lock-held transaction executor, so a safety write
-cannot commit between the decision and the returned action or synthetic row.
-That helper samples one authoritative `lockedNow` immediately after acquiring
-the dog safety lock, passes it to both `loadSafetyInputs` and the callback, and
-the contextual loader uses that same instance for its evidence bounds. Callers
-must not capture a pre-lock clock.
+uses `evaluateSafetyWithSharedLock` to derive the safety decision and full
+contextual evidence/action through the lock-held transaction executor. The
+Postgres shared advisory lock lets same-dog safety readers proceed concurrently,
+while every safety-input writer continues to take the conflicting exclusive
+lock, so a safety write cannot commit between the decision and the returned
+action or synthetic row. The helper samples one authoritative `lockedNow`
+immediately after acquiring the lock, passes it to both `loadSafetyInputs` and
+the callback, and the contextual loader uses that same instance for its
+evidence bounds. Callers must not capture a pre-lock clock. Detail preserves
+the established lock order: dog safety, skill advisory lock, then the shared
+skill-row lock.
+
+Focus follows the same shared safety-read rule, preserving dog safety before
+the focus-week advisory locks and shared focus/skill row locks. Suggestion GET
+finalization likewise uses the shared evaluator for its governing safety
+decision and audit; it may write that audit while holding the shared lock
+because the audit never changes a safety input. Action-use telemetry is
+different: it keeps the exclusive evaluator, and its safety decision plus event
+insert occur in the same transaction.
+
+No advisory-lock timeout is introduced. The locked sections contain only
+bounded, keyed safety and ownership reads plus the existing 21-day evidence
+read, backed by `dog_safety_signals_dog_reported_idx` and
+`practice_sessions_skill_occurred_idx`; the journal aggregate is bounded to
+14 days. Turning ordinary contention into a ready response through a timeout
+would weaken the safety guarantee.
 
 Expose `POST /api/dogs/:id/contextual-progress/events` beneath the same owned
 dog route. Its UUID guard runs before JSON validation, the ownership query, and
 telemetry recording, so a malformed dog ID plus an invalid body still returns
 the same privacy-safe `{ error: "not_found" }` `404` and records no event.
-`training.context_next_action_used` re-evaluates safety under the dog safety
-lock; when exercises are suppressed, it returns the normal `202 { ok: true }`
-acknowledgment without a telemetry record. `training.context_insight_viewed`
-remains recordable while safety is active.
+`training.context_next_action_used` re-evaluates safety under the exclusive dog
+safety lock and inserts its event in that same transaction; when exercises are
+suppressed, it returns the normal `202 { ok: true }` acknowledgment without a
+telemetry record. `training.context_insight_viewed` remains recordable while
+safety is active.
 
 The existing focus response adds one compact `contextualProgressSummary` per
 returned focus skill. The loader derives all returned summaries from one
@@ -442,6 +462,12 @@ catalogs.
   without mutating the session. Attempting to replace an existing curriculum
   anchor returns the existing explicit anchor-rejection result and leaves that
   anchor unchanged; other valid evidence fields may still be saved.
+- A server `anchorRejected` result and a client-detected
+  `auditedAnchorOmitted` result are partial saves: the UI uses localized warning
+  feedback. A complete save remains success feedback, and a mutation failure
+  remains error feedback. If an enabled suggestion action no longer has an
+  eligible audited target, the UI reports localized retry feedback and sends no
+  mutation or telemetry event.
 - Insight query failures show a retryable, localized inline state while
   existing practice controls remain usable.
 - An initial weekly-focus failure is a distinct retry/edit state and must not
@@ -527,18 +553,20 @@ approved product behavior, not a telemetry inconsistency.
 Telemetry never copies notes, context labels derived from free text, dog names,
 or client-supplied identity. View and action events are accepted through an
 authenticated server route that supplies the user identity and validates the
-small enum payload. Action-use telemetry is persisted only after a lock-held
-safety re-evaluation confirms exercises remain available; suppressed requests
-receive the same successful acknowledgment without revealing the decision.
-View telemetry remains recordable while safety is active. The weekly summary
-records at most one view event per mounted card after insight state settles,
-independently of action suppression. Fetching or error state records no view;
+small enum payload. In particular, view-event `strongestStatus` and
+`hasNextAction` are validated, bounded client assertions; the server does not
+recompute them. Action-use telemetry is server-side safety-gated under the
+exclusive lock, while view telemetry remains recordable during active safety.
+
+View counts have intentionally different surface semantics: This Week records
+one view per settled mount, while skill detail records one view per distinct
+settled result, keyed by policy version, curriculum level, strongest context
+and status, and action availability. Fetching or error state records no view;
 settled safety records the strongest status with `hasNextAction: false`, and a
-settled safe result records action availability accurately. Skill detail records
-each distinct settled result once per mount, keyed by policy version, curriculum
-level, strongest context and status, and action availability. Existing route
-telemetry tests are updated for the changed `training.practice_logged`
-properties.
+settled safe result records action availability accurately. Dashboards must
+segment by `surface` and must not compare raw weekly and detail view counts as
+equivalent. Existing route telemetry tests are updated for the changed
+`training.practice_logged` properties.
 
 ## Testing
 
@@ -583,8 +611,12 @@ Cover:
 - injury, aggression/bite, severe-fear, severe-concern, and sustained-worsening
   safety suppression on detail and batched focus responses, including removal
   of synthetic `not_observed` rows, preservation of observed evidence, and no
-  action telemetry; deterministic advisory-lock interleavings prove a response
-  completing after a safety write cannot expose an action or synthetic row;
+  action telemetry; deterministic advisory-lock interleavings prove concurrent
+  safety readers do not queue, exclusive writers and shared readers block each
+  other, and a response completing after a safety write cannot expose an action
+  or synthetic row;
+- action-use telemetry is inserted while its exclusive safety decision remains
+  locked;
 - practice save succeeding independently from later insight loading;
 - server-side telemetry identity and scalar properties.
 
@@ -610,6 +642,9 @@ Cover:
   retry;
 - session form structured-field submission and optional omission;
 - current-level confirmation copy, submission, and conflict handling;
+- warning feedback for server anchor rejections and client audited-anchor
+  omissions, plus retry feedback without a mutation for an invalidated
+  suggestion action;
 - all safety-producing mutation families invalidate the three dog-scoped
   suggestion/focus/contextual-progress prefixes and await completion;
 - stale exercise suggestion plus contextual safety renders one alert, no
