@@ -536,8 +536,8 @@ describe("deriveContextualProgress", () => {
     expect(result.exactContexts).toHaveLength(3);
   });
 
-  it("never progresses after an un-easable latest too_hard, but repeats another Developing context", () => {
-    const fallback = context({ cueSupport: "food_lure" });
+  it("never progresses after an un-easable latest too_hard, but repeats a no-harder Developing context", () => {
+    const fallback = context({ cueSupport: "food_lure", distraction: "none" });
     const result = derive([
       row("reliable-first", "2026-08-17T08:00:00.000Z", {
         cueSupport: "verbal_cue",
@@ -548,7 +548,7 @@ describe("deriveContextualProgress", () => {
         practiceDay: "2026-08-18",
       }),
       row("fallback", "2026-08-19T08:00:00.000Z", {
-        cueSupport: fallback.cueSupport,
+        ...fallback,
         outcome: "mixed",
       }),
       row("latest-hard", "2026-08-20T11:00:00.000Z", {
@@ -564,6 +564,108 @@ describe("deriveContextualProgress", () => {
       context: fallback,
       changedDimension: null,
     });
+  });
+
+  it("skips Terra's higher-ranked mild/busy fallback after an un-easable latest too_hard", () => {
+    const failed = context({ environment: "home_quiet", distraction: "none" });
+    const unsafe = context({
+      cueSupport: "verbal_cue",
+      environment: "busy_outdoor",
+      distraction: "mild",
+    });
+    const safe = context({
+      cueSupport: "food_lure",
+      environment: "home_quiet",
+      distraction: "none",
+    });
+    const result = derive([
+      row("unsafe-success", "2026-08-19T10:00:00.000Z", {
+        ...unsafe,
+        practiceDay: "2026-08-19",
+      }),
+      row("unsafe-hard", "2026-08-19T11:00:00.000Z", {
+        ...unsafe,
+        outcome: "too_hard",
+        practiceDay: "2026-08-19",
+      }),
+      row("safe-lower-ranked", "2026-08-18T10:00:00.000Z", {
+        ...safe,
+        outcome: "mixed",
+      }),
+      row("latest-hard", "2026-08-20T11:00:00.000Z", {
+        ...failed,
+        outcome: "too_hard",
+      }),
+    ]);
+
+    expect(result.nextPracticeAction).toEqual({
+      ruleId: "repeat_developing_context",
+      direction: "repeat",
+      context: safe,
+      changedDimension: null,
+    });
+    expect(result.nextPracticeAction?.context).not.toEqual(unsafe);
+  });
+
+  it("preserves ranking among multiple no-harder Developing fallbacks", () => {
+    const failed = context({ environment: "home_quiet", distraction: "none" });
+    const highestRankedSafe = context({
+      cueSupport: "food_lure",
+      environment: "home_quiet",
+      distraction: "none",
+    });
+    const lowerRankedSafe = context({
+      environment: "home_quiet",
+      durationBand: "about_15_seconds",
+      distraction: "none",
+    });
+    const result = derive([
+      row("highest-safe-success", "2026-08-19T10:00:00.000Z", {
+        ...highestRankedSafe,
+        practiceDay: "2026-08-19",
+      }),
+      row("lower-safe-mixed", "2026-08-18T10:00:00.000Z", {
+        ...lowerRankedSafe,
+        outcome: "mixed",
+      }),
+      row("latest-hard", "2026-08-20T11:00:00.000Z", {
+        ...failed,
+        outcome: "too_hard",
+      }),
+    ]);
+
+    expect(result.nextPracticeAction).toEqual({
+      ruleId: "repeat_developing_context",
+      direction: "repeat",
+      context: highestRankedSafe,
+      changedDimension: null,
+    });
+  });
+
+  it("returns no action when an un-easable latest too_hard has no no-harder Developing fallback", () => {
+    const failed = context({ environment: "home_quiet", distraction: "none" });
+    const unsafe = context({
+      cueSupport: "verbal_cue",
+      environment: "busy_outdoor",
+      distraction: "mild",
+    });
+    const result = derive([
+      row("unsafe-success", "2026-08-19T10:00:00.000Z", {
+        ...unsafe,
+        practiceDay: "2026-08-19",
+      }),
+      row("unsafe-hard", "2026-08-19T11:00:00.000Z", {
+        ...unsafe,
+        outcome: "too_hard",
+        practiceDay: "2026-08-19",
+      }),
+      row("latest-hard", "2026-08-20T11:00:00.000Z", {
+        ...failed,
+        outcome: "too_hard",
+      }),
+    ]);
+
+    expect(result.nextPracticeAction).toBeNull();
   });
 
   it("adds one Not observed evidence row for an unobserved easier action target", () => {

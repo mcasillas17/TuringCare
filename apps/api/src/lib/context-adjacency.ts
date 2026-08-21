@@ -7,6 +7,7 @@ import type {
   PracticeDistraction,
   PracticeDurationBand,
   PracticeEnvironment,
+  SkillDimensionMetadata,
 } from "@turingcare/shared";
 
 export type AdjacentContext = {
@@ -25,6 +26,11 @@ type ContextValueByField = {
 type NullableContextByField = {
   [Field in keyof ContextValueByField]: ContextValueByField[Field] | null;
 };
+
+type DistanceStrategy = Extract<
+  EasingStrategy,
+  "increase_trigger_distance" | "decrease_owner_distance"
+>;
 
 const cueSupportOrder = [
   "food_lure",
@@ -89,6 +95,87 @@ const reviewedStrategyByDimension = {
   duration: "shorten_duration",
   distraction: "reduce_distractions",
 } as const satisfies Record<Exclude<PracticeDimension, "distance">, EasingStrategy>;
+
+function compareOrderedContextValues<Field extends keyof ContextValueByField>(
+  candidate: NullableContextByField,
+  failed: NullableContextByField,
+  field: Field,
+  order: readonly ContextValueByField[Field][],
+): number | null {
+  const candidateValue = candidate[field];
+  const failedValue = failed[field];
+  if (candidateValue === failedValue) return 0;
+  if (candidateValue === null || failedValue === null) return null;
+
+  const candidateIndex = order.indexOf(candidateValue);
+  const failedIndex = order.indexOf(failedValue);
+  if (candidateIndex < 0 || failedIndex < 0) return null;
+  return candidateIndex - failedIndex;
+}
+
+function isDistanceStrategy(strategy: EasingStrategy): strategy is DistanceStrategy {
+  return strategy === "increase_trigger_distance" || strategy === "decrease_owner_distance";
+}
+
+function reviewedDistanceStrategy(
+  metadata: SkillDimensionMetadata | null,
+): DistanceStrategy | null {
+  if (!metadata) return null;
+
+  let strategy: DistanceStrategy | null = null;
+  const register = (dimension: PracticeDimension, candidate: EasingStrategy): boolean => {
+    if (dimension !== "distance") return true;
+    if (!isDistanceStrategy(candidate)) return false;
+    if (strategy !== null && strategy !== candidate) return false;
+    strategy = candidate;
+    return true;
+  };
+
+  if (!register(metadata.baseEase.dimension, metadata.baseEase.strategy)) return null;
+  for (let index = 0; index < metadata.levelSteps.length; index += 1) {
+    const dimension = metadata.levelSteps[index];
+    const strategyForLevel = metadata.levelStepStrategies[index];
+    if (!dimension || !strategyForLevel || !register(dimension, strategyForLevel)) return null;
+  }
+
+  return strategy;
+}
+
+/**
+ * A null position is comparable only when both contexts have that same null.
+ * A one-sided null or an unreviewed distance direction cannot prove a fallback safe.
+ */
+export function isContextNoHarderThan(
+  candidate: ExactPracticeContext,
+  failed: ExactPracticeContext,
+  metadata: SkillDimensionMetadata | null,
+): boolean {
+  const nonDistanceComparisons = [
+    ["cueSupport", cueSupportOrder],
+    ["environment", environmentOrder],
+    ["durationBand", durationOrder],
+    ["distraction", distractionOrder],
+  ] as const;
+
+  for (const [field, order] of nonDistanceComparisons) {
+    const difference = compareOrderedContextValues(candidate, failed, field, order);
+    if (difference === null || difference > 0) return false;
+  }
+
+  const distanceDifference = compareOrderedContextValues(
+    candidate,
+    failed,
+    "distance",
+    distanceOrder,
+  );
+  if (distanceDifference === null || distanceDifference === 0) return distanceDifference === 0;
+
+  const strategy = reviewedDistanceStrategy(metadata);
+  if (!strategy) return false;
+  return strategy === "increase_trigger_distance"
+    ? distanceDifference >= 0
+    : distanceDifference <= 0;
+}
 
 function moveContextValue<Field extends keyof ContextValueByField>(
   source: NullableContextByField,

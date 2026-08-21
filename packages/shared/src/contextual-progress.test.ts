@@ -89,6 +89,25 @@ describe("contextualProgressSchema", () => {
     ).toBe(false);
   });
 
+  it("rejects Not observed as the summary strongest context", () => {
+    expect(
+      contextualProgressSchema.safeParse({
+        ...fixture,
+        strongestContext: {
+          ...exactContextEvidence,
+          status: "not_observed",
+        },
+      }).success,
+    ).toBe(false);
+
+    expect(
+      contextualProgressSchema.safeParse({
+        ...fixture,
+        exactContexts: [{ ...exactContextEvidence, status: "not_observed" }],
+      }).success,
+    ).toBe(true);
+  });
+
   it("accepts a complete next-practice action", () => {
     expect(
       nextPracticeActionSchema.parse({

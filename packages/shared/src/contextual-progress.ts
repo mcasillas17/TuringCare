@@ -15,6 +15,9 @@ export const CONTEXTUAL_PROGRESS_WINDOW_DAYS = 21 as const;
 export const contextualStatusValues = ["reliable", "developing", "not_observed"] as const;
 export type ContextualStatus = (typeof contextualStatusValues)[number];
 
+export const observedContextStatusValues = ["reliable", "developing"] as const;
+export type ObservedContextStatus = (typeof observedContextStatusValues)[number];
+
 export const nextPracticeDirectionValues = ["easier", "harder", "repeat"] as const;
 export type NextPracticeDirection = (typeof nextPracticeDirectionValues)[number];
 
@@ -47,6 +50,11 @@ export const exactContextEvidenceSchema = z.object({
 });
 export type ExactContextEvidence = z.infer<typeof exactContextEvidenceSchema>;
 
+export const observedExactContextEvidenceSchema = exactContextEvidenceSchema.extend({
+  status: z.enum(observedContextStatusValues),
+});
+export type ObservedExactContextEvidence = z.infer<typeof observedExactContextEvidenceSchema>;
+
 export const nextPracticeActionSchema = z.object({
   ruleId: z.enum(nextPracticeRuleValues),
   direction: z.enum(nextPracticeDirectionValues),
@@ -56,7 +64,7 @@ export const nextPracticeActionSchema = z.object({
 export type NextPracticeAction = z.infer<typeof nextPracticeActionSchema>;
 
 export const contextualProgressSummarySchema = z.object({
-  strongestContext: exactContextEvidenceSchema.nullable(),
+  strongestContext: observedExactContextEvidenceSchema.nullable(),
   nextPracticeAction: nextPracticeActionSchema.nullable(),
   safety: suggestionSafetySchema.nullable(),
 });

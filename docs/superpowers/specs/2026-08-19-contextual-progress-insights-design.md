@@ -210,6 +210,12 @@ The policy applies these rules in order:
 
 1. If the latest relevant result is `too_hard`, choose the nearest recorded or
    curriculum-supported context that reduces exactly one difficulty dimension.
+   If reviewed easing is unavailable, repeat only a recorded Developing context
+   that is proven no harder than the failed context on every controlled
+   dimension. It may be equal or easier across multiple dimensions, but the
+   failed exact context is excluded. A changed null/unknown value or an
+   unreviewed or ambiguous distance direction is not proven safe. If no such
+   Developing context exists, return no action.
 2. Otherwise, if a Reliable context has a reviewed adjacent harder context,
    recommend that single-step progression only when the exact harder target is
    not already observed as non-Reliable or with a `too_hard` result. A failed

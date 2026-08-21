@@ -5,12 +5,13 @@ import type {
   ExactContextEvidence,
   ExactPracticeContext,
   NextPracticeAction,
+  ObservedExactContextEvidence,
   PracticeDimension,
   PracticeOutcome,
   SkillDimensionMetadata,
   SuggestionSafety,
 } from "@turingcare/shared";
-import { adjacentContext } from "./context-adjacency";
+import { adjacentContext, isContextNoHarderThan } from "./context-adjacency";
 
 export const CONTEXTUAL_PROGRESS_POLICY_VERSION = "2026-08-20";
 
@@ -48,7 +49,7 @@ type EligibleContextualProgressRow = {
 
 type ObservedContext = {
   key: string;
-  evidence: ExactContextEvidence;
+  evidence: ObservedExactContextEvidence;
 };
 
 type ReviewedContextStep = SkillDimensionMetadata["baseEase"];
@@ -282,10 +283,18 @@ function getReviewedContextStep(
 
 function deriveDevelopingRepeat(
   observed: ObservedContext[],
-  excludedKey?: string,
+  options: {
+    excludedKey?: string;
+    noHarderThan?: ExactPracticeContext;
+    metadata?: SkillDimensionMetadata | null;
+  } = {},
 ): NextPracticeAction | null {
   const developing = observed.find(
-    ({ key, evidence }) => evidence.status === "developing" && key !== excludedKey,
+    ({ key, evidence }) =>
+      evidence.status === "developing" &&
+      key !== options.excludedKey &&
+      (!options.noHarderThan ||
+        isContextNoHarderThan(evidence.context, options.noHarderThan, options.metadata ?? null)),
   );
   if (!developing) return null;
 
@@ -316,7 +325,11 @@ function deriveAction(input: {
     );
     return (
       easierAction ??
-      deriveDevelopingRepeat(input.observed, serializeContext(input.latestRow.context))
+      deriveDevelopingRepeat(input.observed, {
+        excludedKey: serializeContext(input.latestRow.context),
+        noHarderThan: input.latestRow.context,
+        metadata: input.metadata,
+      })
     );
   }
 
@@ -338,7 +351,7 @@ function deriveAction(input: {
       !observedHarder ||
       (observedHarder.status === "reliable" && observedHarder.latestOutcome !== "too_hard");
     if (!harderTargetIsSafe) {
-      return deriveDevelopingRepeat(input.observed, harderKey);
+      return deriveDevelopingRepeat(input.observed, { excludedKey: harderKey });
     }
 
     return {
@@ -389,7 +402,7 @@ export function deriveContextualProgress(input: {
     catalogSkillKey: input.catalogSkillKey,
     metadata: input.metadata,
   });
-  const exactContexts = observed.map(({ evidence }) => evidence);
+  const exactContexts: ExactContextEvidence[] = observed.map(({ evidence }) => evidence);
 
   if (
     nextPracticeAction &&

@@ -10,7 +10,7 @@ import { useI18n } from "@/i18n";
 import { useRecordContextualProgressEvent } from "@/lib/contextual-progress";
 import type { FocusSkill } from "@/lib/weekly-focus";
 import { CONTEXTUAL_PROGRESS_WINDOW_DAYS } from "@turingcare/shared";
-import type { ExactContextEvidence, NextPracticeAction } from "@turingcare/shared";
+import type { NextPracticeAction, ObservedExactContextEvidence } from "@turingcare/shared";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
@@ -18,7 +18,7 @@ function StrongestContextCompact({
   evidence,
   t,
 }: {
-  evidence: ExactContextEvidence | null;
+  evidence: ObservedExactContextEvidence | null;
   t: ReturnType<typeof useI18n>["t"];
 }) {
   if (!evidence) {
@@ -31,18 +31,14 @@ function StrongestContextCompact({
       {evidence.status === "developing" && evidence.latestOutcome === "too_hard" && (
         <p className="text-sm text-slate-soft">{t("contextProgress.needsSupport")}</p>
       )}
-      {evidence.status === "not_observed" ? (
-        <p className="text-sm text-slate-soft">{t("contextProgress.noEvidence")}</p>
-      ) : (
-        <p className="text-sm text-slate-soft">
-          {t(
-            evidence.successfulDistinctDays === 1
-              ? "contextProgress.successfulDay"
-              : "contextProgress.successfulDays",
-            { days: evidence.successfulDistinctDays },
-          )}
-        </p>
-      )}
+      <p className="text-sm text-slate-soft">
+        {t(
+          evidence.successfulDistinctDays === 1
+            ? "contextProgress.successfulDay"
+            : "contextProgress.successfulDays",
+          { days: evidence.successfulDistinctDays },
+        )}
+      </p>
       <ContextLabels context={evidence.context} t={t} compact />
     </div>
   );

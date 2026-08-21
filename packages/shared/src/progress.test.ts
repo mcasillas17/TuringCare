@@ -61,6 +61,24 @@ describe("practiceSessionSchema", () => {
     ).toBe(false);
   });
 
+  it.each([-840, 840])("accepts timezone offsets at the practiceDay boundary: %i", (offset) => {
+    expect(
+      practiceSessionSchema.safeParse({
+        occurredAt: "2026-05-22T10:00",
+        timezoneOffsetMinutes: offset,
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([-841, 841])("rejects timezone offsets beyond the practiceDay boundary: %i", (offset) => {
+    expect(
+      practiceSessionSchema.safeParse({
+        occurredAt: "2026-05-22T10:00",
+        timezoneOffsetMinutes: offset,
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts structured manual confirmation and rejects combined anchors", () => {
     expect(
       practiceSessionSchema.parse({

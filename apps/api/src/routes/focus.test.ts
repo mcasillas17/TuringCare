@@ -29,6 +29,7 @@ import {
   dogSafetySignals,
   dogs,
   focusCompatibilityWeeks,
+  journalEntries,
   legacyFocusClaims,
   practiceSessions,
   trainingSkills,
@@ -51,6 +52,38 @@ const WEEK_KEY = "2026-06-01";
 const NEXT_WEEK_KEY = "2026-06-08";
 const FOCUS_QUERY = `weekKey=${WEEK_KEY}&timezoneOffsetMinutes=0&weekEndTimezoneOffsetMinutes=0`;
 const dogIds = new Set<string>();
+const activeSafetyCases = [
+  {
+    name: "injury",
+    signal: "injury_or_pain" as const,
+    referral: "veterinarian" as const,
+    ruleId: "reported_injury_or_pain" as const,
+  },
+  {
+    name: "aggression",
+    signal: "aggression_or_bite_risk" as const,
+    referral: "veterinary_behaviorist" as const,
+    ruleId: "reported_aggression_or_bite_risk" as const,
+  },
+  {
+    name: "severe fear",
+    signal: "severe_fear_or_panic" as const,
+    referral: "veterinary_behaviorist" as const,
+    ruleId: "reported_severe_fear" as const,
+  },
+  {
+    name: "severe recorded concern",
+    signal: "severe_behavior_concern" as const,
+    referral: "veterinary_behaviorist" as const,
+    ruleId: "severe_recorded_concern" as const,
+  },
+  {
+    name: "sustained worsening",
+    signal: null,
+    referral: "credentialed_trainer" as const,
+    ruleId: "sustained_worsening_intensity" as const,
+  },
+] as const;
 
 async function makeDog(u: TestUser) {
   const res = await app.request("/api/dogs", {
@@ -120,6 +153,53 @@ function currentFocusWindow() {
       weekEndTimezoneOffsetMinutes: String(end.getTimezoneOffset()),
     }).toString(),
   };
+}
+
+async function activateSafety(
+  dogId: string,
+  safetyCase: (typeof activeSafetyCases)[number],
+): Promise<void> {
+  if (safetyCase.signal) {
+    await db.insert(dogSafetySignals).values({
+      dogId,
+      type: safetyCase.signal,
+      source: "practice_session",
+      reportedAt: new Date(),
+    });
+    return;
+  }
+
+  const occurredAt = new Date();
+  await db.insert(journalEntries).values([
+    {
+      dogId,
+      kind: "moment",
+      occurredAt,
+      note: "high intensity",
+      intensity: 4,
+    },
+    {
+      dogId,
+      kind: "moment",
+      occurredAt,
+      note: "high intensity again",
+      intensity: 4,
+    },
+    {
+      dogId,
+      kind: "daily_checkin",
+      occurredAt,
+      note: "harder check-in",
+      trend: "harder",
+    },
+    {
+      dogId,
+      kind: "daily_checkin",
+      occurredAt,
+      note: "harder check-in again",
+      trend: "harder",
+    },
+  ]);
 }
 
 async function expectDatabaseError(operation: Promise<unknown>, message: string) {
@@ -828,83 +908,84 @@ describe("dogs: weekly focus", () => {
     expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(rawError);
   });
 
-  it("suppresses batched next actions while the dog has active safety", async () => {
-    const { dog, skill } = await setupDogWithSkill(u);
-    await db.insert(weeklyFocus).values({
-      dogId: dog.id,
-      skillId: skill.id,
-      weekStart: currentFocusWindow().weekKey,
-      position: 0,
-    });
-    const now = new Date();
-    const first = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-    const second = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    await db.insert(practiceSessions).values([
-      {
+  it.each(activeSafetyCases)(
+    "suppresses batched next actions while the dog has active $name safety",
+    async (safetyCase) => {
+      const { dog, skill } = await setupDogWithSkill(u);
+      await db.insert(weeklyFocus).values({
+        dogId: dog.id,
         skillId: skill.id,
-        occurredAt: first,
-        outcome: "went_well",
-        practiceDay: first.toISOString().slice(0, 10),
-        curriculumLevel: 1,
-        curriculumVersion: CURRICULUM_VERSION,
-        cueSupport: "hand_signal",
-        environment: "home_quiet",
-        distance: "few_steps",
-        durationBand: "about_15_seconds",
-        distraction: "none",
-      },
-      {
-        skillId: skill.id,
-        occurredAt: second,
-        outcome: "went_well",
-        practiceDay: second.toISOString().slice(0, 10),
-        curriculumLevel: 1,
-        curriculumVersion: CURRICULUM_VERSION,
-        cueSupport: "hand_signal",
-        environment: "home_quiet",
-        distance: "few_steps",
-        durationBand: "about_15_seconds",
-        distraction: "none",
-      },
-    ]);
-    await db.insert(dogSafetySignals).values({
-      dogId: dog.id,
-      type: "injury_or_pain",
-      source: "practice_session",
-      reportedAt: now,
-    });
-
-    const response = await app.request(`/api/dogs/${dog.id}/focus?${currentFocusWindow().query}`, {
-      headers: u.authHeaders,
-    });
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      focusSkills: Array<{
-        contextualProgress:
-          | {
-              status: "ready";
-              summary: {
-                strongestContext: { status: string } | null;
-                nextPracticeAction: unknown;
-                safety: { ruleId: string; referral: string } | null;
-              };
-            }
-          | { status: "unavailable" };
-      }>;
-    };
-    expect(body.focusSkills[0]?.contextualProgress).toEqual({
-      status: "ready",
-      summary: {
-        strongestContext: expect.objectContaining({ status: "reliable" }),
-        nextPracticeAction: null,
-        safety: {
-          suppressed: true,
-          ruleId: "reported_injury_or_pain",
-          referral: "veterinarian",
+        weekStart: currentFocusWindow().weekKey,
+        position: 0,
+      });
+      const now = new Date();
+      const first = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+      const second = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      await db.insert(practiceSessions).values([
+        {
+          skillId: skill.id,
+          occurredAt: first,
+          outcome: "went_well",
+          practiceDay: first.toISOString().slice(0, 10),
+          curriculumLevel: 1,
+          curriculumVersion: CURRICULUM_VERSION,
+          cueSupport: "hand_signal",
+          environment: "home_quiet",
+          distance: "few_steps",
+          durationBand: "about_15_seconds",
+          distraction: "none",
         },
-      },
-    });
-  });
+        {
+          skillId: skill.id,
+          occurredAt: second,
+          outcome: "went_well",
+          practiceDay: second.toISOString().slice(0, 10),
+          curriculumLevel: 1,
+          curriculumVersion: CURRICULUM_VERSION,
+          cueSupport: "hand_signal",
+          environment: "home_quiet",
+          distance: "few_steps",
+          durationBand: "about_15_seconds",
+          distraction: "none",
+        },
+      ]);
+      await activateSafety(dog.id, safetyCase);
+
+      const response = await app.request(
+        `/api/dogs/${dog.id}/focus?${currentFocusWindow().query}`,
+        {
+          headers: u.authHeaders,
+        },
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        focusSkills: Array<{
+          contextualProgress:
+            | {
+                status: "ready";
+                summary: {
+                  strongestContext: { status: string } | null;
+                  nextPracticeAction: unknown;
+                  safety: { ruleId: string; referral: string } | null;
+                };
+              }
+            | { status: "unavailable" };
+        }>;
+      };
+      expect(body.focusSkills[0]?.contextualProgress).toEqual({
+        status: "ready",
+        summary: {
+          strongestContext: expect.objectContaining({ status: "reliable" }),
+          nextPracticeAction: null,
+          safety: {
+            suppressed: true,
+            ruleId: safetyCase.ruleId,
+            referral: safetyCase.referral,
+          },
+        },
+      });
+    },
+  );
 
   it("waits for a concurrent aggression report before deriving batched contextual progress", async () => {
     const { dog, skill } = await setupDogWithSkill(u);

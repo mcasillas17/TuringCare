@@ -141,6 +141,11 @@ plan before adding an index or migration.
 - A Reliable context never recommends a reviewed harder target already observed
   as non-Reliable or with any `too_hard` result; that failed target is excluded
   from Developing-repeat fallback selection.
+- When a latest `too_hard` context cannot be eased, a Developing-repeat
+  fallback must be proven no harder across every controlled dimension. Equal or
+  easier changes are allowed, but the failed exact context, changed
+  null/unknown values, and unreviewed or ambiguous distance direction are
+  unsafe. Return no action when no safe Developing fallback remains.
 - At most one Not observed row is derived from a real observed context by one
   reviewed adjacent change.
 - Contextual responses carry the server-owned active safety decision. When it
@@ -819,8 +824,10 @@ Define a fixture builder with all five context positions and test:
    serialized context;
 10. latest `too_hard` creates an easier one-field action; when easing is
     unavailable, it never falls through to a harder action and repeats the
-    highest-ranked Developing context only when that context is not the
-    too-hard context, otherwise returning no action;
+    highest-ranked Developing context that is proven no harder than the failed
+    context across every controlled dimension. It excludes the failed exact
+    context and any changed null/unknown or unreviewed/ambiguous distance
+    comparison, returning no action when no safe Developing fallback exists;
 11. Reliable creates a harder one-field action when a reviewed harder adjacency
     exists, then repeats the highest-ranked Developing context when it does not;
 12. a Reliable context at level 5, at a maxed-out reviewed adjacency, or with
@@ -904,9 +911,11 @@ Implementation order:
    (`levelSteps[level - 1]`) and return no harder adjacency at level 5;
 9. pass the matching reviewed strategy to the adjacency helper;
 10. select easier after the globally latest `too_hard`; if no easier action can
-   be derived, repeat the highest-ranked Developing context only when it is not
-   the too-hard context, otherwise return no action, and never select a harder
-   action for that latest `too_hard`;
+   be derived, repeat the highest-ranked Developing context only when it is
+   proven no harder than the failed context across every controlled dimension.
+   Exclude the failed exact context and any changed null/unknown or
+   unreviewed/ambiguous distance comparison; otherwise return no action, and
+   never select a harder action for that latest `too_hard`;
 11. otherwise select a harder action after Reliable when reviewed adjacency
    exists only when its exact target is absent or already Reliable without a
    `too_hard`; if the target is observed non-Reliable, exclude it and repeat

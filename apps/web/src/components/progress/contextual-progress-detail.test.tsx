@@ -5,6 +5,7 @@ import type {
   ContextualProgress,
   ExactContextEvidence,
   NextPracticeAction,
+  ObservedExactContextEvidence,
 } from "@turingcare/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ContextualProgressDetail } from "./contextual-progress-detail";
@@ -25,7 +26,7 @@ const evidenceWindow = {
   days: 21 as const,
 };
 
-const strongestContext: ExactContextEvidence = {
+const strongestContext: ObservedExactContextEvidence = {
   context: {
     cueSupport: "verbal_cue",
     environment: "home_quiet",

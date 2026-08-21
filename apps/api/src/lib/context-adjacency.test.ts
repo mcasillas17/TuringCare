@@ -1,7 +1,11 @@
-import type { ExactPracticeContext, PracticeDimension } from "@turingcare/shared";
+import type {
+  ExactPracticeContext,
+  PracticeDimension,
+  SkillDimensionMetadata,
+} from "@turingcare/shared";
 import { describe, expect, it } from "vitest";
 import type { AdjacentContext } from "./context-adjacency";
-import { adjacentContext } from "./context-adjacency";
+import { adjacentContext, isContextNoHarderThan } from "./context-adjacency";
 
 const contextKeys = [
   "cueSupport",
@@ -22,6 +26,30 @@ function createBaseContext(): ExactPracticeContext {
     distraction: "mild",
   };
 }
+
+const increaseTriggerDistanceMetadata: SkillDimensionMetadata = {
+  dimensions: ["distance"],
+  levelSteps: ["distance", "distance", "distance", "distance"],
+  levelStepStrategies: [
+    "increase_trigger_distance",
+    "increase_trigger_distance",
+    "increase_trigger_distance",
+    "increase_trigger_distance",
+  ],
+  baseEase: { dimension: "distance", strategy: "increase_trigger_distance" },
+};
+
+const decreaseOwnerDistanceMetadata: SkillDimensionMetadata = {
+  dimensions: ["distance"],
+  levelSteps: ["distance", "distance", "distance", "distance"],
+  levelStepStrategies: [
+    "decrease_owner_distance",
+    "decrease_owner_distance",
+    "decrease_owner_distance",
+    "decrease_owner_distance",
+  ],
+  baseEase: { dimension: "distance", strategy: "decrease_owner_distance" },
+};
 
 function expectExactOneFieldChange<K extends ContextKey>(
   source: ExactPracticeContext,
@@ -416,5 +444,60 @@ describe("adjacentContext", () => {
       adjacentContext(createBaseContext(), "distraction", "harder", "use_quieter_environment"),
     ).toBeNull();
     expect(adjacentContext(createBaseContext(), "distance", "easier", "add_cue_help")).toBeNull();
+  });
+});
+
+describe("isContextNoHarderThan", () => {
+  it("accepts a candidate that is equal or easier across multiple controlled dimensions", () => {
+    const failed = createBaseContext();
+    const candidate = {
+      ...failed,
+      cueSupport: "food_lure",
+      environment: "home_quiet",
+      durationBand: "about_15_seconds",
+      distraction: "none",
+    } as const;
+
+    expect(isContextNoHarderThan(candidate, failed, null)).toBe(true);
+  });
+
+  it("rejects a candidate that is harder in any controlled dimension", () => {
+    const failed = createBaseContext();
+    const candidate = {
+      ...failed,
+      cueSupport: "food_lure",
+      environment: "home_quiet",
+      durationBand: "one_to_two_minutes",
+      distraction: "none",
+    } as const;
+
+    expect(isContextNoHarderThan(candidate, failed, null)).toBe(false);
+  });
+
+  it("rejects null mismatches while accepting equally unknown fields", () => {
+    const failed = { ...createBaseContext(), environment: null, distance: null };
+
+    expect(isContextNoHarderThan({ ...failed }, failed, null)).toBe(true);
+    expect(isContextNoHarderThan({ ...failed, environment: "home_quiet" }, failed, null)).toBe(
+      false,
+    );
+    expect(
+      isContextNoHarderThan(
+        { ...createBaseContext(), environment: null },
+        createBaseContext(),
+        null,
+      ),
+    ).toBe(false);
+  });
+
+  it("uses the reviewed distance strategy when deciding whether a candidate is harder", () => {
+    const failed = createBaseContext();
+    const farther = { ...failed, distance: "across_yard" } as const;
+    const nearer = { ...failed, distance: "few_steps" } as const;
+
+    expect(isContextNoHarderThan(farther, failed, increaseTriggerDistanceMetadata)).toBe(true);
+    expect(isContextNoHarderThan(farther, failed, decreaseOwnerDistanceMetadata)).toBe(false);
+    expect(isContextNoHarderThan(nearer, failed, increaseTriggerDistanceMetadata)).toBe(false);
+    expect(isContextNoHarderThan(nearer, failed, decreaseOwnerDistanceMetadata)).toBe(true);
   });
 });
