@@ -25,6 +25,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
 import { findOwnedSkill } from "../db/owned-skill";
@@ -115,6 +116,38 @@ const legacyPracticeDateTime = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
 function practiceDay(occurredAt: Date, timezoneOffsetMinutes: number | undefined) {
   if (timezoneOffsetMinutes === undefined) return null;
   return new Date(occurredAt.getTime() - timezoneOffsetMinutes * 60_000).toISOString().slice(0, 10);
+}
+
+function resolveConfirmedCurrentLevelAnchor(
+  confirmCurrentLevel: true | undefined,
+  lockedSkill: typeof trainingSkills.$inferSelect,
+  resolvedPracticeDay: string | null,
+  existing?: typeof practiceSessions.$inferSelect,
+):
+  | { kind: "none" }
+  | {
+      kind: "rejected";
+      reason: "practice_day_required" | "target_locked";
+    }
+  | { kind: "accepted"; level: number; curriculumVersion: string } {
+  if (!confirmCurrentLevel) return { kind: "none" };
+  if (!resolvedPracticeDay) {
+    return { kind: "rejected", reason: "practice_day_required" };
+  }
+  if (
+    existing &&
+    (existing.curriculumLevel !== null ||
+      existing.curriculumVersion !== null ||
+      existing.practiceVariant !== null ||
+      existing.suggestionId !== null)
+  ) {
+    return { kind: "rejected", reason: "target_locked" };
+  }
+  return {
+    kind: "accepted",
+    level: lockedSkill.confidence,
+    curriculumVersion: CURRICULUM_VERSION,
+  };
 }
 
 function practiceOccurredAt(value: string) {
@@ -424,6 +457,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       if (occurredAt === "future") {
         return c.json({ error: "future_practice_session" } as const, 400);
       }
+      const resolvedPracticeDay = practiceDay(occurredAt, body.timezoneOffsetMinutes);
       const target = body.practicedTarget;
       const audit = target
         ? await resolvePracticeTargetAudit({
@@ -448,17 +482,18 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
           | "audit_unavailable"
           | "invalid_anchor"
           | "invalid_target"
+          | "target_locked"
           | null = null;
         let anchor:
           | {
               level: number;
               curriculumVersion: string;
-              variant: "primary" | "fallback";
-              suggestionId: string;
+              variant: "primary" | "fallback" | null;
+              suggestionId: string | null;
             }
           | undefined;
         if (target) {
-          if (!practiceDay(occurredAt, body.timezoneOffsetMinutes)) {
+          if (!resolvedPracticeDay) {
             anchorRejected = "practice_day_required";
           } else if (audit === "unavailable") {
             anchorRejected = "audit_unavailable";
@@ -479,6 +514,22 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
               };
             }
           }
+        } else {
+          const manualAnchor = resolveConfirmedCurrentLevelAnchor(
+            body.confirmCurrentLevel,
+            lockedSkill,
+            resolvedPracticeDay,
+          );
+          if (manualAnchor.kind === "rejected") {
+            anchorRejected = manualAnchor.reason;
+          } else if (manualAnchor.kind === "accepted") {
+            anchor = {
+              level: manualAnchor.level,
+              curriculumVersion: manualAnchor.curriculumVersion,
+              variant: null,
+              suggestionId: null,
+            };
+          }
         }
         const [session] = await tx
           .insert(practiceSessions)
@@ -497,7 +548,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
             curriculumVersion: anchor?.curriculumVersion ?? null,
             practiceVariant: anchor?.variant ?? null,
             suggestionId: anchor?.suggestionId ?? null,
-            practiceDay: practiceDay(occurredAt, body.timezoneOffsetMinutes),
+            practiceDay: resolvedPracticeDay,
           })
           .returning();
         if (!session) throw new Error("failed to create practice session");
@@ -512,7 +563,24 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         return { session, anchorRejected };
       });
       if (!result) return c.json({ error: "not_found" } as const, 404);
-      await recordEvent("training.practice_logged", { userId: c.get("userId") });
+      await recordEvent("training.practice_logged", {
+        userId: c.get("userId"),
+        props: {
+          outcome: result.session.outcome ?? "unanswered",
+          hasCueSupport: result.session.cueSupport !== null,
+          hasEnvironment: result.session.environment !== null,
+          hasDistance: result.session.distance !== null,
+          hasDurationBand: result.session.durationBand !== null,
+          hasDistraction: result.session.distraction !== null,
+          levelAnchored: result.session.curriculumLevel !== null,
+          anchorSource:
+            result.session.suggestionId !== null
+              ? "suggestion"
+              : result.session.curriculumLevel !== null
+                ? "manual_confirmation"
+                : "unanchored",
+        },
+      });
       if (result.session.outcome) {
         await recordEvent("training.practice_outcome_recorded", {
           userId: c.get("userId"),
@@ -583,8 +651,8 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
           | {
               level: number;
               curriculumVersion: string;
-              variant: "primary" | "fallback";
-              suggestionId: string;
+              variant: "primary" | "fallback" | null;
+              suggestionId: string | null;
             }
           | undefined;
         if (target) {
@@ -615,6 +683,23 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
                 suggestionId: target.suggestionId,
               };
             }
+          }
+        } else {
+          const manualAnchor = resolveConfirmedCurrentLevelAnchor(
+            body.confirmCurrentLevel,
+            lockedSkill,
+            existing.practiceDay,
+            existing,
+          );
+          if (manualAnchor.kind === "rejected") {
+            anchorRejected = manualAnchor.reason;
+          } else if (manualAnchor.kind === "accepted") {
+            anchor = {
+              level: manualAnchor.level,
+              curriculumVersion: manualAnchor.curriculumVersion,
+              variant: null,
+              suggestionId: null,
+            };
           }
         }
         const changes: Partial<typeof practiceSessions.$inferInsert> = {};
