@@ -15,6 +15,7 @@ import {
 } from "./contextual-progress";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+type ContextualProgressExecutor = Pick<typeof db, "select">;
 
 const contextualProgressColumns = {
   id: practiceSessions.id,
@@ -34,9 +35,10 @@ export async function loadContextualProgress(
   skill: Pick<typeof trainingSkills.$inferSelect, "id" | "confidence" | "catalogSkillKey">,
   now: Date,
   safety: SuggestionSafety | null = null,
+  executor: ContextualProgressExecutor = db,
 ): Promise<ContextualProgress> {
   const startsAt = new Date(now.getTime() - CONTEXTUAL_PROGRESS_WINDOW_DAYS * DAY_MS);
-  const rows: ContextualProgressRow[] = await db
+  const rows: ContextualProgressRow[] = await executor
     .select(contextualProgressColumns)
     .from(practiceSessions)
     .where(
@@ -72,13 +74,14 @@ export async function loadContextualProgressSummaries(
   skills: Array<Pick<typeof trainingSkills.$inferSelect, "id" | "confidence" | "catalogSkillKey">>,
   now: Date,
   safety: SuggestionSafety | null = null,
+  executor: ContextualProgressExecutor = db,
 ): Promise<Map<string, ContextualProgressSummary>> {
   const summaries = new Map<string, ContextualProgressSummary>();
   if (skills.length === 0) return summaries;
 
   const startsAt = new Date(now.getTime() - CONTEXTUAL_PROGRESS_WINDOW_DAYS * DAY_MS);
   const skillIds = skills.map((skill) => skill.id);
-  const rows = await db
+  const rows = await executor
     .select({
       skillId: practiceSessions.skillId,
       ...contextualProgressColumns,

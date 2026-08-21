@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
-import { db } from "../db";
+import { db, pool } from "../db";
 import {
   events,
   dogSafetySignals,
@@ -14,6 +14,7 @@ import {
   trainingGoals,
   trainingSkills,
 } from "../db/schema";
+import { lockDogSafety } from "../lib/safety-lock";
 import { type TestUser, createTestUser } from "../test-helpers";
 
 const validDog = {
@@ -32,6 +33,39 @@ const baseContext = {
   durationBand: "about_30_seconds" as const,
   distraction: "mild" as const,
 };
+
+const activeSafetyCases = [
+  {
+    name: "injury",
+    signal: "injury_or_pain" as const,
+    referral: "veterinarian" as const,
+    ruleId: "reported_injury_or_pain" as const,
+  },
+  {
+    name: "aggression",
+    signal: "aggression_or_bite_risk" as const,
+    referral: "veterinary_behaviorist" as const,
+    ruleId: "reported_aggression_or_bite_risk" as const,
+  },
+  {
+    name: "severe fear",
+    signal: "severe_fear_or_panic" as const,
+    referral: "veterinary_behaviorist" as const,
+    ruleId: "reported_severe_fear" as const,
+  },
+  {
+    name: "severe recorded concern",
+    signal: "severe_behavior_concern" as const,
+    referral: "veterinary_behaviorist" as const,
+    ruleId: "severe_recorded_concern" as const,
+  },
+  {
+    name: "sustained worsening",
+    signal: null,
+    referral: "credentialed_trainer" as const,
+    ruleId: "sustained_worsening_intensity" as const,
+  },
+] as const;
 
 type Setup = {
   user: TestUser;
@@ -114,6 +148,99 @@ async function getDetail(setupValue: Setup) {
   return app.request(detailPath(setupValue.dogId, setupValue.skillId), {
     headers: setupValue.user.authHeaders,
   });
+}
+
+async function waitForAdvisoryLockWaiter() {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const result = await pool.query<{ waiting: boolean }>(
+      "select exists (select 1 from pg_locks where locktype = 'advisory' and not granted and database = (select oid from pg_database where datname = current_database())) as waiting",
+    );
+    if (result.rows[0]?.waiting) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error("timed out waiting for a contextual-progress advisory lock waiter");
+}
+
+function beginHeldSafetyWrite(dogId: string, type: "injury_or_pain" | "aggression_or_bite_risk") {
+  let markReady: (() => void) | undefined;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve;
+  });
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const write = db.transaction(async (tx) => {
+    await lockDogSafety(tx, dogId);
+    await tx.insert(dogSafetySignals).values({
+      dogId,
+      type,
+      source: "practice_session",
+      reportedAt: new Date(),
+    });
+    markReady?.();
+    await hold;
+  });
+
+  return { ready, release: () => release?.(), write };
+}
+
+async function activateSafety(
+  dogId: string,
+  safetyCase: (typeof activeSafetyCases)[number],
+): Promise<void> {
+  if (safetyCase.signal) {
+    await db.insert(dogSafetySignals).values({
+      dogId,
+      type: safetyCase.signal,
+      source: "practice_session",
+      reportedAt: new Date(),
+    });
+    return;
+  }
+
+  const occurredAt = new Date();
+  await db.insert(journalEntries).values([
+    {
+      dogId,
+      kind: "moment",
+      occurredAt,
+      note: "high intensity",
+      intensity: 4,
+    },
+    {
+      dogId,
+      kind: "moment",
+      occurredAt,
+      note: "high intensity again",
+      intensity: 4,
+    },
+    {
+      dogId,
+      kind: "daily_checkin",
+      occurredAt,
+      note: "harder check-in",
+      trend: "harder",
+    },
+    {
+      dogId,
+      kind: "daily_checkin",
+      occurredAt,
+      note: "harder check-in again",
+      trend: "harder",
+    },
+  ]);
+}
+
+async function seedReliableContext(skillId: string): Promise<void> {
+  const now = new Date();
+  for (const daysAgo of [2, 1]) {
+    const occurredAt = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+    await insertSession(skillId, {
+      occurredAt,
+      practiceDay: occurredAt.toISOString().slice(0, 10),
+    });
+  }
 }
 
 describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
@@ -227,125 +354,105 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
     });
   });
 
-  it.each([
-    {
-      name: "injury",
-      signal: "injury_or_pain" as const,
-      referral: "veterinarian" as const,
-      ruleId: "reported_injury_or_pain" as const,
-    },
-    {
-      name: "aggression",
-      signal: "aggression_or_bite_risk" as const,
-      referral: "veterinary_behaviorist" as const,
-      ruleId: "reported_aggression_or_bite_risk" as const,
-    },
-    {
-      name: "severe fear",
-      signal: "severe_fear_or_panic" as const,
-      referral: "veterinary_behaviorist" as const,
-      ruleId: "reported_severe_fear" as const,
-    },
-    {
-      name: "severe recorded concern",
-      signal: "severe_behavior_concern" as const,
-      referral: "veterinary_behaviorist" as const,
-      ruleId: "severe_recorded_concern" as const,
-    },
-    {
-      name: "sustained worsening",
-      signal: null,
-      referral: "credentialed_trainer" as const,
-      ruleId: "sustained_worsening_intensity" as const,
-    },
-  ])("suppresses the action and synthetic evidence for active $name safety", async (safetyCase) => {
-    const setupValue = await setup(users);
-    const now = new Date();
-    const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    await insertSession(setupValue.skillId, {
-      occurredAt: daysAgo(5),
-      practiceDay: daysAgo(5).toISOString().slice(0, 10),
-      cueSupport: "verbal_cue",
-    });
-    await insertSession(setupValue.skillId, {
-      occurredAt: daysAgo(4),
-      practiceDay: daysAgo(4).toISOString().slice(0, 10),
-      cueSupport: "verbal_cue",
-    });
-    await insertSession(setupValue.skillId, {
-      occurredAt: daysAgo(2),
-      practiceDay: daysAgo(2).toISOString().slice(0, 10),
-    });
-    await insertSession(setupValue.skillId, {
-      occurredAt: daysAgo(1),
-      practiceDay: daysAgo(1).toISOString().slice(0, 10),
-      outcome: "too_hard",
-    });
-
-    if (safetyCase.signal) {
-      await db.insert(dogSafetySignals).values({
-        dogId: setupValue.dogId,
-        type: safetyCase.signal,
-        source: "practice_session",
-        reportedAt: now,
+  it.each(activeSafetyCases)(
+    "suppresses the action and synthetic evidence for active $name safety",
+    async (safetyCase) => {
+      const setupValue = await setup(users);
+      const now = new Date();
+      const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      await insertSession(setupValue.skillId, {
+        occurredAt: daysAgo(5),
+        practiceDay: daysAgo(5).toISOString().slice(0, 10),
+        cueSupport: "verbal_cue",
       });
-    } else {
-      const occurredAt = new Date();
-      await db.insert(journalEntries).values([
-        {
-          dogId: setupValue.dogId,
-          kind: "moment",
-          occurredAt,
-          note: "high intensity",
-          intensity: 4,
-        },
-        {
-          dogId: setupValue.dogId,
-          kind: "moment",
-          occurredAt,
-          note: "high intensity again",
-          intensity: 4,
-        },
-        {
-          dogId: setupValue.dogId,
-          kind: "daily_checkin",
-          occurredAt,
-          note: "harder check-in",
-          trend: "harder",
-        },
-        {
-          dogId: setupValue.dogId,
-          kind: "daily_checkin",
-          occurredAt,
-          note: "harder check-in again",
-          trend: "harder",
-        },
-      ]);
-    }
+      await insertSession(setupValue.skillId, {
+        occurredAt: daysAgo(4),
+        practiceDay: daysAgo(4).toISOString().slice(0, 10),
+        cueSupport: "verbal_cue",
+      });
+      await insertSession(setupValue.skillId, {
+        occurredAt: daysAgo(2),
+        practiceDay: daysAgo(2).toISOString().slice(0, 10),
+      });
+      await insertSession(setupValue.skillId, {
+        occurredAt: daysAgo(1),
+        practiceDay: daysAgo(1).toISOString().slice(0, 10),
+        outcome: "too_hard",
+      });
 
-    const response = await getDetail(setupValue);
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      safety: { suppressed: true; ruleId: string; referral: string } | null;
+      await activateSafety(setupValue.dogId, safetyCase);
+
+      const response = await getDetail(setupValue);
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        safety: { suppressed: true; ruleId: string; referral: string } | null;
+        nextPracticeAction: unknown;
+        exactContexts: Array<{ status: string }>;
+      };
+      expect(body.safety).toEqual({
+        suppressed: true,
+        ruleId: safetyCase.ruleId,
+        referral: safetyCase.referral,
+      });
+      expect(body.nextPracticeAction).toBeNull();
+      expect(body.exactContexts).toHaveLength(2);
+      expect(body.exactContexts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ status: "reliable" }),
+          expect.objectContaining({ status: "developing" }),
+        ]),
+      );
+      expect(body.exactContexts).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ status: "not_observed" })]),
+      );
+    },
+  );
+
+  it("waits for a concurrent injury report before deriving contextual evidence", async () => {
+    const setupValue = await setup(users);
+    await seedReliableContext(setupValue.skillId);
+
+    const before = await getDetail(setupValue);
+    expect(before.status).toBe(200);
+    const beforeBody = (await before.json()) as {
       nextPracticeAction: unknown;
       exactContexts: Array<{ status: string }>;
     };
-    expect(body.safety).toEqual({
-      suppressed: true,
-      ruleId: safetyCase.ruleId,
-      referral: safetyCase.referral,
-    });
-    expect(body.nextPracticeAction).toBeNull();
-    expect(body.exactContexts).toHaveLength(2);
-    expect(body.exactContexts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ status: "reliable" }),
-        expect.objectContaining({ status: "developing" }),
-      ]),
-    );
-    expect(body.exactContexts).not.toEqual(
+    expect(beforeBody.nextPracticeAction).not.toBeNull();
+    expect(beforeBody.exactContexts).toEqual(
       expect.arrayContaining([expect.objectContaining({ status: "not_observed" })]),
     );
+
+    const safetyWrite = beginHeldSafetyWrite(setupValue.dogId, "injury_or_pain");
+    await safetyWrite.ready;
+    let completed = false;
+    const responsePromise = getDetail(setupValue).then((response) => {
+      completed = true;
+      return response;
+    });
+
+    try {
+      await waitForAdvisoryLockWaiter();
+      expect(completed).toBe(false);
+      safetyWrite.release();
+      await safetyWrite.write;
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        safety: { ruleId: string } | null;
+        nextPracticeAction: unknown;
+        exactContexts: Array<{ status: string }>;
+      };
+      expect(body.safety).toEqual(expect.objectContaining({ ruleId: "reported_injury_or_pain" }));
+      expect(body.nextPracticeAction).toBeNull();
+      expect(body.exactContexts).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ status: "not_observed" })]),
+      );
+    } finally {
+      safetyWrite.release();
+      await Promise.allSettled([safetyWrite.write, responsePromise]);
+    }
   });
 
   it("returns the privacy-safe 404 for a malformed dog id", async () => {
@@ -493,6 +600,24 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
       expect(stored).toEqual([]);
     });
 
+    it("returns malformed-dog 404 before validating an invalid event body", async () => {
+      const owner = await createTestUser();
+      users.push(owner);
+
+      const response = await app.request(eventPath("not-a-uuid"), {
+        method: "POST",
+        headers: owner.authHeaders,
+        body: JSON.stringify({
+          name: "training.context_not_real",
+          surface: "dashboard",
+          strongestStatus: "not-a-status",
+        }),
+      });
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
+    });
+
     it("does not reveal whether an unowned dog exists", async () => {
       const owner = await createTestUser();
       const otherOwner = await createTestUser();
@@ -519,6 +644,116 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
       expect(ownedByOther.status).toBe(404);
       expect(missing.status).toBe(404);
       expect(await ownedByOther.json()).toEqual(await missing.json());
+    });
+
+    it.each(activeSafetyCases)(
+      "acknowledges action use without telemetry for active $name safety",
+      async (safetyCase) => {
+        const owner = await createTestUser();
+        users.push(owner);
+        const dog = await makeDog(owner);
+        await activateSafety(dog.id, safetyCase);
+
+        const response = await app.request(eventPath(dog.id), {
+          method: "POST",
+          headers: owner.authHeaders,
+          body: JSON.stringify({
+            name: "training.context_next_action_used",
+            surface: "week",
+            ruleId: "advance_reliable_context",
+            direction: "harder",
+          }),
+        });
+
+        expect(response.status).toBe(202);
+        expect(await response.json()).toEqual({ ok: true });
+        const stored = await db
+          .select({ id: events.id })
+          .from(events)
+          .where(
+            and(
+              eq(events.name, "training.context_next_action_used"),
+              eq(events.userId, owner.userId),
+            ),
+          );
+        expect(stored).toEqual([]);
+      },
+    );
+
+    it("continues recording insight views while safety suppresses action use", async () => {
+      const owner = await createTestUser();
+      users.push(owner);
+      const dog = await makeDog(owner);
+      await activateSafety(dog.id, activeSafetyCases[0]);
+
+      const response = await app.request(eventPath(dog.id), {
+        method: "POST",
+        headers: owner.authHeaders,
+        body: JSON.stringify({
+          name: "training.context_insight_viewed",
+          surface: "week",
+          strongestStatus: "reliable",
+          hasNextAction: false,
+        }),
+      });
+
+      expect(response.status).toBe(202);
+      const [stored] = await db
+        .select({ id: events.id })
+        .from(events)
+        .where(
+          and(eq(events.name, "training.context_insight_viewed"), eq(events.userId, owner.userId)),
+        )
+        .limit(1);
+      expect(stored).toBeDefined();
+    });
+
+    it("waits for a concurrent aggression report before accepting action-use telemetry", async () => {
+      const owner = await createTestUser();
+      users.push(owner);
+      const dog = await makeDog(owner);
+      const safetyWrite = beginHeldSafetyWrite(dog.id, "aggression_or_bite_risk");
+      await safetyWrite.ready;
+      let completed = false;
+      const responsePromise = Promise.resolve(
+        app.request(eventPath(dog.id), {
+          method: "POST",
+          headers: owner.authHeaders,
+          body: JSON.stringify({
+            name: "training.context_next_action_used",
+            surface: "week",
+            ruleId: "advance_reliable_context",
+            direction: "harder",
+          }),
+        }),
+      ).then((response) => {
+        completed = true;
+        return response;
+      });
+
+      try {
+        await waitForAdvisoryLockWaiter();
+        expect(completed).toBe(false);
+        safetyWrite.release();
+        await safetyWrite.write;
+
+        const response = await responsePromise;
+        expect(response.status).toBe(202);
+        expect(await response.json()).toEqual({ ok: true });
+        const stored = await db
+          .select({ id: events.id })
+          .from(events)
+          .where(
+            and(
+              eq(events.name, "training.context_next_action_used"),
+              eq(events.userId, owner.userId),
+            ),
+          );
+        expect(stored).toEqual([]);
+      } finally {
+        safetyWrite.release();
+        await Promise.allSettled([safetyWrite.write, responsePromise]);
+      }
     });
 
     it("rejects unknown event names with 400", async () => {
