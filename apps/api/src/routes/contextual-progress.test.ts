@@ -215,9 +215,15 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
 
   it("excludes outside-window, mismatched-anchor, incomplete, and all-null-context evidence", async () => {
     const setupValue = await setup(users);
+    const siblingSkill = await makeSkill(setupValue.dogId, { name: "Down" });
     const now = Date.now();
     const inside = new Date(now - 60 * 60 * 1000);
     await insertSession(setupValue.skillId, { occurredAt: inside, practiceDay: "2026-08-20" });
+    await insertSession(siblingSkill.id, {
+      occurredAt: new Date(now - 30 * 60 * 1000),
+      outcome: "too_hard",
+      practiceDay: "2026-08-20",
+    });
     await insertSession(setupValue.skillId, {
       occurredAt: new Date(now - 22 * 24 * 60 * 60 * 1000),
       practiceDay: "2026-07-30",
@@ -384,14 +390,16 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
   it("uses the larger id as the deterministic latest row when timestamps tie", async () => {
     const setupValue = await setup(users);
     const occurredAt = new Date(Date.now() - 60 * 60 * 1000);
+    const [lowerId, higherId] = [randomUUID(), randomUUID()].sort();
+    if (!lowerId || !higherId) throw new Error("expected two practice session ids");
     await insertSession(setupValue.skillId, {
-      id: "00000000-0000-4000-8000-000000000001",
+      id: lowerId,
       occurredAt,
       outcome: "went_well",
       practiceDay: "2026-08-20",
     });
     await insertSession(setupValue.skillId, {
-      id: "00000000-0000-4000-8000-000000000002",
+      id: higherId,
       occurredAt,
       outcome: "too_hard",
       practiceDay: "2026-08-20",

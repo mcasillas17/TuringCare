@@ -382,22 +382,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
     if (!skill) return c.json({ error: "not_found" } as const, 404);
-    const [skillCatalog] = await db
-      .select({ catalogSkillKey: trainingSkills.catalogSkillKey })
-      .from(trainingSkills)
-      .where(eq(trainingSkills.id, skill.id))
-      .limit(1);
-    if (!skillCatalog) return c.json({ error: "not_found" } as const, 404);
-    return c.json(
-      await loadContextualProgress(
-        {
-          id: skill.id,
-          confidence: skill.confidence,
-          catalogSkillKey: skillCatalog.catalogSkillKey,
-        },
-        new Date(),
-      ),
-    );
+    return c.json(await loadContextualProgress(skill, new Date()));
   })
   .post("/:id/goals/:goalId/skills", zValidator("json", trainingSkillSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));

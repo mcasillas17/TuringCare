@@ -9,6 +9,7 @@ export async function findOwnedSkill(userId: string, dogId: string, skillId: str
       goalId: trainingSkills.goalId,
       name: trainingSkills.name,
       confidence: trainingSkills.confidence,
+      catalogSkillKey: trainingSkills.catalogSkillKey,
       position: trainingSkills.position,
       createdAt: trainingSkills.createdAt,
     })

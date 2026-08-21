@@ -50,6 +50,26 @@ async function makeSkill(userId: string) {
     })
     .returning();
   if (!skill) throw new Error("expected skill");
+  return { dog, skill };
+}
+
+async function makeSiblingSkill(dogId: string) {
+  const [goal] = await db
+    .insert(trainingGoals)
+    .values({ dogId, goal: "Reliable down" })
+    .returning();
+  if (!goal) throw new Error("expected goal");
+
+  const [skill] = await db
+    .insert(trainingSkills)
+    .values({
+      goalId: goal.id,
+      name: "Down",
+      confidence: 3,
+      catalogSkillKey: "basic-manners.down",
+    })
+    .returning();
+  if (!skill) throw new Error("expected skill");
   return skill;
 }
 
@@ -81,7 +101,8 @@ describe("loadContextualProgress", () => {
   it("includes the exact lower bound and excludes stale, future, and incomplete evidence", async () => {
     const user = await createTestUser();
     users.push(user);
-    const skill = await makeSkill(user.userId);
+    const { dog, skill } = await makeSkill(user.userId);
+    const siblingSkill = await makeSiblingSkill(dog.id);
     const cutoff = new Date(NOW.getTime() - 21 * DAY_MS);
     const recent = new Date(NOW.getTime() - DAY_MS);
 
@@ -92,6 +113,11 @@ describe("loadContextualProgress", () => {
     await insertSession(skill.id, {
       occurredAt: recent,
       practiceDay: "2026-08-20",
+    });
+    await insertSession(siblingSkill.id, {
+      occurredAt: NOW,
+      outcome: "too_hard",
+      practiceDay: "2026-08-21",
     });
 
     await insertSession(skill.id, {

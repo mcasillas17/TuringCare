@@ -32,6 +32,7 @@ export async function loadContextualProgress(
     })
     .from(practiceSessions)
     .where(
+      // Keep SQL eligibility a superset of pure policy; pure policy intentionally drops all-null contexts.
       and(
         eq(practiceSessions.skillId, skill.id),
         gte(practiceSessions.occurredAt, startsAt),
