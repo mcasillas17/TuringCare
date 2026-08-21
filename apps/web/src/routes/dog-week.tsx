@@ -405,18 +405,24 @@ export function DogWeek() {
         />
       )}
 
-      {!focusError && !focusLoading && skills.length === 0 ? (
-        <section className="space-y-3 rounded border border-silver bg-white p-6 text-center">
-          <p className="text-slate-soft">{t("week.pickFocus")}</p>
-          <Button type="button" className="bg-slate text-cream" onClick={() => setPickerOpen(true)}>
-            {t("week.editFocus")}
-          </Button>
-          <div>
-            <Link to={`/my/dogs/${id}/training`} className="text-sm text-copper hover:underline">
-              {t("week.goToTraining")}
-            </Link>
-          </div>
-        </section>
+      {skills.length === 0 ? (
+        focusLoading || focusError ? null : (
+          <section className="space-y-3 rounded border border-silver bg-white p-6 text-center">
+            <p className="text-slate-soft">{t("week.pickFocus")}</p>
+            <Button
+              type="button"
+              className="bg-slate text-cream"
+              onClick={() => setPickerOpen(true)}
+            >
+              {t("week.editFocus")}
+            </Button>
+            <div>
+              <Link to={`/my/dogs/${id}/training`} className="text-sm text-copper hover:underline">
+                {t("week.goToTraining")}
+              </Link>
+            </div>
+          </section>
+        )
       ) : (
         <WeekGrid
           focusSkills={skills}

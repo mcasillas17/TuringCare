@@ -862,6 +862,7 @@ describe("DogWeek", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent("Loading…");
     expect(screen.queryByText("Pick one skill to focus on this week")).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
   it("keeps a saved session and the confirmed safety report available after an evidence failure", async () => {
