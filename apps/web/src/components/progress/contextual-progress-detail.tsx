@@ -242,22 +242,18 @@ export function ContextualProgressDetail({
 }) {
   const { t, locale } = useI18n();
   const recordEvent = useRecordContextualProgressEvent(dogId);
-  const viewedResult = useRef<string | null>(null);
-
-  const resultKey = data
-    ? `${data.policyVersion}|${data.curriculumLevel}|${serializeContext(data.strongestContext?.context)}`
-    : null;
+  const hasRecordedView = useRef(false);
 
   useEffect(() => {
-    if (isLoading || isError || !data || !resultKey || viewedResult.current === resultKey) return;
-    viewedResult.current = resultKey;
+    if (isLoading || isError || !data || hasRecordedView.current) return;
+    hasRecordedView.current = true;
     recordEvent.mutate({
       name: "training.context_insight_viewed",
       surface: "skill_detail",
       strongestStatus: data.strongestContext?.status ?? null,
       hasNextAction: Boolean(data.nextPracticeAction),
     });
-  }, [data, isError, isLoading, recordEvent, resultKey]);
+  }, [data, isError, isLoading, recordEvent]);
 
   const sectionId = `context-progress-${skillId}`;
 
@@ -281,7 +277,7 @@ export function ContextualProgressDetail({
           {t("contextProgress.title")}
         </h5>
         <div className="mt-2 space-y-2 text-sm text-slate-soft">
-          <p role="alert">{t("contextProgress.loadError")}</p>
+          <output>{t("contextProgress.loadError")}</output>
           <Button type="button" variant="outline" onClick={() => void refetch()}>
             {t("contextProgress.retry")}
           </Button>

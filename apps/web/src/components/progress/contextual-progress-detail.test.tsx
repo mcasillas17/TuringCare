@@ -6,7 +6,7 @@ import type {
   ExactContextEvidence,
   NextPracticeAction,
 } from "@turingcare/shared";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ContextualProgressDetail } from "./contextual-progress-detail";
 
 vi.mock("@/lib/contextual-progress", async () => {
@@ -93,9 +93,14 @@ function setup(
 }
 
 describe("ContextualProgressDetail", () => {
-  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
 
   it("shows the reliable strongest exact context with window, level, dates, and evidence", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-21T12:00:00.000Z"));
     setup();
 
     expect(screen.getByRole("heading", { name: "Context progress" })).toBeInTheDocument();
@@ -182,10 +187,10 @@ describe("ContextualProgressDetail", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders an alert with a retry control when loading fails", () => {
+  it("renders a status with a retry control when loading fails", () => {
     const { refetch } = setup({ data: undefined, isError: true });
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load context progress.");
+    expect(screen.getByRole("status")).toHaveTextContent("Couldn't load context progress.");
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(refetch).toHaveBeenCalledOnce();
   });
@@ -224,7 +229,7 @@ describe("ContextualProgressDetail", () => {
     expect(onUseNextAction).toHaveBeenCalledWith(nextPracticeAction.context);
   });
 
-  it("records one view event for one mounted result despite rerenders", () => {
+  it("records one view event for one mounted surface despite data changes and rerenders", () => {
     const mutate = vi.fn();
     vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
       mutate,
@@ -254,7 +259,7 @@ describe("ContextualProgressDetail", () => {
         <ContextualProgressDetail
           dogId="dog-1"
           skillId="skill-1"
-          data={makeData()}
+          data={makeData({ policyVersion: "2026-08-21" })}
           isLoading={false}
           isError={false}
           refetch={vi.fn()}
@@ -264,5 +269,43 @@ describe("ContextualProgressDetail", () => {
     );
 
     expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("records a new view event after the detail surface remounts", () => {
+    const mutate = vi.fn();
+    vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
+      mutate,
+    } as never);
+
+    const first = render(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData()}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+    first.unmount();
+
+    render(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData()}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(mutate).toHaveBeenCalledTimes(2);
   });
 });
