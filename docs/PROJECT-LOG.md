@@ -1125,4 +1125,4 @@ deduplication, adds its mounted regression, and removes redundant action-return
 and pre-lock-clock plumbing.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Code commits: `59c26a2..7f659d9` on `feat/contextual-progress-insights`.
+- Code commits: `59c26a2..6b9d1b2` on `feat/contextual-progress-insights`.

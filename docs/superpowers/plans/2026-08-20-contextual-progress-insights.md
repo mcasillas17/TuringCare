@@ -1,6 +1,7 @@
 # Contextual Progress Insights Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Execution record:** This plan was implemented task-by-task with isolated
+> implementers and two-stage reviews. Checkboxes record completed work.
 
 **Goal:** Ship the first Personalized Training Gate 2 slice: current-level exact-context reliability, one conservative next-practice action, a compact This Week summary, and full supporting evidence in expanded skill detail.
 
@@ -2121,13 +2122,13 @@ Invoke `receiving-code-review`. For each finding:
 - fix valid findings using TDD;
 - rerun the smallest affected test immediately.
 
-- [ ] **Step 5: Repeat reviews until both are clean**
+- [x] **Step 5: Repeat reviews until both are clean**
 
 After every accepted fix, rerun both whole-branch reviewers. Stop only when both
 return no substantive correctness, security, UX, or coverage findings. Do not
 ask one reviewer to validate the other.
 
-- [ ] **Step 6: Refresh the full gate after the last change**
+- [x] **Step 6: Refresh the full gate after the last change**
 
 Repeat Step 1 after the latest code edit. Earlier output is stale.
 
