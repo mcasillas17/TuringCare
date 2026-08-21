@@ -6,9 +6,9 @@ import {
   durationBandValues,
   environmentValues,
   practiceDimensionValues,
+  practiceEvidenceFields,
   practiceEvidenceSchema,
   practiceOutcomeValues,
-  practicedTargetVariantValues,
   safetySignalValues,
 } from "./practice-evidence";
 
@@ -53,7 +53,20 @@ describe("practice evidence vocabularies", () => {
       "injury_or_pain",
       "severe_fear_or_panic",
     ]);
-    expect(practicedTargetVariantValues).toEqual(["primary", "fallback"]);
+    expect(practiceEvidenceFields.practicedTarget).toBeDefined();
+    expect(
+      practiceEvidenceSchema.parse({
+        practicedTarget: {
+          suggestionId: "00000000-0000-4000-8000-000000000001",
+          variant: "fallback",
+        },
+      }),
+    ).toEqual({
+      practicedTarget: {
+        suggestionId: "00000000-0000-4000-8000-000000000001",
+        variant: "fallback",
+      },
+    });
   });
 });
 

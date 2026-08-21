@@ -60,8 +60,7 @@ export const safetySignalValues = [
 ] as const;
 export type SafetySignalType = (typeof safetySignalValues)[number];
 
-export const practicedTargetVariantValues = ["primary", "fallback"] as const;
-export type PracticedTargetVariant = (typeof practicedTargetVariantValues)[number];
+const practicedTargetVariantValues = ["primary", "fallback"] as const;
 
 export const easingStrategyValues = [
   "add_cue_help",
@@ -94,7 +93,7 @@ export const practiceEvidenceFields = {
     .optional(),
 };
 
-export type PracticeEvidenceAnchorInput = {
+type PracticeEvidenceAnchorInput = {
   outcome?: PracticeOutcome | null;
   cueSupport?: CueSupport | null;
   environment?: PracticeEnvironment | null;
@@ -104,7 +103,7 @@ export type PracticeEvidenceAnchorInput = {
   confirmCurrentLevel?: true;
   practicedTarget?: {
     suggestionId: string;
-    variant: PracticedTargetVariant;
+    variant: "primary" | "fallback";
   } | null;
 };
 
