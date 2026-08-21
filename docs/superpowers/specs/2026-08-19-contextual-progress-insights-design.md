@@ -347,7 +347,14 @@ is trusted. No database migration is required for this anchor.
 Expose `GET /api/dogs/:id/skills/:skillId/contextual-progress` beneath the
 existing owned dog and skill hierarchy. It returns the full contract and must
 call `findOwnedDog` and `findOwnedSkill`, returning `404` for cross-owner or
-missing resources.
+missing resources. Validate both route parameters with the repository UUID
+schema before either ownership query; malformed IDs use the same
+`{ error: "not_found" }` `404` response and must not reach Drizzle.
+
+Expose `POST /api/dogs/:id/contextual-progress/events` beneath the same owned
+dog route. Validate the dog UUID before the ownership query and before
+telemetry recording. A malformed dog ID returns the same privacy-safe
+`{ error: "not_found" }` `404` and records no event.
 
 The existing focus response adds one compact `contextualProgressSummary` per
 returned focus skill. The loader derives all returned summaries from one
@@ -414,6 +421,12 @@ catalogs.
   render the genuine empty-focus state. Cached focus data remains usable during
   a background error. An unavailable per-skill contextual summary exposes an
   inline retry without disabling the week grid.
+- Weekly recommendation suppression is fail-closed for a relevant focus query
+  error or a current-week suggestion query error, including when cached data is
+  still present. Cached evidence, the week grid, and practice logging remain
+  usable; Retry remains available, but suggestion/context action CTAs and their
+  telemetry stay suppressed until a successful response settles. A cold focus
+  load shows loading only, not the pick-focus empty state.
 - Active safety suppression removes `nextPracticeAction` and action-derived
   synthetic `not_observed` rows, preserves observed evidence/status rows,
   renders the existing localized safety/referral guidance, and records no
@@ -425,7 +438,17 @@ catalogs.
 - During background revalidation, `isFetching` on either suggestion or focus
   query conservatively suppresses cached suggestion exercises/actions and all
   contextual next-action CTAs and telemetry. The week grid and practice
-  logging controls remain available.
+  logging controls remain available. Skill detail receives its own
+  `isFetching` state: cached evidence and session controls remain visible while
+  its next-practice CTA and action telemetry are suppressed, then restore after
+  a settled safe result. A detail query error with cached data preserves that
+  evidence and Retry but fails closed on actions until a successful retry.
+- After weekly session creation awaits, `DogWeek` re-checks a ref-held latest
+  recommendation state (settled, successful, current-week, current-skill,
+  unsuppressed suggestion). If safety, revalidation, or an error became active,
+  the capture is manual with `suggestionId: null` and
+  `usesAuditedSuggestion: false`; the UI allows explicit current-level
+  confirmation and never submits `practicedTarget`.
 - Sparse evidence shows a neutral capture prompt.
 - A Developing context whose latest result is `too_hard` shows support-oriented
   language and never a harder next step.
@@ -512,6 +535,9 @@ Cover:
 - Not observed never presented as failure;
 - inline insight errors preserving practice controls;
 - weekly cold-error Retry/Edit focus state and per-skill unavailable Retry;
+- cached skill-detail evidence with `isFetching` or an error suppressing its
+  next-practice CTA and action telemetry, then restoring the CTA after a safe
+  retry;
 - session form structured-field submission and optional omission;
 - current-level confirmation copy, submission, and conflict handling;
 - all safety-producing mutation families invalidate the three dog-scoped
@@ -520,7 +546,13 @@ Cover:
   exercise/CTA, and no next-action telemetry;
 - either recommendation query's `isFetching` suppresses cached CTAs, while
   settled safe data restores them;
-- suggestion errors still preserve contextual safety guidance;
+- suggestion/focus errors suppress cached CTAs and view/action telemetry while
+  preserving cached evidence, Retry, and practice logging; settled retry
+  restores telemetry with the correct `hasNextAction` value;
+- awaited weekly session creation fails closed when cached suggestions become
+  unsafe, revalidating, or errored, including omission of `practicedTarget`;
+- malformed dog/skill UUIDs on the two contextual routes return privacy-safe
+  `404` responses before database access and record no telemetry;
 - English and Spanish catalog parity;
 - keyboard, screen-reader, contrast, and mobile layout behavior.
 

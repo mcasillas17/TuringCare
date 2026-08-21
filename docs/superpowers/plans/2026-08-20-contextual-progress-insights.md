@@ -960,6 +960,8 @@ Assert:
 - manual current-level evidence included;
 - another owner's dog or skill returns `404`;
 - a skill belonging to a different owned dog returns `404`;
+- malformed dog or skill UUIDs return the same `{ error: "not_found" }` `404`
+  before Drizzle;
 - custom skill evidence returns observed rows but no synthetic Not observed row;
 - active safety removes an action-derived synthetic `not_observed` row while
   preserving observed Reliable/Developing rows;
@@ -1035,6 +1037,11 @@ The SQL bounds prove that the existing `(skill_id, occurred_at)` index applies.
 Keep the same defensive filters in the pure policy.
 
 - [ ] **Step 4: Add the owned route**
+
+Validate both `:id` and `:skillId` with the existing repository UUID schema
+before calling `findOwnedDog` or `findOwnedSkill`. A malformed value must
+return `{ error: "not_found" }` with status `404`, indistinguishable from a
+missing or cross-owner resource.
 
 Add after the existing progress route:
 
@@ -1230,6 +1237,8 @@ POST /api/dogs/:id/contextual-progress/events
 Assert an authenticated owner receives `202`, another owner receives `404`,
 unknown enum values receive `400`, and the stored event receives the session
 user ID rather than any client identity.
+- a malformed dog UUID returns `{ error: "not_found" }` with `404` before the
+  ownership query and records no telemetry.
 
 - [ ] **Step 2: Run and confirm RED**
 
@@ -1250,6 +1259,10 @@ Add to `KNOWN_EVENTS`:
 ```
 
 Do not add them to `CLIENT_EVENTS`. Add:
+
+Validate `:id` with the existing repository UUID schema before
+`findOwnedDog`; malformed IDs return the same privacy-safe `404` and must not
+record an event.
 
 ```ts
 .post(
@@ -1599,6 +1612,10 @@ Cover:
   safety/referral guidance, removes action-derived synthetic `not_observed`
   rows, preserves observed evidence rows, and removes the practice CTA/action
   telemetry;
+- cached detail data keeps its evidence visible while `isFetching` suppresses
+  the next-practice CTA and action telemetry;
+- cached detail data remains visible but fails closed on actions after a query
+  error, with Retry restoring the CTA only after a successful result;
 - CTA calls the telemetry mutation then opens the existing session form
   prefilled with the recommended context;
 - one view event per mounted detail result, not per rerender.
@@ -1778,6 +1795,13 @@ Cover:
 - either suggestion or focus query `isFetching` suppresses cached suggestion
   exercises/actions and contextual action CTAs, while settled safe data
   restores the CTAs;
+- a relevant focus error or current-week suggestion error suppresses cached
+  suggestion/context actions and view/action telemetry while preserving Retry,
+  cached evidence, and the week-grid logging controls; telemetry resumes only
+  after a settled successful retry;
+- an awaited session creation re-checks the latest recommendation eligibility
+  and falls back to manual capture when safety, revalidation, or an error
+  becomes active, never sending `practicedTarget`;
 - initial focus failure offers Retry and Edit focus without claiming an empty
   focus, while cached focus controls remain enabled;
 

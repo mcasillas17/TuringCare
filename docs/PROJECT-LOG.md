@@ -1066,7 +1066,12 @@ headings semantically nested, and removes action-derived synthetic
 hardening centralizes the three dog-scoped suggestion/focus/contextual-progress
 prefix invalidations across safety-producing web mutations, awaits their
 refetches, and conservatively suppresses stale recommendations during
-`isFetching` revalidation while preserving practice logging.
+`isFetching` revalidation or relevant query errors while preserving practice
+logging. Awaited weekly session creation now re-checks the latest suggestion
+eligibility and fails closed to manual capture when safety or revalidation
+changes. Skill detail preserves cached evidence while failing closed on
+revalidation/error actions, and both new contextual routes reject malformed
+UUIDs with privacy-safe `404` responses before database access.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Commits: `59c26a2..b8ba739` on `feat/contextual-progress-insights`.
+- Commits: `59c26a2..ce274b5` on `feat/contextual-progress-insights`.
