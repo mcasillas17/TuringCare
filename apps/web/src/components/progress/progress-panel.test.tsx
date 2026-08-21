@@ -6,7 +6,7 @@ import type { ProgressGoal } from "@/lib/progress";
 import * as catalogLib from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { CatalogTemplate, ContextualProgress } from "@turingcare/shared";
+import type { CatalogTemplate, ContextualProgress, SuggestionSafety } from "@turingcare/shared";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -90,6 +90,26 @@ const goals: ProgressGoal[] = [
     ],
   },
 ];
+
+const goalsWithTwoSkills: ProgressGoal[] = goals.map((goal) => ({
+  ...goal,
+  skills: [
+    ...goal.skills,
+    {
+      id: "s2",
+      name: "Stay",
+      confidence: 2,
+      position: 1,
+      catalogSkillKey: null,
+      sessionCount: 0,
+      firstSessionAt: null,
+      lastSessionAt: null,
+      lastNote: null,
+      sessions: [],
+      milestones: [],
+    },
+  ],
+}));
 
 const catalog: CatalogTemplate[] = [
   {
@@ -179,9 +199,16 @@ const emptyActionContextData = {
   exactContexts: [],
 } satisfies ContextualProgress;
 
+const activeSafety = {
+  suppressed: true,
+  ruleId: "reported_injury_or_pain",
+  referral: "veterinarian",
+} satisfies SuggestionSafety;
+
 function setup({
   withContext = false,
   customSkill = false,
+  multipleSkills = false,
   data = contextualData,
   withHashNavigator = false,
   contextualFetching = false,
@@ -190,19 +217,21 @@ function setup({
 }: {
   withContext?: boolean;
   customSkill?: boolean;
+  multipleSkills?: boolean;
   data?: ContextualProgress;
   withHashNavigator?: boolean;
   contextualFetching?: boolean;
   contextualError?: boolean;
   contextualLoading?: boolean;
 } = {}) {
+  const sourceGoals = multipleSkills ? goalsWithTwoSkills : goals;
   const renderedGoals =
     withContext && !customSkill
-      ? goals.map((goal) => ({
+      ? sourceGoals.map((goal) => ({
           ...goal,
           skills: goal.skills.map((skill) => ({ ...skill, catalogSkillKey: "sit" })),
         }))
-      : goals;
+      : sourceGoals;
   vi.mocked(progressLib.useProgress).mockReturnValue({
     data: renderedGoals,
     isLoading: false,
@@ -244,17 +273,19 @@ function setup({
   vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
     mutate: recordEvent,
   } as never);
-  render(
+  const queryClient = new QueryClient();
+  const renderPanel = () => (
     <LocaleProvider>
-      <QueryClientProvider client={new QueryClient()}>
+      <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={[`${window.location.pathname}${window.location.hash}`]}>
           {withHashNavigator && <HashNavigator />}
           <ProgressPanel dogId="d1" />
         </MemoryRouter>
       </QueryClientProvider>
-    </LocaleProvider>,
+    </LocaleProvider>
   );
-  return { mutateAsync, recordEvent };
+  const rendered = render(renderPanel());
+  return { mutateAsync, recordEvent, rerender: () => rendered.rerender(renderPanel()) };
 }
 
 describe("ProgressPanel", () => {
@@ -318,6 +349,59 @@ describe("ProgressPanel", () => {
     expect(
       screen.queryByRole("button", { name: "Use this practice plan" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("coordinates one page-level referral alert across expanded skill details", async () => {
+    setup({
+      withContext: true,
+      multipleSkills: true,
+      data: {
+        ...contextualData,
+        nextPracticeAction: null,
+        safety: activeSafety,
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
+    fireEvent.click(screen.getByRole("button", { name: /expand stay/i }));
+
+    await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(1));
+    expect(
+      screen.getByRole("heading", { name: "Let's pause training suggestions", level: 3 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Please book a veterinary appointment/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /collapse sit/i }));
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /collapse stay/i }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+
+  it("clears the page-level referral alert when an expanded detail clears safety", async () => {
+    const { rerender } = setup({
+      withContext: true,
+      data: {
+        ...contextualData,
+        nextPracticeAction: null,
+        safety: activeSafety,
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(
+      screen.getByRole("heading", { name: "Let's pause training suggestions", level: 3 }),
+    ).toBeInTheDocument();
+    vi.mocked(contextualProgressLib.useContextualProgress).mockReturnValue({
+      data: { ...contextualData, nextPracticeAction: null, safety: null },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    rerender();
+
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 
   it("expands and scrolls to the owned skill named by the training hash", async () => {

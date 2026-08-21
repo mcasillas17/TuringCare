@@ -36,6 +36,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+type AuditedAnchorOmissionReason = "cache_pending" | "cache_ineligible";
+
+type PendingOutcome = {
+  scope: string;
+  skillId: string;
+  sessionId: string;
+  suggestionId: string | null;
+  originalAuditedSuggestionId: string | null;
+  hasPrimary: boolean;
+  hasFallback: boolean;
+  dimensions: PracticeDimension[];
+  currentLevel: number;
+  usesAuditedSuggestion: boolean;
+  auditedAnchorOmissionReason?: AuditedAnchorOmissionReason;
+};
+
 export function DogWeek() {
   const { t, locale } = useI18n();
   const { id = "" } = useParams();
@@ -69,17 +85,7 @@ export function DogWeek() {
   } = useSuggestion(id, weekKey, currentTimezoneOffsetMinutes);
   const suggestionAction = useSuggestionAction(id, weekKey);
   const advancementDecision = useAdvancementDecision(id);
-  const [pendingOutcome, setPendingOutcome] = useState<{
-    scope: string;
-    skillId: string;
-    sessionId: string;
-    suggestionId: string | null;
-    hasPrimary: boolean;
-    hasFallback: boolean;
-    dimensions: PracticeDimension[];
-    currentLevel: number;
-    usesAuditedSuggestion: boolean;
-  } | null>(null);
+  const [pendingOutcome, setPendingOutcome] = useState<PendingOutcome | null>(null);
   const logDisabled = logSession.isPending || (weekKey === currentWeekKey && suggestionLoading);
 
   const skills = focusSkills ?? [];
@@ -170,6 +176,7 @@ export function DogWeek() {
             hasPrimary: false,
             hasFallback: false,
             usesAuditedSuggestion: false,
+            auditedAnchorOmissionReason: "cache_ineligible",
           }
         : current,
     );
@@ -213,6 +220,7 @@ export function DogWeek() {
       skillId,
       sessionId: created.session.id,
       suggestionId: matchingSuggestion?.suggestionId ?? null,
+      originalAuditedSuggestionId: matchingSuggestion?.suggestionId ?? null,
       hasPrimary: Boolean(matchingSuggestion?.primary),
       hasFallback: Boolean(matchingSuggestion?.fallback),
       dimensions: matchingSuggestion?.requestedDimensions ?? latestFocusSkill.dimensions,
@@ -231,18 +239,22 @@ export function DogWeek() {
     if (!pendingOutcome) return;
     const target = pendingOutcome;
     const { variant, ...evidence } = input;
-    const auditedTarget =
-      target.usesAuditedSuggestion &&
-      target.scope === pendingScope &&
-      activeScope.current === target.scope &&
-      target.suggestionId !== null
-        ? getAuditedSuggestionTarget(queryClient, {
+    const originalAuditedSuggestionId = target.originalAuditedSuggestionId;
+    const canReadAuditedTarget =
+      target.scope === pendingScope && activeScope.current === target.scope;
+    const auditedTargetState =
+      originalAuditedSuggestionId !== null && canReadAuditedTarget
+        ? getAuditedSuggestionTargetState(queryClient, {
             dogId: id,
             weekKey,
             currentWeekKey,
             skillId: target.skillId,
-            suggestionId: target.suggestionId,
+            suggestionId: originalAuditedSuggestionId,
           })
+        : null;
+    const auditedTarget =
+      target.usesAuditedSuggestion && auditedTargetState?.status === "eligible"
+        ? auditedTargetState.target
         : null;
     const auditedSuggestionId =
       auditedTarget &&
@@ -251,6 +263,13 @@ export function DogWeek() {
         : auditedTarget.suggestion.primary)
         ? auditedTarget.suggestion.suggestionId
         : null;
+    const auditedAnchorOmissionReason =
+      target.auditedAnchorOmissionReason ??
+      (originalAuditedSuggestionId && !auditedTarget
+        ? auditedTargetState?.status === "pending"
+          ? "cache_pending"
+          : "cache_ineligible"
+        : undefined);
     try {
       const result = await setEvidence.mutateAsync({
         skillId: target.skillId,
@@ -271,7 +290,9 @@ export function DogWeek() {
             ? t("practice.anchorRejectedTargetLocked")
             : result.anchorRejected
               ? t("practice.anchorRejectedGeneric")
-              : t("practice.outcomeSaved");
+              : auditedAnchorOmissionReason
+                ? t("practice.auditedAnchorOmitted")
+                : t("practice.outcomeSaved");
       toast.success(feedback);
     } catch {
       toast.error(t("practice.outcomeFailed"));

@@ -625,6 +625,8 @@ export const es = {
       "Se guardó la práctica, pero no se registró la confirmación del nivel actual porque esta práctica ya tiene otro anclaje de entrenamiento.",
     anchorRejectedGeneric:
       "Se guardó la práctica, pero no se registró la confirmación del nivel actual.",
+    auditedAnchorOmitted:
+      "La respuesta de práctica se guardó, pero no quedó vinculada a la sugerencia de entrenamiento original.",
     contextTitle: "Detalles de la práctica",
     contextOptional: "opcional",
     dimCueSupport: "ayuda",

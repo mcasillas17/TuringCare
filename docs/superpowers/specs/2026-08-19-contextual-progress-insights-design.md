@@ -517,6 +517,13 @@ Server-side telemetry records scalar, privacy-safe events:
 - `training.context_next_action_used`, with rule identifier and whether it
   repeated, increased, or reduced one difficulty dimension.
 
+`training.context_next_action_used` intentionally has surface-specific
+semantics. On `week`, it records recommendation intent/navigation to the
+supporting detail. On `skill_detail`, it records that the owner applied the
+recommended context to a practice capture. Dashboard queries must segment by
+`surface`; they must not sum these events as the same conversion. This is
+approved product behavior, not a telemetry inconsistency.
+
 Telemetry never copies notes, context labels derived from free text, dog names,
 or client-supplied identity. View and action events are accepted through an
 authenticated server route that supplies the user identity and validates the

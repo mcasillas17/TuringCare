@@ -87,6 +87,7 @@ describe("i18n catalogs", () => {
         "anchorRejectedPracticeDay",
         "anchorRejectedTargetLocked",
         "anchorRejectedGeneric",
+        "auditedAnchorOmitted",
         "contextTitle",
         "contextOptional",
         "dimCueSupport",

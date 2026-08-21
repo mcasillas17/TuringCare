@@ -10,6 +10,7 @@ import type {
   ExactContextEvidence,
   ExactPracticeContext,
   NextPracticeAction,
+  SuggestionSafety,
 } from "@turingcare/shared";
 import { useEffect, useRef } from "react";
 import {
@@ -158,6 +159,8 @@ export function ContextualProgressDetail({
   isError,
   refetch,
   onUseNextAction,
+  showSafetyNotice = true,
+  onSafetyChange,
 }: {
   dogId: string;
   skillId: string;
@@ -167,12 +170,21 @@ export function ContextualProgressDetail({
   isError: boolean;
   refetch: () => unknown;
   onUseNextAction: (context: ExactPracticeContext) => boolean;
+  showSafetyNotice?: boolean;
+  onSafetyChange?: (safety: SuggestionSafety | null) => void;
 }) {
   const { t, locale } = useI18n();
   const recordEvent = useRecordContextualProgressEvent(dogId);
   const seenResultKeys = useRef(new Set<string>());
+  const reportedSafety = data?.safety ?? null;
   const availableNextPracticeAction =
     isFetching || isError || data?.safety ? null : (data?.nextPracticeAction ?? null);
+
+  useEffect(() => {
+    if (!onSafetyChange) return;
+    onSafetyChange(reportedSafety);
+    return () => onSafetyChange(null);
+  }, [onSafetyChange, reportedSafety]);
 
   const resultKey = data
     ? `${data.policyVersion}|${data.curriculumLevel}|${serializeContext(data.strongestContext?.context)}|${data.strongestContext?.status ?? "null"}|${Boolean(availableNextPracticeAction)}|${data.safety?.ruleId ?? "none"}`
@@ -251,7 +263,7 @@ export function ContextualProgressDetail({
           </Button>
         </div>
       )}
-      {data.safety && <SafetyNotice safety={data.safety} headingLevel="h6" />}
+      {showSafetyNotice && data.safety && <SafetyNotice safety={data.safety} headingLevel="h6" />}
       <StrongestContext
         evidence={data.strongestContext}
         headingId={`${sectionId}-strongest`}

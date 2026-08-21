@@ -1,6 +1,7 @@
 import { ContextualProgressDetail } from "@/components/progress/contextual-progress-detail";
 import { MilestoneStepper } from "@/components/progress/milestone-stepper";
 import { SessionForm } from "@/components/progress/session-form";
+import { SafetyNotice } from "@/components/training/safety-notice";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useContextualProgress } from "@/lib/contextual-progress";
@@ -23,11 +24,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   type ExactPracticeContext,
   type PracticeDimension,
+  type SuggestionSafety,
   type TrainingSkillInput,
   practiceDimensionValues,
   trainingSkillSchema,
 } from "@turingcare/shared";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -58,7 +60,44 @@ export function ProgressPanel({ dogId }: { dogId: string }) {
   const { data, isLoading, isError } = useProgress(dogId);
   const goals = data ?? [];
   const [deepLinkedSkillId, setDeepLinkedSkillId] = useState<string | null>(null);
+  const [detailSafetyBySkillId, setDetailSafetyBySkillId] = useState<
+    Record<string, SuggestionSafety>
+  >({});
   const { hash } = useLocation();
+
+  const handleDetailSafetyChange = useCallback(
+    (skillId: string, safety: SuggestionSafety | null) => {
+      setDetailSafetyBySkillId((current) => {
+        if (safety) {
+          const previous = current[skillId];
+          if (
+            previous?.suppressed === safety.suppressed &&
+            previous.ruleId === safety.ruleId &&
+            previous.referral === safety.referral
+          ) {
+            return current;
+          }
+          return { ...current, [skillId]: safety };
+        }
+        if (!(skillId in current)) return current;
+        const next = { ...current };
+        delete next[skillId];
+        return next;
+      });
+    },
+    [],
+  );
+  let pageSafety: SuggestionSafety | null = null;
+  for (const goal of goals) {
+    for (const skill of goal.skills) {
+      const safety = detailSafetyBySkillId[skill.id];
+      if (safety) {
+        pageSafety = safety;
+        break;
+      }
+    }
+    if (pageSafety) break;
+  }
 
   useEffect(() => {
     if (isLoading || !data) return;
@@ -70,6 +109,7 @@ export function ProgressPanel({ dogId }: { dogId: string }) {
 
   return (
     <div className="space-y-3">
+      {pageSafety && <SafetyNotice safety={pageSafety} headingLevel="h3" />}
       {isLoading && <p className="text-slate-soft">{t("common.loading")}</p>}
       {isError && <p className="text-red-600">{t("progress.loadError")}</p>}
       {!isLoading && !isError && goals.length === 0 && (
@@ -83,6 +123,7 @@ export function ProgressPanel({ dogId }: { dogId: string }) {
             dogId={dogId}
             goal={goal}
             deepLinkedSkillId={deepLinkedSkillId}
+            onDetailSafetyChange={handleDetailSafetyChange}
           />
         ))}
     </div>
@@ -93,10 +134,12 @@ function GoalSection({
   dogId,
   goal,
   deepLinkedSkillId,
+  onDetailSafetyChange,
 }: {
   dogId: string;
   goal: ProgressGoal;
   deepLinkedSkillId: string | null;
+  onDetailSafetyChange: (skillId: string, safety: SuggestionSafety | null) => void;
 }) {
   const { t } = useI18n();
   const removeGoal = useRemoveGoal(dogId);
@@ -130,6 +173,7 @@ function GoalSection({
               dogId={dogId}
               skill={skill}
               deepLinkedSkillId={deepLinkedSkillId}
+              onDetailSafetyChange={onDetailSafetyChange}
             />
           ))}
         </ul>
@@ -192,10 +236,12 @@ function SkillCard({
   dogId,
   skill,
   deepLinkedSkillId,
+  onDetailSafetyChange,
 }: {
   dogId: string;
   skill: ProgressSkill;
   deepLinkedSkillId: string | null;
+  onDetailSafetyChange: (skillId: string, safety: SuggestionSafety | null) => void;
 }) {
   const { t, locale } = useI18n();
   const [expanded, setExpanded] = useState(false);
@@ -215,6 +261,10 @@ function SkillCard({
   const contextualProgress = useContextualProgress(dogId, displaySkill.id, expanded);
   const dimensions = getSessionDimensions(catalogSkill?.dimensions ?? [], recommendedContext);
   const skillRef = useRef<HTMLLIElement>(null);
+  const handleDetailSafetyChange = useCallback(
+    (safety: SuggestionSafety | null) => onDetailSafetyChange(displaySkill.id, safety),
+    [displaySkill.id, onDetailSafetyChange],
+  );
 
   useEffect(() => {
     if (deepLinkedSkillId !== displaySkill.id) return;
@@ -292,6 +342,8 @@ function SkillCard({
             isFetching={contextualProgress.isFetching}
             isError={contextualProgress.isError}
             refetch={contextualProgress.refetch}
+            showSafetyNotice={false}
+            onSafetyChange={handleDetailSafetyChange}
             onUseNextAction={(context) => {
               if (getSessionDimensions([], context).length === 0) {
                 toast.error(t("contextProgress.actionUnavailable"));

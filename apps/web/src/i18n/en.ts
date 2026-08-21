@@ -618,6 +618,8 @@ export const en = {
     anchorRejectedTargetLocked:
       "Practice was saved, but current-level confirmation was not recorded because this practice already has a different training anchor.",
     anchorRejectedGeneric: "Practice was saved, but current-level confirmation was not recorded.",
+    auditedAnchorOmitted:
+      "Practice response was saved, but it was not linked to the original training suggestion.",
     contextTitle: "Practice details",
     contextOptional: "optional",
     dimCueSupport: "help",

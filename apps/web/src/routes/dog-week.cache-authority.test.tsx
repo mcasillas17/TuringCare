@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { TrainingSuggestion } from "@turingcare/shared";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DogWeek } from "./dog-week";
 
@@ -37,6 +38,7 @@ vi.mock("@/lib/api", () => ({
     },
   },
 }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 const weekKey = weekKeyOf(new Date());
 
@@ -225,6 +227,47 @@ describe("DogWeek audited suggestion cache authority", () => {
         },
       }),
     );
+    expect(toast.success).toHaveBeenCalledWith("Thanks — logged.");
+  });
+
+  it("saves without an audited target and reports partial feedback while cache authority is pending", async () => {
+    const refreshedFocus = deferred<ReturnType<typeof response>>();
+    const refreshedSuggestion = deferred<ReturnType<typeof response>>();
+    getFocus
+      .mockResolvedValueOnce(response({ focusSkills: [focusSkill] }))
+      .mockResolvedValueOnce(response({ focusSkills: [focusSkill] }))
+      .mockImplementationOnce(() => refreshedFocus.promise);
+    getSuggestion
+      .mockResolvedValueOnce(response({ suggestion }))
+      .mockResolvedValueOnce(response({ suggestion }))
+      .mockImplementationOnce(() => refreshedSuggestion.promise);
+    postSession.mockResolvedValue(response({ session: { id: "session-1" }, anchorRejected: null }));
+    patchEvidence.mockResolvedValue(response({ anchorRejected: null }));
+    const queryClient = createQueryClient();
+
+    renderWeek(queryClient);
+    await openAuditedCapture();
+
+    beginBackgroundRevalidation(queryClient);
+    await waitFor(() =>
+      expect(queryClient.getQueryState(focusKey("dog-1", weekKey))).toMatchObject({
+        fetchStatus: "fetching",
+        status: "success",
+      }),
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    await waitFor(() =>
+      expect(patchEvidence).toHaveBeenCalledWith({
+        param: { id: "dog-1", skillId: "skill-1", sessionId: "session-1" },
+        json: { outcome: "went_well" },
+      }),
+    );
+    expect(toast.success).toHaveBeenCalledWith(
+      "Practice response was saved, but it was not linked to the original training suggestion.",
+    );
   });
 
   it("downgrades to manual capture when safety appears in the awaited focus refetch", async () => {
@@ -317,6 +360,9 @@ describe("DogWeek audited suggestion cache authority", () => {
         json: { confirmCurrentLevel: true, outcome: "went_well" },
       }),
     );
+    expect(toast.success).toHaveBeenCalledWith(
+      "Practice response was saved, but it was not linked to the original training suggestion.",
+    );
   });
 
   it("preserves an open audited capture through transient revalidation and anchors after it settles safe", async () => {
@@ -407,6 +453,9 @@ describe("DogWeek audited suggestion cache authority", () => {
         json: { confirmCurrentLevel: true, outcome: "went_well" },
       }),
     );
+    expect(toast.success).toHaveBeenCalledWith(
+      "Practice response was saved, but it was not linked to the original training suggestion.",
+    );
   });
 
   it("downgrades an open audited capture when a refetch settles with an error", async () => {
@@ -444,6 +493,9 @@ describe("DogWeek audited suggestion cache authority", () => {
         param: { id: "dog-1", skillId: "skill-1", sessionId: "session-1" },
         json: { confirmCurrentLevel: true, outcome: "went_well" },
       }),
+    );
+    expect(toast.success).toHaveBeenCalledWith(
+      "Practice response was saved, but it was not linked to the original training suggestion.",
     );
   });
 
@@ -484,6 +536,9 @@ describe("DogWeek audited suggestion cache authority", () => {
         param: { id: "dog-1", skillId: "skill-1", sessionId: "session-1" },
         json: { confirmCurrentLevel: true, outcome: "went_well" },
       }),
+    );
+    expect(toast.success).toHaveBeenCalledWith(
+      "Practice response was saved, but it was not linked to the original training suggestion.",
     );
   });
 });
