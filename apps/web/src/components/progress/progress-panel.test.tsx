@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { CatalogTemplate, ContextualProgress } from "@turingcare/shared";
 import { toast } from "sonner";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProgressPanel } from "./progress-panel";
 
 vi.mock("@/lib/progress", async () => {
@@ -40,6 +40,10 @@ vi.mock("@/lib/contextual-progress", async () => {
   return { ...actual, useContextualProgress: vi.fn(), useRecordContextualProgressEvent: vi.fn() };
 });
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+afterEach(() => {
+  window.history.replaceState({}, "", "/");
+});
 
 const goals: ProgressGoal[] = [
   {
@@ -244,6 +248,33 @@ describe("ProgressPanel", () => {
         name: "I practiced this at the current Level 3.",
       }),
     ).not.toBeChecked();
+  });
+
+  it("expands and scrolls to the owned skill named by the training hash", async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    window.history.replaceState({}, "", "#skill-s1");
+
+    setup();
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /collapse sit/i })).toBeInTheDocument(),
+    );
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+  });
+
+  it("ignores a training hash for a skill that is not rendered", async () => {
+    window.history.replaceState({}, "", "#skill-not-owned");
+
+    setup();
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /expand sit/i })).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("button", { name: /collapse sit/i })).not.toBeInTheDocument();
   });
 
   it("updates an already-open blank session form when applying a recommendation", () => {

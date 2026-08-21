@@ -2,6 +2,7 @@ import { OutcomeQuickCapture } from "@/components/progress/outcome-quick-capture
 import { SuggestionCard } from "@/components/training/suggestion-card";
 import { useTuring } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
+import { ContextualProgressSummaryCard } from "@/components/week/contextual-progress-summary";
 import { FocusPicker } from "@/components/week/focus-picker";
 import { WeekGrid } from "@/components/week/week-grid";
 import { WeekNav } from "@/components/week/week-nav";
@@ -18,7 +19,7 @@ import {
   weekKeyAtOffset,
   weekKeyOf,
 } from "@/lib/week";
-import { useFocusWeek } from "@/lib/weekly-focus";
+import { type FocusSkill, useFocusWeek } from "@/lib/weekly-focus";
 import type {
   AdvancementDecision,
   PracticeDimension,
@@ -40,12 +41,11 @@ export function DogWeek() {
   const weekKey = weekKeyOf(monday);
   const timezoneOffsetMinutes = monday.getTimezoneOffset();
   const weekEndTimezoneOffsetMinutes = addDays(monday, 7).getTimezoneOffset();
-  const { data: focusSkills } = useFocusWeek(
-    id,
-    weekKey,
-    timezoneOffsetMinutes,
-    weekEndTimezoneOffsetMinutes,
-  );
+  const {
+    data: focusSkills,
+    isError: focusError,
+    isLoading: focusLoading,
+  } = useFocusWeek(id, weekKey, timezoneOffsetMinutes, weekEndTimezoneOffsetMinutes);
   const logSession = useLogSession(id);
   const deleteSession = useDeleteSession(id);
   const setEvidence = useSetSessionEvidence(id);
@@ -70,7 +70,9 @@ export function DogWeek() {
   } | null>(null);
   const logDisabled = logSession.isPending || (weekKey === currentWeekKey && suggestionLoading);
 
-  const skills = focusSkills ?? [];
+  const availableFocusSkills = useRef<FocusSkill[]>([]);
+  if (focusSkills) availableFocusSkills.current = focusSkills;
+  const skills = focusSkills ?? (focusError && !focusLoading ? availableFocusSkills.current : []);
   const canGoNext = !sameWeek(monday, today);
 
   const sessionCount = skills.reduce((sum, s) => sum + s.sessions.length, 0);
@@ -243,9 +245,31 @@ export function DogWeek() {
       {weekKey === currentWeekKey && suggestionError && (
         <output className="text-sm text-slate-soft">{t("suggestion.loadError")}</output>
       )}
+      {focusError && (
+        <output className="text-sm text-slate-soft">{t("week.focusLoadError")}</output>
+      )}
+      {focusLoading && (
+        <output aria-live="polite" className="text-sm text-slate-soft">
+          {t("common.loading")}
+        </output>
+      )}
 
       {skills.length > 0 && (
         <p className="text-sm text-slate-soft">{t("week.summary", { sessions: sessionCount })}</p>
+      )}
+
+      {skills.length > 0 && (
+        <div className="space-y-3">
+          {skills.map((skill) =>
+            skill.contextualProgress.status === "ready" ? (
+              <ContextualProgressSummaryCard key={skill.skillId} dogId={id} skill={skill} />
+            ) : (
+              <output key={skill.skillId} className="block text-sm text-slate-soft">
+                {t("contextProgress.loadError")}
+              </output>
+            ),
+          )}
+        </div>
       )}
 
       {pendingOutcome && (

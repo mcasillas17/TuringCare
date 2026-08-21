@@ -27,7 +27,7 @@ import {
   practiceDimensionValues,
   trainingSkillSchema,
 } from "@turingcare/shared";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -56,6 +56,18 @@ export function ProgressPanel({ dogId }: { dogId: string }) {
   const { t } = useI18n();
   const { data, isLoading, isError } = useProgress(dogId);
   const goals = data ?? [];
+  const [deepLinkedSkillId, setDeepLinkedSkillId] = useState<string | null>(null);
+  const hashHandled = useRef(false);
+
+  useEffect(() => {
+    if (hashHandled.current || isLoading || !data) return;
+    hashHandled.current = true;
+    const hash = window.location.hash;
+    if (!hash.startsWith("#skill-")) return;
+    const skillId = hash.slice("#skill-".length);
+    if (!data.some((goal) => goal.skills.some((skill) => skill.id === skillId))) return;
+    setDeepLinkedSkillId(skillId);
+  }, [data, isLoading]);
 
   return (
     <div className="space-y-3">
@@ -66,12 +78,27 @@ export function ProgressPanel({ dogId }: { dogId: string }) {
       )}
       {!isLoading &&
         !isError &&
-        goals.map((goal) => <GoalSection key={goal.id} dogId={dogId} goal={goal} />)}
+        goals.map((goal) => (
+          <GoalSection
+            key={goal.id}
+            dogId={dogId}
+            goal={goal}
+            deepLinkedSkillId={deepLinkedSkillId}
+          />
+        ))}
     </div>
   );
 }
 
-function GoalSection({ dogId, goal }: { dogId: string; goal: ProgressGoal }) {
+function GoalSection({
+  dogId,
+  goal,
+  deepLinkedSkillId,
+}: {
+  dogId: string;
+  goal: ProgressGoal;
+  deepLinkedSkillId: string | null;
+}) {
   const { t } = useI18n();
   const removeGoal = useRemoveGoal(dogId);
 
@@ -99,7 +126,12 @@ function GoalSection({ dogId, goal }: { dogId: string; goal: ProgressGoal }) {
       ) : (
         <ul className="space-y-2">
           {goal.skills.map((skill) => (
-            <SkillCard key={skill.id} dogId={dogId} skill={skill} />
+            <SkillCard
+              key={skill.id}
+              dogId={dogId}
+              skill={skill}
+              deepLinkedSkillId={deepLinkedSkillId}
+            />
           ))}
         </ul>
       )}
@@ -157,7 +189,15 @@ function AddSkillForm({ dogId, goalId }: { dogId: string; goalId: string }) {
   );
 }
 
-function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
+function SkillCard({
+  dogId,
+  skill,
+  deepLinkedSkillId,
+}: {
+  dogId: string;
+  skill: ProgressSkill;
+  deepLinkedSkillId: string | null;
+}) {
   const { t, locale } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const [mode, setMode] = useState<"view" | "editing" | "logging">("view");
@@ -175,9 +215,25 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   const catalogSkill = findCatalogSkill(catalog, displaySkill.catalogSkillKey);
   const contextualProgress = useContextualProgress(dogId, displaySkill.id, expanded);
   const dimensions = getSessionDimensions(catalogSkill?.dimensions ?? [], recommendedContext);
+  const skillRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    if (deepLinkedSkillId !== displaySkill.id) return;
+    setExpanded(true);
+    const scroll = () => skillRef.current?.scrollIntoView?.({ block: "start" });
+    if (typeof window.requestAnimationFrame === "function") {
+      const frame = window.requestAnimationFrame(scroll);
+      return () => window.cancelAnimationFrame(frame);
+    }
+    scroll();
+  }, [deepLinkedSkillId, displaySkill.id]);
 
   return (
-    <li className="space-y-3 rounded border border-silver p-3">
+    <li
+      ref={skillRef}
+      id={`skill-${displaySkill.id}`}
+      className="space-y-3 rounded border border-silver p-3"
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-1 items-start gap-2">
           <button

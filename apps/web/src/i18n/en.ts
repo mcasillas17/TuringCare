@@ -580,6 +580,7 @@ export const en = {
     retry: "Retry",
     useAction: "Use this practice plan",
     viewEvidence: "Context evidence",
+    viewAllEvidence: "View all evidence",
     successfulDay: "{days} successful day",
     successfulDays: "{days} successful days",
     lastObserved: "Last observed: {date}",
@@ -741,6 +742,8 @@ export const en = {
     selectFocusSkill: "Focus skill",
     cellLog: "Log {skill} on {day}",
     cellFilled: "{skill} on {day}: {n} sessions",
+    focusLoadError:
+      "Couldn't load this week's focus. Your saved practice controls remain available.",
   },
   brief: {
     title: "Behavior Brief",

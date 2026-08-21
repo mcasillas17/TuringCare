@@ -586,6 +586,7 @@ export const es = {
     retry: "Reintentar",
     useAction: "Usar este plan de práctica",
     viewEvidence: "Evidencia del contexto",
+    viewAllEvidence: "Ver toda la evidencia",
     successfulDay: "{days} día exitoso",
     successfulDays: "{days} días exitosos",
     lastObserved: "Última observación: {date}",
@@ -749,6 +750,8 @@ export const es = {
     selectFocusSkill: "Habilidad en foco",
     cellLog: "Registrar {skill} el {day}",
     cellFilled: "{skill} el {day}: {n} sesiones",
+    focusLoadError:
+      "No se pudo cargar el enfoque de esta semana. Tus controles de práctica guardados siguen disponibles.",
   },
   brief: {
     title: "Resumen de conducta",

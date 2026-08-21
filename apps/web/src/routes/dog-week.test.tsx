@@ -1,4 +1,5 @@
 import { LocaleProvider } from "@/i18n";
+import * as contextualProgressLib from "@/lib/contextual-progress";
 import * as progressLib from "@/lib/progress";
 import * as suggestionLib from "@/lib/suggestion";
 import { weekKeyOf } from "@/lib/week";
@@ -21,6 +22,12 @@ vi.mock("@/lib/weekly-focus", async () => {
     useAddFocus: vi.fn(),
     useRemoveFocus: vi.fn(),
   };
+});
+vi.mock("@/lib/contextual-progress", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/contextual-progress")>(
+    "@/lib/contextual-progress",
+  );
+  return { ...actual, useRecordContextualProgressEvent: vi.fn() };
 });
 vi.mock("@/lib/progress", () => ({
   useProgress: vi.fn(),
@@ -89,6 +96,9 @@ function setup(
   vi.mocked(focusLib.useRemoveFocus).mockReturnValue({
     mutate: vi.fn(),
   } as unknown as ReturnType<typeof focusLib.useRemoveFocus>);
+  vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
+    mutate: vi.fn(),
+  } as never);
   vi.mocked(progressLib.useProgress).mockReturnValue({
     data: [
       {
@@ -190,8 +200,60 @@ describe("DogWeek", () => {
       },
     ]);
     renderWeek();
-    expect(screen.getByText("Recall")).toBeInTheDocument();
+    expect(screen.getAllByText("Recall").length).toBeGreaterThan(0);
     expect(screen.getByText("Reliability")).toBeInTheDocument();
+  });
+
+  it("renders a compact contextual summary above the practice grid", () => {
+    setup([sitFocus]);
+    renderWeek();
+
+    expect(screen.getByRole("heading", { name: "Sit" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Add an outcome and context after practice to see where this skill is becoming reliable.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeEnabled();
+  });
+
+  it("keeps the practice grid usable when contextual progress is unavailable", () => {
+    setup([
+      {
+        ...sitFocus,
+        contextualProgress: { status: "unavailable" },
+      },
+    ]);
+    renderWeek();
+
+    expect(screen.getByRole("status")).toHaveTextContent("Couldn't load context progress.");
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeEnabled();
+  });
+
+  it("keeps stale focus controls usable when the focus query reports an error", () => {
+    setup([sitFocus]);
+    vi.mocked(focusLib.useFocusWeek).mockReturnValue({
+      data: [sitFocus],
+      isLoading: false,
+      isError: true,
+    } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
+    renderWeek();
+
+    expect(screen.getByRole("status")).toHaveTextContent("Couldn't load this week's focus.");
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeEnabled();
+  });
+
+  it("announces focus loading without disabling saved practice controls", () => {
+    setup([sitFocus]);
+    vi.mocked(focusLib.useFocusWeek).mockReturnValue({
+      data: [sitFocus],
+      isLoading: true,
+      isError: false,
+    } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
+    renderWeek();
+
+    expect(screen.getByRole("status")).toHaveTextContent("Loading…");
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeEnabled();
   });
 
   it("logs a session with the selected day's instant and timezone offset", async () => {
