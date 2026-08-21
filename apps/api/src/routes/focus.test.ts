@@ -517,10 +517,16 @@ describe("dogs: weekly focus", () => {
       .update(trainingSkills)
       .set({ catalogSkillKey: "basic-manners.sit" })
       .where(eq(trainingSkills.id, skill.id));
+    await db
+      .update(trainingSkills)
+      .set({ confidence: 2 })
+      .where(eq(trainingSkills.id, customSkill.id));
 
     const now = new Date();
     const older = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
     const recent = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const catalogCurrentLevel = 1;
+    const customCurrentLevel = 2;
     const context = {
       cueSupport: "hand_signal" as const,
       environment: "home_quiet" as const,
@@ -534,7 +540,7 @@ describe("dogs: weekly focus", () => {
         occurredAt: older,
         outcome: "went_well",
         practiceDay: older.toISOString().slice(0, 10),
-        curriculumLevel: 1,
+        curriculumLevel: catalogCurrentLevel,
         curriculumVersion: CURRICULUM_VERSION,
         ...context,
       },
@@ -543,7 +549,7 @@ describe("dogs: weekly focus", () => {
         occurredAt: recent,
         outcome: "went_well",
         practiceDay: recent.toISOString().slice(0, 10),
-        curriculumLevel: 1,
+        curriculumLevel: catalogCurrentLevel,
         curriculumVersion: CURRICULUM_VERSION,
         ...context,
       },
@@ -552,7 +558,7 @@ describe("dogs: weekly focus", () => {
         occurredAt: older,
         outcome: "went_well",
         practiceDay: older.toISOString().slice(0, 10),
-        curriculumLevel: 1,
+        curriculumLevel: customCurrentLevel,
         curriculumVersion: CURRICULUM_VERSION,
         ...context,
       },
@@ -561,7 +567,7 @@ describe("dogs: weekly focus", () => {
         occurredAt: recent,
         outcome: "went_well",
         practiceDay: recent.toISOString().slice(0, 10),
-        curriculumLevel: 1,
+        curriculumLevel: customCurrentLevel,
         curriculumVersion: CURRICULUM_VERSION,
         ...context,
       },
@@ -571,8 +577,12 @@ describe("dogs: weekly focus", () => {
     const perSkillLoader = vi.spyOn(contextualProgressData, "loadContextualProgress");
     const summaries = await contextualProgressData.loadContextualProgressSummaries(
       [
-        { id: skill.id, confidence: 1, catalogSkillKey: "basic-manners.sit" },
-        { id: customSkill.id, confidence: 1, catalogSkillKey: null },
+        {
+          id: skill.id,
+          confidence: catalogCurrentLevel,
+          catalogSkillKey: "basic-manners.sit",
+        },
+        { id: customSkill.id, confidence: customCurrentLevel, catalogSkillKey: null },
       ],
       now,
     );
@@ -580,11 +590,14 @@ describe("dogs: weekly focus", () => {
     expect(selectSpy).toHaveBeenCalledTimes(1);
     expect(perSkillLoader).not.toHaveBeenCalled();
     expect(summaries.get(skill.id)).toMatchObject({
-      strongestContext: { status: "reliable" },
+      strongestContext: { status: "reliable", successfulDistinctDays: 2 },
       nextPracticeAction: { direction: "harder" },
     });
     expect(summaries.get(customSkill.id)).toEqual({
-      strongestContext: expect.objectContaining({ status: "reliable" }),
+      strongestContext: expect.objectContaining({
+        status: "reliable",
+        successfulDistinctDays: 2,
+      }),
       nextPracticeAction: null,
     });
   });

@@ -1081,24 +1081,21 @@ git commit -m "feat: expose contextual progress detail"
 
 - [ ] **Step 1: Write failing focus response tests**
 
-Create two focused-skill fixtures in the same response and assert each gains:
+Use two skill fixtures only in the direct data-layer batch test: one weekly
+focus response supports one focused skill because `weekly_focus_dog_week`
+enforces one focus skill per dog/week. Give the catalog and custom fixtures
+distinct confidence/current levels (for example, level 1 and level 2), seed
+each skill's evidence at its own current level, and assert the returned
+summaries reflect independent current-level filtering/results. Spy at the
+data-access boundary and assert that one batched context-evidence query serves
+both skill IDs, with no per-skill loader calls.
 
-```ts
-contextualProgress: {
-  status: "ready",
-  summary: {
-    strongestContext: expect.objectContaining({ status: "reliable" }),
-    nextPracticeAction: expect.objectContaining({ direction: "harder" }),
-  },
-}
-```
-
-Spy at the data-access boundary and assert the focus loader calls one batched
-context-evidence query for all skill IDs, not one query per skill. Also assert a
-historical focus week still receives a summary whose window ends at request
-time, because the summary is current and explicitly labeled as such in the UI.
-Force the batch loader to reject and assert the focus response still returns
-the skills/sessions with `contextualProgress: { status: "unavailable" }`.
+Separately, use the real `/focus` response with its one focused skill to assert
+that ready contextual progress is attached without removing its sessions.
+Also assert a historical focus week still receives a current summary whose
+window ends at request time. Force the batch loader to reject and assert that
+the same one-skill focus response still returns the skill and sessions with
+`contextualProgress: { status: "unavailable" }`.
 
 - [ ] **Step 2: Run and confirm RED**
 
