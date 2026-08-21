@@ -1,12 +1,14 @@
 import { CONTEXTUAL_PROGRESS_WINDOW_DAYS } from "@turingcare/shared";
 import type {
   ContextualProgress,
+  ContextualProgressSummary,
   ExactContextEvidence,
   ExactPracticeContext,
   NextPracticeAction,
   PracticeDimension,
   PracticeOutcome,
   SkillDimensionMetadata,
+  SuggestionSafety,
 } from "@turingcare/shared";
 import { adjacentContext } from "./context-adjacency";
 
@@ -50,6 +52,34 @@ type ObservedContext = {
 };
 
 type ReviewedContextStep = SkillDimensionMetadata["baseEase"];
+
+export function applyContextualSafety(
+  progress: ContextualProgress,
+  safety: SuggestionSafety | null,
+): ContextualProgress;
+export function applyContextualSafety(
+  progress: ContextualProgressSummary,
+  safety: SuggestionSafety | null,
+): ContextualProgressSummary;
+export function applyContextualSafety(
+  progress: ContextualProgress | ContextualProgressSummary,
+  safety: SuggestionSafety | null,
+): ContextualProgress | ContextualProgressSummary {
+  const applied = {
+    ...progress,
+    nextPracticeAction: safety ? null : progress.nextPracticeAction,
+    safety,
+  };
+
+  if (!("exactContexts" in progress)) return applied;
+
+  return {
+    ...applied,
+    exactContexts: safety
+      ? progress.exactContexts.filter((evidence) => evidence.status !== "not_observed")
+      : progress.exactContexts,
+  };
+}
 
 function serializeContext(context: ExactPracticeContext): string {
   return JSON.stringify({

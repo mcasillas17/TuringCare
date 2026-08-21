@@ -72,6 +72,18 @@ export function DogWeek() {
   const logDisabled = logSession.isPending || (weekKey === currentWeekKey && suggestionLoading);
 
   const skills = focusSkills ?? [];
+  const summarySafetySkillId =
+    skills.find(
+      (skill) =>
+        skill.contextualProgress.status === "ready" && skill.contextualProgress.summary.safety,
+    )?.skillId ?? null;
+  const suggestionSafety =
+    weekKey === currentWeekKey &&
+    !suggestionError &&
+    suggestion?.weekKey === weekKey &&
+    suggestion.safety
+      ? suggestion.safety
+      : null;
   const canGoNext = !sameWeek(monday, today);
 
   const sessionCount = skills.reduce((sum, s) => sum + s.sessions.length, 0);
@@ -274,6 +286,9 @@ export function DogWeek() {
               key={skill.skillId}
               dogId={id}
               skill={skill}
+              showSafetyNotice={
+                !suggestionSafety && skill.skillId === summarySafetySkillId
+              }
               onRetry={() => refetchFocus()}
             />
           ))}

@@ -198,4 +198,44 @@ describe("loadContextualProgress", () => {
       }),
     ]);
   });
+
+  it("removes the synthetic adjacent row under safety while retaining observed rows", async () => {
+    const user = await createTestUser();
+    users.push(user);
+    const { skill } = await makeSkill(user.userId);
+    const day = (daysAgo: number) => new Date(NOW.getTime() - daysAgo * DAY_MS);
+
+    await insertSession(skill.id, {
+      occurredAt: day(5),
+      practiceDay: "2026-08-16",
+      cueSupport: "verbal_cue",
+    });
+    await insertSession(skill.id, {
+      occurredAt: day(4),
+      practiceDay: "2026-08-17",
+      cueSupport: "verbal_cue",
+    });
+    await insertSession(skill.id, {
+      occurredAt: day(1),
+      practiceDay: "2026-08-20",
+      outcome: "too_hard",
+    });
+
+    const withoutSafety = await loadContextualProgress(skill, NOW);
+    expect(withoutSafety.exactContexts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ status: "not_observed" })]),
+    );
+
+    const withSafety = await loadContextualProgress(skill, NOW, {
+      suppressed: true,
+      ruleId: "reported_injury_or_pain",
+      referral: "veterinarian",
+    });
+    expect(withSafety.nextPracticeAction).toBeNull();
+    expect(withSafety.exactContexts).toHaveLength(2);
+    expect(withSafety.exactContexts.map(({ status }) => status)).toEqual(
+      expect.arrayContaining(["reliable", "developing"]),
+    );
+    expect(withSafety.exactContexts.some(({ status }) => status === "not_observed")).toBe(false);
+  });
 });

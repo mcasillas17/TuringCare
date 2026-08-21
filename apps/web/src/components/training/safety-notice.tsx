@@ -3,13 +3,22 @@ import { REFERRAL_DIRECTORIES, REFERRAL_KEYS, SAFETY_BODY_KEYS } from "@/lib/pra
 import type { SuggestionSafety } from "@turingcare/shared";
 import { useId } from "react";
 
+export type SafetyNoticeHeadingLevel = "h2" | "h3" | "h4" | "h5" | "h6";
+
 /**
  * Deliberately has no dismiss control: suppression must not be something an
  * owner can click away to get exercises back.
  */
-export function SafetyNotice({ safety }: { safety: SuggestionSafety }) {
+export function SafetyNotice({
+  safety,
+  headingLevel = "h2",
+}: {
+  safety: SuggestionSafety;
+  headingLevel?: SafetyNoticeHeadingLevel;
+}) {
   const { t } = useI18n();
   const titleId = useId();
+  const Heading = headingLevel;
   const directories = REFERRAL_DIRECTORIES.filter((entry) =>
     entry.referrals.includes(safety.referral),
   );
@@ -19,9 +28,9 @@ export function SafetyNotice({ safety }: { safety: SuggestionSafety }) {
       role="alert"
       aria-labelledby={titleId}
     >
-      <h2 id={titleId} className="font-semibold text-slate">
+      <Heading id={titleId} className="font-semibold text-slate">
         {t("safety.title")}
-      </h2>
+      </Heading>
       <p className="text-sm text-slate">{t(SAFETY_BODY_KEYS[safety.ruleId])}</p>
       <p className="text-sm text-slate">{t(REFERRAL_KEYS[safety.referral])}</p>
       {directories.length > 0 && (

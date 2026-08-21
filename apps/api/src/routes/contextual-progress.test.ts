@@ -258,16 +258,36 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
       referral: "credentialed_trainer" as const,
       ruleId: "sustained_worsening_intensity" as const,
     },
-  ])("suppresses only the next action for active $name safety", async (safetyCase) => {
+  ])("suppresses the action and synthetic evidence for active $name safety", async (safetyCase) => {
     const setupValue = await setup(users);
-    await insertSession(setupValue.skillId);
+    const now = new Date();
+    const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    await insertSession(setupValue.skillId, {
+      occurredAt: daysAgo(5),
+      practiceDay: daysAgo(5).toISOString().slice(0, 10),
+      cueSupport: "verbal_cue",
+    });
+    await insertSession(setupValue.skillId, {
+      occurredAt: daysAgo(4),
+      practiceDay: daysAgo(4).toISOString().slice(0, 10),
+      cueSupport: "verbal_cue",
+    });
+    await insertSession(setupValue.skillId, {
+      occurredAt: daysAgo(2),
+      practiceDay: daysAgo(2).toISOString().slice(0, 10),
+    });
+    await insertSession(setupValue.skillId, {
+      occurredAt: daysAgo(1),
+      practiceDay: daysAgo(1).toISOString().slice(0, 10),
+      outcome: "too_hard",
+    });
 
     if (safetyCase.signal) {
       await db.insert(dogSafetySignals).values({
         dogId: setupValue.dogId,
         type: safetyCase.signal,
         source: "practice_session",
-        reportedAt: new Date(),
+        reportedAt: now,
       });
     } else {
       const occurredAt = new Date();
@@ -316,7 +336,16 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
       referral: safetyCase.referral,
     });
     expect(body.nextPracticeAction).toBeNull();
-    expect(body.exactContexts).toEqual([expect.objectContaining({ status: "developing" })]);
+    expect(body.exactContexts).toHaveLength(2);
+    expect(body.exactContexts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: "reliable" }),
+        expect.objectContaining({ status: "developing" }),
+      ]),
+    );
+    expect(body.exactContexts).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ status: "not_observed" })]),
+    );
   });
 
   describe("POST /api/dogs/:id/contextual-progress/events", () => {

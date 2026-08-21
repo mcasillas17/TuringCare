@@ -8,7 +8,11 @@ import { and, desc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import { CURRICULUM_VERSION, skillDimensionMetadata } from "../data/training-curriculum";
 import { db } from "../db";
 import { practiceSessions, type trainingSkills } from "../db/schema";
-import { type ContextualProgressRow, deriveContextualProgress } from "./contextual-progress";
+import {
+  applyContextualSafety,
+  type ContextualProgressRow,
+  deriveContextualProgress,
+} from "./contextual-progress";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -61,11 +65,7 @@ export async function loadContextualProgress(
     metadata,
     rows,
   });
-  return {
-    ...progress,
-    nextPracticeAction: safety ? null : progress.nextPracticeAction,
-    safety,
-  };
+  return applyContextualSafety(progress, safety);
 }
 
 export async function loadContextualProgressSummaries(
@@ -118,11 +118,17 @@ export async function loadContextualProgressSummaries(
       metadata,
       rows: rowsBySkill.get(skill.id) ?? [],
     });
-    summaries.set(skill.id, {
-      strongestContext: progress.strongestContext,
-      nextPracticeAction: safety ? null : progress.nextPracticeAction,
-      safety,
-    });
+    summaries.set(
+      skill.id,
+      applyContextualSafety(
+        {
+          strongestContext: progress.strongestContext,
+          nextPracticeAction: progress.nextPracticeAction,
+          safety: null,
+        },
+        safety,
+      ),
+    );
   }
 
   return summaries;

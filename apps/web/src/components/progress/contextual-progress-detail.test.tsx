@@ -226,6 +226,9 @@ describe("ContextualProgressDetail", () => {
     setup({ data: makeData({ safety }) }, mutate);
 
     expect(screen.getByRole("alert")).toHaveAccessibleName("Let's pause training suggestions");
+    expect(
+      screen.getByRole("heading", { name: "Let's pause training suggestions", level: 6 }),
+    ).toBeInTheDocument();
     expect(screen.getByText(guidance)).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Use this practice plan" }),

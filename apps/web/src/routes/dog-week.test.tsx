@@ -81,6 +81,21 @@ const exerciseSuggestion: TrainingSuggestion = {
   advancementProposal: null,
 };
 
+const activeSafety = {
+  suppressed: true as const,
+  ruleId: "reported_injury_or_pain" as const,
+  referral: "veterinarian" as const,
+};
+
+const safetySuggestion: TrainingSuggestion = {
+  ...exerciseSuggestion,
+  type: "safety_suppressed",
+  ruleId: null,
+  primary: null,
+  fallback: null,
+  safety: activeSafety,
+};
+
 function setup(
   focusSkills: focusLib.FocusSkill[],
   suggestion: TrainingSuggestion | undefined = exerciseSuggestion,
@@ -175,6 +190,20 @@ const sitFocus: focusLib.FocusSkill = {
     summary: { strongestContext: null, nextPracticeAction: null, safety: null },
   },
 };
+
+function focusWithSafety(): focusLib.FocusSkill {
+  return {
+    ...sitFocus,
+    contextualProgress: {
+      status: "ready",
+      summary: {
+        strongestContext: null,
+        nextPracticeAction: null,
+        safety: activeSafety,
+      },
+    },
+  };
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -373,6 +402,27 @@ describe("DogWeek", () => {
     renderWeek();
     expect(screen.getByText("This week's suggestion")).toBeInTheDocument();
     expect(screen.getAllByText("Lure into a sit.")).toHaveLength(2);
+  });
+
+  it("renders one referral alert when suggestion and summary share active safety", () => {
+    setup([focusWithSafety()], safetySuggestion);
+    renderWeek();
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByText(/Please book a veterinary appointment/)).toBeInTheDocument();
+  });
+
+  it("keeps the summary referral alert when the weekly suggestion is unavailable", () => {
+    setup([focusWithSafety()]);
+    vi.mocked(suggestionLib.useSuggestion).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+    } as unknown as ReturnType<typeof suggestionLib.useSuggestion>);
+    renderWeek();
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByText(/Please book a veterinary appointment/)).toBeInTheDocument();
   });
 
   it("does not render cached suggestions on historical weeks", () => {

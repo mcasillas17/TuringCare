@@ -72,10 +72,12 @@ export function ContextualProgressSummaryCard({
   dogId,
   skill,
   onRetry,
+  showSafetyNotice = true,
 }: {
   dogId: string;
   skill: Pick<FocusSkill, "skillId" | "name" | "contextualProgress">;
   onRetry: () => unknown;
+  showSafetyNotice?: boolean;
 }) {
   const { t } = useI18n();
   const recordEvent = useRecordContextualProgressEvent(dogId);
@@ -123,7 +125,9 @@ export function ContextualProgressSummaryCard({
         </div>
       ) : (
         <>
-          {summary?.safety && <SafetyNotice safety={summary.safety} />}
+          {showSafetyNotice && summary?.safety && (
+            <SafetyNotice safety={summary.safety} headingLevel="h3" />
+          )}
           <section aria-labelledby={`week-context-${skill.skillId}-strongest`}>
             <h3
               id={`week-context-${skill.skillId}-strongest`}

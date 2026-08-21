@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { skillDimensionMetadata } from "../data/training-curriculum";
 import {
   CONTEXTUAL_PROGRESS_POLICY_VERSION,
+  applyContextualSafety,
   type ContextualProgressRow,
   deriveContextualProgress,
 } from "./contextual-progress";
@@ -577,6 +578,43 @@ describe("deriveContextualProgress", () => {
       lastObservedAt: null,
       lastSuccessfulAt: null,
     });
+  });
+
+  it("removes only action-derived Not observed evidence under active safety", () => {
+    const result = derive([
+      row("reliable-one", "2026-08-17T08:00:00.000Z", {
+        cueSupport: "verbal_cue",
+        practiceDay: "2026-08-17",
+      }),
+      row("reliable-two", "2026-08-18T08:00:00.000Z", {
+        cueSupport: "verbal_cue",
+        practiceDay: "2026-08-18",
+      }),
+      row("latest-hard", "2026-08-20T11:00:00.000Z", { outcome: "too_hard" }),
+    ]);
+    const safety = {
+      suppressed: true as const,
+      ruleId: "reported_injury_or_pain" as const,
+      referral: "veterinarian" as const,
+    };
+
+    expect(result.exactContexts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: "reliable" }),
+        expect.objectContaining({ status: "developing" }),
+        expect.objectContaining({ status: "not_observed" }),
+      ]),
+    );
+
+    const suppressed = applyContextualSafety(result, safety);
+
+    expect(suppressed.nextPracticeAction).toBeNull();
+    expect(suppressed.safety).toEqual(safety);
+    expect(suppressed.exactContexts).toHaveLength(2);
+    expect(suppressed.exactContexts.map(({ status }) => status)).toEqual(
+      expect.arrayContaining(["reliable", "developing"]),
+    );
+    expect(suppressed.exactContexts.some(({ status }) => status === "not_observed")).toBe(false);
   });
 
   it("does not add Not observed evidence when the action target exists or when repeating", () => {

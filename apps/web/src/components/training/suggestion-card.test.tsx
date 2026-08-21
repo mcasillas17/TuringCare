@@ -158,6 +158,9 @@ describe("SuggestionCard", () => {
     });
     expect(screen.getByText("Let's pause training suggestions")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveAccessibleName("Let's pause training suggestions");
+    expect(
+      screen.getByRole("heading", { name: "Let's pause training suggestions", level: 2 }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Lure into a sit in a quiet room.")).not.toBeInTheDocument();
     expect(screen.queryByText("We did this")).not.toBeInTheDocument();
     expect(screen.getByText("DACVB — veterinary behaviorists")).toBeInTheDocument();
@@ -202,6 +205,23 @@ describe("SuggestionCard", () => {
       expect(titleId).not.toBeNull();
       expect(document.getElementById(titleId ?? "")).not.toBeNull();
     }
+  });
+
+  it("renders the requested safety heading level", () => {
+    const safety = {
+      suppressed: true as const,
+      ruleId: "reported_injury_or_pain" as const,
+      referral: "veterinarian" as const,
+    };
+    render(
+      <LocaleProvider>
+        <SafetyNotice safety={safety} headingLevel="h4" />
+      </LocaleProvider>,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Let's pause training suggestions", level: 4 }),
+    ).toBeInTheDocument();
   });
 
   it("explains that custom skills are not covered", () => {

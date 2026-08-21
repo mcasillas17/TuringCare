@@ -50,6 +50,7 @@ function renderSummary(
     | { status: "ready"; summary: ContextualProgressSummary }
     | { status: "unavailable" },
   onRetry = vi.fn(),
+  showSafetyNotice?: boolean,
 ) {
   const recordEvent = vi.fn();
   vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
@@ -62,6 +63,7 @@ function renderSummary(
           dogId="dog-1"
           skill={{ skillId: "skill-1", name: "Sit", contextualProgress }}
           onRetry={onRetry}
+          showSafetyNotice={showSafetyNotice}
         />
       </MemoryRouter>
     </LocaleProvider>,
@@ -256,10 +258,33 @@ describe("ContextualProgressSummaryCard", () => {
     });
 
     expect(screen.getByRole("alert")).toHaveAccessibleName("Let's pause training suggestions");
+    expect(
+      screen.getByRole("heading", { name: "Let's pause training suggestions", level: 3 }),
+    ).toBeInTheDocument();
     expect(screen.getByText(/Please book a veterinary appointment/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Use this practice plan" })).not.toBeInTheDocument();
     expect(
       recordEvent.mock.calls.some(([event]) => event.name === "training.context_next_action_used"),
     ).toBe(false);
+  });
+
+  it("can defer its safety notice when another weekly surface owns the alert", () => {
+    renderSummary(
+      {
+        status: "ready",
+        summary: {
+          ...reliableSummary,
+          safety: {
+            suppressed: true,
+            ruleId: "reported_injury_or_pain",
+            referral: "veterinarian",
+          },
+        },
+      },
+      vi.fn(),
+      false,
+    );
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

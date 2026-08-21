@@ -233,7 +233,7 @@ export function ContextualProgressDetail({
           })}
         </p>
       </div>
-      {data.safety && <SafetyNotice safety={data.safety} />}
+      {data.safety && <SafetyNotice safety={data.safety} headingLevel="h6" />}
       <StrongestContext
         evidence={data.strongestContext}
         headingId={`${sectionId}-strongest`}
