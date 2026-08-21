@@ -1062,7 +1062,11 @@ summary, while expanded skill detail shows the supporting evidence. There is no
 universal completion score and no automatic advancement. Round-two hardening
 coordinates one safety referral alert across weekly surfaces, keeps safety
 headings semantically nested, and removes action-derived synthetic
-`not_observed` rows while preserving observed evidence.
+`not_observed` rows while preserving observed evidence. Final safety-cache
+hardening centralizes the three dog-scoped suggestion/focus/contextual-progress
+prefix invalidations across safety-producing web mutations, awaits their
+refetches, and conservatively suppresses stale recommendations during
+`isFetching` revalidation while preserving practice logging.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Commits: `59c26a2..5822883` on `feat/contextual-progress-insights`.
+- Commits: `59c26a2..b8ba739` on `feat/contextual-progress-insights`.

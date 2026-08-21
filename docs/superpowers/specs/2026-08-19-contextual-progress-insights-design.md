@@ -364,12 +364,28 @@ Add TanStack Query hooks and stable keys for:
 - dog/focus contextual summaries;
 - skill contextual detail.
 
-Logging or deleting a practice session invalidates:
+Safety-derived training caches use one shared web invalidation boundary:
+`invalidateTrainingSafetyData(queryClient, dogId)` invalidates the dog-scoped
+prefixes `["suggestion", dogId]`, `["focus", dogId]`, and
+`["contextual-progress", dogId]`. The helper is independent of the query hooks
+that consume those keys, and every mutation callback returns or awaits its
+promise so `mutateAsync` cannot resolve before invalidation scheduling and
+active refetches complete.
 
-- dog progress;
-- skill contextual detail;
-- focus/week contextual summaries;
-- overview caches affected by existing practice behavior.
+Apply that boundary after every web mutation that can add, change, or remove
+an active safety input:
+
+- practice session creation, evidence updates, and session deletion;
+- behavior-concern add/remove;
+- journal entry add/update/delete;
+- guided setup behavior and progress actions;
+- dog deletion, which removes the dog and its safety inputs.
+
+The profile update hook is not included because the current
+`evaluateSafety` policy reads persisted safety signals and bounded journal
+fields, not dog profile fields. Practice-derived invalidation reuses the
+focused helper and adds progress and overview caches without creating an
+import cycle.
 
 UI responsibilities remain separated:
 
@@ -402,6 +418,14 @@ catalogs.
   synthetic `not_observed` rows, preserves observed evidence/status rows,
   renders the existing localized safety/referral guidance, and records no
   next-action-use telemetry.
+- `DogWeek` derives one `activeSafety` from the current-week suggestion or any
+  ready contextual summary. It renders exactly one page-level referral notice,
+  hides stale exercise suggestions, and passes page-owned notice/action
+  ownership to each summary card.
+- During background revalidation, `isFetching` on either suggestion or focus
+  query conservatively suppresses cached suggestion exercises/actions and all
+  contextual next-action CTAs and telemetry. The week grid and practice
+  logging controls remain available.
 - Sparse evidence shows a neutral capture prompt.
 - A Developing context whose latest result is `too_hard` shows support-oriented
   language and never a harder next step.
@@ -490,7 +514,13 @@ Cover:
 - weekly cold-error Retry/Edit focus state and per-skill unavailable Retry;
 - session form structured-field submission and optional omission;
 - current-level confirmation copy, submission, and conflict handling;
-- all affected query-key invalidations;
+- all safety-producing mutation families invalidate the three dog-scoped
+  suggestion/focus/contextual-progress prefixes and await completion;
+- stale exercise suggestion plus contextual safety renders one alert, no
+  exercise/CTA, and no next-action telemetry;
+- either recommendation query's `isFetching` suppresses cached CTAs, while
+  settled safe data restores them;
+- suggestion errors still preserve contextual safety guidance;
 - English and Spanish catalog parity;
 - keyboard, screen-reader, contrast, and mobile layout behavior.
 

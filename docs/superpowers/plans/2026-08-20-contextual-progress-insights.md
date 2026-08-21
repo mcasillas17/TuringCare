@@ -68,6 +68,10 @@ plan before adding an index or migration.
   anchoring, batching, and telemetry integration tests.
 - `apps/web/src/lib/contextual-progress.ts` — stable keys, typed detail query,
   and typed telemetry mutation.
+- `apps/web/src/lib/training-safety-cache.ts` — shared dog-scoped safety
+  invalidation boundary.
+- `apps/web/src/lib/dogs-safety-cache.test.tsx`.
+- `apps/web/src/lib/journal-safety-cache.test.tsx`.
 - `apps/web/src/components/progress/contextual-progress-detail.tsx` — expanded
   skill evidence, empty/error states, and next-action CTA.
 - `apps/web/src/components/progress/contextual-progress-detail.test.tsx`.
@@ -93,7 +97,13 @@ plan before adding an index or migration.
 - `apps/api/src/routes/telemetry.test.ts`.
 - `apps/api/src/telemetry/events.ts`.
 - `apps/api/src/telemetry/events.test.ts`.
-- `apps/web/src/lib/progress.ts` — contextual cache invalidation.
+- `apps/web/src/lib/progress.ts` — practice-derived invalidation reusing the
+  safety boundary.
+- `apps/web/src/lib/dogs.ts` — concern and dog-deletion safety invalidation.
+- `apps/web/src/lib/journal.ts` — journal safety invalidation.
+- `apps/web/src/lib/guided-setup.ts` — behavior/progress action invalidation.
+- `apps/web/src/lib/progress.test.tsx`.
+- `apps/web/src/lib/guided-setup.test.tsx`.
 - `apps/web/src/lib/weekly-focus.ts` — shared summary type on focused skills.
 - `apps/web/src/components/progress/session-form.tsx` — current-level
   confirmation.
@@ -1290,7 +1300,15 @@ git commit -m "feat: record contextual progress telemetry"
 
 - Create: `apps/web/src/lib/contextual-progress.ts`
 - Create: `apps/web/src/lib/contextual-progress.test.tsx`
+- Create: `apps/web/src/lib/training-safety-cache.ts`
+- Create: `apps/web/src/lib/dogs-safety-cache.test.tsx`
+- Create: `apps/web/src/lib/journal-safety-cache.test.tsx`
 - Modify: `apps/web/src/lib/progress.ts`
+- Modify: `apps/web/src/lib/progress.test.tsx`
+- Modify: `apps/web/src/lib/dogs.ts`
+- Modify: `apps/web/src/lib/journal.ts`
+- Modify: `apps/web/src/lib/guided-setup.ts`
+- Modify: `apps/web/src/lib/guided-setup.test.tsx`
 - Modify: `apps/web/src/lib/weekly-focus.ts`
 
 - [ ] **Step 1: Write failing hook tests**
@@ -1311,18 +1329,30 @@ expect(contextualProgressDogKey("d1")).toEqual([
 
 Mock the typed client and assert detail GET errors throw
 `contextual_progress_load_failed`. Assert view/action telemetry POSTs the shared
-event payload. Spy on a `QueryClient` and require log, evidence update, delete,
-and level change to invalidate:
+event payload. Spy on a `QueryClient` and require log, evidence update, delete, and level
+change to invalidate the dog-scoped safety prefixes:
+
+```ts
+["suggestion", dogId]
+["focus", dogId]
+["contextual-progress", dogId]
+```
+
+The same three prefixes must be covered for concern add/remove, journal
+add/update/delete, guided setup behavior/progress actions, and dog deletion.
+Use prefix invalidation because multiple week and skill-detail keys may be
+cached. Every mutation callback returns or awaits invalidation promises so
+`mutateAsync` does not resolve before active refetches settle. Dog profile
+updates are excluded unless `evaluateSafety` later consumes a profile field;
+the current policy reads persisted safety signals and bounded journal fields.
+
+Practice mutations also retain these non-safety derived caches:
 
 ```ts
 ["progress", dogId]
-["contextual-progress", dogId]
-["focus", dogId]
-["suggestion", dogId]
 ["overview"]
+["dogs-overview"]
 ```
-
-Use prefix invalidation for focus because multiple week keys may be cached.
 
 - [ ] **Step 2: Run and confirm RED**
 
@@ -1390,8 +1420,10 @@ contextualProgress:
   | { status: "unavailable" };
 ```
 
-Centralize all mutation invalidations in one `invalidatePracticeDerivedData`
-helper in `progress.ts`; do not duplicate slightly different invalidation lists.
+Keep `invalidateTrainingSafetyData` in its own helper module so concern,
+journal, guided setup, and dog hooks can share it without import cycles.
+`invalidatePracticeDerivedData` must reuse that helper and add only its
+progress/overview caches; do not duplicate slightly different safety lists.
 
 - [ ] **Step 4: Run hook tests and typecheck**
 
@@ -1739,6 +1771,13 @@ Cover:
 - the unavailable summary has an inline Retry that refetches focus;
 - active safety shows the existing referral guidance, suppresses the weekly
   practice CTA, and emits no next-action-use event;
+- stale exercise suggestion plus contextual safety renders one page-level
+  alert, no exercise/CTA, and no contextual next-action telemetry;
+- suggestion errors still show contextual safety guidance when that summary
+  reports active safety;
+- either suggestion or focus query `isFetching` suppresses cached suggestion
+  exercises/actions and contextual action CTAs, while settled safe data
+  restores the CTAs;
 - initial focus failure offers Retry and Edit focus without claiming an empty
   focus, while cached focus controls remain enabled;
 
@@ -1777,7 +1816,9 @@ Render only:
 ```
 
 If both summary fields are null, render the capture prompt and the same skill
-detail link. Never render the `exactContexts` list on This Week.
+detail link. Never render the `exactContexts` list on This Week. Give the
+component explicit `suppressActions` and page-owned notice props; do not infer
+ownership from DOM queries or global safety state.
 
 - [ ] **Step 4: Mount below the weekly suggestion and above the grid**
 
