@@ -134,8 +134,9 @@ plan before adding an index or migration.
 - At most one Not observed row is derived from a real observed context by one
   reviewed adjacent change.
 - Contextual responses carry the server-owned active safety decision. When it
-  suppresses exercises, only `nextPracticeAction` is removed; evidence/status
-  rows remain available for guidance.
+  suppresses exercises, `nextPracticeAction` and action-derived synthetic
+  `not_observed` rows are removed; observed Reliable/Developing evidence remains
+  available for guidance.
 - Manual confirmation stamps server-owned level/version but leaves
   `practiceVariant` and `suggestionId` null, so it cannot support advancement.
 - Every new nested resource returns `404`, not `403`, when it is absent or
@@ -950,6 +951,8 @@ Assert:
 - another owner's dog or skill returns `404`;
 - a skill belonging to a different owned dog returns `404`;
 - custom skill evidence returns observed rows but no synthetic Not observed row;
+- active safety removes an action-derived synthetic `not_observed` row while
+  preserving observed Reliable/Developing rows;
 - empty evidence returns `strongestContext: null`,
   `nextPracticeAction: null`, and `exactContexts: []`.
 
@@ -1149,8 +1152,9 @@ shared server-owned safety decision once per dog/request, pass it to the batch
 loader, and call the batch loader once. Catch only that combined summary/safety
 read, log `[contextual-progress] focus_summary_failed` without owner content,
 and return the explicit unavailable state rather than silently inventing an
-empty summary. Active safety sets every returned summary's action to null while
-preserving its evidence and safety decision. Add:
+empty summary. Active safety sets every returned summary's action to null, removes any
+action-derived synthetic `not_observed` rows from detail responses, and
+preserves observed evidence plus the safety decision. Add:
 
 ```ts
 currentLevel: f.confidence,
@@ -1560,8 +1564,9 @@ Cover:
 - error state is a retryable `role="status"` and Log session remains enabled;
 - all five non-null context labels render so exact combinations remain legible;
 - active server-owned safety suppression shows the existing accessible
-  safety/referral guidance, preserves evidence rows, and removes the practice
-  CTA/action telemetry;
+  safety/referral guidance, removes action-derived synthetic `not_observed`
+  rows, preserves observed evidence rows, and removes the practice CTA/action
+  telemetry;
 - CTA calls the telemetry mutation then opens the existing session form
   prefilled with the recommended context;
 - one view event per mounted detail result, not per rerender.
@@ -1847,7 +1852,7 @@ directly into Postgres for this owner journey.
 
 ```bash
 pnpm exec playwright test e2e/critical-owner-journey.spec.ts \
-  --project=chromium --grep "full owner journey"
+  --project=desktop-chromium --grep "full owner journey"
 ```
 
 Expected before completing selectors/wiring: failure at the first contextual
@@ -1874,9 +1879,9 @@ Expected: all selected tests pass.
 
 ```bash
 pnpm exec playwright test e2e/critical-owner-journey.spec.ts \
-  --project=chromium
+  --project=desktop-chromium
 pnpm exec playwright test e2e/critical-owner-journey.spec.ts \
-  --project=phone
+  --project=phone-chromium
 ```
 
 Expected: selected journeys pass in both projects. Confirm the three cards or
@@ -1926,9 +1931,9 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm exec playwright test e2e/critical-owner-journey.spec.ts \
-  --project=chromium
+  --project=desktop-chromium
 pnpm exec playwright test e2e/critical-owner-journey.spec.ts \
-  --project=phone
+  --project=phone-chromium
 ```
 
 Expected: every command exits 0 with nonzero tests collected.

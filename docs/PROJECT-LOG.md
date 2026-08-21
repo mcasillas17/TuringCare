@@ -1059,7 +1059,10 @@ Exact-context, current-level reliability is derived from recent practice evidenc
 Owners can manually confirm current-level practice; one evidence-derived adjacent
 next context is offered for the next attempt. This Week presents a decision-first
 summary, while expanded skill detail shows the supporting evidence. There is no
-universal completion score and no automatic advancement.
+universal completion score and no automatic advancement. Round-two hardening
+coordinates one safety referral alert across weekly surfaces, keeps safety
+headings semantically nested, and removes action-derived synthetic
+`not_observed` rows while preserving observed evidence.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Commits: `59c26a2..2dd66b8` on `feat/contextual-progress-insights`.
+- Commits: `59c26a2..34ba811` on `feat/contextual-progress-insights`.

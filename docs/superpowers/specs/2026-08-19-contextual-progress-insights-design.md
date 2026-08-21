@@ -126,7 +126,9 @@ skill.
 When the server-owned active safety decision blocks exercises, the summary
 preserves its strongest evidence but returns no practice action and includes
 the existing safety/referral decision for accessible guidance. This is distinct
-from a genuine sparse response with no safety decision.
+from a genuine sparse response with no safety decision. Action-derived synthetic
+`not_observed` rows are removed under suppression, while observed Reliable and
+Developing evidence remains available for guidance.
 
 If no structured evidence exists, the summary uses neutral copy such as:
 
@@ -396,9 +398,10 @@ catalogs.
   render the genuine empty-focus state. Cached focus data remains usable during
   a background error. An unavailable per-skill contextual summary exposes an
   inline retry without disabling the week grid.
-- Active safety suppression removes only `nextPracticeAction`, preserves
-  evidence/status rows, renders the existing localized safety/referral guidance,
-  and records no next-action-use telemetry.
+- Active safety suppression removes `nextPracticeAction` and action-derived
+  synthetic `not_observed` rows, preserves observed evidence/status rows,
+  renders the existing localized safety/referral guidance, and records no
+  next-action-use telemetry.
 - Sparse evidence shows a neutral capture prompt.
 - A Developing context whose latest result is `too_hard` shows support-oriented
   language and never a harder next step.
@@ -462,8 +465,9 @@ Cover:
 - bounded query behavior using the existing relevant index;
 - batched focus summaries without N+1 queries;
 - injury, aggression/bite, severe-fear, severe-concern, and sustained-worsening
-  safety suppression on detail and batched focus responses, including evidence
-  preservation and no action telemetry;
+  safety suppression on detail and batched focus responses, including removal
+  of synthetic `not_observed` rows, preservation of observed evidence, and no
+  action telemetry;
 - practice save succeeding independently from later insight loading;
 - server-side telemetry identity and scalar properties.
 
