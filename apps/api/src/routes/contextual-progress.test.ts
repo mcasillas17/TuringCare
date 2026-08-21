@@ -4,7 +4,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
-import { dogs, practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
+import {
+  events,
+  dogs,
+  practiceSessions,
+  session,
+  trainingGoals,
+  trainingSkills,
+} from "../db/schema";
 import { type TestUser, createTestUser } from "../test-helpers";
 
 const validDog = {
@@ -95,6 +102,10 @@ async function insertSession(skillId: string, overrides: SessionOverrides = {}) 
 
 function detailPath(dogId: string, skillId: string) {
   return `/api/dogs/${dogId}/skills/${skillId}/contextual-progress`;
+}
+
+function eventPath(dogId: string) {
+  return `/api/dogs/${dogId}/contextual-progress/events`;
 }
 
 async function getDetail(setupValue: Setup) {
@@ -210,6 +221,170 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
     expect(body.strongestContext).toMatchObject({
       status: "reliable",
       successfulDistinctDays: 2,
+    });
+  });
+
+  describe("POST /api/dogs/:id/contextual-progress/events", () => {
+    const users: TestUser[] = [];
+
+    afterEach(async () => {
+      for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
+    });
+
+    it("records an owned contextual event with authenticated identity and safe properties", async () => {
+      const owner = await createTestUser();
+      const otherOwner = await createTestUser();
+      users.push(owner, otherOwner);
+      const dog = await makeDog(owner);
+
+      const response = await app.request(eventPath(dog.id), {
+        method: "POST",
+        headers: owner.authHeaders,
+        body: JSON.stringify({
+          name: "training.context_insight_viewed",
+          surface: "skill_detail",
+          strongestStatus: "developing",
+          hasNextAction: true,
+          userId: otherOwner.userId,
+          sessionId: "forged-session",
+          props: { note: "must not be stored" },
+        }),
+      });
+
+      expect(response.status).toBe(202);
+      expect(await response.json()).toEqual({ ok: true });
+
+      const [stored] = await db
+        .select({
+          name: events.name,
+          userId: events.userId,
+          sessionId: events.sessionId,
+          props: events.props,
+        })
+        .from(events)
+        .where(
+          and(eq(events.name, "training.context_insight_viewed"), eq(events.userId, owner.userId)),
+        )
+        .orderBy(events.createdAt)
+        .limit(1);
+      const [ownerSession] = await db
+        .select({ id: session.id })
+        .from(session)
+        .where(eq(session.userId, owner.userId))
+        .limit(1);
+
+      expect(stored).toMatchObject({
+        name: "training.context_insight_viewed",
+        userId: owner.userId,
+        sessionId: ownerSession?.id,
+        props: {
+          surface: "skill_detail",
+          strongestStatus: "developing",
+          hasNextAction: true,
+        },
+      });
+      expect(stored?.userId).not.toBe(otherOwner.userId);
+      expect(stored?.sessionId).not.toBe("forged-session");
+      expect(stored?.props).not.toHaveProperty("userId");
+      expect(stored?.props).not.toHaveProperty("sessionId");
+      expect(stored?.props).not.toHaveProperty("props");
+    });
+
+    it("returns 404 for another owner's dog without recording an event", async () => {
+      const owner = await createTestUser();
+      const otherOwner = await createTestUser();
+      users.push(owner, otherOwner);
+      const dog = await makeDog(owner);
+
+      const response = await app.request(eventPath(dog.id), {
+        method: "POST",
+        headers: otherOwner.authHeaders,
+        body: JSON.stringify({
+          name: "training.context_insight_viewed",
+          surface: "week",
+          strongestStatus: null,
+          hasNextAction: false,
+        }),
+      });
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
+      const stored = await db
+        .select({ id: events.id })
+        .from(events)
+        .where(
+          and(
+            eq(events.name, "training.context_insight_viewed"),
+            eq(events.userId, otherOwner.userId),
+          ),
+        );
+      expect(stored).toEqual([]);
+    });
+
+    it("does not reveal whether an unowned dog exists", async () => {
+      const owner = await createTestUser();
+      const otherOwner = await createTestUser();
+      users.push(owner, otherOwner);
+      const dog = await makeDog(owner);
+      const body = {
+        name: "training.context_next_action_used",
+        surface: "week",
+        ruleId: "repeat_developing_context",
+        direction: "repeat",
+      };
+
+      const ownedByOther = await app.request(eventPath(dog.id), {
+        method: "POST",
+        headers: otherOwner.authHeaders,
+        body: JSON.stringify(body),
+      });
+      const missing = await app.request(eventPath(randomUUID()), {
+        method: "POST",
+        headers: otherOwner.authHeaders,
+        body: JSON.stringify(body),
+      });
+
+      expect(ownedByOther.status).toBe(404);
+      expect(missing.status).toBe(404);
+      expect(await ownedByOther.json()).toEqual(await missing.json());
+    });
+
+    it("rejects unknown event names with 400", async () => {
+      const owner = await createTestUser();
+      users.push(owner);
+      const dog = await makeDog(owner);
+
+      const response = await app.request(eventPath(dog.id), {
+        method: "POST",
+        headers: owner.authHeaders,
+        body: JSON.stringify({
+          name: "training.context_not_real",
+          surface: "week",
+          strongestStatus: null,
+          hasNextAction: false,
+        }),
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it("rejects invalid contextual event properties with 400", async () => {
+      const owner = await createTestUser();
+      users.push(owner);
+      const dog = await makeDog(owner);
+
+      const response = await app.request(eventPath(dog.id), {
+        method: "POST",
+        headers: owner.authHeaders,
+        body: JSON.stringify({
+          name: "training.context_insight_viewed",
+          surface: "dashboard",
+          strongestStatus: "developing",
+          hasNextAction: "yes",
+        }),
+      });
+
+      expect(response.status).toBe(400);
     });
   });
 

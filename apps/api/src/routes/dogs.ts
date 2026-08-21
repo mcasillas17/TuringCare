@@ -5,6 +5,7 @@ import {
   behaviorConcernSchema,
   briefGenerateSchema,
   briefSendSchema,
+  contextualProgressEventSchema,
   dogProfileSchema,
   goalFromTemplateSchema,
   journalEntryCreateSchema,
@@ -384,6 +385,22 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!skill) return c.json({ error: "not_found" } as const, 404);
     return c.json(await loadContextualProgress(skill, new Date()));
   })
+  .post(
+    "/:id/contextual-progress/events",
+    zValidator("json", contextualProgressEventSchema),
+    async (c) => {
+      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const event = c.req.valid("json");
+      const { name, ...props } = event;
+      await recordEvent(name, {
+        userId: c.get("userId"),
+        sessionId: c.get("sessionId"),
+        props,
+      });
+      return c.json({ ok: true } as const, 202);
+    },
+  )
   .post("/:id/goals/:goalId/skills", zValidator("json", trainingSkillSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
