@@ -7,8 +7,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { TrainingSuggestion } from "@turingcare/shared";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DogWeek } from "./dog-week";
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 vi.mock("@/lib/weekly-focus", async () => {
   const actual = await vi.importActual<typeof import("@/lib/weekly-focus")>("@/lib/weekly-focus");
@@ -401,6 +404,69 @@ describe("DogWeek", () => {
     await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
     expect(evidenceMutate.mock.calls[0]?.[0]?.body.practicedTarget).toBeUndefined();
     expect(evidenceMutate.mock.calls[0]?.[0]?.body.confirmCurrentLevel).toBe(true);
+  });
+
+  it("saves manual quick evidence without current-level confirmation", async () => {
+    const { evidenceMutate } = setup(
+      [
+        {
+          ...sitFocus,
+          dimensions: ["distraction"],
+        },
+      ],
+      { ...exerciseSuggestion, dismissed: true, requestedDimensions: ["distraction"] },
+    );
+    renderWeek();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
+    expect(evidenceMutate.mock.calls[0]?.[0]?.body.confirmCurrentLevel).toBeUndefined();
+  });
+
+  it("reports a saved practice when current-level confirmation is rejected", async () => {
+    const { evidenceMutate } = setup([sitFocus]);
+    evidenceMutate.mockResolvedValueOnce({ anchorRejected: "practice_day_required" });
+    renderWeek();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
+    expect(toast.success).toHaveBeenCalledWith(
+      "Practice was saved, but current-level confirmation was not recorded because this practice was not on a valid practice day.",
+    );
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("maps a locked anchor rejection without turning the saved practice into a failure", async () => {
+    const { evidenceMutate } = setup([sitFocus]);
+    evidenceMutate.mockResolvedValueOnce({ anchorRejected: "target_locked" });
+    renderWeek();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
+    expect(toast.success).toHaveBeenCalledWith(
+      "Practice was saved, but current-level confirmation was not recorded because this practice already has a different training anchor.",
+    );
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("shows an error if a logged focus skill is no longer available", async () => {
+    const focusSkills = [sitFocus];
+    setup(focusSkills);
+    renderWeek();
+    focusSkills.length = 0;
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+
+    expect(toast.error).toHaveBeenCalledWith("Couldn't save");
   });
 
   it("records suggestion actions and opens the focus picker on request", async () => {

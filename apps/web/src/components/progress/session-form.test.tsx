@@ -53,7 +53,7 @@ describe("SessionForm evidence capture", () => {
     expect(screen.queryByText("How much help did you give?")).not.toBeInTheDocument();
   });
 
-  it("submits the chosen outcome, context and safety signal", async () => {
+  it("submits the chosen outcome, context and safety signal without safety attestation", async () => {
     const { mutateAsync } = setup(["distraction"]);
     fireEvent.change(screen.getByLabelText("How did it go?"), {
       target: { value: "too_hard" },
@@ -64,14 +64,6 @@ describe("SessionForm evidence capture", () => {
     fireEvent.change(screen.getByLabelText("Did anything unsafe happen?"), {
       target: { value: "injury_or_pain" },
     });
-    submitSession();
-    await waitFor(() => expect(screen.getByText("Save session")).toBeEnabled());
-    expect(mutateAsync).not.toHaveBeenCalled();
-    fireEvent.click(
-      screen.getByRole("checkbox", {
-        name: "I confirm this safety event happened and understand training suggestions may pause.",
-      }),
-    );
     submitSession();
     await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
     const body = mutateAsync.mock.calls[0]?.[0]?.body as Record<string, unknown>;
@@ -106,5 +98,43 @@ describe("SessionForm evidence capture", () => {
     expect(body.confirmCurrentLevel).toBe(true);
     expect(body.currentLevel).toBeUndefined();
     expect(body.curriculumVersion).toBeUndefined();
+  });
+
+  it("omits a stale confirmation after all structured evidence is cleared", async () => {
+    const { mutateAsync } = setup(["distraction"]);
+    fireEvent.change(screen.getByLabelText("What else was going on?"), {
+      target: { value: "mild" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 3.",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("What else was going on?"), {
+      target: { value: "" },
+    });
+
+    submitSession();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    const body = mutateAsync.mock.calls[0]?.[0]?.body as Record<string, unknown>;
+    expect(body.distraction).toBeUndefined();
+    expect(body.confirmCurrentLevel).toBeUndefined();
+  });
+
+  it("associates confirmation help with an accessible checkbox name", () => {
+    setup(["distraction"]);
+    fireEvent.change(screen.getByLabelText("What else was going on?"), {
+      target: { value: "mild" },
+    });
+
+    const confirmation = screen.getByRole("checkbox", {
+      name: "I practiced this at the current Level 3.",
+    });
+    const help = screen.getByText(
+      "This lets TuringCare compare this practice with other work at the same level.",
+    );
+    expect(confirmation).not.toHaveAttribute("aria-label");
+    expect(confirmation).toHaveAttribute("aria-describedby", help.id);
+    expect(help.closest("label")).toBeNull();
   });
 });

@@ -11,7 +11,7 @@ import {
   safetySignalValues,
 } from "@turingcare/shared";
 import { useEffect, useId, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
 const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
@@ -45,19 +45,19 @@ export function SessionForm({
     handleSubmit,
     unregister,
     setValue,
-    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<PracticeSessionInput>({
     resolver: zodResolver(practiceSessionSchema),
     defaultValues: { occurredAt: localDateTime() },
   });
-  const values = watch();
-  const selectedSafetySignal = watch("safetySignal");
-  const currentLevelConfirmed = watch("confirmCurrentLevel") === true;
-  const hasStructuredEvidence = Boolean(
-    values.outcome ||
-      dimensions.some((dimension) => Boolean(values[DIMENSION_CONFIG[dimension].field])),
-  );
+  const evidenceValues = useWatch({
+    control,
+    name: ["outcome", "cueSupport", "environment", "distance", "durationBand", "distraction"],
+  });
+  const selectedSafetySignal = useWatch({ control, name: "safetySignal" });
+  const currentLevelConfirmed = useWatch({ control, name: "confirmCurrentLevel" }) === true;
+  const hasStructuredEvidence = evidenceValues.some(Boolean);
   const [safetyConfirmed, setSafetyConfirmed] = useState(false);
 
   useEffect(() => {
@@ -67,16 +67,23 @@ export function SessionForm({
   }, [hasStructuredEvidence, unregister]);
 
   const onSubmit = handleSubmit(async (body) => {
-    if (body.safetySignal && !safetyConfirmed) {
-      toast.error(t("practice.safetyConfirm"));
-      return;
-    }
     try {
       const occurredAt = new Date(body.occurredAt);
+      const { confirmCurrentLevel, ...bodyWithoutConfirmation } = body;
+      const submittedHasStructuredEvidence = Boolean(
+        body.outcome ||
+          dimensions.some((dimension) => Boolean(body[DIMENSION_CONFIG[dimension].field])),
+      );
+      const submittedBody: PracticeSessionInput = {
+        ...bodyWithoutConfirmation,
+        ...(submittedHasStructuredEvidence && confirmCurrentLevel
+          ? { confirmCurrentLevel: true }
+          : {}),
+      };
       await logSession.mutateAsync({
         skillId,
         body: {
-          ...body,
+          ...submittedBody,
           occurredAt: occurredAt.toISOString(),
           timezoneOffsetMinutes: occurredAt.getTimezoneOffset(),
         },
@@ -198,23 +205,24 @@ export function SessionForm({
         </label>
       )}
       {hasStructuredEvidence && (
-        <label className="block text-sm">
-          <input
-            type="checkbox"
-            className="mr-2 size-4 accent-copper"
-            aria-label={t("contextProgress.confirmCurrentLevel", { level: currentLevel })}
-            aria-describedby={confirmationHelpId}
-            checked={currentLevelConfirmed}
-            onChange={(event) => {
-              if (event.target.checked) setValue("confirmCurrentLevel", true);
-              else unregister("confirmCurrentLevel");
-            }}
-          />
-          <span>{t("contextProgress.confirmCurrentLevel", { level: currentLevel })}</span>
+        <div className="block text-sm">
+          <label>
+            <input
+              type="checkbox"
+              className="mr-2 size-4 accent-copper"
+              aria-describedby={confirmationHelpId}
+              checked={currentLevelConfirmed}
+              onChange={(event) => {
+                if (event.target.checked) setValue("confirmCurrentLevel", true);
+                else unregister("confirmCurrentLevel");
+              }}
+            />
+            <span>{t("contextProgress.confirmCurrentLevel", { level: currentLevel })}</span>
+          </label>
           <span id={confirmationHelpId} className="ml-6 block text-xs text-slate-soft">
             {t("contextProgress.confirmCurrentLevelHelp")}
           </span>
-        </label>
+        </div>
       )}
       <div className="flex gap-2">
         <Button type="submit" disabled={isSubmitting || logSession.isPending}>

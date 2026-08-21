@@ -56,7 +56,10 @@ describe("progress hooks", () => {
   it("patches session evidence and invalidates derived progress and suggestions", async () => {
     patchEvidence.mockResolvedValue({
       ok: true,
-      json: async () => ({ session: { id: "session-1" } }),
+      json: async () => ({
+        session: { id: "session-1" },
+        anchorRejected: "practice_day_required",
+      }),
     });
     const queryClient = makeQueryClient();
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
@@ -65,8 +68,13 @@ describe("progress hooks", () => {
     });
     const body = { outcome: "went_well" as const };
 
+    let saved: unknown;
     await act(async () => {
-      await result.current.mutateAsync({ skillId: "skill-1", sessionId: "session-1", body });
+      saved = await result.current.mutateAsync({
+        skillId: "skill-1",
+        sessionId: "session-1",
+        body,
+      });
     });
 
     expect(patchEvidence).toHaveBeenCalledWith({
@@ -75,6 +83,10 @@ describe("progress hooks", () => {
     });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["progress", "dog-1"] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["suggestion", "dog-1"] });
+    expect(saved).toEqual({
+      session: { id: "session-1" },
+      anchorRejected: "practice_day_required",
+    });
   });
 
   it.each([

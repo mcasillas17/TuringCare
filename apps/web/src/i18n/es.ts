@@ -583,6 +583,12 @@ export const es = {
     practicedFallback: "Alternativa más fácil",
     outcomeSaved: "Gracias, quedó registrado.",
     outcomeFailed: "No se pudo guardar.",
+    anchorRejectedPracticeDay:
+      "Se guardó la práctica, pero no se registró la confirmación del nivel actual porque esta práctica no corresponde a un día válido.",
+    anchorRejectedTargetLocked:
+      "Se guardó la práctica, pero no se registró la confirmación del nivel actual porque esta práctica ya tiene otro anclaje de entrenamiento.",
+    anchorRejectedGeneric:
+      "Se guardó la práctica, pero no se registró la confirmación del nivel actual.",
     contextTitle: "Detalles de la práctica",
     contextOptional: "opcional",
     dimCueSupport: "ayuda",

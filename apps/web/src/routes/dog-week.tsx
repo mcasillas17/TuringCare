@@ -110,7 +110,10 @@ export function DogWeek() {
 
   const onLog = async (skillId: string, day: Date) => {
     const focusSkill = skills.find((skill) => skill.skillId === skillId);
-    if (!focusSkill) return;
+    if (!focusSkill) {
+      toast.error(t("progress.saveFailed"));
+      return;
+    }
     const scopeAtStart = pendingScope;
     const isToday = dayKey(day) === dayKey(today);
     const occurredAt = isToday
@@ -158,7 +161,7 @@ export function DogWeek() {
     const target = pendingOutcome;
     const { variant, ...evidence } = input;
     try {
-      await setEvidence.mutateAsync({
+      const result = await setEvidence.mutateAsync({
         skillId: target.skillId,
         sessionId: target.sessionId,
         body: {
@@ -170,7 +173,15 @@ export function DogWeek() {
         },
       });
       setPendingOutcome((current) => (current?.sessionId === target.sessionId ? null : current));
-      toast.success(t("practice.outcomeSaved"));
+      const feedback =
+        result.anchorRejected === "practice_day_required"
+          ? t("practice.anchorRejectedPracticeDay")
+          : result.anchorRejected === "target_locked"
+            ? t("practice.anchorRejectedTargetLocked")
+            : result.anchorRejected
+              ? t("practice.anchorRejectedGeneric")
+              : t("practice.outcomeSaved");
+      toast.success(feedback);
     } catch {
       toast.error(t("practice.outcomeFailed"));
     }

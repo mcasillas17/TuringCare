@@ -577,6 +577,11 @@ export const en = {
     practicedFallback: "Easier fallback",
     outcomeSaved: "Thanks — logged.",
     outcomeFailed: "Couldn't save that.",
+    anchorRejectedPracticeDay:
+      "Practice was saved, but current-level confirmation was not recorded because this practice was not on a valid practice day.",
+    anchorRejectedTargetLocked:
+      "Practice was saved, but current-level confirmation was not recorded because this practice already has a different training anchor.",
+    anchorRejectedGeneric: "Practice was saved, but current-level confirmation was not recorded.",
     contextTitle: "Practice details",
     contextOptional: "optional",
     dimCueSupport: "help",

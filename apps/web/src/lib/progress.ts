@@ -193,7 +193,7 @@ export function useSetSessionEvidence(dogId: string) {
         json: args.body,
       });
       if (!res.ok) throw new Error("evidence_failed");
-      return (await res.json()).session;
+      return await res.json();
     },
     onSuccess: () => invalidatePracticeDerivedData(qc, dogId),
   });

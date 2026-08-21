@@ -58,7 +58,6 @@ export function OutcomeQuickCapture({
 
   return (
     <section
-      aria-live="polite"
       aria-label={t("practice.outcomeQuestion")}
       className="flex flex-wrap items-center gap-2 rounded border border-silver bg-white p-3"
     >
@@ -151,35 +150,31 @@ export function OutcomeQuickCapture({
         </label>
       )}
       {hasStructuredEvidence && !usesAuditedSuggestion && (
-        <label className="text-sm text-slate">
-          <input
-            type="checkbox"
-            className="mr-2 size-4 accent-copper"
-            aria-label={t("contextProgress.confirmCurrentLevel", { level: currentLevel })}
-            aria-describedby={confirmationHelpId}
-            checked={currentLevelConfirmed}
-            onChange={(event) => setCurrentLevelConfirmed(event.target.checked)}
-          />
-          <span>{t("contextProgress.confirmCurrentLevel", { level: currentLevel })}</span>
+        <div className="text-sm text-slate">
+          <label>
+            <input
+              type="checkbox"
+              className="mr-2 size-4 accent-copper"
+              aria-describedby={confirmationHelpId}
+              checked={currentLevelConfirmed}
+              onChange={(event) => setCurrentLevelConfirmed(event.target.checked)}
+            />
+            <span>{t("contextProgress.confirmCurrentLevel", { level: currentLevel })}</span>
+          </label>
           <span id={confirmationHelpId} className="ml-6 block text-xs text-slate-soft">
             {t("contextProgress.confirmCurrentLevelHelp")}
           </span>
-        </label>
+        </div>
       )}
       <Button
         type="button"
-        disabled={
-          saving ||
-          (!outcome && !safetySignal) ||
-          Boolean(safetySignal && !safetyConfirmed) ||
-          Boolean(hasStructuredEvidence && !usesAuditedSuggestion && !currentLevelConfirmed)
-        }
+        disabled={saving || (!outcome && !safetySignal)}
         onClick={() =>
           onSave({
             ...context,
             outcome: outcome ?? undefined,
             safetySignal: safetySignal || undefined,
-            ...(!usesAuditedSuggestion && currentLevelConfirmed
+            ...(hasStructuredEvidence && !usesAuditedSuggestion && currentLevelConfirmed
               ? { confirmCurrentLevel: true }
               : {}),
             variant,
