@@ -1,3 +1,4 @@
+import { CONTEXTUAL_PROGRESS_WINDOW_DAYS } from "@turingcare/shared";
 import type {
   ContextualProgress,
   ExactContextEvidence,
@@ -10,7 +11,6 @@ import type {
 import { adjacentContext } from "./context-adjacency";
 
 export const CONTEXTUAL_PROGRESS_POLICY_VERSION = "2026-08-20";
-export const CONTEXTUAL_PROGRESS_WINDOW_DAYS = 21;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

@@ -1,7 +1,10 @@
 import { LocaleProvider } from "@/i18n";
 import * as contextualProgressLib from "@/lib/contextual-progress";
 import { fireEvent, render, screen } from "@testing-library/react";
-import type { ContextualProgressSummary } from "@turingcare/shared";
+import {
+  CONTEXTUAL_PROGRESS_WINDOW_DAYS,
+  type ContextualProgressSummary,
+} from "@turingcare/shared";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ContextualProgressSummaryCard } from "./contextual-progress-summary";
@@ -69,10 +72,16 @@ describe("ContextualProgressSummaryCard", () => {
   it("shows the strongest reliable context and one next-practice action", () => {
     renderSummary({ status: "ready", summary: reliableSummary });
 
-    expect(screen.getByRole("heading", { name: "Sit" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sit", level: 2 })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Strongest recent context", level: 3 }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Practice next", level: 3 })).toBeInTheDocument();
     expect(screen.getByText("Reliable")).toBeInTheDocument();
     expect(screen.getByText("One step harder")).toBeInTheDocument();
-    expect(screen.getByText("Based on the most recent 21 days")).toBeInTheDocument();
+    expect(
+      screen.getByText(`Based on the most recent ${CONTEXTUAL_PROGRESS_WINDOW_DAYS} days`),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Distance").length).toBeGreaterThan(0);
   });
 
@@ -124,7 +133,9 @@ describe("ContextualProgressSummaryCard", () => {
   it("uses the recent 21-day label for historical weekly summaries", () => {
     renderSummary({ status: "ready", summary: reliableSummary });
 
-    expect(screen.getByText("Based on the most recent 21 days")).toBeInTheDocument();
+    expect(
+      screen.getByText(`Based on the most recent ${CONTEXTUAL_PROGRESS_WINDOW_DAYS} days`),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/this week/i)).not.toBeInTheDocument();
   });
 

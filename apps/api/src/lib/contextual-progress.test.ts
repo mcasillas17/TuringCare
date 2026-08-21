@@ -3,11 +3,11 @@ import type {
   PracticeDimension,
   SkillDimensionMetadata,
 } from "@turingcare/shared";
+import { CONTEXTUAL_PROGRESS_WINDOW_DAYS } from "@turingcare/shared";
 import { describe, expect, it } from "vitest";
 import { skillDimensionMetadata } from "../data/training-curriculum";
 import {
   CONTEXTUAL_PROGRESS_POLICY_VERSION,
-  CONTEXTUAL_PROGRESS_WINDOW_DAYS,
   type ContextualProgressRow,
   deriveContextualProgress,
 } from "./contextual-progress";

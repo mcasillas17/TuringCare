@@ -1,13 +1,13 @@
-import type { ContextualProgress, ContextualProgressSummary } from "@turingcare/shared";
+import {
+  CONTEXTUAL_PROGRESS_WINDOW_DAYS,
+  type ContextualProgress,
+  type ContextualProgressSummary,
+} from "@turingcare/shared";
 import { and, desc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import { CURRICULUM_VERSION, skillDimensionMetadata } from "../data/training-curriculum";
 import { db } from "../db";
 import { practiceSessions, type trainingSkills } from "../db/schema";
-import {
-  CONTEXTUAL_PROGRESS_WINDOW_DAYS,
-  type ContextualProgressRow,
-  deriveContextualProgress,
-} from "./contextual-progress";
+import { type ContextualProgressRow, deriveContextualProgress } from "./contextual-progress";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

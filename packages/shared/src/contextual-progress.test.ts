@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONTEXTUAL_PROGRESS_WINDOW_DAYS,
   contextualProgressEventSchema,
   contextualProgressSchema,
   contextualProgressSurfaceValues,
@@ -14,7 +15,7 @@ const fixture = {
   window: {
     startsAt: "2026-07-30T12:00:00.000Z",
     endsAt: "2026-08-20T12:00:00.000Z",
-    days: 21,
+    days: CONTEXTUAL_PROGRESS_WINDOW_DAYS,
   },
   curriculumLevel: 2,
   curriculumVersion: "2026-08-11",

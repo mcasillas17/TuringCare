@@ -19,7 +19,7 @@ import {
   weekKeyAtOffset,
   weekKeyOf,
 } from "@/lib/week";
-import { type FocusSkill, useFocusWeek } from "@/lib/weekly-focus";
+import { useFocusWeek } from "@/lib/weekly-focus";
 import type {
   AdvancementDecision,
   PracticeDimension,
@@ -70,9 +70,7 @@ export function DogWeek() {
   } | null>(null);
   const logDisabled = logSession.isPending || (weekKey === currentWeekKey && suggestionLoading);
 
-  const availableFocusSkills = useRef<FocusSkill[]>([]);
-  if (focusSkills) availableFocusSkills.current = focusSkills;
-  const skills = focusSkills ?? (focusError && !focusLoading ? availableFocusSkills.current : []);
+  const skills = focusSkills ?? [];
   const canGoNext = !sameWeek(monday, today);
 
   const sessionCount = skills.reduce((sum, s) => sum + s.sessions.length, 0);
@@ -260,15 +258,9 @@ export function DogWeek() {
 
       {skills.length > 0 && (
         <div className="space-y-3">
-          {skills.map((skill) =>
-            skill.contextualProgress.status === "ready" ? (
-              <ContextualProgressSummaryCard key={skill.skillId} dogId={id} skill={skill} />
-            ) : (
-              <output key={skill.skillId} className="block text-sm text-slate-soft">
-                {t("contextProgress.loadError")}
-              </output>
-            ),
-          )}
+          {skills.map((skill) => (
+            <ContextualProgressSummaryCard key={skill.skillId} dogId={id} skill={skill} />
+          ))}
         </div>
       )}
 

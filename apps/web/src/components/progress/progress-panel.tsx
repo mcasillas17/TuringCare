@@ -29,6 +29,7 @@ import {
 } from "@turingcare/shared";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
+import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 
 const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
@@ -57,17 +58,15 @@ export function ProgressPanel({ dogId }: { dogId: string }) {
   const { data, isLoading, isError } = useProgress(dogId);
   const goals = data ?? [];
   const [deepLinkedSkillId, setDeepLinkedSkillId] = useState<string | null>(null);
-  const hashHandled = useRef(false);
+  const { hash } = useLocation();
 
   useEffect(() => {
-    if (hashHandled.current || isLoading || !data) return;
-    hashHandled.current = true;
-    const hash = window.location.hash;
+    if (isLoading || !data) return;
     if (!hash.startsWith("#skill-")) return;
     const skillId = hash.slice("#skill-".length);
     if (!data.some((goal) => goal.skills.some((skill) => skill.id === skillId))) return;
     setDeepLinkedSkillId(skillId);
-  }, [data, isLoading]);
+  }, [data, hash, isLoading]);
 
   return (
     <div className="space-y-3">
@@ -220,7 +219,11 @@ function SkillCard({
   useEffect(() => {
     if (deepLinkedSkillId !== displaySkill.id) return;
     setExpanded(true);
-    const scroll = () => skillRef.current?.scrollIntoView?.({ block: "start" });
+    const scroll = () => {
+      const skillElement = skillRef.current;
+      skillElement?.scrollIntoView?.({ block: "start" });
+      skillElement?.focus({ preventScroll: true });
+    };
     if (typeof window.requestAnimationFrame === "function") {
       const frame = window.requestAnimationFrame(scroll);
       return () => window.cancelAnimationFrame(frame);
@@ -232,6 +235,8 @@ function SkillCard({
     <li
       ref={skillRef}
       id={`skill-${displaySkill.id}`}
+      tabIndex={-1}
+      aria-labelledby={`skill-heading-${displaySkill.id}`}
       className="space-y-3 rounded border border-silver p-3"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -258,7 +263,9 @@ function SkillCard({
             {expanded ? "▼" : "▶"}
           </button>
           <div className="flex-1">
-            <h4 className="font-medium text-slate">{displaySkill.name}</h4>
+            <h4 id={`skill-heading-${displaySkill.id}`} className="font-medium text-slate">
+              {displaySkill.name}
+            </h4>
             {catalogSkill && (
               <div className="text-xs text-slate-soft">{catalogSkill.description}</div>
             )}

@@ -7,9 +7,13 @@ import * as catalogLib from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { CatalogTemplate, ContextualProgress } from "@turingcare/shared";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProgressPanel } from "./progress-panel";
+
+const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+const originalFocus = HTMLElement.prototype.focus;
 
 vi.mock("@/lib/progress", async () => {
   const actual = await vi.importActual<typeof import("@/lib/progress")>("@/lib/progress");
@@ -43,7 +47,25 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 afterEach(() => {
   window.history.replaceState({}, "", "/");
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: originalScrollIntoView,
+  });
+  Object.defineProperty(HTMLElement.prototype, "focus", {
+    configurable: true,
+    value: originalFocus,
+  });
+  vi.restoreAllMocks();
 });
+
+function HashNavigator() {
+  const navigate = useNavigate();
+  return (
+    <button type="button" onClick={() => navigate("/my/dogs/d1/training#skill-s1")}>
+      Open Sit
+    </button>
+  );
+}
 
 const goals: ProgressGoal[] = [
   {
@@ -160,10 +182,12 @@ function setup({
   withContext = false,
   customSkill = false,
   data = contextualData,
+  withHashNavigator = false,
 }: {
   withContext?: boolean;
   customSkill?: boolean;
   data?: ContextualProgress;
+  withHashNavigator?: boolean;
 } = {}) {
   const renderedGoals =
     withContext && !customSkill
@@ -215,7 +239,10 @@ function setup({
   render(
     <LocaleProvider>
       <QueryClientProvider client={new QueryClient()}>
-        <ProgressPanel dogId="d1" />
+        <MemoryRouter initialEntries={[`${window.location.pathname}${window.location.hash}`]}>
+          {withHashNavigator && <HashNavigator />}
+          <ProgressPanel dogId="d1" />
+        </MemoryRouter>
       </QueryClientProvider>
     </LocaleProvider>,
   );
@@ -252,9 +279,14 @@ describe("ProgressPanel", () => {
 
   it("expands and scrolls to the owned skill named by the training hash", async () => {
     const scrollIntoView = vi.fn();
+    const focus = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
       value: scrollIntoView,
+    });
+    Object.defineProperty(HTMLElement.prototype, "focus", {
+      configurable: true,
+      value: focus,
     });
     window.history.replaceState({}, "", "#skill-s1");
 
@@ -264,6 +296,31 @@ describe("ProgressPanel", () => {
       expect(screen.getByRole("button", { name: /collapse sit/i })).toBeInTheDocument(),
     );
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  });
+
+  it("reacts to an in-app training hash change and focuses the owned skill", async () => {
+    const scrollIntoView = vi.fn();
+    const focus = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    Object.defineProperty(HTMLElement.prototype, "focus", {
+      configurable: true,
+      value: focus,
+    });
+
+    setup({ withHashNavigator: true });
+    expect(screen.getByRole("button", { name: /expand sit/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Sit" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /collapse sit/i })).toBeInTheDocument(),
+    );
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
   });
 
   it("ignores a training hash for a skill that is not rendered", async () => {

@@ -9,6 +9,8 @@ import {
   practiceOutcomeValues,
 } from "./practice-evidence";
 
+export const CONTEXTUAL_PROGRESS_WINDOW_DAYS = 21 as const;
+
 export const contextualStatusValues = ["reliable", "developing", "not_observed"] as const;
 export type ContextualStatus = (typeof contextualStatusValues)[number];
 
@@ -62,7 +64,7 @@ export const contextualProgressSchema = contextualProgressSummarySchema.extend({
   window: z.object({
     startsAt: z.string().datetime(),
     endsAt: z.string().datetime(),
-    days: z.literal(21),
+    days: z.literal(CONTEXTUAL_PROGRESS_WINDOW_DAYS),
   }),
   curriculumLevel: z.number().int().min(1).max(5),
   curriculumVersion: z.string().min(1),

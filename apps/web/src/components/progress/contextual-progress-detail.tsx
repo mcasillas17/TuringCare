@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useRecordContextualProgressEvent } from "@/lib/contextual-progress";
-import { DIMENSION_CONFIG, OUTCOME_KEYS } from "@/lib/practice-options";
+import { OUTCOME_KEYS } from "@/lib/practice-options";
 import { LEVEL_KEYS } from "@/lib/progress";
 import { dateLabel } from "@/lib/when";
 import type {
@@ -9,81 +9,15 @@ import type {
   ExactContextEvidence,
   ExactPracticeContext,
   NextPracticeAction,
-  PracticeDimension,
 } from "@turingcare/shared";
 import { useEffect, useRef } from "react";
-
-const CONTEXT_DIMENSIONS = [
-  { dimension: "cue_support", field: "cueSupport", labelKey: "contextProgress.cueSupport" },
-  { dimension: "environment", field: "environment", labelKey: "contextProgress.environment" },
-  { dimension: "distance", field: "distance", labelKey: "contextProgress.distance" },
-  { dimension: "duration", field: "durationBand", labelKey: "contextProgress.durationBand" },
-  { dimension: "distraction", field: "distraction", labelKey: "contextProgress.distraction" },
-] as const;
-
-function serializeContext(context: ExactPracticeContext | null | undefined) {
-  if (!context) return "none";
-  return CONTEXT_DIMENSIONS.map(({ field }) => `${field}:${context[field] ?? "null"}`).join("|");
-}
-
-function statusLabel(status: ExactContextEvidence["status"], t: ReturnType<typeof useI18n>["t"]) {
-  if (status === "reliable") return t("contextProgress.reliable");
-  if (status === "developing") return t("contextProgress.developing");
-  return t("contextProgress.notObserved");
-}
-
-function StatusBadge({
-  status,
-  t,
-}: {
-  status: ExactContextEvidence["status"];
-  t: ReturnType<typeof useI18n>["t"];
-}) {
-  const className =
-    status === "reliable"
-      ? "bg-emerald-50 text-emerald-800"
-      : status === "developing"
-        ? "bg-amber-50 text-amber-900"
-        : "bg-cream text-slate-soft";
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}>
-      {statusLabel(status, t)}
-    </span>
-  );
-}
-
-function contextValueLabel(
-  dimension: PracticeDimension,
-  value: string | null,
-  t: ReturnType<typeof useI18n>["t"],
-) {
-  if (value === null) return t("contextProgress.notRecorded");
-  const option = DIMENSION_CONFIG[dimension].options.find((candidate) => candidate.value === value);
-  return option ? t(option.labelKey) : value;
-}
-
-function ContextLabels({
-  context,
-  t,
-}: {
-  context: ExactPracticeContext;
-  t: ReturnType<typeof useI18n>["t"];
-}) {
-  return (
-    <dl className="grid gap-2 sm:grid-cols-2">
-      {CONTEXT_DIMENSIONS.map(({ dimension, field, labelKey }) => {
-        return (
-          <div key={field}>
-            <dt className="text-xs text-slate-soft">{t(labelKey)}</dt>
-            <dd className="text-sm text-slate">
-              {contextValueLabel(dimension, context[field], t)}
-            </dd>
-          </div>
-        );
-      })}
-    </dl>
-  );
-}
+import {
+  ContextLabels,
+  ContextStatusBadge,
+  contextActionDirection,
+  contextActionReason,
+  serializeContext,
+} from "./contextual-progress-presentation";
 
 function EvidenceMeta({
   evidence,
@@ -144,7 +78,7 @@ function StrongestContext({
         {t("contextProgress.strongest")}
       </h6>
       <div className="mt-2 space-y-2 rounded border border-silver bg-cream p-3">
-        <StatusBadge status={evidence.status} t={t} />
+        <ContextStatusBadge status={evidence.status} t={t} />
         {evidence.status === "developing" && evidence.latestOutcome === "too_hard" && (
           <p className="text-sm text-slate-soft">{t("contextProgress.needsSupport")}</p>
         )}
@@ -153,21 +87,6 @@ function StrongestContext({
       </div>
     </section>
   );
-}
-
-function actionDirection(
-  direction: NextPracticeAction["direction"],
-  t: ReturnType<typeof useI18n>["t"],
-) {
-  if (direction === "easier") return t("contextProgress.directionEasier");
-  if (direction === "harder") return t("contextProgress.directionHarder");
-  return t("contextProgress.directionRepeat");
-}
-
-function actionReason(action: NextPracticeAction, t: ReturnType<typeof useI18n>["t"]) {
-  if (action.ruleId === "ease_after_too_hard") return t("contextProgress.reasonEasier");
-  if (action.ruleId === "advance_reliable_context") return t("contextProgress.reasonHarder");
-  return t("contextProgress.reasonRepeat");
 }
 
 function NextPracticeActionCard({
@@ -189,8 +108,10 @@ function NextPracticeActionCard({
         {t("contextProgress.practiceNext")}
       </h6>
       <div className="space-y-2 rounded border border-silver bg-white p-3">
-        <p className="text-sm font-medium text-slate">{actionDirection(action.direction, t)}</p>
-        <p className="text-sm text-slate-soft">{actionReason(action, t)}</p>
+        <p className="text-sm font-medium text-slate">
+          {contextActionDirection(action.direction, t)}
+        </p>
+        <p className="text-sm text-slate-soft">{contextActionReason(action, t)}</p>
         <ContextLabels context={action.context} t={t} />
         <Button type="button" onClick={onUse}>
           {t("contextProgress.useAction")}
@@ -212,7 +133,7 @@ function ContextEvidenceRow({
   return (
     <li className="space-y-2 rounded border border-silver p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <StatusBadge status={evidence.status} t={t} />
+        <ContextStatusBadge status={evidence.status} t={t} />
         {evidence.status === "developing" && evidence.latestOutcome === "too_hard" && (
           <span className="text-xs text-slate-soft">{t("contextProgress.needsSupport")}</span>
         )}

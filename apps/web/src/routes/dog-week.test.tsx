@@ -227,7 +227,59 @@ describe("DogWeek", () => {
     renderWeek();
 
     expect(screen.getByRole("status")).toHaveTextContent("Couldn't load context progress.");
+    expect(screen.getByRole("heading", { name: "Sit", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View all evidence" })).toHaveAttribute(
+      "href",
+      "/my/dogs/d1/training#skill-s1",
+    );
     expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeEnabled();
+  });
+
+  it("does not reuse a previous week's focus controls after the focus scope changes", () => {
+    const currentWeek = weekKeyOf(new Date());
+    setup([
+      {
+        ...sitFocus,
+        sessions: [
+          { id: "session-1", occurredAt: new Date().toISOString(), durationMinutes: null },
+        ],
+      },
+    ]);
+    vi.mocked(focusLib.useFocusWeek).mockImplementation((_dogId, weekKey) =>
+      weekKey === currentWeek
+        ? ({
+            data: [
+              {
+                ...sitFocus,
+                sessions: [
+                  { id: "session-1", occurredAt: new Date().toISOString(), durationMinutes: null },
+                ],
+              },
+            ],
+            isLoading: false,
+            isError: false,
+          } as unknown as ReturnType<typeof focusLib.useFocusWeek>)
+        : ({
+            data: undefined,
+            isLoading: false,
+            isError: true,
+          } as unknown as ReturnType<typeof focusLib.useFocusWeek>),
+    );
+    renderWeek();
+
+    expect(screen.getByRole("heading", { name: "Sit", level: 2 })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Sit on .*: 1 sessions/i }));
+    expect(screen.getByRole("button", { name: /remove/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /log another/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous week" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("Couldn't load this week's focus.");
+    expect(screen.queryByRole("heading", { name: "Sit", level: 2 })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Log Sit on/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /remove/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /log another/i })).not.toBeInTheDocument();
   });
 
   it("keeps stale focus controls usable when the focus query reports an error", () => {
