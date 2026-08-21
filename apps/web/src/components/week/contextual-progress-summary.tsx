@@ -69,13 +69,15 @@ export function ContextualProgressSummaryCard({
   skill,
   onRetry,
   showSafetyNotice = true,
-  suppressActions = false,
+  actionsSuppressed = false,
+  insightSettled = true,
 }: {
   dogId: string;
   skill: Pick<FocusSkill, "skillId" | "name" | "contextualProgress">;
   onRetry: () => unknown;
   showSafetyNotice?: boolean;
-  suppressActions?: boolean;
+  actionsSuppressed?: boolean;
+  insightSettled?: boolean;
 }) {
   const { t } = useI18n();
   const recordEvent = useRecordContextualProgressEvent(dogId);
@@ -83,11 +85,11 @@ export function ContextualProgressSummaryCard({
   const progress = skill.contextualProgress;
   const summary = progress.status === "ready" ? progress.summary : null;
   const availableNextPracticeAction =
-    suppressActions || summary?.safety ? null : (summary?.nextPracticeAction ?? null);
+    actionsSuppressed || summary?.safety ? null : (summary?.nextPracticeAction ?? null);
   const detailHref = `/my/dogs/${dogId}/training#skill-${skill.skillId}`;
 
   useEffect(() => {
-    if (progress.status !== "ready" || suppressActions || viewRecorded.current) return;
+    if (progress.status !== "ready" || !insightSettled || viewRecorded.current) return;
     viewRecorded.current = true;
     recordEvent.mutate({
       name: "training.context_insight_viewed",
@@ -95,7 +97,7 @@ export function ContextualProgressSummaryCard({
       strongestStatus: progress.summary.strongestContext?.status ?? null,
       hasNextAction: Boolean(availableNextPracticeAction),
     });
-  }, [availableNextPracticeAction, progress, recordEvent, suppressActions]);
+  }, [availableNextPracticeAction, insightSettled, progress, recordEvent]);
 
   return (
     <section

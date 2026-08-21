@@ -51,7 +51,8 @@ function renderSummary(
     | { status: "unavailable" },
   onRetry = vi.fn(),
   showSafetyNotice?: boolean,
-  suppressActions = false,
+  actionsSuppressed = false,
+  insightSettled = true,
 ) {
   const recordEvent = vi.fn();
   vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
@@ -65,7 +66,8 @@ function renderSummary(
           skill={{ skillId: "skill-1", name: "Sit", contextualProgress }}
           onRetry={onRetry}
           showSafetyNotice={showSafetyNotice}
-          suppressActions={suppressActions}
+          actionsSuppressed={actionsSuppressed}
+          insightSettled={insightSettled}
         />
       </MemoryRouter>
     </LocaleProvider>,
@@ -235,6 +237,129 @@ describe("ContextualProgressSummaryCard", () => {
     expect(recordEvent).not.toHaveBeenCalled();
   });
 
+  it("records one settled view without an action when page-owned safety suppresses actions", () => {
+    const recordEvent = vi.fn();
+    vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
+      mutate: recordEvent,
+    } as never);
+    const { rerender } = render(
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/dogs/dog-1/week"]}>
+          <ContextualProgressSummaryCard
+            dogId="dog-1"
+            skill={{
+              skillId: "skill-1",
+              name: "Sit",
+              contextualProgress: { status: "ready", summary: reliableSummary },
+            }}
+            onRetry={vi.fn()}
+            actionsSuppressed
+            insightSettled
+          />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+
+    expect(recordEvent).toHaveBeenCalledTimes(1);
+    expect(recordEvent).toHaveBeenCalledWith({
+      name: "training.context_insight_viewed",
+      surface: "week",
+      strongestStatus: "reliable",
+      hasNextAction: false,
+    });
+    expect(screen.queryByRole("link", { name: "Use this practice plan" })).not.toBeInTheDocument();
+
+    rerender(
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/dogs/dog-1/week"]}>
+          <ContextualProgressSummaryCard
+            dogId="dog-1"
+            skill={{
+              skillId: "skill-1",
+              name: "Sit",
+              contextualProgress: { status: "ready", summary: reliableSummary },
+            }}
+            onRetry={vi.fn()}
+            actionsSuppressed
+            insightSettled
+          />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+
+    expect(recordEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits through unresolved recommendation state before recording one accurate view", () => {
+    const recordEvent = vi.fn();
+    vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
+      mutate: recordEvent,
+    } as never);
+    const { rerender } = render(
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/dogs/dog-1/week"]}>
+          <ContextualProgressSummaryCard
+            dogId="dog-1"
+            skill={{
+              skillId: "skill-1",
+              name: "Sit",
+              contextualProgress: { status: "ready", summary: reliableSummary },
+            }}
+            onRetry={vi.fn()}
+            actionsSuppressed
+            insightSettled={false}
+          />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+
+    expect(recordEvent).not.toHaveBeenCalled();
+
+    rerender(
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/dogs/dog-1/week"]}>
+          <ContextualProgressSummaryCard
+            dogId="dog-1"
+            skill={{
+              skillId: "skill-1",
+              name: "Sit",
+              contextualProgress: { status: "ready", summary: reliableSummary },
+            }}
+            onRetry={vi.fn()}
+            insightSettled
+          />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+
+    expect(recordEvent).toHaveBeenCalledTimes(1);
+    expect(recordEvent).toHaveBeenCalledWith({
+      name: "training.context_insight_viewed",
+      surface: "week",
+      strongestStatus: "reliable",
+      hasNextAction: true,
+    });
+
+    rerender(
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/dogs/dog-1/week"]}>
+          <ContextualProgressSummaryCard
+            dogId="dog-1"
+            skill={{
+              skillId: "skill-1",
+              name: "Sit",
+              contextualProgress: { status: "ready", summary: reliableSummary },
+            }}
+            onRetry={vi.fn()}
+            insightSettled
+          />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+
+    expect(recordEvent).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps an unavailable summary inline instead of hiding practice controls", () => {
     const onRetry = vi.fn();
     renderSummary({ status: "unavailable" }, onRetry);
@@ -302,6 +427,7 @@ describe("ContextualProgressSummaryCard", () => {
       vi.fn(),
       false,
       true,
+      false,
     );
 
     expect(
@@ -320,6 +446,7 @@ describe("ContextualProgressSummaryCard", () => {
       vi.fn(),
       false,
       true,
+      false,
     );
 
     expect(recordEvent).not.toHaveBeenCalled();
@@ -338,7 +465,7 @@ describe("ContextualProgressSummaryCard", () => {
               },
             }}
             onRetry={vi.fn()}
-            suppressActions={false}
+            actionsSuppressed={false}
           />
         </MemoryRouter>
       </LocaleProvider>,

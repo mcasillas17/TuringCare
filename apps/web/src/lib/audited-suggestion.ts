@@ -8,7 +8,12 @@ export type AuditedSuggestionTarget = {
   suggestion: TrainingSuggestion;
 };
 
-type AuditedSuggestionTargetInput = {
+export type AuditedSuggestionTargetState =
+  | { status: "eligible"; target: AuditedSuggestionTarget }
+  | { status: "pending" }
+  | { status: "ineligible" };
+
+export type AuditedSuggestionTargetInput = {
   dogId: string;
   weekKey: string;
   currentWeekKey: string;
@@ -20,18 +25,28 @@ function isSettledSuccessfulQuery(query: ReturnType<QueryClient["getQueryState"]
   return query?.status === "success" && query.fetchStatus === "idle" && query.error == null;
 }
 
-export function getAuditedSuggestionTarget(
+function isQueryUnsettled(query: ReturnType<QueryClient["getQueryState"]>) {
+  return (
+    query?.status === "pending" ||
+    (query?.fetchStatus !== undefined && query.fetchStatus !== "idle")
+  );
+}
+
+export function getAuditedSuggestionTargetState(
   queryClient: QueryClient,
   { dogId, weekKey, currentWeekKey, skillId, suggestionId }: AuditedSuggestionTargetInput,
-): AuditedSuggestionTarget | null {
-  if (!dogId || weekKey !== currentWeekKey) return null;
+): AuditedSuggestionTargetState {
+  if (!dogId || weekKey !== currentWeekKey) return { status: "ineligible" };
 
   const currentSuggestionKey = suggestionKey(dogId, weekKey);
   const currentFocusKey = focusKey(dogId, weekKey);
   const suggestionQuery = queryClient.getQueryState<TrainingSuggestion>(currentSuggestionKey);
   const focusQuery = queryClient.getQueryState<FocusSkill[]>(currentFocusKey);
+  if (isQueryUnsettled(suggestionQuery) || isQueryUnsettled(focusQuery)) {
+    return { status: "pending" };
+  }
   if (!isSettledSuccessfulQuery(suggestionQuery) || !isSettledSuccessfulQuery(focusQuery)) {
-    return null;
+    return { status: "ineligible" };
   }
 
   const suggestion = queryClient.getQueryData<TrainingSuggestion>(currentSuggestionKey);
@@ -48,7 +63,7 @@ export function getAuditedSuggestionTarget(
     suggestion.skill?.id !== skillId ||
     (suggestionId !== undefined && suggestion.suggestionId !== suggestionId)
   ) {
-    return null;
+    return { status: "ineligible" };
   }
 
   const summarySafetySkill = focusSkills.find(
@@ -59,7 +74,15 @@ export function getAuditedSuggestionTarget(
     summarySafetySkill?.contextualProgress.status === "ready"
       ? summarySafetySkill.contextualProgress.summary.safety
       : null;
-  if (suggestion.safety ?? summarySafety) return null;
+  if (suggestion.safety ?? summarySafety) return { status: "ineligible" };
 
-  return { focusSkill, suggestion };
+  return { status: "eligible", target: { focusSkill, suggestion } };
+}
+
+export function getAuditedSuggestionTarget(
+  queryClient: QueryClient,
+  input: AuditedSuggestionTargetInput,
+): AuditedSuggestionTarget | null {
+  const state = getAuditedSuggestionTargetState(queryClient, input);
+  return state.status === "eligible" ? state.target : null;
 }

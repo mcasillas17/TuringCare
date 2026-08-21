@@ -6,6 +6,8 @@ import type { MessageKey } from "@/i18n/types";
 import { EASING_STRATEGY_KEYS, RULE_REASON_KEYS } from "@/lib/practice-options";
 import type { AdvancementDecision, SuggestionAction, TrainingSuggestion } from "@turingcare/shared";
 
+export type SuggestionSuppressionReason = "fetching" | "error" | "safety";
+
 const ACTIONS: { action: SuggestionAction; labelKey: MessageKey }[] = [
   { action: "started", labelKey: "suggestion.actionStarted" },
   { action: "skipped", labelKey: "suggestion.actionSkipped" },
@@ -21,7 +23,8 @@ type InteractiveSuggestionCardProps = {
   onPickFocus: () => void;
   actionPending?: boolean;
   decisionPending?: boolean;
-  actionsSuppressed?: boolean;
+  suppressionReason?: SuggestionSuppressionReason;
+  onRetry?: () => void;
 };
 
 type PreviewSuggestionCardProps = {
@@ -35,13 +38,32 @@ export function SuggestionCard(props: SuggestionCardProps) {
   const { t } = useI18n();
   const { suggestion } = props;
 
+  if (props.mode !== "preview" && props.suppressionReason === "safety") return null;
+
   if (suggestion.safety) return <SafetyNotice safety={suggestion.safety} />;
 
-  if (props.mode !== "preview" && props.actionsSuppressed) {
+  if (
+    props.mode !== "preview" &&
+    (props.suppressionReason === "fetching" || props.suppressionReason === "error")
+  ) {
     return (
-      <section aria-busy="true" className="space-y-2 rounded border border-silver bg-white p-4">
+      <section
+        aria-busy={props.suppressionReason === "fetching" ? true : undefined}
+        className="space-y-2 rounded border border-silver bg-white p-4"
+      >
         <h2 className="font-semibold text-slate">{t("suggestion.title")}</h2>
-        <p className="text-sm text-slate-soft">{t("common.loading")}</p>
+        {props.suppressionReason === "fetching" ? (
+          <p className="text-sm text-slate-soft">{t("common.loading")}</p>
+        ) : (
+          <>
+            <output className="block text-sm text-slate-soft">{t("suggestion.loadError")}</output>
+            {props.onRetry && (
+              <Button type="button" variant="outline" onClick={props.onRetry}>
+                {t("contextProgress.retry")}
+              </Button>
+            )}
+          </>
+        )}
       </section>
     );
   }

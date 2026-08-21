@@ -8,7 +8,10 @@ import { FocusPicker } from "@/components/week/focus-picker";
 import { WeekGrid } from "@/components/week/week-grid";
 import { WeekNav } from "@/components/week/week-nav";
 import { useI18n } from "@/i18n";
-import { getAuditedSuggestionTarget } from "@/lib/audited-suggestion";
+import {
+  getAuditedSuggestionTarget,
+  getAuditedSuggestionTargetState,
+} from "@/lib/audited-suggestion";
 import { useDeleteSession, useLogSession, useSetSessionEvidence } from "@/lib/progress";
 import { useAdvancementDecision, useSuggestion, useSuggestionAction } from "@/lib/suggestion";
 import {
@@ -94,11 +97,20 @@ export function DogWeek() {
       : null;
   const activeSafety = suggestionSafety ?? summarySafety;
   const safetyDataFetching = suggestionFetching || focusFetching;
-  const recommendationsSuppressed =
-    activeSafety !== null ||
-    safetyDataFetching ||
-    focusError ||
-    (weekKey === currentWeekKey && suggestionError);
+  const recommendationSuppressionReason =
+    activeSafety !== null
+      ? "safety"
+      : safetyDataFetching
+        ? "fetching"
+        : focusError || (weekKey === currentWeekKey && suggestionError)
+          ? "error"
+          : undefined;
+  const actionsSuppressed = recommendationSuppressionReason !== undefined;
+  const insightSettled =
+    !focusLoading &&
+    !focusFetching &&
+    !focusError &&
+    (weekKey !== currentWeekKey || (!suggestionLoading && !suggestionFetching && !suggestionError));
   const canGoNext = !sameWeek(monday, today);
 
   const sessionCount = skills.reduce((sum, s) => sum + s.sessions.length, 0);
@@ -113,18 +125,16 @@ export function DogWeek() {
   const previousPendingScope = useRef(pendingScope);
   const activeScope = useRef(pendingScope);
   activeScope.current = pendingScope;
-  const pendingAuditedSuggestionAllowed =
+  const pendingAuditedSuggestionState =
     pendingOutcome?.usesAuditedSuggestion &&
     pendingOutcome.scope === pendingScope &&
-    Boolean(
-      getAuditedSuggestionTarget(queryClient, {
-        dogId: id,
-        weekKey,
-        currentWeekKey,
-        skillId: pendingOutcome.skillId,
-        suggestionId: pendingOutcome.suggestionId ?? undefined,
-      }),
-    );
+    getAuditedSuggestionTargetState(queryClient, {
+      dogId: id,
+      weekKey,
+      currentWeekKey,
+      skillId: pendingOutcome.skillId,
+      suggestionId: pendingOutcome.suggestionId ?? undefined,
+    }).status;
   // Derived-state trigger: week completion comes from the refetched focus query
   // (not the log-session mutation response), so we watch it here and hop once on
   // a real false->true transition for the current week (refs keep it idempotent).
@@ -149,7 +159,9 @@ export function DogWeek() {
   }, [pendingScope]);
 
   useEffect(() => {
-    if (!pendingOutcome?.usesAuditedSuggestion || pendingAuditedSuggestionAllowed) return;
+    if (!pendingOutcome?.usesAuditedSuggestion || pendingAuditedSuggestionState !== "ineligible") {
+      return;
+    }
     setPendingOutcome((current) =>
       current?.sessionId === pendingOutcome.sessionId
         ? {
@@ -161,7 +173,7 @@ export function DogWeek() {
           }
         : current,
     );
-  }, [pendingAuditedSuggestionAllowed, pendingOutcome]);
+  }, [pendingAuditedSuggestionState, pendingOutcome]);
 
   const onLog = async (skillId: string, day: Date) => {
     const focusSkill = skills.find((skill) => skill.skillId === skillId);
@@ -319,6 +331,7 @@ export function DogWeek() {
 
       {weekKey === currentWeekKey &&
         !suggestionLoading &&
+        !focusError &&
         suggestion &&
         suggestion.weekKey === weekKey &&
         !suggestion.safety && (
@@ -329,17 +342,20 @@ export function DogWeek() {
             onPickFocus={() => setPickerOpen(true)}
             actionPending={suggestionAction.isPending}
             decisionPending={advancementDecision.isPending}
-            actionsSuppressed={recommendationsSuppressed}
+            suppressionReason={recommendationSuppressionReason}
+            onRetry={() => void refetchSuggestion()}
           />
         )}
-      {weekKey === currentWeekKey && suggestionError && (
-        <div className="space-y-2">
-          <output className="block text-sm text-slate-soft">{t("suggestion.loadError")}</output>
-          <Button type="button" variant="outline" onClick={() => void refetchSuggestion()}>
-            {t("contextProgress.retry")}
-          </Button>
-        </div>
-      )}
+      {weekKey === currentWeekKey &&
+        suggestionError &&
+        (!suggestion || suggestion.weekKey !== weekKey) && (
+          <div className="space-y-2">
+            <output className="block text-sm text-slate-soft">{t("suggestion.loadError")}</output>
+            <Button type="button" variant="outline" onClick={() => void refetchSuggestion()}>
+              {t("contextProgress.retry")}
+            </Button>
+          </div>
+        )}
       {focusError && (
         <div className="space-y-2">
           <output className="block text-sm text-slate-soft">{t("week.focusLoadError")}</output>
@@ -371,7 +387,8 @@ export function DogWeek() {
               dogId={id}
               skill={skill}
               showSafetyNotice={false}
-              suppressActions={recommendationsSuppressed}
+              actionsSuppressed={actionsSuppressed}
+              insightSettled={insightSettled}
               onRetry={() => refetchFocus()}
             />
           ))}

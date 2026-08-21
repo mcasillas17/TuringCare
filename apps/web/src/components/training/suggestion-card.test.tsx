@@ -121,7 +121,54 @@ describe("SuggestionCard", () => {
     expect(onAction).toHaveBeenCalledWith("started");
   });
 
-  it("keeps a neutral shell while recommendation actions are suppressed", () => {
+  it("keeps a stable shell while recommendation state changes from fetching to an error", () => {
+    const onRetry = vi.fn();
+    const { rerender } = render(
+      <LocaleProvider>
+        <SuggestionCard
+          suggestion={baseSuggestion}
+          onAction={vi.fn()}
+          onDecision={vi.fn()}
+          onPickFocus={vi.fn()}
+          suppressionReason="fetching"
+        />
+      </LocaleProvider>,
+    );
+
+    const heading = screen.getByRole("heading", { name: "This week's suggestion" });
+    const shell = heading.closest("section");
+    if (!shell) throw new Error("suggestion shell is missing");
+
+    expect(shell).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.queryByText("Lure into a sit in a quiet room.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "We did this" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Choose a different focus" }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <LocaleProvider>
+        <SuggestionCard
+          suggestion={baseSuggestion}
+          onAction={vi.fn()}
+          onDecision={vi.fn()}
+          onPickFocus={vi.fn()}
+          suppressionReason="error"
+          onRetry={onRetry}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "This week's suggestion" })).toBe(heading);
+    expect(heading.closest("section")).not.toHaveAttribute("aria-busy");
+    expect(screen.getByRole("status")).toHaveTextContent(/Couldn't load this week's suggestion/);
+    expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("defers safety rendering to the page-level safety notice", () => {
     render(
       <LocaleProvider>
         <SuggestionCard
@@ -129,18 +176,16 @@ describe("SuggestionCard", () => {
           onAction={vi.fn()}
           onDecision={vi.fn()}
           onPickFocus={vi.fn()}
-          actionsSuppressed
+          suppressionReason="safety"
         />
       </LocaleProvider>,
     );
 
-    expect(screen.getByRole("heading", { name: "This week's suggestion" })).toBeInTheDocument();
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "This week's suggestion" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Lure into a sit in a quiet room.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "We did this" })).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Choose a different focus" }),
-    ).not.toBeInTheDocument();
   });
 
   it("lets the owner replace an ordinary suggestion by changing focus", () => {
