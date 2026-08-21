@@ -229,7 +229,7 @@ describe("ContextualProgressDetail", () => {
     expect(onUseNextAction).toHaveBeenCalledWith(nextPracticeAction.context);
   });
 
-  it("records one view event for one mounted surface despite data changes and rerenders", () => {
+  it("does not duplicate a view event when the same result rerenders", () => {
     const mutate = vi.fn();
     vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
       mutate,
@@ -259,7 +259,7 @@ describe("ContextualProgressDetail", () => {
         <ContextualProgressDetail
           dogId="dog-1"
           skillId="skill-1"
-          data={makeData({ policyVersion: "2026-08-21" })}
+          data={makeData()}
           isLoading={false}
           isError={false}
           refetch={vi.fn()}
@@ -269,6 +269,48 @@ describe("ContextualProgressDetail", () => {
     );
 
     expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("records one view event for a distinct result while the detail remains mounted", () => {
+    const mutate = vi.fn();
+    vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
+      mutate,
+    } as never);
+    const result = render(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData()}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    result.rerender(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData({ policyVersion: "2026-08-21" })}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(mutate).toHaveBeenNthCalledWith(2, {
+      name: "training.context_insight_viewed",
+      surface: "skill_detail",
+      strongestStatus: "reliable",
+      hasNextAction: true,
+    });
+    expect(mutate).toHaveBeenCalledTimes(2);
   });
 
   it("records a new view event after the detail surface remounts", () => {

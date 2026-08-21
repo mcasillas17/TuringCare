@@ -242,18 +242,24 @@ export function ContextualProgressDetail({
 }) {
   const { t, locale } = useI18n();
   const recordEvent = useRecordContextualProgressEvent(dogId);
-  const hasRecordedView = useRef(false);
+  const seenResultKeys = useRef(new Set<string>());
+
+  const resultKey = data
+    ? `${data.policyVersion}|${data.curriculumLevel}|${serializeContext(data.strongestContext?.context)}`
+    : null;
 
   useEffect(() => {
-    if (isLoading || isError || !data || hasRecordedView.current) return;
-    hasRecordedView.current = true;
+    if (isLoading || isError || !data || !resultKey || seenResultKeys.current.has(resultKey)) {
+      return;
+    }
+    seenResultKeys.current.add(resultKey);
     recordEvent.mutate({
       name: "training.context_insight_viewed",
       surface: "skill_detail",
       strongestStatus: data.strongestContext?.status ?? null,
       hasNextAction: Boolean(data.nextPracticeAction),
     });
-  }, [data, isError, isLoading, recordEvent]);
+  }, [data, isError, isLoading, recordEvent, resultKey]);
 
   const sectionId = `context-progress-${skillId}`;
 
