@@ -446,25 +446,34 @@ describe("deriveContextualProgress", () => {
     expect(ambiguousAdjacency.nextPracticeAction).toBeNull();
   });
 
-  it("lets custom Developing skills repeat but never fabricates harder or easier context", () => {
+  it("lets custom Developing skills repeat even when metadata is present", () => {
     const developing = derive([row("mixed", "2026-08-20T08:00:00.000Z", { outcome: "mixed" })], {
-      metadata: null,
       catalogSkillKey: null,
+      metadata: DEFAULT_METADATA,
     });
     expect(developing.nextPracticeAction?.direction).toBe("repeat");
+    expect(developing.nextPracticeAction).toEqual({
+      ruleId: "repeat_developing_context",
+      direction: "repeat",
+      context: baseContext,
+      changedDimension: null,
+    });
+  });
 
+  it("does not synthesize harder adjacency or Not observed for a custom Reliable context", () => {
     const reliable = derive(
       [
         row("first", "2026-08-18T08:00:00.000Z", { practiceDay: "2026-08-18" }),
         row("second", "2026-08-19T08:00:00.000Z", { practiceDay: "2026-08-19" }),
       ],
-      { metadata: null, catalogSkillKey: null },
+      { catalogSkillKey: null, metadata: DEFAULT_METADATA },
     );
     expect(reliable.strongestContext?.status).toBe("reliable");
     expect(reliable.nextPracticeAction).toBeNull();
+    expect(reliable.exactContexts).toHaveLength(1);
   });
 
-  it("repeats Developing for a custom Reliable context when no harder adjacency exists", () => {
+  it("does not synthesize an easier action for a custom latest too_hard result", () => {
     const developing = context({ cueSupport: "food_lure" });
     const result = derive(
       [
@@ -478,8 +487,12 @@ describe("deriveContextualProgress", () => {
           cueSupport: developing.cueSupport,
           outcome: "mixed",
         }),
+        row("latest-hard", "2026-08-20T11:00:00.000Z", {
+          cueSupport: "verbal_cue",
+          outcome: "too_hard",
+        }),
       ],
-      { metadata: null, catalogSkillKey: null },
+      { catalogSkillKey: null, metadata: DEFAULT_METADATA },
     );
 
     expect(result.strongestContext?.status).toBe("reliable");
@@ -489,6 +502,7 @@ describe("deriveContextualProgress", () => {
       context: developing,
       changedDimension: null,
     });
+    expect(result.exactContexts).toHaveLength(3);
   });
 
   it("never progresses after an un-easable latest too_hard, but repeats another Developing context", () => {

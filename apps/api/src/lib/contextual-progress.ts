@@ -178,12 +178,13 @@ function compareObservedContexts(left: ObservedContext, right: ObservedContext):
 
 function deriveAdjacentAction(
   source: ExactPracticeContext,
+  catalogSkillKey: string | null,
   metadata: SkillDimensionMetadata | null,
   curriculumLevel: number,
   direction: "easier" | "harder",
   ruleId: "ease_after_too_hard" | "advance_reliable_context",
 ): NextPracticeAction | null {
-  if (!metadata) return null;
+  if (!catalogSkillKey || !metadata) return null;
 
   const step = getReviewedContextStep(metadata, curriculumLevel, direction);
   if (!step) return null;
@@ -238,11 +239,13 @@ function deriveAction(input: {
   observed: ObservedContext[];
   strongest: ExactContextEvidence | null;
   curriculumLevel: number;
+  catalogSkillKey: string | null;
   metadata: SkillDimensionMetadata | null;
 }): NextPracticeAction | null {
   if (input.latestRow?.outcome === "too_hard") {
     const easierAction = deriveAdjacentAction(
       input.latestRow.context,
+      input.catalogSkillKey,
       input.metadata,
       input.curriculumLevel,
       "easier",
@@ -259,6 +262,7 @@ function deriveAction(input: {
   if (input.strongest.status === "reliable") {
     const harderAction = deriveAdjacentAction(
       input.strongest.context,
+      input.catalogSkillKey,
       input.metadata,
       input.curriculumLevel,
       "harder",
@@ -304,6 +308,7 @@ export function deriveContextualProgress(input: {
     observed,
     strongest,
     curriculumLevel: input.curriculumLevel,
+    catalogSkillKey: input.catalogSkillKey,
     metadata: input.metadata,
   });
   const exactContexts = observed.map(({ evidence }) => evidence);
