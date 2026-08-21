@@ -10,7 +10,8 @@ import {
   trainingSkills,
   weeklyFocus,
 } from "../db/schema";
-import * as contextualProgressData from "./contextual-progress-data";
+import { classifyExceptionValue } from "../monitoring/sanitize-event";
+import { loadContextualProgressSummaries } from "./contextual-progress-data";
 import type { TransactionType } from "./safety-lock";
 
 export type FocusSession = {
@@ -99,10 +100,10 @@ export async function loadFocusWeek(
     .orderBy(asc(weeklyFocus.position), asc(weeklyFocus.createdAt));
 
   const skillIds = focus.map((f) => f.skillId);
-  const sessions =
+  const sessionsPromise =
     skillIds.length === 0
-      ? []
-      : await db
+      ? Promise.resolve([])
+      : db
           .select({
             id: practiceSessions.id,
             skillId: practiceSessions.skillId,
@@ -120,20 +121,23 @@ export async function loadFocusWeek(
           .orderBy(asc(practiceSessions.occurredAt));
 
   const now = new Date();
-  let summaries: Map<string, ContextualProgressSummary> | null;
-  try {
-    summaries = await contextualProgressData.loadContextualProgressSummaries(
-      focus.map((focusedSkill) => ({
-        id: focusedSkill.skillId,
-        confidence: focusedSkill.confidence,
-        catalogSkillKey: focusedSkill.catalogSkillKey,
-      })),
-      now,
-    );
-  } catch {
-    console.error("[contextual-progress] focus_summary_failed");
-    summaries = null;
-  }
+  const summariesPromise = loadContextualProgressSummaries(
+    focus.map((focusedSkill) => ({
+      id: focusedSkill.skillId,
+      confidence: focusedSkill.confidence,
+      catalogSkillKey: focusedSkill.catalogSkillKey,
+    })),
+    now,
+  ).catch((error: unknown) => {
+    const errorType = error instanceof Error ? error.constructor.name : undefined;
+    console.error("[contextual-progress] focus_summary_failed", {
+      dogId,
+      weekKey,
+      errorType: classifyExceptionValue(errorType),
+    });
+    return null;
+  });
+  const [sessions, summaries] = await Promise.all([sessionsPromise, summariesPromise]);
 
   const bySkill = new Map<string, FocusSession[]>();
   for (const s of sessions) {

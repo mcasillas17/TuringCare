@@ -1,5 +1,27 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+const contextualProgressSummaryControl = vi.hoisted(() => ({
+  captureNow: undefined as ((now: Date) => void) | undefined,
+  rejection: undefined as Error | undefined,
+}));
+
+vi.mock("../lib/contextual-progress-data", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/contextual-progress-data")>();
+  return {
+    ...actual,
+    loadContextualProgressSummaries: vi.fn(
+      async (...args: Parameters<typeof actual.loadContextualProgressSummaries>) => {
+        contextualProgressSummaryControl.captureNow?.(args[1]);
+        if (contextualProgressSummaryControl.rejection) {
+          throw contextualProgressSummaryControl.rejection;
+        }
+        return actual.loadContextualProgressSummaries(...args);
+      },
+    ),
+  };
+});
+
 import { app } from "../app";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
@@ -11,7 +33,7 @@ import {
   trainingSkills,
   weeklyFocus,
 } from "../db/schema";
-import * as contextualProgressData from "../lib/contextual-progress-data";
+import { loadContextualProgressSummaries } from "../lib/contextual-progress-data";
 import { claimLegacyFocus, legacyFocusWeekKey, rememberLegacyFocusWeek } from "../lib/focus";
 import { type TestUser, createTestUser } from "../test-helpers";
 
@@ -117,6 +139,9 @@ describe("dogs: weekly focus", () => {
     u = await createTestUser();
   });
   afterEach(async () => {
+    contextualProgressSummaryControl.captureNow = undefined;
+    contextualProgressSummaryControl.rejection = undefined;
+    vi.clearAllMocks();
     vi.restoreAllMocks();
     for (const dogId of dogIds) {
       await db.delete(dogs).where(eq(dogs.id, dogId));
@@ -513,7 +538,7 @@ describe("dogs: weekly focus", () => {
   it("returns no summaries without querying evidence when no skills are provided", async () => {
     const selectSpy = vi.spyOn(db, "select");
 
-    const summaries = await contextualProgressData.loadContextualProgressSummaries([], new Date());
+    const summaries = await loadContextualProgressSummaries([], new Date());
 
     expect(summaries).toEqual(new Map());
     expect(selectSpy).not.toHaveBeenCalled();
@@ -590,11 +615,19 @@ describe("dogs: weekly focus", () => {
         curriculumVersion: CURRICULUM_VERSION,
         ...context,
       },
+      {
+        skillId: skill.id,
+        occurredAt: sentinel,
+        outcome: "went_well",
+        practiceDay: sentinel.toISOString().slice(0, 10),
+        curriculumLevel: catalogCurrentLevel,
+        curriculumVersion: "obsolete-version",
+        ...context,
+      },
     ]);
 
     const selectSpy = vi.spyOn(db, "select");
-    const perSkillLoader = vi.spyOn(contextualProgressData, "loadContextualProgress");
-    const summaries = await contextualProgressData.loadContextualProgressSummaries(
+    const summaries = await loadContextualProgressSummaries(
       [
         {
           id: skill.id,
@@ -605,9 +638,7 @@ describe("dogs: weekly focus", () => {
       ],
       now,
     );
-
     expect(selectSpy).toHaveBeenCalledTimes(1);
-    expect(perSkillLoader).not.toHaveBeenCalled();
     expect(summaries.get(skill.id)).toEqual({
       strongestContext: {
         context,
@@ -680,14 +711,10 @@ describe("dogs: weekly focus", () => {
       },
     ]);
 
-    const originalBatchLoader = contextualProgressData.loadContextualProgressSummaries;
     let summaryNow: Date | undefined;
-    vi.spyOn(contextualProgressData, "loadContextualProgressSummaries").mockImplementation(
-      async (skills, now) => {
-        summaryNow = now;
-        return originalBatchLoader(skills, now);
-      },
-    );
+    contextualProgressSummaryControl.captureNow = (now) => {
+      summaryNow = now;
+    };
     const beforeRequest = Date.now();
     const response = await app.request(`/api/dogs/${dog.id}/focus?${FOCUS_QUERY}`, {
       headers: u.authHeaders,
@@ -715,7 +742,6 @@ describe("dogs: weekly focus", () => {
     expect(body.focusSkills).toHaveLength(1);
     expect(summaryNow?.getTime()).toBeGreaterThanOrEqual(beforeRequest);
     expect(summaryNow?.getTime()).toBeLessThanOrEqual(afterRequest);
-    expect(beforeRequest).toBeLessThanOrEqual(afterRequest);
   });
 
   it("preserves focus sessions and controls when contextual summaries are unavailable", async () => {
@@ -727,9 +753,8 @@ describe("dogs: weekly focus", () => {
       position: 0,
     });
     await logSession(u, dog.id, skill.id, "2026-06-03T12:00:00.000Z");
-    const batchLoader = vi
-      .spyOn(contextualProgressData, "loadContextualProgressSummaries")
-      .mockRejectedValueOnce(new Error("forced contextual summary failure"));
+    const rawError = "summary-owner-content-sentinel";
+    contextualProgressSummaryControl.rejection = new TypeError(rawError);
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const response = await app.request(`/api/dogs/${dog.id}/focus?${FOCUS_QUERY}`, {
@@ -745,7 +770,6 @@ describe("dogs: weekly focus", () => {
         contextualProgress: { status: string };
       }>;
     };
-    expect(batchLoader).toHaveBeenCalledTimes(1);
     expect(body.focusSkills).toEqual([
       expect.objectContaining({
         skillId: skill.id,
@@ -754,7 +778,14 @@ describe("dogs: weekly focus", () => {
         contextualProgress: { status: "unavailable" },
       }),
     ]);
-    expect(errorSpy).toHaveBeenCalledWith("[contextual-progress] focus_summary_failed");
+    expect(vi.mocked(loadContextualProgressSummaries)).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith("[contextual-progress] focus_summary_failed", {
+      dogId: dog.id,
+      weekKey: WEEK_KEY,
+      errorType: "Unexpected TypeError",
+    });
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(rawError);
   });
 
   it("returns 404 when a new-contract POST names an unowned skill", async () => {

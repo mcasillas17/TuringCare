@@ -81,6 +81,7 @@ export async function loadContextualProgressSummaries(
         inArray(practiceSessions.skillId, skillIds),
         gte(practiceSessions.occurredAt, startsAt),
         lte(practiceSessions.occurredAt, now),
+        eq(practiceSessions.curriculumVersion, CURRICULUM_VERSION),
         isNotNull(practiceSessions.outcome),
         isNotNull(practiceSessions.practiceDay),
       ),
@@ -91,21 +92,10 @@ export async function loadContextualProgressSummaries(
     skillIds.map((skillId) => [skillId, []]),
   );
   for (const row of rows) {
-    const skillRows = rowsBySkill.get(row.skillId);
+    const { skillId, ...contextRow } = row;
+    const skillRows = rowsBySkill.get(skillId);
     if (!skillRows) continue;
-    skillRows.push({
-      id: row.id,
-      outcome: row.outcome,
-      occurredAt: row.occurredAt,
-      practiceDay: row.practiceDay,
-      curriculumLevel: row.curriculumLevel,
-      curriculumVersion: row.curriculumVersion,
-      cueSupport: row.cueSupport,
-      environment: row.environment,
-      distance: row.distance,
-      durationBand: row.durationBand,
-      distraction: row.distraction,
-    });
+    skillRows.push(contextRow);
   }
 
   for (const skill of skills) {
