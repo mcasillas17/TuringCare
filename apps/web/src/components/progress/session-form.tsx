@@ -5,6 +5,7 @@ import { useLogSession } from "@/lib/progress";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   type PracticeDimension,
+  type PracticeEvidenceInput,
   type PracticeSessionInput,
   practiceOutcomeValues,
   practiceSessionSchema,
@@ -27,6 +28,7 @@ export function SessionForm({
   skillId,
   dimensions,
   currentLevel,
+  initialEvidence,
   onCancel,
   onSaved,
 }: {
@@ -34,6 +36,10 @@ export function SessionForm({
   skillId: string;
   dimensions: PracticeDimension[];
   currentLevel: number;
+  initialEvidence?: Pick<
+    PracticeEvidenceInput,
+    "cueSupport" | "environment" | "distance" | "durationBand" | "distraction"
+  >;
   onCancel: () => void;
   onSaved?: () => void;
 }) {
@@ -49,7 +55,7 @@ export function SessionForm({
     formState: { errors, isSubmitting },
   } = useForm<PracticeSessionInput>({
     resolver: zodResolver(practiceSessionSchema),
-    defaultValues: { occurredAt: localDateTime() },
+    defaultValues: { occurredAt: localDateTime(), ...initialEvidence },
   });
   const evidenceValues = useWatch({
     control,

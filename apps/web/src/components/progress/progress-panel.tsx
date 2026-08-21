@@ -1,7 +1,9 @@
+import { ContextualProgressDetail } from "@/components/progress/contextual-progress-detail";
 import { MilestoneStepper } from "@/components/progress/milestone-stepper";
 import { SessionForm } from "@/components/progress/session-form";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useContextualProgress } from "@/lib/contextual-progress";
 import { useRemoveGoal } from "@/lib/dogs";
 import {
   LEVEL_KEYS,
@@ -16,7 +18,11 @@ import {
 } from "@/lib/progress";
 import { findCatalogSkill, useTrainingCatalog } from "@/lib/training-catalog";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type TrainingSkillInput, trainingSkillSchema } from "@turingcare/shared";
+import {
+  type ExactPracticeContext,
+  type TrainingSkillInput,
+  trainingSkillSchema,
+} from "@turingcare/shared";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -143,6 +149,7 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const [mode, setMode] = useState<"view" | "editing" | "logging">("view");
+  const [recommendedContext, setRecommendedContext] = useState<ExactPracticeContext | null>(null);
   const updateSkill = useUpdateSkill(dogId);
   const deleteSkill = useDeleteSkill(dogId);
   // Always use the prop (a full ProgressSkill from the progress query). The skill
@@ -152,6 +159,7 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   const lastSession = formatDate(displaySkill.lastSessionAt);
   const { data: catalog } = useTrainingCatalog();
   const catalogSkill = findCatalogSkill(catalog, displaySkill.catalogSkillKey);
+  const contextualProgress = useContextualProgress(dogId, displaySkill.id, expanded);
 
   return (
     <li className="space-y-3 rounded border border-silver p-3">
@@ -161,7 +169,10 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
             type="button"
             onClick={() =>
               setExpanded((v) => {
-                if (v) setMode("view");
+                if (v) {
+                  setMode("view");
+                  setRecommendedContext(null);
+                }
                 return !v;
               })
             }
@@ -197,14 +208,40 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
       {expanded && (
         <>
           <MilestoneStepper dogId={dogId} skill={displaySkill} />
+          <ContextualProgressDetail
+            dogId={dogId}
+            skillId={displaySkill.id}
+            data={contextualProgress.data}
+            isLoading={contextualProgress.isLoading}
+            isError={contextualProgress.isError}
+            refetch={contextualProgress.refetch}
+            onUseNextAction={(context) => {
+              setRecommendedContext(context);
+              setMode("logging");
+            }}
+          />
           {displaySkill.lastNote && (
             <p className="text-sm text-slate-soft">{displaySkill.lastNote}</p>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => setMode("logging")}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setRecommendedContext(null);
+                setMode("logging");
+              }}
+            >
               {t("progress.logSession")}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setMode("editing")}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setRecommendedContext(null);
+                setMode("editing");
+              }}
+            >
               {t("progress.edit")}
             </Button>
             <Button
@@ -221,7 +258,10 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
               dogId={dogId}
               skill={displaySkill}
               submitting={updateSkill.isPending}
-              onCancel={() => setMode("view")}
+              onCancel={() => {
+                setRecommendedContext(null);
+                setMode("view");
+              }}
               onSave={async (body) => {
                 await updateSkill.mutateAsync({ skillId: displaySkill.id, body });
                 setMode("view");
@@ -235,7 +275,11 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
               dimensions={catalogSkill?.dimensions ?? []}
               currentLevel={displaySkill.confidence}
               onCancel={() => setMode("view")}
-              onSaved={() => setMode("view")}
+              onSaved={() => {
+                setRecommendedContext(null);
+                setMode("view");
+              }}
+              initialEvidence={recommendedContext ?? undefined}
             />
           )}
           <SessionList dogId={dogId} skillId={displaySkill.id} sessions={displaySkill.sessions} />

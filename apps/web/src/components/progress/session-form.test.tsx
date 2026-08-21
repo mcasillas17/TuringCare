@@ -1,6 +1,7 @@
 import { LocaleProvider } from "@/i18n";
 import * as progressLib from "@/lib/progress";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { PracticeEvidenceInput } from "@turingcare/shared";
 import { toast } from "sonner";
 import { describe, expect, it, vi } from "vitest";
 import { SessionForm } from "./session-form";
@@ -8,7 +9,14 @@ import { SessionForm } from "./session-form";
 vi.mock("@/lib/progress", () => ({ useLogSession: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
-function setup(dimensions: Parameters<typeof SessionForm>[0]["dimensions"], currentLevel = 3) {
+function setup(
+  dimensions: Parameters<typeof SessionForm>[0]["dimensions"],
+  currentLevel = 3,
+  initialEvidence?: Pick<
+    PracticeEvidenceInput,
+    "cueSupport" | "environment" | "distance" | "durationBand" | "distraction"
+  >,
+) {
   const mutateAsync = vi.fn().mockResolvedValue({});
   vi.mocked(progressLib.useLogSession).mockReturnValue({
     mutateAsync,
@@ -21,6 +29,7 @@ function setup(dimensions: Parameters<typeof SessionForm>[0]["dimensions"], curr
         skillId="s1"
         dimensions={dimensions}
         currentLevel={currentLevel}
+        initialEvidence={initialEvidence}
         onCancel={vi.fn()}
         onSaved={vi.fn()}
       />
@@ -150,5 +159,22 @@ describe("SessionForm evidence capture", () => {
     expect(confirmation).not.toHaveAttribute("aria-label");
     expect(confirmation).toHaveAttribute("aria-describedby", help.id);
     expect(help.closest("label")).toBeNull();
+  });
+
+  it("prefills only the recommended context without implying current-level confirmation", async () => {
+    const { mutateAsync } = setup(["distraction"], 3, { distraction: "mild" });
+
+    expect(screen.getByLabelText("What else was going on?")).toHaveValue("mild");
+    expect(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 3.",
+      }),
+    ).not.toBeChecked();
+
+    submitSession();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    expect(mutateAsync.mock.calls[0]?.[0]?.body.confirmCurrentLevel).toBeUndefined();
+    expect(mutateAsync.mock.calls[0]?.[0]?.body.outcome).toBeUndefined();
+    expect(mutateAsync.mock.calls[0]?.[0]?.body.safetySignal).toBeUndefined();
   });
 });
