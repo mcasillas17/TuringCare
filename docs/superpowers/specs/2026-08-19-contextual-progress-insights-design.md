@@ -60,6 +60,10 @@ Only dimensions relevant to the practiced skill need to be recorded. Missing
 optional dimensions remain absent in the context identity; they are not
 silently converted into a lowest-difficulty value.
 
+An outcome with no context dimensions remains valid anchored practice history
+but cannot answer where the skill is reliable. Contextual status requires at
+least one recorded context dimension.
+
 ### Evidence Window
 
 Only practice sessions whose `occurredAt` timestamp falls in the inclusive
