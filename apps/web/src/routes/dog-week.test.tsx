@@ -186,6 +186,12 @@ function renderWeek() {
   };
 }
 
+function seedAuditedSuggestion(queryClient: QueryClient) {
+  const weekKey = weekKeyOf(new Date());
+  queryClient.setQueryData(focusLib.focusKey("d1", weekKey), [sitFocus]);
+  queryClient.setQueryData(suggestionLib.suggestionKey("d1", weekKey), exerciseSuggestion);
+}
+
 const sitFocus: focusLib.FocusSkill = {
   skillId: "s1",
   name: "Sit",
@@ -525,6 +531,9 @@ describe("DogWeek", () => {
 
       renderWeek();
 
+      expect(
+        screen.getByRole("heading", { name: "This week's suggestion", level: 2 }),
+      ).toBeInTheDocument();
       expect(screen.queryByText("Lure into a sit.")).not.toBeInTheDocument();
       expect(
         screen.queryByRole("link", { name: "Use this practice plan" }),
@@ -740,7 +749,8 @@ describe("DogWeek", () => {
 
   it("captures evidence anchored to the matching current suggestion after grid logging", async () => {
     const { evidenceMutate } = setup([sitFocus]);
-    renderWeek();
+    const { qc } = renderWeek();
+    seedAuditedSuggestion(qc);
 
     fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
     fireEvent.click(await screen.findByRole("button", { name: "Too hard" }));
@@ -967,7 +977,8 @@ describe("DogWeek", () => {
 
   it("records suggestion actions and opens the focus picker on request", async () => {
     const { actionMutate } = setup([sitFocus]);
-    renderWeek();
+    const { qc } = renderWeek();
+    seedAuditedSuggestion(qc);
 
     fireEvent.click(screen.getByRole("button", { name: "We did this" }));
     await waitFor(() =>

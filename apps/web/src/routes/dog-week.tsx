@@ -8,6 +8,7 @@ import { FocusPicker } from "@/components/week/focus-picker";
 import { WeekGrid } from "@/components/week/week-grid";
 import { WeekNav } from "@/components/week/week-nav";
 import { useI18n } from "@/i18n";
+import { getAuditedSuggestionTarget } from "@/lib/audited-suggestion";
 import { useDeleteSession, useLogSession, useSetSessionEvidence } from "@/lib/progress";
 import { useAdvancementDecision, useSuggestion, useSuggestionAction } from "@/lib/suggestion";
 import {
@@ -20,7 +21,8 @@ import {
   weekKeyAtOffset,
   weekKeyOf,
 } from "@/lib/week";
-import { useFocusWeek } from "@/lib/weekly-focus";
+import { type FocusSkill, focusKey, useFocusWeek } from "@/lib/weekly-focus";
+import { useQueryClient } from "@tanstack/react-query";
 import type {
   AdvancementDecision,
   PracticeDimension,
@@ -34,6 +36,7 @@ import { toast } from "sonner";
 export function DogWeek() {
   const { t, locale } = useI18n();
   const { id = "" } = useParams();
+  const queryClient = useQueryClient();
   const today = useMemo(() => new Date(), []);
   const [monday, setMonday] = useState(() => mondayOf(new Date()));
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -64,6 +67,7 @@ export function DogWeek() {
   const suggestionAction = useSuggestionAction(id, weekKey);
   const advancementDecision = useAdvancementDecision(id);
   const [pendingOutcome, setPendingOutcome] = useState<{
+    scope: string;
     skillId: string;
     sessionId: string;
     suggestionId: string | null;
@@ -109,39 +113,18 @@ export function DogWeek() {
   const previousPendingScope = useRef(pendingScope);
   const activeScope = useRef(pendingScope);
   activeScope.current = pendingScope;
-  const suggestionEligibility =
-    weekKey === currentWeekKey &&
-    !suggestionLoading &&
-    !suggestionFetching &&
-    !suggestionError &&
-    !recommendationsSuppressed &&
-    suggestion?.type === "exercise" &&
-    !suggestion.dismissed &&
-    suggestion.weekKey === weekKey &&
-    Boolean(suggestion.suggestionId);
-  const recommendationStateRef = useRef<{
-    scope: string;
-    suggestion: typeof suggestion;
-    suggestionEligibility: boolean;
-    focusSkills: typeof skills;
-  }>({
-    scope: pendingScope,
-    suggestion: undefined,
-    suggestionEligibility: false,
-    focusSkills: [],
-  });
-  recommendationStateRef.current = {
-    scope: pendingScope,
-    suggestion,
-    suggestionEligibility,
-    focusSkills: skills,
-  };
   const pendingAuditedSuggestionAllowed =
     pendingOutcome?.usesAuditedSuggestion &&
-    recommendationStateRef.current.scope === pendingScope &&
-    recommendationStateRef.current.suggestionEligibility &&
-    recommendationStateRef.current.suggestion?.suggestionId === pendingOutcome.suggestionId &&
-    recommendationStateRef.current.suggestion?.skill?.id === pendingOutcome.skillId;
+    pendingOutcome.scope === pendingScope &&
+    Boolean(
+      getAuditedSuggestionTarget(queryClient, {
+        dogId: id,
+        weekKey,
+        currentWeekKey,
+        skillId: pendingOutcome.skillId,
+        suggestionId: pendingOutcome.suggestionId ?? undefined,
+      }),
+    );
   // Derived-state trigger: week completion comes from the refetched focus query
   // (not the log-session mutation response), so we watch it here and hop once on
   // a real false->true transition for the current week (refs keep it idempotent).
@@ -200,18 +183,21 @@ export function DogWeek() {
       },
     });
     if (activeScope.current !== scopeAtStart) return;
-    const latestRecommendationState = recommendationStateRef.current;
+    const auditedTarget = getAuditedSuggestionTarget(queryClient, {
+      dogId: id,
+      weekKey,
+      currentWeekKey,
+      skillId,
+    });
     const latestFocusSkill =
-      latestRecommendationState.focusSkills.find((skill) => skill.skillId === skillId) ??
+      auditedTarget?.focusSkill ??
+      queryClient
+        .getQueryData<FocusSkill[]>(focusKey(id, weekKey))
+        ?.find((focus) => focus.skillId === skillId) ??
       focusSkill;
-    const matchingSuggestion =
-      latestRecommendationState.scope === scopeAtStart &&
-      latestRecommendationState.suggestionEligibility &&
-      latestRecommendationState.suggestion?.skill?.id === skillId
-        ? latestRecommendationState.suggestion
-        : null;
-    const usesAuditedSuggestion = Boolean(matchingSuggestion);
+    const matchingSuggestion = auditedTarget?.suggestion ?? null;
     setPendingOutcome({
+      scope: scopeAtStart,
       skillId,
       sessionId: created.session.id,
       suggestionId: matchingSuggestion?.suggestionId ?? null,
@@ -219,7 +205,7 @@ export function DogWeek() {
       hasFallback: Boolean(matchingSuggestion?.fallback),
       dimensions: matchingSuggestion?.requestedDimensions ?? latestFocusSkill.dimensions,
       currentLevel: latestFocusSkill.currentLevel,
-      usesAuditedSuggestion,
+      usesAuditedSuggestion: Boolean(matchingSuggestion),
     });
   };
 
@@ -233,15 +219,25 @@ export function DogWeek() {
     if (!pendingOutcome) return;
     const target = pendingOutcome;
     const { variant, ...evidence } = input;
-    const latestRecommendationState = recommendationStateRef.current;
-    const auditedSuggestionId =
+    const auditedTarget =
       target.usesAuditedSuggestion &&
-      target.suggestionId !== null &&
-      latestRecommendationState.scope === pendingScope &&
-      latestRecommendationState.suggestionEligibility &&
-      latestRecommendationState.suggestion?.suggestionId === target.suggestionId &&
-      latestRecommendationState.suggestion?.skill?.id === target.skillId
-        ? target.suggestionId
+      target.scope === pendingScope &&
+      activeScope.current === target.scope &&
+      target.suggestionId !== null
+        ? getAuditedSuggestionTarget(queryClient, {
+            dogId: id,
+            weekKey,
+            currentWeekKey,
+            skillId: target.skillId,
+            suggestionId: target.suggestionId,
+          })
+        : null;
+    const auditedSuggestionId =
+      auditedTarget &&
+      (variant === "fallback"
+        ? auditedTarget.suggestion.fallback
+        : auditedTarget.suggestion.primary)
+        ? auditedTarget.suggestion.suggestionId
         : null;
     try {
       const result = await setEvidence.mutateAsync({
@@ -271,19 +267,18 @@ export function DogWeek() {
   };
 
   const onSuggestionAction = async (action: SuggestionAction) => {
-    const latestRecommendationState = recommendationStateRef.current;
-    const latestSuggestion = latestRecommendationState.suggestion;
-    if (
-      !latestRecommendationState.suggestionEligibility ||
-      !latestSuggestion ||
-      !latestSuggestion.suggestionId ||
-      latestSuggestion.suggestionId !== suggestion?.suggestionId
-    ) {
-      return;
-    }
+    if (!suggestion?.skill?.id || !suggestion.suggestionId) return;
+    const auditedTarget = getAuditedSuggestionTarget(queryClient, {
+      dogId: id,
+      weekKey,
+      currentWeekKey,
+      skillId: suggestion.skill.id,
+      suggestionId: suggestion.suggestionId,
+    });
+    if (!auditedTarget) return;
     try {
       await suggestionAction.mutateAsync({
-        suggestionId: latestSuggestion.suggestionId,
+        suggestionId: suggestion.suggestionId,
         action,
       });
       toast.success(t("suggestion.actionThanks"));
@@ -324,10 +319,9 @@ export function DogWeek() {
 
       {weekKey === currentWeekKey &&
         !suggestionLoading &&
-        !suggestionError &&
-        !recommendationsSuppressed &&
         suggestion &&
-        suggestion.weekKey === weekKey && (
+        suggestion.weekKey === weekKey &&
+        !suggestion.safety && (
           <SuggestionCard
             suggestion={suggestion}
             onAction={onSuggestionAction}
@@ -335,6 +329,7 @@ export function DogWeek() {
             onPickFocus={() => setPickerOpen(true)}
             actionPending={suggestionAction.isPending}
             decisionPending={advancementDecision.isPending}
+            actionsSuppressed={recommendationsSuppressed}
           />
         )}
       {weekKey === currentWeekKey && suggestionError && (

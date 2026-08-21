@@ -1072,6 +1072,12 @@ eligibility and fails closed to manual capture when safety or revalidation
 changes. Skill detail preserves cached evidence while failing closed on
 revalidation/error actions, and both new contextual routes reject malformed
 UUIDs with privacy-safe `404` responses before database access.
+
+Follow-up timing hardening makes that session and evidence decision
+cache-authoritative: `DogWeek` reads the settled QueryClient suggestion/focus
+state and data through stable keys instead of render-written fetch flags,
+re-checks before evidence save, and keeps a neutral weekly suggestion shell
+while recommendation actions are suppressed.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
 - Commits: `59c26a2..cc57c88` on `feat/contextual-progress-insights`.

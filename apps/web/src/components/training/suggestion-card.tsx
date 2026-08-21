@@ -21,6 +21,7 @@ type InteractiveSuggestionCardProps = {
   onPickFocus: () => void;
   actionPending?: boolean;
   decisionPending?: boolean;
+  actionsSuppressed?: boolean;
 };
 
 type PreviewSuggestionCardProps = {
@@ -35,6 +36,15 @@ export function SuggestionCard(props: SuggestionCardProps) {
   const { suggestion } = props;
 
   if (suggestion.safety) return <SafetyNotice safety={suggestion.safety} />;
+
+  if (props.mode !== "preview" && props.actionsSuppressed) {
+    return (
+      <section aria-busy="true" className="space-y-2 rounded border border-silver bg-white p-4">
+        <h2 className="font-semibold text-slate">{t("suggestion.title")}</h2>
+        <p className="text-sm text-slate-soft">{t("common.loading")}</p>
+      </section>
+    );
+  }
 
   if (suggestion.dismissed) {
     return (

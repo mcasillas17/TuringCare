@@ -448,19 +448,26 @@ catalogs.
   hides stale exercise suggestions, and passes page-owned notice/action
   ownership to each summary card.
 - During background revalidation, `isFetching` on either suggestion or focus
-  query conservatively suppresses cached suggestion exercises/actions and all
-  contextual next-action CTAs and telemetry. The week grid and practice
-  logging controls remain available. Skill detail receives its own
-  `isFetching` state: cached evidence and session controls remain visible while
-  its next-practice CTA and action telemetry are suppressed, then restore after
-  a settled safe result. A detail query error with cached data preserves that
-  evidence and Retry but fails closed on actions until a successful retry.
-- After weekly session creation awaits, `DogWeek` re-checks a ref-held latest
-  recommendation state (settled, successful, current-week, current-skill,
-  unsuppressed suggestion). If safety, revalidation, or an error became active,
-  the capture is manual with `suggestionId: null` and
-  `usesAuditedSuggestion: false`; the UI allows explicit current-level
-  confirmation and never submits `practicedTarget`.
+  query conservatively suppresses cached suggestion exercise/action controls
+  and all contextual next-action CTAs and telemetry. A cached weekly
+  suggestion retains a neutral card shell when possible, but never exposes
+  stale primary/fallback exercise text or interactive controls. The week grid
+  and practice logging controls remain available. Skill detail receives its
+  own `isFetching` state: cached evidence and session controls remain visible
+  while its next-practice CTA and action telemetry are suppressed, then restore
+  after a settled safe result. A detail query error with cached data preserves
+  that evidence and Retry but fails closed on actions until a successful retry.
+- After weekly session creation awaits, `DogWeek` reads authoritative
+  QueryClient snapshots through `suggestionKey(id, weekKey)` and
+  `focusKey(id, weekKey)`, rather than using render-written recommendation
+  refs. Both query states must be `status: "success"`, `fetchStatus: "idle"`,
+  and error-free; their current cached data must still describe the current
+  dog, week, skill, non-dismissed exercise, suggestion ID, and active-safety
+  calculation. Otherwise the capture is manual with `suggestionId: null` and
+  `usesAuditedSuggestion: false`, allowing explicit current-level
+  confirmation and never submitting `practicedTarget`. Evidence save repeats
+  the same scoped cache-authority check before attaching `practicedTarget`, so
+  a later safety, error, or revalidation change also downgrades to manual.
 - Sparse evidence shows a neutral capture prompt.
 - A Developing context whose latest result is `too_hard` shows support-oriented
   language and never a harder next step.

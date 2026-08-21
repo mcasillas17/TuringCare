@@ -1825,15 +1825,20 @@ Cover:
 - suggestion errors still show contextual safety guidance when that summary
   reports active safety;
 - either suggestion or focus query `isFetching` suppresses cached suggestion
-  exercises/actions and contextual action CTAs, while settled safe data
-  restores the CTAs;
+  exercise/action controls and contextual action CTAs, while a cached weekly
+  suggestion retains a neutral shell and settled safe data restores the CTAs;
 - a relevant focus error or current-week suggestion error suppresses cached
   suggestion/context actions and view/action telemetry while preserving Retry,
   cached evidence, and the week-grid logging controls; telemetry resumes only
   after a settled successful retry;
-- an awaited session creation re-checks the latest recommendation eligibility
-  and falls back to manual capture when safety, revalidation, or an error
-  becomes active, never sending `practicedTarget`;
+- an awaited session creation reads QueryClient state and data through
+  `suggestionKey(id, weekKey)` and `focusKey(id, weekKey)`, requiring both
+  queries to be successful, idle, error-free, current-scope, and safe before
+  retaining an audited target; it falls back to manual capture when safety,
+  revalidation, or an error becomes active, never sending `practicedTarget`;
+- evidence save repeats that scoped cache-authority check against the captured
+  suggestion ID before attaching `practicedTarget`, so a post-capture safety,
+  error, or revalidation change cannot retain the audited anchor;
 - initial focus failure offers Retry and Edit focus without claiming an empty
   focus, while cached focus controls remain enabled;
 

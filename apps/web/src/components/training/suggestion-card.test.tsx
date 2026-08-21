@@ -121,6 +121,28 @@ describe("SuggestionCard", () => {
     expect(onAction).toHaveBeenCalledWith("started");
   });
 
+  it("keeps a neutral shell while recommendation actions are suppressed", () => {
+    render(
+      <LocaleProvider>
+        <SuggestionCard
+          suggestion={baseSuggestion}
+          onAction={vi.fn()}
+          onDecision={vi.fn()}
+          onPickFocus={vi.fn()}
+          actionsSuppressed
+        />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "This week's suggestion" })).toBeInTheDocument();
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.queryByText("Lure into a sit in a quiet room.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "We did this" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Choose a different focus" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("lets the owner replace an ordinary suggestion by changing focus", () => {
     const onPickFocus = vi.fn();
     render(
