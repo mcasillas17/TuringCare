@@ -194,7 +194,6 @@ async function finalizeUnderSharedSafetyLock(input: {
   dogId: string;
   weekKey: string;
   auditDay: string;
-  now: Date;
   build: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<TrainingSuggestion>;
 }): Promise<TrainingSuggestion> {
   // A plain `let` would be narrowed to `null`; the holder remains readable from `catch`.
@@ -298,7 +297,6 @@ export async function loadSuggestion(input: {
       dogId: input.dogId,
       weekKey: input.weekKey,
       auditDay,
-      now,
       build: (decision, tx) => buildSuppressed(decision ?? safety, tx),
     });
   }
@@ -348,7 +346,6 @@ export async function loadSuggestion(input: {
       dogId: input.dogId,
       weekKey: input.weekKey,
       auditDay,
-      now,
       build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : unsupported),
     });
   }
@@ -400,7 +397,6 @@ export async function loadSuggestion(input: {
     dogId: input.dogId,
     weekKey: input.weekKey,
     auditDay,
-    now,
     build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : suggestion),
   });
 }

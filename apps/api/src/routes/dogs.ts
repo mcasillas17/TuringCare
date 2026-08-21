@@ -409,8 +409,8 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       if (!dog) return c.json({ error: "not_found" } as const, 404);
       const event = c.req.valid("json");
       if (event.name === "training.context_next_action_used") {
-        const actionUseAllowed = await evaluateSafetyWithLock(dog.id, async (safety, tx) => {
-          if (safety) return false;
+        await evaluateSafetyWithLock(dog.id, async (safety, tx) => {
+          if (safety) return;
           await recordEvent(
             event.name,
             {
@@ -424,9 +424,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
             },
             tx,
           );
-          return true;
         });
-        if (!actionUseAllowed) return c.json({ ok: true } as const, 202);
         return c.json({ ok: true } as const, 202);
       }
       const { name, ...props } = event;

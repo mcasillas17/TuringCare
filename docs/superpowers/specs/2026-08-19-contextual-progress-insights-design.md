@@ -348,7 +348,7 @@ The data-access layer:
 - selects only columns required by the derivation;
 - filters to the current owner-confirmed level and current curriculum version;
 - requires persisted `practiceDay` for distinct-day claims;
-- orders deterministically by occurrence and creation time;
+- orders deterministically by occurrence time descending, then stable row ID/UUID descending for ties—not creation time;
 - keeps owner authorization outside the pure policy.
 
 Manual level anchoring reuses the transaction and skill row lock already used
@@ -561,7 +561,7 @@ exclusive lock, while view telemetry remains recordable during active safety.
 View counts have intentionally different surface semantics: This Week records
 one view per settled mount, while skill detail records one view per distinct
 settled result, keyed by policy version, curriculum level, strongest context
-and status, and action availability. Fetching or error state records no view;
+and status, action availability, and `safety.ruleId`. Fetching or error state records no view;
 settled safety records the strongest status with `hasNextAction: false`, and a
 settled safe result records action availability accurately. Dashboards must
 segment by `surface` and must not compare raw weekly and detail view counts as

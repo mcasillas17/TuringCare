@@ -1119,6 +1119,10 @@ feedback without a mutation. View telemetry explicitly treats
 `strongestStatus` and `hasNextAction` as validated bounded client assertions,
 not server recomputation; dashboards segment weekly settled-mount views from
 distinct settled skill-detail results and never compare their raw counts.
+Final feedback aligns documented evidence ordering with the occurrence-time and
+stable-row-ID implementation, specifies `safety.ruleId` in detail-result
+deduplication, adds its mounted regression, and removes redundant action-return
+and pre-lock-clock plumbing.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
 - Code commits: `59c26a2..7f659d9` on `feat/contextual-progress-insights`.

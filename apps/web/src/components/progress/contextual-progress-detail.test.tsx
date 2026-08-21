@@ -444,6 +444,76 @@ describe("ContextualProgressDetail", () => {
     expect(mutate).toHaveBeenCalledTimes(1);
   });
 
+  it("records a distinct settled view once when only the safety rule changes", () => {
+    const mutate = vi.fn();
+    vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
+      mutate,
+    } as never);
+    const firstSafety = {
+      suppressed: true as const,
+      ruleId: "reported_injury_or_pain" as const,
+      referral: "veterinarian" as const,
+    };
+    const secondSafety = {
+      suppressed: true as const,
+      ruleId: "reported_aggression_or_bite_risk" as const,
+      referral: "veterinary_behaviorist" as const,
+    };
+    const result = render(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData({ safety: firstSafety })}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    result.rerender(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData({ safety: secondSafety })}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(mutate).toHaveBeenCalledTimes(2);
+    expect(mutate).toHaveBeenNthCalledWith(2, {
+      name: "training.context_insight_viewed",
+      surface: "skill_detail",
+      strongestStatus: "reliable",
+      hasNextAction: false,
+    });
+
+    result.rerender(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData({ safety: secondSafety })}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(mutate).toHaveBeenCalledTimes(2);
+  });
+
   it("records each changed view result once when status or action availability changes", () => {
     const mutate = vi.fn();
     vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({

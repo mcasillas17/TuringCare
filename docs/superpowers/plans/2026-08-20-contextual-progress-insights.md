@@ -1690,8 +1690,10 @@ Cover:
   error, with Retry restoring the CTA only after a successful result;
 - CTA calls the telemetry mutation then opens the existing session form
   prefilled with the recommended context;
-- one view event per distinct settled detail result, not per rerender; raw
-  detail counts are not comparable to weekly mount counts.
+- one view event per distinct settled detail result, keyed by policy version,
+  curriculum level, strongest context and status, action availability, and
+  `safety.ruleId`, not per rerender; raw detail counts are not comparable to
+  weekly mount counts.
 
 - [x] **Step 2: Run and confirm RED**
 
@@ -2217,3 +2219,38 @@ distinct settled detail result; dashboards segment surfaces and never compare
 raw counts as equivalent. Run the targeted lock/API/web cases, all shared/API/web
 Node 22 suites, typechecks, and lint before committing code/tests and then
 documentation.
+
+---
+
+### Task 15: Final review feedback
+
+**Files:**
+
+- Modify: `apps/api/src/lib/suggestion.ts`
+- Modify: `apps/api/src/routes/dogs.ts`
+- Modify: `apps/web/src/components/progress/contextual-progress-detail.test.tsx`
+- Modify: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`
+- Modify: `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
+- Modify: `docs/PROJECT-LOG.md`
+
+- [x] **Step 1: Write and observe the safety-rule telemetry regression**
+
+Mount `ContextualProgressDetail` with stable policy/version/level, strongest
+context/status, and action availability. Change only `safety.ruleId`; require
+one additional view event, then require a same-rule rerender to remain deduped.
+The red mutation removes the safety-rule dimension from the result key and must
+fail with the second event absent.
+
+- [x] **Step 2: Keep result identity and telemetry response behavior explicit**
+
+Document result identity with `safety.ruleId` as a distinct dimension. Preserve
+the existing safety-rule result-key dimension, simplify identical action-event
+acknowledgment branches, and remove the unused pre-lock `now` input from
+suggestion finalization.
+
+- [x] **Step 3: Verify the requested correction**
+
+Run focused contextual detail, API telemetry, and suggestion tests; then run the
+full shared/API/web Node 22 suites, typechecks, and Biome. Keep the plan's
+broader final review, full gate, and branch-finish steps open until they are
+actually completed.
