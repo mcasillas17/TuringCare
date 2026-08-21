@@ -566,6 +566,7 @@ export const en = {
       "This lets TuringCare compare this practice with other work at the same level.",
     title: "Context progress",
     window: "Recent {days}-day window",
+    recentWindow: "Based on the most recent {days} days",
     strongest: "Strongest recent context",
     practiceNext: "Practice next",
     reliable: "Reliable",

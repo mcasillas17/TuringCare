@@ -572,6 +572,7 @@ export const es = {
       "Esto permite que TuringCare compare esta práctica con otras del mismo nivel.",
     title: "Progreso por contexto",
     window: "Ventana reciente de {days} días",
+    recentWindow: "Basado en los {days} días más recientes",
     strongest: "Contexto reciente más sólido",
     practiceNext: "Próxima práctica",
     reliable: "Confiable",
