@@ -5,7 +5,7 @@ import * as progressLib from "@/lib/progress";
 import type { ProgressGoal } from "@/lib/progress";
 import * as catalogLib from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { CatalogTemplate, ContextualProgress } from "@turingcare/shared";
 import { describe, expect, it, vi } from "vitest";
 import { ProgressPanel } from "./progress-panel";
@@ -169,8 +169,9 @@ function setup({ withContext = false }: { withContext?: boolean } = {}) {
     isError: false,
     refetch: vi.fn(),
   } as never);
+  const recordEvent = vi.fn();
   vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
-    mutate: vi.fn(),
+    mutate: recordEvent,
   } as never);
   render(
     <LocaleProvider>
@@ -179,6 +180,7 @@ function setup({ withContext = false }: { withContext?: boolean } = {}) {
       </QueryClientProvider>
     </LocaleProvider>,
   );
+  return { recordEvent };
 }
 
 describe("ProgressPanel", () => {
@@ -210,6 +212,24 @@ describe("ProgressPanel", () => {
     ).not.toBeChecked();
   });
 
+  it("updates an already-open blank session form when applying a recommendation", () => {
+    const { recordEvent } = setup({ withContext: true });
+    fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Log session" }));
+    expect(screen.getByLabelText("What else was going on?")).toHaveValue("");
+
+    recordEvent.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Use this practice plan" }));
+
+    expect(screen.getByLabelText("What else was going on?")).toHaveValue("mild");
+    expect(recordEvent).toHaveBeenCalledWith({
+      name: "training.context_next_action_used",
+      surface: "skill_detail",
+      ruleId: "repeat_developing_context",
+      direction: "repeat",
+    });
+  });
+
   it("clears the recommended context when the prefilled form is cancelled", () => {
     setup({ withContext: true });
     fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
@@ -218,5 +238,17 @@ describe("ProgressPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Log session" }));
 
     expect(screen.getByLabelText("What else was going on?")).toHaveValue("");
+  });
+
+  it("clears the recommendation and visible fields from the mounted form on reset", async () => {
+    setup({ withContext: true });
+    fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Log session" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use this practice plan" }));
+    expect(screen.getByLabelText("What else was going on?")).toHaveValue("mild");
+
+    fireEvent.click(screen.getByRole("button", { name: "Log session" }));
+
+    await waitFor(() => expect(screen.getByLabelText("What else was going on?")).toHaveValue(""));
   });
 });

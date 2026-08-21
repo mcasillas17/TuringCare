@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useContextualProgress } from "@/lib/contextual-progress";
 import { useRemoveGoal } from "@/lib/dogs";
+import { DIMENSION_CONFIG } from "@/lib/practice-options";
 import {
   LEVEL_KEYS,
   type ProgressGoal,
@@ -17,6 +18,7 @@ import {
   useUpdateSkill,
 } from "@/lib/progress";
 import { findCatalogSkill, useTrainingCatalog } from "@/lib/training-catalog";
+import { dateLabel } from "@/lib/when";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   type ExactPracticeContext,
@@ -31,13 +33,6 @@ const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm te
 function sessionCountLabel(skill: ProgressSkill, t: ReturnType<typeof useI18n>["t"]) {
   const label = skill.sessionCount === 1 ? t("progress.session") : t("progress.sessions");
   return `${skill.sessionCount} ${label}`;
-}
-
-function formatDate(value: string | null) {
-  if (!value) return null;
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
-    new Date(value),
-  );
 }
 
 export function ProgressPanel({ dogId }: { dogId: string }) {
@@ -146,7 +141,7 @@ function AddSkillForm({ dogId, goalId }: { dogId: string; goalId: string }) {
 }
 
 function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const [mode, setMode] = useState<"view" | "editing" | "logging">("view");
   const [recommendedContext, setRecommendedContext] = useState<ExactPracticeContext | null>(null);
@@ -156,7 +151,9 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   // PUT mutation returns a bare DB row without milestones/sessions, so reading it
   // here would crash the stepper/session list after a name edit.
   const displaySkill = skill;
-  const lastSession = formatDate(displaySkill.lastSessionAt);
+  const lastSession = displaySkill.lastSessionAt
+    ? dateLabel(displaySkill.lastSessionAt, new Date(), locale)
+    : null;
   const { data: catalog } = useTrainingCatalog();
   const catalogSkill = findCatalogSkill(catalog, displaySkill.catalogSkillKey);
   const contextualProgress = useContextualProgress(dogId, displaySkill.id, expanded);
@@ -187,7 +184,7 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
             {expanded ? "▼" : "▶"}
           </button>
           <div className="flex-1">
-            <div className="font-medium text-slate">{displaySkill.name}</div>
+            <h4 className="font-medium text-slate">{displaySkill.name}</h4>
             {catalogSkill && (
               <div className="text-xs text-slate-soft">{catalogSkill.description}</div>
             )}
@@ -216,8 +213,14 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
             isError={contextualProgress.isError}
             refetch={contextualProgress.refetch}
             onUseNextAction={(context) => {
+              const dimensions = catalogSkill?.dimensions ?? [];
+              const canApply = dimensions.some(
+                (dimension) => context[DIMENSION_CONFIG[dimension].field] !== null,
+              );
+              if (!canApply) return false;
               setRecommendedContext(context);
               setMode("logging");
+              return true;
             }}
           />
           {displaySkill.lastNote && (
@@ -270,11 +273,15 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
           )}
           {mode === "logging" && (
             <SessionForm
+              key={recommendedContext ? "recommended" : "blank"}
               dogId={dogId}
               skillId={displaySkill.id}
               dimensions={catalogSkill?.dimensions ?? []}
               currentLevel={displaySkill.confidence}
-              onCancel={() => setMode("view")}
+              onCancel={() => {
+                setRecommendedContext(null);
+                setMode("view");
+              }}
               onSaved={() => {
                 setRecommendedContext(null);
                 setMode("view");

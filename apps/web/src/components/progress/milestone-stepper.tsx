@@ -25,9 +25,9 @@ export function MilestoneStepper({ dogId, skill }: { dogId: string; skill: Progr
 
   return (
     <div className="space-y-1">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-soft">
+      <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-soft">
         {t("progress.milestonesTitle", { n: current })}
-      </p>
+      </h5>
       <ol className="space-y-1">
         {LEVELS.map((level) => {
           const reached = level <= current;

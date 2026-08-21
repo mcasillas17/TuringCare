@@ -3,6 +3,7 @@ import { useI18n } from "@/i18n";
 import { useRecordContextualProgressEvent } from "@/lib/contextual-progress";
 import { DIMENSION_CONFIG, OUTCOME_KEYS } from "@/lib/practice-options";
 import { LEVEL_KEYS } from "@/lib/progress";
+import { dateLabel } from "@/lib/when";
 import type {
   ContextualProgress,
   ExactContextEvidence,
@@ -23,13 +24,6 @@ const CONTEXT_DIMENSIONS = [
 function serializeContext(context: ExactPracticeContext | null | undefined) {
   if (!context) return "none";
   return CONTEXT_DIMENSIONS.map(({ field }) => `${field}:${context[field] ?? "null"}`).join("|");
-}
-
-function formatDate(value: string | null) {
-  if (!value) return null;
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
-    new Date(value),
-  );
 }
 
 function statusLabel(status: ExactContextEvidence["status"], t: ReturnType<typeof useI18n>["t"]) {
@@ -94,17 +88,29 @@ function ContextLabels({
 function EvidenceMeta({
   evidence,
   t,
+  locale,
 }: {
   evidence: ExactContextEvidence;
   t: ReturnType<typeof useI18n>["t"];
+  locale: ReturnType<typeof useI18n>["locale"];
 }) {
   if (evidence.status === "not_observed") {
     return <p className="text-sm text-slate-soft">{t("contextProgress.noEvidence")}</p>;
   }
 
+  const lastObserved = evidence.lastObservedAt
+    ? dateLabel(evidence.lastObservedAt, new Date(), locale)
+    : null;
   return (
     <div className="space-y-1 text-sm text-slate-soft">
-      <p>{t("contextProgress.successfulDays", { days: evidence.successfulDistinctDays })}</p>
+      <p>
+        {t(
+          evidence.successfulDistinctDays === 1
+            ? "contextProgress.successfulDay"
+            : "contextProgress.successfulDays",
+          { days: evidence.successfulDistinctDays },
+        )}
+      </p>
       {evidence.latestOutcome && (
         <p>
           {t("contextProgress.latestOutcome", {
@@ -112,11 +118,7 @@ function EvidenceMeta({
           })}
         </p>
       )}
-      {formatDate(evidence.lastObservedAt) && (
-        <p>
-          {t("contextProgress.lastObserved", { date: formatDate(evidence.lastObservedAt) ?? "" })}
-        </p>
-      )}
+      {lastObserved && <p>{t("contextProgress.lastObserved", { date: lastObserved })}</p>}
     </div>
   );
 }
@@ -125,10 +127,12 @@ function StrongestContext({
   evidence,
   headingId,
   t,
+  locale,
 }: {
   evidence: ExactContextEvidence | null;
   headingId: string;
   t: ReturnType<typeof useI18n>["t"];
+  locale: ReturnType<typeof useI18n>["locale"];
 }) {
   if (!evidence) {
     return <p className="text-sm text-slate-soft">{t("contextProgress.empty")}</p>;
@@ -136,15 +140,15 @@ function StrongestContext({
 
   return (
     <section aria-labelledby={headingId}>
-      <h5 id={headingId} className="font-medium text-slate">
+      <h6 id={headingId} className="font-medium text-slate">
         {t("contextProgress.strongest")}
-      </h5>
+      </h6>
       <div className="mt-2 space-y-2 rounded border border-silver bg-cream p-3">
         <StatusBadge status={evidence.status} t={t} />
         {evidence.status === "developing" && evidence.latestOutcome === "too_hard" && (
           <p className="text-sm text-slate-soft">{t("contextProgress.needsSupport")}</p>
         )}
-        <EvidenceMeta evidence={evidence} t={t} />
+        <EvidenceMeta evidence={evidence} t={t} locale={locale} />
         <ContextLabels context={evidence.context} t={t} />
       </div>
     </section>
@@ -181,9 +185,9 @@ function NextPracticeActionCard({
 
   return (
     <section aria-labelledby={headingId} className="space-y-2">
-      <h5 id={headingId} className="font-medium text-slate">
+      <h6 id={headingId} className="font-medium text-slate">
         {t("contextProgress.practiceNext")}
-      </h5>
+      </h6>
       <div className="space-y-2 rounded border border-silver bg-white p-3">
         <p className="text-sm font-medium text-slate">{actionDirection(action.direction, t)}</p>
         <p className="text-sm text-slate-soft">{actionReason(action, t)}</p>
@@ -199,9 +203,11 @@ function NextPracticeActionCard({
 function ContextEvidenceRow({
   evidence,
   t,
+  locale,
 }: {
   evidence: ExactContextEvidence;
   t: ReturnType<typeof useI18n>["t"];
+  locale: ReturnType<typeof useI18n>["locale"];
 }) {
   return (
     <li className="space-y-2 rounded border border-silver p-3">
@@ -212,7 +218,7 @@ function ContextEvidenceRow({
         )}
       </div>
       <ContextLabels context={evidence.context} t={t} />
-      <EvidenceMeta evidence={evidence} t={t} />
+      <EvidenceMeta evidence={evidence} t={t} locale={locale} />
     </li>
   );
 }
@@ -232,9 +238,9 @@ export function ContextualProgressDetail({
   isLoading: boolean;
   isError: boolean;
   refetch: () => unknown;
-  onUseNextAction: (context: ExactPracticeContext) => void;
+  onUseNextAction: (context: ExactPracticeContext) => boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const recordEvent = useRecordContextualProgressEvent(dogId);
   const viewedResult = useRef<string | null>(null);
 
@@ -258,9 +264,9 @@ export function ContextualProgressDetail({
   if (isLoading) {
     return (
       <section aria-labelledby={sectionId}>
-        <h4 id={sectionId} className="font-medium text-slate">
+        <h5 id={sectionId} className="font-medium text-slate">
           {t("contextProgress.title")}
-        </h4>
+        </h5>
         <output aria-live="polite" className="mt-2 block text-sm text-slate-soft">
           {t("common.loading")}
         </output>
@@ -271,15 +277,15 @@ export function ContextualProgressDetail({
   if (isError || !data) {
     return (
       <section aria-labelledby={sectionId}>
-        <h4 id={sectionId} className="font-medium text-slate">
+        <h5 id={sectionId} className="font-medium text-slate">
           {t("contextProgress.title")}
-        </h4>
-        <output aria-live="polite" className="mt-2 block space-y-2 text-sm text-slate-soft">
-          <p>{t("contextProgress.loadError")}</p>
+        </h5>
+        <div className="mt-2 space-y-2 text-sm text-slate-soft">
+          <p role="alert">{t("contextProgress.loadError")}</p>
           <Button type="button" variant="outline" onClick={() => void refetch()}>
             {t("contextProgress.retry")}
           </Button>
-        </output>
+        </div>
       </section>
     );
   }
@@ -287,9 +293,9 @@ export function ContextualProgressDetail({
   return (
     <section aria-labelledby={sectionId} className="space-y-3">
       <div>
-        <h4 id={sectionId} className="font-medium text-slate">
+        <h5 id={sectionId} className="font-medium text-slate">
           {t("contextProgress.title")}
-        </h4>
+        </h5>
         <p className="text-sm text-slate-soft">
           {t("contextProgress.window", { days: data.window.days })} ·{" "}
           {t("progress.levelBadge", {
@@ -302,6 +308,7 @@ export function ContextualProgressDetail({
         evidence={data.strongestContext}
         headingId={`${sectionId}-strongest`}
         t={t}
+        locale={locale}
       />
       <NextPracticeActionCard
         action={data.nextPracticeAction}
@@ -309,26 +316,28 @@ export function ContextualProgressDetail({
         t={t}
         onUse={() => {
           if (!data.nextPracticeAction) return;
+          const applied = onUseNextAction(data.nextPracticeAction.context);
+          if (!applied) return;
           recordEvent.mutate({
             name: "training.context_next_action_used",
             surface: "skill_detail",
             ruleId: data.nextPracticeAction.ruleId,
             direction: data.nextPracticeAction.direction,
           });
-          onUseNextAction(data.nextPracticeAction.context);
         }}
       />
       {data.exactContexts.length > 0 && (
         <section aria-labelledby={`${sectionId}-evidence`} className="space-y-2">
-          <h5 id={`${sectionId}-evidence`} className="font-medium text-slate">
+          <h6 id={`${sectionId}-evidence`} className="font-medium text-slate">
             {t("contextProgress.viewEvidence")}
-          </h5>
+          </h6>
           <ul className="space-y-2">
             {data.exactContexts.map((evidence) => (
               <ContextEvidenceRow
                 key={serializeContext(evidence.context)}
                 evidence={evidence}
                 t={t}
+                locale={locale}
               />
             ))}
           </ul>

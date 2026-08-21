@@ -22,7 +22,7 @@ function setup(
     mutateAsync,
     isPending: false,
   } as unknown as ReturnType<typeof progressLib.useLogSession>);
-  render(
+  const rendered = render(
     <LocaleProvider>
       <SessionForm
         dogId="d1"
@@ -35,7 +35,7 @@ function setup(
       />
     </LocaleProvider>,
   );
-  return { mutateAsync };
+  return { mutateAsync, rendered };
 }
 
 function submitSession() {
@@ -161,8 +161,34 @@ describe("SessionForm evidence capture", () => {
     expect(help.closest("label")).toBeNull();
   });
 
-  it("prefills only the recommended context without implying current-level confirmation", async () => {
-    const { mutateAsync } = setup(["distraction"], 3, { distraction: "mild" });
+  it("updates visible fields when a recommendation changes while the form is mounted", async () => {
+    const { rendered } = setup(["distraction"], 3);
+    expect(screen.getByLabelText("What else was going on?")).toHaveValue("");
+
+    rendered.rerender(
+      <LocaleProvider>
+        <SessionForm
+          dogId="d1"
+          skillId="s1"
+          dimensions={["distraction"]}
+          currentLevel={3}
+          initialEvidence={{ distraction: "mild" }}
+          onCancel={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("What else was going on?")).toHaveValue("mild"),
+    );
+  });
+
+  it("prefills only rendered recommended context without implying current-level confirmation", async () => {
+    const { mutateAsync } = setup(["distraction"], 3, {
+      distraction: "mild",
+      environment: "busy_outdoor",
+    });
 
     expect(screen.getByLabelText("What else was going on?")).toHaveValue("mild");
     expect(
@@ -176,5 +202,6 @@ describe("SessionForm evidence capture", () => {
     expect(mutateAsync.mock.calls[0]?.[0]?.body.confirmCurrentLevel).toBeUndefined();
     expect(mutateAsync.mock.calls[0]?.[0]?.body.outcome).toBeUndefined();
     expect(mutateAsync.mock.calls[0]?.[0]?.body.safetySignal).toBeUndefined();
+    expect(mutateAsync.mock.calls[0]?.[0]?.body.environment).toBeUndefined();
   });
 });

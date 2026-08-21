@@ -19,7 +19,7 @@ vi.mock("@/lib/contextual-progress", async () => {
   };
 });
 
-const window = {
+const evidenceWindow = {
   startsAt: "2026-07-30T12:00:00.000Z",
   endsAt: "2026-08-20T12:00:00.000Z",
   days: 21 as const,
@@ -55,7 +55,7 @@ const nextPracticeAction: NextPracticeAction = {
 
 function makeData(overrides: Partial<ContextualProgress> = {}): ContextualProgress {
   return {
-    window,
+    window: evidenceWindow,
     curriculumLevel: 3,
     curriculumVersion: "2026-08-11",
     policyVersion: "2026-08-20",
@@ -70,7 +70,7 @@ function setup(
   props: Partial<React.ComponentProps<typeof ContextualProgressDetail>> = {},
   mutate = vi.fn(),
 ) {
-  const onUseNextAction = vi.fn();
+  const onUseNextAction = vi.fn().mockReturnValue(true);
   const refetch = vi.fn().mockResolvedValue(undefined);
   vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
     mutate,
@@ -137,6 +137,17 @@ describe("ContextualProgressDetail", () => {
     expect(screen.queryByText(/failed/i)).not.toBeInTheDocument();
   });
 
+  it("uses singular copy for one successful day", () => {
+    setup({
+      data: makeData({
+        strongestContext: { ...strongestContext, successfulDistinctDays: 1 },
+      }),
+    });
+
+    expect(screen.getAllByText("1 successful day").length).toBeGreaterThan(0);
+    expect(screen.queryByText("1 successful days")).not.toBeInTheDocument();
+  });
+
   it("keeps Not observed neutral and explicitly says there is no recent evidence", () => {
     const notObserved: ExactContextEvidence = {
       ...strongestContext,
@@ -171,10 +182,10 @@ describe("ContextualProgressDetail", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders a retryable status without removing the practice action", () => {
+  it("renders an alert with a retry control when loading fails", () => {
     const { refetch } = setup({ data: undefined, isError: true });
 
-    expect(screen.getByRole("status")).toHaveTextContent("Couldn't load context progress.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load context progress.");
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(refetch).toHaveBeenCalledOnce();
   });
@@ -186,7 +197,7 @@ describe("ContextualProgressDetail", () => {
     expect(screen.queryByText("Reliable")).not.toBeInTheDocument();
   });
 
-  it("records the next-action event before opening the prefilled session form", () => {
+  it("records the next-action event after the recommendation is applied", () => {
     const mutate = vi.fn();
     const { onUseNextAction } = setup({}, mutate);
 
@@ -198,6 +209,18 @@ describe("ContextualProgressDetail", () => {
       ruleId: "advance_reliable_context",
       direction: "harder",
     });
+    expect(onUseNextAction).toHaveBeenCalledWith(nextPracticeAction.context);
+  });
+
+  it("does not record next-action telemetry when the recommendation is not applied", () => {
+    const mutate = vi.fn();
+    const { onUseNextAction } = setup({}, mutate);
+    mutate.mockClear();
+    onUseNextAction.mockReturnValue(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Use this practice plan" }));
+
+    expect(mutate).not.toHaveBeenCalled();
     expect(onUseNextAction).toHaveBeenCalledWith(nextPracticeAction.context);
   });
 

@@ -11,11 +11,28 @@ import {
   practiceSessionSchema,
   safetySignalValues,
 } from "@turingcare/shared";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
 const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
+type InitialEvidence = Pick<
+  PracticeEvidenceInput,
+  "cueSupport" | "environment" | "distance" | "durationBand" | "distraction"
+>;
+
+function getRenderedInitialEvidence(
+  dimensions: PracticeDimension[],
+  initialEvidence: InitialEvidence | undefined,
+): Partial<InitialEvidence> {
+  const values: Partial<InitialEvidence> = {};
+  for (const dimension of dimensions) {
+    const field = DIMENSION_CONFIG[dimension].field;
+    const value = initialEvidence?.[field];
+    Object.assign(values, { [field]: value });
+  }
+  return values;
+}
 
 function localDateTime() {
   const now = new Date();
@@ -36,35 +53,55 @@ export function SessionForm({
   skillId: string;
   dimensions: PracticeDimension[];
   currentLevel: number;
-  initialEvidence?: Pick<
-    PracticeEvidenceInput,
-    "cueSupport" | "environment" | "distance" | "durationBand" | "distraction"
-  >;
+  initialEvidence?: InitialEvidence;
   onCancel: () => void;
   onSaved?: () => void;
 }) {
   const { t } = useI18n();
   const logSession = useLogSession(dogId);
   const confirmationHelpId = useId();
+  const initialEvidenceKey = dimensions
+    .map((dimension) => {
+      const field = DIMENSION_CONFIG[dimension].field;
+      return `${field}:${initialEvidence?.[field] ?? ""}`;
+    })
+    .join("|");
+  // The serialized key keeps unstable prop identities from resetting user input.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: initialEvidenceKey captures rendered dimensions and values
+  const initialFormValues = useMemo(
+    () => ({
+      occurredAt: localDateTime(),
+      ...getRenderedInitialEvidence(dimensions, initialEvidence),
+    }),
+    [initialEvidenceKey],
+  );
   const {
     register,
     handleSubmit,
     unregister,
+    reset,
     setValue,
     control,
     formState: { errors, isSubmitting },
   } = useForm<PracticeSessionInput>({
     resolver: zodResolver(practiceSessionSchema),
-    defaultValues: { occurredAt: localDateTime(), ...initialEvidence },
+    defaultValues: initialFormValues,
+    shouldUnregister: true,
   });
-  const evidenceValues = useWatch({
-    control,
-    name: ["outcome", "cueSupport", "environment", "distance", "durationBand", "distraction"],
-  });
+  const formValues = useWatch({ control });
   const selectedSafetySignal = useWatch({ control, name: "safetySignal" });
   const currentLevelConfirmed = useWatch({ control, name: "confirmCurrentLevel" }) === true;
-  const hasStructuredEvidence = evidenceValues.some(Boolean);
+  const hasStructuredEvidence = Boolean(
+    formValues.outcome ||
+      dimensions.some((dimension) => Boolean(formValues[DIMENSION_CONFIG[dimension].field])),
+  );
   const [safetyConfirmed, setSafetyConfirmed] = useState(false);
+
+  useEffect(() => {
+    reset(initialFormValues);
+    unregister("confirmCurrentLevel");
+    setSafetyConfirmed(false);
+  }, [initialFormValues, reset, unregister]);
 
   useEffect(() => {
     if (!hasStructuredEvidence) {
