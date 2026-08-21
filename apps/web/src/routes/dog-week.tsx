@@ -293,7 +293,11 @@ export function DogWeek() {
               : auditedAnchorOmissionReason
                 ? t("practice.auditedAnchorOmitted")
                 : t("practice.outcomeSaved");
-      toast.success(feedback);
+      if (result.anchorRejected || auditedAnchorOmissionReason) {
+        toast.warning(feedback);
+      } else {
+        toast.success(feedback);
+      }
     } catch {
       toast.error(t("practice.outcomeFailed"));
     }
@@ -308,7 +312,10 @@ export function DogWeek() {
       skillId: suggestion.skill.id,
       suggestionId: suggestion.suggestionId,
     });
-    if (!auditedTarget) return;
+    if (!auditedTarget) {
+      toast.error(t("suggestion.actionFailed"));
+      return;
+    }
     try {
       await suggestionAction.mutateAsync({
         suggestionId: suggestion.suggestionId,

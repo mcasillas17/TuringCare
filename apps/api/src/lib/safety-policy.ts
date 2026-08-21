@@ -2,7 +2,7 @@ import type { SafetySignalType, SuggestionSafety } from "@turingcare/shared";
 import { and, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { dogSafetySignals, journalEntries } from "../db/schema";
-import { type TransactionType, withDogSafetyLock } from "./safety-lock";
+import { type TransactionType, withDogSafetyLock, withDogSafetySharedLock } from "./safety-lock";
 
 /** Time-bounded medical reports stay in policy for this long. */
 export const SAFETY_SIGNAL_WINDOW_DAYS = 90;
@@ -135,8 +135,18 @@ export async function evaluateSafety(dogId: string, now: Date): Promise<Suggesti
   return decideSafety(await loadSafetyInputs(dogId, now));
 }
 
+async function evaluateSafetyInLockedTransaction<T>(
+  dogId: string,
+  tx: TransactionType,
+  callback: (decision: SuggestionSafety | null, tx: TransactionType, lockedNow: Date) => Promise<T>,
+): Promise<T> {
+  const lockedNow = new Date();
+  const decision = decideSafety(await loadSafetyInputs(dogId, lockedNow, tx));
+  return await callback(decision, tx, lockedNow);
+}
+
 /**
- * Holds the shared safety lock through the guarded write, making this decision
+ * Holds the exclusive safety lock through a guarded write, making the decision
  * and action a single linearization point. The clock is sampled only after
  * lock acquisition, then shared by the decision and guarded callback.
  */
@@ -144,9 +154,19 @@ export async function evaluateSafetyWithLock<T>(
   dogId: string,
   callback: (decision: SuggestionSafety | null, tx: TransactionType, lockedNow: Date) => Promise<T>,
 ): Promise<T> {
-  return withDogSafetyLock(dogId, async (tx) => {
-    const lockedNow = new Date();
-    const decision = decideSafety(await loadSafetyInputs(dogId, lockedNow, tx));
-    return await callback(decision, tx, lockedNow);
-  });
+  return withDogSafetyLock(dogId, (tx) => evaluateSafetyInLockedTransaction(dogId, tx, callback));
+}
+
+/**
+ * Holds a shared safety lock through a safety decision and derivation that do
+ * not mutate safety inputs. The clock is sampled only after lock acquisition,
+ * then shared by every bounded read.
+ */
+export async function evaluateSafetyWithSharedLock<T>(
+  dogId: string,
+  callback: (decision: SuggestionSafety | null, tx: TransactionType, lockedNow: Date) => Promise<T>,
+): Promise<T> {
+  return withDogSafetySharedLock(dogId, (tx) =>
+    evaluateSafetyInLockedTransaction(dogId, tx, callback),
+  );
 }

@@ -1,6 +1,65 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const contextualDetailReadControl = vi.hoisted(() => ({
+  calls: 0,
+  firstReadStarted: undefined as (() => void) | undefined,
+  holdFirstRead: Promise.resolve(),
+  pauseFirstRead: false,
+  releaseFirstRead: undefined as (() => void) | undefined,
+  secondReadStarted: false,
+}));
+
+const actionUseTelemetryControl = vi.hoisted(() => ({
+  dogId: undefined as string | undefined,
+  safetyLockHeld: undefined as boolean | undefined,
+}));
+
+vi.mock("../lib/contextual-progress-data", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/contextual-progress-data")>();
+  return {
+    ...actual,
+    loadContextualProgress: async (
+      ...args: Parameters<typeof actual.loadContextualProgress>
+    ): ReturnType<typeof actual.loadContextualProgress> => {
+      contextualDetailReadControl.calls += 1;
+      if (contextualDetailReadControl.pauseFirstRead && contextualDetailReadControl.calls === 1) {
+        contextualDetailReadControl.firstReadStarted?.();
+        await contextualDetailReadControl.holdFirstRead;
+      } else if (contextualDetailReadControl.calls === 2) {
+        contextualDetailReadControl.secondReadStarted = true;
+      }
+      return actual.loadContextualProgress(...args);
+    },
+  };
+});
+
+vi.mock("../telemetry/record-event", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../telemetry/record-event")>();
+  return {
+    ...actual,
+    recordEvent: async (...args: Parameters<typeof actual.recordEvent>) => {
+      if (args[0] === "training.context_next_action_used" && actionUseTelemetryControl.dogId) {
+        const { pool } = await import("../db");
+        const probe = await pool.connect();
+        try {
+          await probe.query("begin");
+          const { rows } = await probe.query<{ acquired: boolean }>(
+            "select pg_try_advisory_xact_lock(hashtext($1)) as acquired",
+            [`dog-safety:${actionUseTelemetryControl.dogId}`],
+          );
+          actionUseTelemetryControl.safetyLockHeld = rows[0]?.acquired !== true;
+        } finally {
+          await probe.query("rollback");
+          probe.release();
+        }
+      }
+      return actual.recordEvent(...args);
+    },
+  };
+});
+
 import { app } from "../app";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db, pool } from "../db";
@@ -161,6 +220,39 @@ async function waitForAdvisoryLockWaiter() {
   throw new Error("timed out waiting for a contextual-progress advisory lock waiter");
 }
 
+async function waitForSecondDetailReaderOrSafetyWaiter() {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (contextualDetailReadControl.secondReadStarted) return "second_reader";
+    const result = await pool.query<{ waiting: boolean }>(
+      "select exists (select 1 from pg_locks where locktype = 'advisory' and not granted and database = (select oid from pg_database where datname = current_database())) as waiting",
+    );
+    if (result.rows[0]?.waiting) return "safety_waiter";
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error("timed out waiting for the second contextual-progress reader");
+}
+
+function holdFirstContextualDetailRead() {
+  let markFirstReadStarted: (() => void) | undefined;
+  let releaseFirstRead: (() => void) | undefined;
+  const firstReadStarted = new Promise<void>((resolve) => {
+    markFirstReadStarted = resolve;
+  });
+  const holdFirstRead = new Promise<void>((resolve) => {
+    releaseFirstRead = resolve;
+  });
+  contextualDetailReadControl.calls = 0;
+  contextualDetailReadControl.firstReadStarted = markFirstReadStarted;
+  contextualDetailReadControl.holdFirstRead = holdFirstRead;
+  contextualDetailReadControl.pauseFirstRead = true;
+  contextualDetailReadControl.releaseFirstRead = releaseFirstRead;
+  contextualDetailReadControl.secondReadStarted = false;
+  return {
+    firstReadStarted,
+    release: () => releaseFirstRead?.(),
+  };
+}
+
 function beginHeldSafetyWrite(dogId: string, type: "injury_or_pain" | "aggression_or_bite_risk") {
   let markReady: (() => void) | undefined;
   let release: (() => void) | undefined;
@@ -311,6 +403,15 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
   const users: TestUser[] = [];
 
   afterEach(async () => {
+    contextualDetailReadControl.releaseFirstRead?.();
+    contextualDetailReadControl.calls = 0;
+    contextualDetailReadControl.firstReadStarted = undefined;
+    contextualDetailReadControl.holdFirstRead = Promise.resolve();
+    contextualDetailReadControl.pauseFirstRead = false;
+    contextualDetailReadControl.releaseFirstRead = undefined;
+    contextualDetailReadControl.secondReadStarted = false;
+    actionUseTelemetryControl.dogId = undefined;
+    actionUseTelemetryControl.safetyLockHeld = undefined;
     for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
   });
 
@@ -516,6 +617,27 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
     } finally {
       safetyWrite.release();
       await Promise.allSettled([safetyWrite.write, responsePromise]);
+    }
+  });
+
+  it("allows two detail reads for one dog to derive concurrently", async () => {
+    const setupValue = await setup(users);
+    const secondSkill = await makeSkill(setupValue.dogId, { name: "Down" });
+    const heldRead = holdFirstContextualDetailRead();
+    const firstResponse = getDetail(setupValue);
+    await heldRead.firstReadStarted;
+    const secondResponse = app.request(detailPath(setupValue.dogId, secondSkill.id), {
+      headers: setupValue.user.authHeaders,
+    });
+
+    try {
+      expect(await waitForSecondDetailReaderOrSafetyWaiter()).toBe("second_reader");
+      heldRead.release();
+      expect((await firstResponse).status).toBe(200);
+      expect((await secondResponse).status).toBe(200);
+    } finally {
+      heldRead.release();
+      await Promise.allSettled([firstResponse, secondResponse]);
     }
   });
 
@@ -837,6 +959,27 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
         expect(stored).toEqual([]);
       },
     );
+
+    it("records action-use telemetry while its exclusive safety decision remains locked", async () => {
+      const owner = await createTestUser();
+      users.push(owner);
+      const dog = await makeDog(owner);
+      actionUseTelemetryControl.dogId = dog.id;
+
+      const response = await app.request(eventPath(dog.id), {
+        method: "POST",
+        headers: owner.authHeaders,
+        body: JSON.stringify({
+          name: "training.context_next_action_used",
+          surface: "week",
+          ruleId: "advance_reliable_context",
+          direction: "harder",
+        }),
+      });
+
+      expect(response.status).toBe(202);
+      expect(actionUseTelemetryControl.safetyLockHeld).toBe(true);
+    });
 
     it("continues recording insight views while safety suppresses action use", async () => {
       const owner = await createTestUser();

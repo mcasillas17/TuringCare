@@ -13,7 +13,7 @@ import {
 import { classifyExceptionValue } from "../monitoring/sanitize-event";
 import { loadContextualProgressSummaries } from "./contextual-progress-data";
 import type { TransactionType } from "./safety-lock";
-import { evaluateSafetyWithLock } from "./safety-policy";
+import { evaluateSafetyWithSharedLock } from "./safety-policy";
 
 export type FocusSession = {
   id: string;
@@ -135,7 +135,7 @@ export async function loadFocusWeek(
     timezoneOffsetMinutes,
     weekEndTimezoneOffsetMinutes,
   );
-  return evaluateSafetyWithLock(dogId, async (safety, tx, lockedNow) => {
+  return evaluateSafetyWithSharedLock(dogId, async (safety, tx, lockedNow) => {
     await lockFocusWeek(tx, dogId, weekKey);
     const focus = await loadFocusSnapshot(tx, dogId, weekKey, "share");
     const skillIds = focus.map((f) => f.skillId);

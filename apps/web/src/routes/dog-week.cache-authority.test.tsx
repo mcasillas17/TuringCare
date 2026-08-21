@@ -38,7 +38,7 @@ vi.mock("@/lib/api", () => ({
     },
   },
 }));
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
 const weekKey = weekKeyOf(new Date());
 
@@ -265,7 +265,7 @@ describe("DogWeek audited suggestion cache authority", () => {
         json: { outcome: "went_well" },
       }),
     );
-    expect(toast.success).toHaveBeenCalledWith(
+    expect(toast.warning).toHaveBeenCalledWith(
       "Practice response was saved, but it was not linked to the original training suggestion.",
     );
   });
@@ -360,7 +360,7 @@ describe("DogWeek audited suggestion cache authority", () => {
         json: { confirmCurrentLevel: true, outcome: "went_well" },
       }),
     );
-    expect(toast.success).toHaveBeenCalledWith(
+    expect(toast.warning).toHaveBeenCalledWith(
       "Practice response was saved, but it was not linked to the original training suggestion.",
     );
   });
@@ -453,7 +453,7 @@ describe("DogWeek audited suggestion cache authority", () => {
         json: { confirmCurrentLevel: true, outcome: "went_well" },
       }),
     );
-    expect(toast.success).toHaveBeenCalledWith(
+    expect(toast.warning).toHaveBeenCalledWith(
       "Practice response was saved, but it was not linked to the original training suggestion.",
     );
   });
@@ -494,7 +494,7 @@ describe("DogWeek audited suggestion cache authority", () => {
         json: { confirmCurrentLevel: true, outcome: "went_well" },
       }),
     );
-    expect(toast.success).toHaveBeenCalledWith(
+    expect(toast.warning).toHaveBeenCalledWith(
       "Practice response was saved, but it was not linked to the original training suggestion.",
     );
   });
@@ -537,7 +537,7 @@ describe("DogWeek audited suggestion cache authority", () => {
         json: { confirmCurrentLevel: true, outcome: "went_well" },
       }),
     );
-    expect(toast.success).toHaveBeenCalledWith(
+    expect(toast.warning).toHaveBeenCalledWith(
       "Practice response was saved, but it was not linked to the original training suggestion.",
     );
   });

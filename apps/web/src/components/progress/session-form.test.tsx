@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SessionForm } from "./session-form";
 
 vi.mock("@/lib/progress", () => ({ useLogSession: vi.fn() }));
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
 function setup(
   dimensions: Parameters<typeof SessionForm>[0]["dimensions"],
@@ -200,7 +200,7 @@ describe("SessionForm evidence capture", () => {
     expect(Date.parse(String(body.occurredAt))).toBe(new Date("2026-08-18T10:30").getTime());
   });
 
-  it("reports a partial anchor rejection while confirming that the session was saved", async () => {
+  it("warns about a partial anchor rejection while confirming that the session was saved", async () => {
     const { mutateAsync } = setup(["distraction"]);
     mutateAsync.mockResolvedValueOnce({
       session: { id: "session-1" },
@@ -218,13 +218,15 @@ describe("SessionForm evidence capture", () => {
       }),
     );
 
+    const successCallCount = vi.mocked(toast.success).mock.calls.length;
     submitSession();
 
     await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith(
+      expect(toast.warning).toHaveBeenCalledWith(
         "Practice was saved, but current-level confirmation was not recorded because this practice already has a different training anchor.",
       ),
     );
+    expect(toast.success).toHaveBeenCalledTimes(successCallCount);
   });
 
   it("omits a stale confirmation after all structured evidence is cleared", async () => {

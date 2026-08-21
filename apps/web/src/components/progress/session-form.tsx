@@ -171,7 +171,11 @@ export function SessionForm({
             : result.anchorRejected
               ? t("practice.anchorRejectedGeneric")
               : t("progress.saved");
-      toast.success(feedback);
+      if (result.anchorRejected) {
+        toast.warning(feedback);
+      } else {
+        toast.success(feedback);
+      }
       onSaved?.();
     } catch (error) {
       toast.error(

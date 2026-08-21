@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DogWeek } from "./dog-week";
 
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
 vi.mock("@/lib/weekly-focus", async () => {
   const actual = await vi.importActual<typeof import("@/lib/weekly-focus")>("@/lib/weekly-focus");
@@ -931,7 +931,7 @@ describe("DogWeek", () => {
     expect(evidenceMutate.mock.calls[0]?.[0]?.body.confirmCurrentLevel).toBeUndefined();
   });
 
-  it("reports a saved practice when current-level confirmation is rejected", async () => {
+  it("warns when current-level confirmation is rejected after saving practice", async () => {
     const { evidenceMutate } = setup([sitFocus]);
     evidenceMutate.mockResolvedValueOnce({ anchorRejected: "practice_day_required" });
     renderWeek();
@@ -941,13 +941,14 @@ describe("DogWeek", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save response" }));
 
     await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
-    expect(toast.success).toHaveBeenCalledWith(
+    expect(toast.warning).toHaveBeenCalledWith(
       "Practice was saved, but current-level confirmation was not recorded because this practice was not on a valid practice day.",
     );
+    expect(toast.success).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it("maps a locked anchor rejection without turning the saved practice into a failure", async () => {
+  it("warns about a locked anchor rejection without turning the saved practice into a failure", async () => {
     const { evidenceMutate } = setup([sitFocus]);
     evidenceMutate.mockResolvedValueOnce({ anchorRejected: "target_locked" });
     renderWeek();
@@ -957,10 +958,33 @@ describe("DogWeek", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save response" }));
 
     await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
-    expect(toast.success).toHaveBeenCalledWith(
+    expect(toast.warning).toHaveBeenCalledWith(
       "Practice was saved, but current-level confirmation was not recorded because this practice already has a different training anchor.",
     );
+    expect(toast.success).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("warns when a saved response loses its audited suggestion anchor", async () => {
+    const { evidenceMutate } = setup([sitFocus]);
+    const { qc } = renderWeek();
+    seedAuditedSuggestion(qc);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+    await screen.findByRole("button", { name: "Went well" });
+    qc.setQueryData(suggestionLib.suggestionKey("d1", weekKeyOf(new Date())), {
+      ...exerciseSuggestion,
+      dismissed: true,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Went well" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
+    expect(evidenceMutate.mock.calls[0]?.[0]?.body.practicedTarget).toBeUndefined();
+    expect(toast.warning).toHaveBeenCalledWith(
+      "Practice response was saved, but it was not linked to the original training suggestion.",
+    );
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("shows an error if a logged focus skill is no longer available", async () => {
@@ -985,6 +1009,18 @@ describe("DogWeek", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Choose a different focus" }));
     expect(screen.getByRole("radiogroup", { name: "Focus skill" })).toBeInTheDocument();
+  });
+
+  it("shows retry feedback when an enabled suggestion action has no audited target", async () => {
+    const { actionMutate } = setup([sitFocus]);
+    renderWeek();
+
+    const action = screen.getByRole("button", { name: "We did this" });
+    expect(action).toBeEnabled();
+    fireEvent.click(action);
+
+    expect(actionMutate).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Couldn't save that.");
   });
 
   it("deletes a session through the progress mutation", async () => {

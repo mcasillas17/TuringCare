@@ -71,7 +71,7 @@ import {
 } from "../lib/practice-anchor";
 import { loadProgress } from "../lib/progress";
 import { lockDogSafety, withDogSafetyLock } from "../lib/safety-lock";
-import { evaluateSafetyWithLock } from "../lib/safety-policy";
+import { evaluateSafetyWithLock, evaluateSafetyWithSharedLock } from "../lib/safety-policy";
 import { setSkillLevel } from "../lib/skill-level";
 import { currentWeekKey, loadSuggestion, recordSuggestionAction } from "../lib/suggestion";
 import { applyTrainingTemplate } from "../lib/training-template-writes";
@@ -387,7 +387,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     }
     const dog = await findOwnedDog(c.get("userId"), dogId);
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const progress = await evaluateSafetyWithLock(dog.id, async (safety, tx, lockedNow) => {
+    const progress = await evaluateSafetyWithSharedLock(dog.id, async (safety, tx, lockedNow) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skillId}))`);
       const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId, tx, "share");
       return skill ? loadContextualProgress(skill, lockedNow, safety, tx) : null;
@@ -409,11 +409,25 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       if (!dog) return c.json({ error: "not_found" } as const, 404);
       const event = c.req.valid("json");
       if (event.name === "training.context_next_action_used") {
-        const actionUseAllowed = await evaluateSafetyWithLock(
-          dog.id,
-          async (safety) => safety === null,
-        );
+        const actionUseAllowed = await evaluateSafetyWithLock(dog.id, async (safety, tx) => {
+          if (safety) return false;
+          await recordEvent(
+            event.name,
+            {
+              userId: c.get("userId"),
+              sessionId: c.get("sessionId"),
+              props: {
+                surface: event.surface,
+                ruleId: event.ruleId,
+                direction: event.direction,
+              },
+            },
+            tx,
+          );
+          return true;
+        });
         if (!actionUseAllowed) return c.json({ ok: true } as const, 202);
+        return c.json({ ok: true } as const, 202);
       }
       const { name, ...props } = event;
       await recordEvent(name, {
