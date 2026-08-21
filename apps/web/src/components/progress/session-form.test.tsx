@@ -1,10 +1,12 @@
 import { LocaleProvider } from "@/i18n";
 import * as progressLib from "@/lib/progress";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { toast } from "sonner";
 import { describe, expect, it, vi } from "vitest";
 import { SessionForm } from "./session-form";
 
 vi.mock("@/lib/progress", () => ({ useLogSession: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 function setup(dimensions: Parameters<typeof SessionForm>[0]["dimensions"], currentLevel = 3) {
   const mutateAsync = vi.fn().mockResolvedValue({});
@@ -53,7 +55,7 @@ describe("SessionForm evidence capture", () => {
     expect(screen.queryByText("How much help did you give?")).not.toBeInTheDocument();
   });
 
-  it("submits the chosen outcome, context and safety signal without safety attestation", async () => {
+  it("requires safety attestation before submitting outcome and safety evidence", async () => {
     const { mutateAsync } = setup(["distraction"]);
     fireEvent.change(screen.getByLabelText("How did it go?"), {
       target: { value: "too_hard" },
@@ -64,6 +66,18 @@ describe("SessionForm evidence capture", () => {
     fireEvent.change(screen.getByLabelText("Did anything unsafe happen?"), {
       target: { value: "injury_or_pain" },
     });
+    submitSession();
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "I confirm this safety event happened and understand training suggestions may pause.",
+      ),
+    );
+    expect(mutateAsync).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I confirm this safety event happened and understand training suggestions may pause.",
+      }),
+    );
     submitSession();
     await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
     const body = mutateAsync.mock.calls[0]?.[0]?.body as Record<string, unknown>;

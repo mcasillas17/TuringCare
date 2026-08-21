@@ -67,6 +67,10 @@ export function SessionForm({
   }, [hasStructuredEvidence, unregister]);
 
   const onSubmit = handleSubmit(async (body) => {
+    if (body.safetySignal && !safetyConfirmed) {
+      toast.error(t("practice.safetyConfirm"));
+      return;
+    }
     try {
       const occurredAt = new Date(body.occurredAt);
       const { confirmCurrentLevel, ...bodyWithoutConfirmation } = body;

@@ -50,13 +50,16 @@ describe("OutcomeQuickCapture", () => {
     });
   });
 
-  it("saves a safety-only report without requiring an attestation", () => {
+  it("requires safety attestation before saving a safety-only report", () => {
     const { onSave } = setup();
     fireEvent.change(screen.getByLabelText("Did anything unsafe happen?"), {
       target: { value: "injury_or_pain" },
     });
-    expect(screen.getByRole("button", { name: "Save response" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+    const saveButton = screen.getByRole("button", { name: "Save response" });
+    expect(saveButton).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /confirm/i }));
+    expect(saveButton).toBeEnabled();
+    fireEvent.click(saveButton);
 
     expect(onSave).toHaveBeenCalledWith({
       outcome: undefined,
@@ -65,19 +68,22 @@ describe("OutcomeQuickCapture", () => {
     });
   });
 
-  it("saves structured evidence with safety when current-level confirmation is unchecked", () => {
+  it("requires safety attestation before saving outcome and safety evidence", () => {
     const { onSave } = setup({ hasFallback: false, usesAuditedSuggestion: false });
     fireEvent.click(screen.getByRole("button", { name: "Went well" }));
     fireEvent.change(screen.getByLabelText("Did anything unsafe happen?"), {
       target: { value: "injury_or_pain" },
     });
 
-    const confirmation = screen.getByRole("checkbox", {
+    const currentLevelConfirmation = screen.getByRole("checkbox", {
       name: "I practiced this at the current Level 3.",
     });
-    expect(confirmation).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "Save response" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+    expect(currentLevelConfirmation).not.toBeChecked();
+    const saveButton = screen.getByRole("button", { name: "Save response" });
+    expect(saveButton).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /confirm/i }));
+    expect(saveButton).toBeEnabled();
+    fireEvent.click(saveButton);
 
     expect(onSave).toHaveBeenCalledWith({
       outcome: "went_well",
@@ -148,6 +154,7 @@ describe("OutcomeQuickCapture", () => {
     fireEvent.change(screen.getByLabelText("Did anything unsafe happen?"), {
       target: { value: "injury_or_pain" },
     });
+    fireEvent.click(screen.getByRole("checkbox", { name: /confirm/i }));
 
     fireEvent.click(screen.getByRole("button", { name: "Save response" }));
 

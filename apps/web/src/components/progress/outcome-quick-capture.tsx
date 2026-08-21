@@ -168,7 +168,9 @@ export function OutcomeQuickCapture({
       )}
       <Button
         type="button"
-        disabled={saving || (!outcome && !safetySignal)}
+        disabled={
+          saving || (!outcome && !safetySignal) || Boolean(safetySignal && !safetyConfirmed)
+        }
         onClick={() =>
           onSave({
             ...context,
