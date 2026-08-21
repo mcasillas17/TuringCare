@@ -1053,3 +1053,13 @@ verified through isolated same-origin Vite proxy servers on ports 3310/3311.
 - Spec/plan: `docs/superpowers/specs/2026-08-15-first-run-guided-setup-design.md`,
   `docs/superpowers/plans/2026-08-15-first-run-guided-setup.md`
 - Commits: `d52d82b..34b25de` on `feat/first-run-guided-setup`.
+
+## 2026-08-21 — Personalized training Gate 2 — contextual progress
+Exact-context, current-level reliability is derived from recent practice evidence.
+Owners can manually confirm current-level practice; one evidence-derived adjacent
+next context is offered for the next attempt. This Week presents a decision-first
+summary, while expanded skill detail shows the supporting evidence. There is no
+universal completion score and no automatic advancement.
+- Spec/plan: `docs/superpowers/specs/2026-08-20-contextual-progress-insights-design.md`,
+  `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
+- Commits: this branch.
