@@ -7,6 +7,7 @@ import type {
 } from "@turingcare/shared";
 import { CONFIDENCE_MAX } from "@turingcare/shared";
 import { api } from "./api";
+import { contextualProgressDogKey } from "./contextual-progress";
 
 /** i18n keys for the generic confidence labels, indexed by level-1 (used as fallback milestone labels). */
 export const LEVEL_KEYS = [
@@ -53,9 +54,17 @@ const dogProgress = api.api.dogs[":id"].progress;
 const dogGoals = api.api.dogs[":id"].goals;
 const dogSkills = api.api.dogs[":id"].skills;
 
-function invalidateProgress(qc: ReturnType<typeof useQueryClient>, dogId: string) {
-  qc.invalidateQueries({ queryKey: ["progress", dogId] });
-  qc.invalidateQueries({ queryKey: ["suggestion", dogId] });
+export function invalidatePracticeDerivedData(
+  qc: ReturnType<typeof useQueryClient>,
+  dogId: string,
+) {
+  return Promise.all([
+    qc.invalidateQueries({ queryKey: ["progress", dogId] }),
+    qc.invalidateQueries({ queryKey: contextualProgressDogKey(dogId) }),
+    qc.invalidateQueries({ queryKey: ["focus", dogId] }),
+    qc.invalidateQueries({ queryKey: ["suggestion", dogId] }),
+    qc.invalidateQueries({ queryKey: ["overview"] }),
+  ]);
 }
 
 export function useProgress(dogId: string) {
@@ -81,7 +90,7 @@ export function useAddSkill(dogId: string, goalId: string) {
       if (!res.ok) throw new Error("save_failed");
       return (await res.json()).skill;
     },
-    onSuccess: () => invalidateProgress(qc, dogId),
+    onSuccess: () => invalidatePracticeDerivedData(qc, dogId),
   });
 }
 
@@ -96,7 +105,7 @@ export function useUpdateSkill(dogId: string) {
       if (!res.ok) throw new Error("update_failed");
       return (await res.json()).skill;
     },
-    onSuccess: () => invalidateProgress(qc, dogId),
+    onSuccess: () => invalidatePracticeDerivedData(qc, dogId),
   });
 }
 
@@ -117,8 +126,7 @@ export function useSetSkillLevel(dogId: string) {
       const mastered = variables.level >= CONFIDENCE_MAX;
       if (mastered) celebrate(true, "turing.celebrateMastery");
       else celebrate(false);
-      invalidateProgress(qc, dogId);
-      qc.invalidateQueries({ queryKey: ["overview"] });
+      invalidatePracticeDerivedData(qc, dogId);
     },
   });
 }
@@ -131,7 +139,7 @@ export function useDeleteSkill(dogId: string) {
       if (!res.ok) throw new Error("delete_failed");
       return res.json();
     },
-    onSuccess: () => invalidateProgress(qc, dogId),
+    onSuccess: () => invalidatePracticeDerivedData(qc, dogId),
   });
 }
 
@@ -152,7 +160,7 @@ export function useLogSession(dogId: string) {
     },
     onSuccess: () => {
       celebrate(false);
-      invalidateProgress(qc, dogId);
+      invalidatePracticeDerivedData(qc, dogId);
     },
   });
 }
@@ -167,7 +175,7 @@ export function useDeleteSession(dogId: string) {
       if (!res.ok) throw new Error("delete_failed");
       return res.json();
     },
-    onSuccess: () => invalidateProgress(qc, dogId),
+    onSuccess: () => invalidatePracticeDerivedData(qc, dogId),
   });
 }
 
@@ -186,6 +194,6 @@ export function useSetSessionEvidence(dogId: string) {
       if (!res.ok) throw new Error("evidence_failed");
       return (await res.json()).session;
     },
-    onSuccess: () => invalidateProgress(qc, dogId),
+    onSuccess: () => invalidatePracticeDerivedData(qc, dogId),
   });
 }

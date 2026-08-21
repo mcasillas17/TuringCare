@@ -150,6 +150,12 @@ const sitFocus: focusLib.FocusSkill = {
   goalName: "Basic manners",
   position: 0,
   sessions: [],
+  currentLevel: 1,
+  dimensions: [],
+  contextualProgress: {
+    status: "ready",
+    summary: { strongestContext: null, nextPracticeAction: null },
+  },
 };
 
 function deferred<T>() {
