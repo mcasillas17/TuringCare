@@ -1062,4 +1062,4 @@ summary, while expanded skill detail shows the supporting evidence. There is no
 universal completion score and no automatic advancement.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Commits: `e46aeca..58669da` on `feat/contextual-progress-insights`.
+- Commits: `59c26a2..2dd66b8` on `feat/contextual-progress-insights`.

@@ -123,6 +123,11 @@ The weekly summary does not list Not observed contexts and does not replace the
 existing week grid. It helps the owner decide how to practice the selected
 skill.
 
+When the server-owned active safety decision blocks exercises, the summary
+preserves its strongest evidence but returns no practice action and includes
+the existing safety/referral decision for accessible guidance. This is distinct
+from a genuine sparse response with no safety decision.
+
 If no structured evidence exists, the summary uses neutral copy such as:
 
 > Add an outcome and context after practice to see where this skill is becoming
@@ -204,7 +209,9 @@ The policy applies these rules in order:
 1. If the latest relevant result is `too_hard`, choose the nearest recorded or
    curriculum-supported context that reduces exactly one difficulty dimension.
 2. Otherwise, if a Reliable context has a reviewed adjacent harder context,
-   recommend that single-step progression.
+   recommend that single-step progression only when the exact harder target is
+   not already observed as non-Reliable or with a `too_hard` result. A failed
+   harder target is excluded from fallback repeats.
 3. Otherwise, recommend another attempt in the strongest Developing context.
 4. If evidence is too sparse, ask the owner to record an outcome and context
    rather than inventing a progression.
@@ -248,6 +255,8 @@ curriculum version, the explicit window, and policy version.
 The shared package exposes:
 
 - the existing practice outcome, context, and practice-session schemas;
+- the existing `SuggestionSafety`/referral contract for server-owned exercise
+  suppression;
 - a request-only `confirmCurrentLevel: true` option for session creation and
   evidence updates, mutually exclusive with `practicedTarget`;
 - contextual status;
@@ -268,6 +277,7 @@ type ContextualProgress = {
   policyVersion: string;
   strongestContext: ExactContextEvidence | null;
   nextPracticeAction: NextPracticeAction | null;
+  safety: SuggestionSafety | null;
   exactContexts: ExactContextEvidence[];
 };
 
@@ -339,8 +349,11 @@ missing resources.
 
 The existing focus response adds one compact `contextualProgressSummary` per
 returned focus skill. The loader derives all returned summaries from one
-bounded evidence query rather than issuing one query per skill. The expanded
-skill card fetches the full skill-scoped route only when opened.
+bounded evidence query rather than issuing one query per skill. Focus evaluates
+the dog's active safety decision once per request and shares it across all
+returned summaries. The expanded skill card fetches the full skill-scoped route
+only when opened and evaluates safety for the owned dog before returning its
+detail.
 
 ## Web Architecture
 
@@ -379,6 +392,13 @@ catalogs.
   anchor unchanged; other valid evidence fields may still be saved.
 - Insight query failures show a retryable, localized inline state while
   existing practice controls remain usable.
+- An initial weekly-focus failure is a distinct retry/edit state and must not
+  render the genuine empty-focus state. Cached focus data remains usable during
+  a background error. An unavailable per-skill contextual summary exposes an
+  inline retry without disabling the week grid.
+- Active safety suppression removes only `nextPracticeAction`, preserves
+  evidence/status rows, renders the existing localized safety/referral guidance,
+  and records no next-action-use telemetry.
 - Sparse evidence shows a neutral capture prompt.
 - A Developing context whose latest result is `too_hard` shows support-oriented
   language and never a harder next step.
@@ -419,6 +439,8 @@ Cover:
 - any recent `too_hard` blocking Reliable in that exact context;
 - latest-`too_hard` selection reducing one difficulty dimension;
 - Reliable progression increasing only one reviewed dimension;
+- an observed non-Reliable or `too_hard` harder target never being recommended,
+  with safe Developing fallback selection;
 - sparse evidence producing no fabricated status or action;
 - deterministic ordering when timestamps tie;
 - custom skills without adjacency using conservative behavior.
@@ -439,6 +461,9 @@ Cover:
 - owner isolation for dog, skill, context detail, and nested session IDs;
 - bounded query behavior using the existing relevant index;
 - batched focus summaries without N+1 queries;
+- injury, aggression/bite, severe-fear, severe-concern, and sustained-worsening
+  safety suppression on detail and batched focus responses, including evidence
+  preservation and no action telemetry;
 - practice save succeeding independently from later insight loading;
 - server-side telemetry identity and scalar properties.
 
@@ -449,9 +474,16 @@ Cover:
 - decision-first summary with Reliable evidence;
 - Developing-only and sparse-evidence states;
 - `too_hard` support-oriented copy;
+- safety/referral guidance with no practice CTA for every exercise-suppressing
+  safety class;
 - full exact-context rows in skill detail;
+- Reliable rows label `lastSuccessfulAt` as the supporting practice date,
+  while Developing rows use `lastObservedAt`;
+- compact weekly labels omit null context values, while full detail retains all
+  five labels; hash expansion scrolls without moving focus or adding a tab stop;
 - Not observed never presented as failure;
 - inline insight errors preserving practice controls;
+- weekly cold-error Retry/Edit focus state and per-skill unavailable Retry;
 - session form structured-field submission and optional omission;
 - current-level confirmation copy, submission, and conflict handling;
 - all affected query-key invalidations;

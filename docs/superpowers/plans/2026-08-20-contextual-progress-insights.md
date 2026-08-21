@@ -128,8 +128,14 @@ plan before adding an index or migration.
 - Reliable requires `went_well` on at least two distinct days and zero
   `too_hard` outcomes in that exact context.
 - Any observed context that is not Reliable is Developing.
+- A Reliable context never recommends a reviewed harder target already observed
+  as non-Reliable or with any `too_hard` result; that failed target is excluded
+  from Developing-repeat fallback selection.
 - At most one Not observed row is derived from a real observed context by one
   reviewed adjacent change.
+- Contextual responses carry the server-owned active safety decision. When it
+  suppresses exercises, only `nextPracticeAction` is removed; evidence/status
+  rows remain available for guidance.
 - Manual confirmation stamps server-owned level/version but leaves
   `practiceVariant` and `suggestionId` null, so it cannot support advancement.
 - Every new nested resource returns `404`, not `403`, when it is absent or
@@ -376,6 +382,7 @@ import {
   practiceDimensionValues,
   practiceOutcomeValues,
 } from "./practice-evidence";
+import { suggestionSafetySchema } from "./suggestion";
 
 export const contextualStatusValues = [
   "reliable",
@@ -416,6 +423,7 @@ export const nextPracticeActionSchema = z.object({
 export const contextualProgressSummarySchema = z.object({
   strongestContext: exactContextEvidenceSchema.nullable(),
   nextPracticeAction: nextPracticeActionSchema.nullable(),
+  safety: suggestionSafetySchema.nullable(),
 });
 
 export const contextualProgressSchema = contextualProgressSummarySchema.extend({
@@ -578,6 +586,11 @@ Do not set `practiceVariant`; advancement continues to require primary
 suggestion-linked evidence. Preserve the existing partial-save behavior for a
 PATCH whose anchor is rejected: return `anchorRejected: "target_locked"` while
 saving otherwise valid evidence fields.
+
+Keep the same `{ session, anchorRejected }` response shape in the web
+`useLogSession` mutation. `SessionForm` maps `practice_day_required`,
+`target_locked`, and other non-null rejection values to the existing localized
+partial-save success copy while still reporting that the session was saved.
 
 - [ ] **Step 4: Add privacy-safe practice telemetry properties**
 
@@ -884,8 +897,10 @@ Implementation order:
    the too-hard context, otherwise return no action, and never select a harder
    action for that latest `too_hard`;
 11. otherwise select a harder action after Reliable when reviewed adjacency
-   exists, then repeat the highest-ranked Developing context if no action was
-   produced, returning null only when no Developing fallback exists;
+   exists only when its exact target is absent or already Reliable without a
+   `too_hard`; if the target is observed non-Reliable, exclude it and repeat
+   the highest-ranked remaining Developing context, returning null only when
+   no safe Developing fallback exists;
 12. append at most one Not observed adjacent row only if the adjacent exact key
    has no observed group.
 
@@ -1129,11 +1144,13 @@ empty map without querying when `skills.length === 0`.
 
 - [ ] **Step 4: Attach summaries in `loadFocusWeek`**
 
-Include `confidence` and `catalogSkillKey` in the focus select. After the
-existing weekly-session query, call the batch loader once. Catch only that
-summary read, log `[contextual-progress] focus_summary_failed` without owner
-content, and return the explicit unavailable state rather than silently
-inventing an empty summary. Add:
+Include `confidence` and `catalogSkillKey` in the focus select. Evaluate the
+shared server-owned safety decision once per dog/request, pass it to the batch
+loader, and call the batch loader once. Catch only that combined summary/safety
+read, log `[contextual-progress] focus_summary_failed` without owner content,
+and return the explicit unavailable state rather than silently inventing an
+empty summary. Active safety sets every returned summary's action to null while
+preserving its evidence and safety decision. Add:
 
 ```ts
 currentLevel: f.confidence,
@@ -1146,6 +1163,7 @@ contextualProgress: summaries
       summary: summaries.get(f.skillId) ?? {
         strongestContext: null,
         nextPracticeAction: null,
+        safety: null,
       },
     }
   : { status: "unavailable" },
@@ -1541,6 +1559,9 @@ Cover:
 - sparse state prompts evidence capture;
 - error state is a retryable `role="status"` and Log session remains enabled;
 - all five non-null context labels render so exact combinations remain legible;
+- active server-owned safety suppression shows the existing accessible
+  safety/referral guidance, preserves evidence rows, and removes the practice
+  CTA/action telemetry;
 - CTA calls the telemetry mutation then opens the existing session form
   prefilled with the recommended context;
 - one view event per mounted detail result, not per rerender.
@@ -1585,9 +1606,10 @@ Keep labels as presentation helpers in this file; the server owns status and
 ranking. Show Not observed only when returned by the API. On query error render
 a retry button calling `refetch`, but do not hide or disable session controls.
 
-Use a ref keyed by `policyVersion`, level, and strongest serialized context to
-send `training.context_insight_viewed` once per mounted result. Telemetry failure
-must be ignored by the UI.
+Use a ref keyed by `policyVersion`, level, strongest serialized context, and
+safety rule to send `training.context_insight_viewed` once per mounted result.
+Telemetry failure must be ignored by the UI. A Reliable row labels
+`lastSuccessfulAt`; Developing labels `lastObservedAt`.
 
 - [ ] **Step 4: Prefill the selected next practice**
 
@@ -1605,6 +1627,9 @@ safety signal, or anchor. In `SkillCard`, keep the selected recommended context
 in local state. The next-practice CTA records
 `training.context_next_action_used`, stores the context, and switches to
 `mode("logging")`. Clearing/cancelling the form clears the recommendation.
+When catalog dimensions hydrate from an empty list, merge new defaults without
+resetting dirty occurredAt, notes, outcome, context, or confirmation values;
+an intentional recommendation change still performs the existing full reset.
 
 - [ ] **Step 5: Fetch only for expanded skills**
 
@@ -1634,11 +1659,13 @@ contextProgress.needsSupport
 contextProgress.noEvidence
 contextProgress.empty
 contextProgress.loadError
+contextProgress.actionUnavailable
 contextProgress.retry
 contextProgress.useAction
 contextProgress.viewEvidence
 contextProgress.successfulDays
 contextProgress.lastObserved
+contextProgress.lastSuccessful
 contextProgress.cueSupport
 contextProgress.environment
 contextProgress.distance
@@ -1704,6 +1731,11 @@ Cover:
 - focus response/query failure does not remove or disable week-grid practice.
 - an unavailable contextual summary shows an inline insight error while the
   week grid remains usable.
+- the unavailable summary has an inline Retry that refetches focus;
+- active safety shows the existing referral guidance, suppresses the weekly
+  practice CTA, and emits no next-action-use event;
+- initial focus failure offers Retry and Edit focus without claiming an empty
+  focus, while cached focus controls remain enabled;
 
 - [ ] **Step 2: Run and confirm RED**
 
@@ -1746,15 +1778,17 @@ detail link. Never render the `exactContexts` list on This Week.
 
 Map the focus skills and render one compact summary for every
 `contextualProgress.status === "ready"` focus skill. For `unavailable`, render
-the localized inline insight error without hiding the grid. This is response
-data, not a separate query. Do not condition it on the selected historical week
-being current; instead always label the rolling 21-day window.
+the localized inline insight error and Retry without hiding the grid. This is
+response data, not a separate query. Do not condition it on the selected
+historical week being current; instead always label the rolling 21-day window.
+Compact context labels omit null values; full detail keeps all five labels.
 
 - [ ] **Step 5: Handle deep-link expansion**
 
-In `ProgressPanel`, read `location.hash` once after progress data loads. If it
+In `ProgressPanel`, react to `location.hash` after progress data loads. If it
 matches an owned rendered skill ID, initialize that `SkillCard` expanded and
-scroll it into view without stealing focus. Ignore unknown hashes.
+scroll it into view without forcing focus or adding a tab stop. Ignore unknown
+hashes.
 
 - [ ] **Step 6: Run weekly UI, progress panel, i18n, and typecheck**
 
