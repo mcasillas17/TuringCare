@@ -43,6 +43,19 @@ function makeQueryClient() {
   });
 }
 
+function expectPracticeDerivedInvalidations(invalidateQueries: unknown) {
+  for (const queryKey of [
+    ["progress", "dog-1"],
+    ["contextual-progress", "dog-1"],
+    ["focus", "dog-1"],
+    ["suggestion", "dog-1"],
+    ["overview"],
+    ["dogs-overview"],
+  ]) {
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey });
+  }
+}
+
 afterEach(() => vi.clearAllMocks());
 
 describe("suggestion hooks", () => {
@@ -121,7 +134,7 @@ describe("suggestion hooks", () => {
     ).rejects.toThrow(message);
   });
 
-  it("posts advancement decisions and invalidates all affected caches", async () => {
+  it("posts advancement decisions and invalidates all practice-derived caches", async () => {
     postDecision.mockResolvedValue({ ok: true, json: async () => ({}) });
     const queryClient = makeQueryClient();
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
@@ -137,10 +150,9 @@ describe("suggestion hooks", () => {
       param: { id: "dog-1", proposalId: "proposal-1" },
       json: { decision: "confirmed" },
     });
-    expect(invalidateQueries).toHaveBeenCalledWith({
+    expectPracticeDerivedInvalidations(invalidateQueries);
+    expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: suggestionKey("dog-1", "2026-08-10"),
     });
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["progress", "dog-1"] });
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["overview"] });
   });
 });

@@ -92,6 +92,9 @@ function expectPracticeDerivedInvalidations(invalidateQueries: unknown) {
   expect(invalidateQueries).toHaveBeenCalledWith({
     queryKey: ["overview"],
   });
+  expect(invalidateQueries).toHaveBeenCalledWith({
+    queryKey: ["dogs-overview"],
+  });
 }
 
 afterEach(() => vi.clearAllMocks());
@@ -274,5 +277,37 @@ describe("practice-derived cache invalidation", () => {
     });
 
     expectPracticeDerivedInvalidations(invalidateQueries);
+  });
+
+  it("waits for every derived cache invalidation before resolving a skill-level mutation", async () => {
+    setSkillLevel.mockResolvedValue({
+      ok: true,
+      json: async () => ({ skill: { id: "skill-1" } }),
+    });
+    const queryClient = makeQueryClient();
+    let releaseInvalidation!: () => void;
+    const invalidation = new Promise<void>((resolve) => {
+      releaseInvalidation = resolve;
+    });
+    const invalidateQueries = vi
+      .spyOn(queryClient, "invalidateQueries")
+      .mockReturnValue(invalidation);
+    const { result } = renderHook(() => useSetSkillLevel("dog-1"), {
+      wrapper: makeWrapper(queryClient),
+    });
+
+    let resolved = false;
+    const mutation = result.current.mutateAsync({ skillId: "skill-1", level: 3 }).then(() => {
+      resolved = true;
+    });
+
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalled());
+    expect(resolved).toBe(false);
+
+    releaseInvalidation();
+    await act(async () => {
+      await mutation;
+    });
+    expect(resolved).toBe(true);
   });
 });

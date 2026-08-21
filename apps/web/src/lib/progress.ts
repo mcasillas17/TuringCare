@@ -64,6 +64,7 @@ export function invalidatePracticeDerivedData(
     qc.invalidateQueries({ queryKey: ["focus", dogId] }),
     qc.invalidateQueries({ queryKey: ["suggestion", dogId] }),
     qc.invalidateQueries({ queryKey: ["overview"] }),
+    qc.invalidateQueries({ queryKey: ["dogs-overview"] }),
   ]);
 }
 
@@ -126,7 +127,7 @@ export function useSetSkillLevel(dogId: string) {
       const mastered = variables.level >= CONFIDENCE_MAX;
       if (mastered) celebrate(true, "turing.celebrateMastery");
       else celebrate(false);
-      invalidatePracticeDerivedData(qc, dogId);
+      return invalidatePracticeDerivedData(qc, dogId);
     },
   });
 }

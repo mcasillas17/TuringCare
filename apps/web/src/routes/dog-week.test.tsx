@@ -409,8 +409,8 @@ describe("DogWeek", () => {
     expect(screen.getByRole("radiogroup", { name: "Focus skill" })).toBeInTheDocument();
   });
 
-  it("invalidates the exact weekly suggestion after deleting a session", async () => {
-    setup([
+  it("deletes a session through the progress mutation", async () => {
+    const { deleteMutate } = setup([
       {
         ...sitFocus,
         sessions: [
@@ -418,16 +418,13 @@ describe("DogWeek", () => {
         ],
       },
     ]);
-    const { qc } = renderWeek();
-    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    renderWeek();
 
     fireEvent.click(screen.getByRole("button", { name: /Sit on .*: 1 sessions/i }));
     fireEvent.click(screen.getByRole("button", { name: /remove/i }));
 
     await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: ["suggestion", "d1", expect.any(String)],
-      }),
+      expect(deleteMutate).toHaveBeenCalledWith({ skillId: "s1", sessionId: "session-1" }),
     );
   });
 });

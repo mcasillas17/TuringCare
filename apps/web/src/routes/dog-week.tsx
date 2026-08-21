@@ -7,12 +7,7 @@ import { WeekGrid } from "@/components/week/week-grid";
 import { WeekNav } from "@/components/week/week-nav";
 import { useI18n } from "@/i18n";
 import { useDeleteSession, useLogSession, useSetSessionEvidence } from "@/lib/progress";
-import {
-  suggestionKey,
-  useAdvancementDecision,
-  useSuggestion,
-  useSuggestionAction,
-} from "@/lib/suggestion";
+import { useAdvancementDecision, useSuggestion, useSuggestionAction } from "@/lib/suggestion";
 import {
   addDays,
   dayKey,
@@ -23,8 +18,7 @@ import {
   weekKeyAtOffset,
   weekKeyOf,
 } from "@/lib/week";
-import { focusKey, useFocusWeek } from "@/lib/weekly-focus";
-import { useQueryClient } from "@tanstack/react-query";
+import { useFocusWeek } from "@/lib/weekly-focus";
 import type {
   AdvancementDecision,
   PracticeDimension,
@@ -38,7 +32,6 @@ import { toast } from "sonner";
 export function DogWeek() {
   const { t, locale } = useI18n();
   const { id = "" } = useParams();
-  const qc = useQueryClient();
   const today = useMemo(() => new Date(), []);
   const [monday, setMonday] = useState(() => mondayOf(new Date()));
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -113,8 +106,6 @@ export function DogWeek() {
     setPendingOutcome(null);
   }, [pendingScope]);
 
-  const refreshFocus = () => qc.invalidateQueries({ queryKey: focusKey(id, weekKey) });
-
   const onLog = async (skillId: string, day: Date) => {
     const scopeAtStart = pendingScope;
     const isToday = dayKey(day) === dayKey(today);
@@ -129,7 +120,6 @@ export function DogWeek() {
         timezoneOffsetMinutes: occurrenceTimezoneOffsetMinutes,
       },
     });
-    refreshFocus();
     if (activeScope.current !== scopeAtStart) return;
     const matchingSuggestion =
       !suggestionError &&
@@ -150,8 +140,6 @@ export function DogWeek() {
 
   const onRemove = async (skillId: string, sessionId: string) => {
     await deleteSession.mutateAsync({ skillId, sessionId });
-    refreshFocus();
-    qc.invalidateQueries({ queryKey: suggestionKey(id, weekKey) });
   };
 
   const onSaveOutcome = async (
@@ -173,7 +161,6 @@ export function DogWeek() {
         },
       });
       setPendingOutcome((current) => (current?.sessionId === target.sessionId ? null : current));
-      qc.invalidateQueries({ queryKey: suggestionKey(id, weekKey) });
       toast.success(t("practice.outcomeSaved"));
     } catch {
       toast.error(t("practice.outcomeFailed"));
