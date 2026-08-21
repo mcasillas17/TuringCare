@@ -92,10 +92,13 @@ An attempt without an outcome may still be saved and shown in practice history,
 but it does not change contextual status.
 
 `Not observed` is neutral missing evidence, never failure. It appears in the
-full skill-detail view only for the current level's reviewed primary context,
-reviewed fallback context, or one reviewed adjacent next context. Custom skills
-without a reviewed mapping do not synthesize Not observed rows. The interface
-does not generate an unbounded list of every possible context combination.
+full skill-detail view only for at most one adjacent context derived from real
+current-level evidence. The policy changes one dimension using the catalog
+skill's reviewed easing or level-step strategy and an explicit controlled-value
+order. If there is no observed context or no unambiguous adjacent value, no Not
+observed row is shown. Custom skills without reviewed dimension metadata do not
+synthesize Not observed rows. The interface does not generate an unbounded
+list of every possible context combination.
 
 If the latest attempt in a Developing context is `too_hard`, owner-facing copy
 says the context needs more support. The next-practice action must reduce
@@ -185,6 +188,12 @@ never discard or block a valid practice-session save.
 
 The next-practice action is deterministic and uses reviewed curriculum context
 ordering where available.
+
+The API owns explicit adjacency tables for cue support, environment, distance,
+duration band, and distraction. Distance direction is never assumed globally:
+the catalog's reviewed strategy decides whether easing means increasing trigger
+distance or decreasing owner distance. Every proposed context is derived from
+an observed exact context by changing one controlled value.
 
 The policy applies these rules in order:
 
@@ -401,6 +410,8 @@ Cover:
 - two successes on the same day remaining Developing;
 - two successes on distinct days becoming Reliable;
 - exact-context combinations remaining separate;
+- at most one Not observed adjacent context derived from observed evidence;
+- no Not observed row when adjacency is missing or ambiguous;
 - any recent `too_hard` blocking Reliable in that exact context;
 - latest-`too_hard` selection reducing one difficulty dimension;
 - Reliable progression increasing only one reviewed dimension;
