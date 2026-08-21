@@ -301,6 +301,77 @@ describe("deriveContextualProgress", () => {
     );
   });
 
+  it("does not recommend an easier target that was itself too hard", () => {
+    const rejectedEasier = context({ distraction: "none" });
+    const result = derive([
+      row("rejected-easier", "2026-08-19T11:00:00.000Z", {
+        ...rejectedEasier,
+        outcome: "too_hard",
+      }),
+      row("latest-hard", "2026-08-20T11:00:00.000Z", { outcome: "too_hard" }),
+    ]);
+
+    expect(result.nextPracticeAction).toBeNull();
+  });
+
+  it("repeats a safe Developing alternative instead of a failed easier target", () => {
+    const rejectedEasier = context({ distraction: "none" });
+    const safeAlternative = context({ cueSupport: "food_lure", distraction: "none" });
+    const result = derive([
+      row("rejected-success", "2026-08-17T11:00:00.000Z", {
+        ...rejectedEasier,
+        practiceDay: "2026-08-17",
+      }),
+      row("rejected-hard", "2026-08-19T11:00:00.000Z", {
+        ...rejectedEasier,
+        outcome: "too_hard",
+        practiceDay: "2026-08-19",
+      }),
+      row("safe-alternative", "2026-08-18T11:00:00.000Z", {
+        ...safeAlternative,
+        outcome: "mixed",
+      }),
+      row("latest-hard", "2026-08-20T11:00:00.000Z", { outcome: "too_hard" }),
+    ]);
+
+    expect(result.nextPracticeAction).toEqual({
+      ruleId: "repeat_developing_context",
+      direction: "repeat",
+      context: safeAlternative,
+      changedDimension: null,
+    });
+  });
+
+  it("returns no action when a non-Reliable easier target has no safe Developing alternative", () => {
+    const rejectedEasier = context({ distraction: "none" });
+    const result = derive([
+      row("rejected-easier", "2026-08-19T11:00:00.000Z", {
+        ...rejectedEasier,
+        outcome: "mixed",
+      }),
+      row("latest-hard", "2026-08-20T11:00:00.000Z", { outcome: "too_hard" }),
+    ]);
+
+    expect(result.nextPracticeAction).toBeNull();
+  });
+
+  it("omits a support-oriented action when the easier target is already Reliable", () => {
+    const reliableEasier = context({ distraction: "none" });
+    const result = derive([
+      row("reliable-easier-one", "2026-08-17T11:00:00.000Z", {
+        ...reliableEasier,
+        practiceDay: "2026-08-17",
+      }),
+      row("reliable-easier-two", "2026-08-18T11:00:00.000Z", {
+        ...reliableEasier,
+        practiceDay: "2026-08-18",
+      }),
+      row("latest-hard", "2026-08-20T11:00:00.000Z", { outcome: "too_hard" }),
+    ]);
+
+    expect(result.nextPracticeAction).toBeNull();
+  });
+
   it("uses the level-one baseEase metadata for too_hard", () => {
     const result = derive(
       [

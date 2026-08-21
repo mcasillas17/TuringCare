@@ -284,15 +284,16 @@ function getReviewedContextStep(
 function deriveDevelopingRepeat(
   observed: ObservedContext[],
   options: {
-    excludedKey?: string;
+    excludedKeys?: readonly string[];
     noHarderThan?: ExactPracticeContext;
     metadata?: SkillDimensionMetadata | null;
   } = {},
 ): NextPracticeAction | null {
+  const excludedKeys = new Set(options.excludedKeys);
   const developing = observed.find(
     ({ key, evidence }) =>
       evidence.status === "developing" &&
-      key !== options.excludedKey &&
+      !excludedKeys.has(key) &&
       (!options.noHarderThan ||
         isContextNoHarderThan(evidence.context, options.noHarderThan, options.metadata ?? null)),
   );
@@ -306,6 +307,12 @@ function deriveDevelopingRepeat(
   };
 }
 
+function isUnobservedOrReliableWithoutTooHard(
+  evidence: ObservedExactContextEvidence | undefined,
+): boolean {
+  return !evidence || (evidence.status === "reliable" && evidence.latestOutcome !== "too_hard");
+}
+
 function deriveAction(input: {
   latestRow: EligibleContextualProgressRow | undefined;
   observed: ObservedContext[];
@@ -315,6 +322,7 @@ function deriveAction(input: {
   metadata: SkillDimensionMetadata | null;
 }): NextPracticeAction | null {
   if (input.latestRow?.outcome === "too_hard") {
+    const failedKey = serializeContext(input.latestRow.context);
     const easierAction = deriveAdjacentAction(
       input.latestRow.context,
       input.catalogSkillKey,
@@ -323,14 +331,28 @@ function deriveAction(input: {
       "easier",
       "ease_after_too_hard",
     );
-    return (
-      easierAction ??
-      deriveDevelopingRepeat(input.observed, {
-        excludedKey: serializeContext(input.latestRow.context),
+
+    if (easierAction) {
+      const easierKey = serializeContext(easierAction.context);
+      const observedEasier = input.observed.find(({ key }) => key === easierKey)?.evidence;
+      if (!observedEasier) return easierAction;
+
+      if (isUnobservedOrReliableWithoutTooHard(observedEasier)) {
+        return null;
+      }
+
+      return deriveDevelopingRepeat(input.observed, {
+        excludedKeys: [failedKey, easierKey],
         noHarderThan: input.latestRow.context,
         metadata: input.metadata,
-      })
-    );
+      });
+    }
+
+    return deriveDevelopingRepeat(input.observed, {
+      excludedKeys: [failedKey],
+      noHarderThan: input.latestRow.context,
+      metadata: input.metadata,
+    });
   }
 
   if (!input.strongest) return null;
@@ -347,11 +369,8 @@ function deriveAction(input: {
 
     const harderKey = serializeContext(harderContext);
     const observedHarder = input.observed.find(({ key }) => key === harderKey)?.evidence;
-    const harderTargetIsSafe =
-      !observedHarder ||
-      (observedHarder.status === "reliable" && observedHarder.latestOutcome !== "too_hard");
-    if (!harderTargetIsSafe) {
-      return deriveDevelopingRepeat(input.observed, { excludedKey: harderKey });
+    if (!isUnobservedOrReliableWithoutTooHard(observedHarder)) {
+      return deriveDevelopingRepeat(input.observed, { excludedKeys: [harderKey] });
     }
 
     return {

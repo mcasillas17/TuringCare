@@ -120,11 +120,10 @@ export async function loadFocusWeek(
             ),
           )
           .orderBy(asc(practiceSessions.occurredAt));
-  const now = new Date();
   const summariesPromise =
     focus.length === 0
       ? Promise.resolve(new Map<string, ContextualProgressSummary>())
-      : evaluateSafetyWithLock(dogId, now, async (safety, tx) => {
+      : evaluateSafetyWithLock(dogId, async (safety, tx, lockedNow) => {
           try {
             // Keep a failed evidence read local so the outer safety lock can still commit.
             return await tx.transaction((summaryTx) =>
@@ -134,7 +133,7 @@ export async function loadFocusWeek(
                   confidence: focusedSkill.confidence,
                   catalogSkillKey: focusedSkill.catalogSkillKey,
                 })),
-                now,
+                lockedNow,
                 safety,
                 summaryTx,
               ),

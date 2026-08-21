@@ -123,18 +123,19 @@ describe("decideSafety", () => {
   });
 
   describe("evaluateSafetyWithLock", () => {
-    it("runs the guarded callback with an empty decision and propagates its value", async () => {
+    it("runs the guarded callback with an empty decision and its lock-owned clock", async () => {
       const result = await evaluateSafetyWithLock(
         crypto.randomUUID(),
-        NOW,
-        async (decision, tx) => {
+        async (decision, tx, lockedNow) => {
           expect(decision).toBeNull();
+          expect(lockedNow).toBeInstanceOf(Date);
           await tx.execute(sql`select 1`);
-          return "guarded-write-complete";
+          return { value: "guarded-write-complete", lockedNow };
         },
       );
 
-      expect(result).toBe("guarded-write-complete");
+      expect(result.value).toBe("guarded-write-complete");
+      expect(result.lockedNow).toBeInstanceOf(Date);
     });
   });
 

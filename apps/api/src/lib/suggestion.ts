@@ -200,7 +200,6 @@ async function finalizeUnderSafetyLock(input: {
   try {
     const { suggestion, inserted } = await evaluateSafetyWithLock(
       input.dogId,
-      input.now,
       async (decision, tx) => {
         const built = await input.build(decision, tx);
         state.built = built;

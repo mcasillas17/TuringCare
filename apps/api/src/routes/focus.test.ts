@@ -250,6 +250,52 @@ function beginHeldSafetyWrite(dogId: string) {
   return { ready, release: () => release?.(), write };
 }
 
+function beginHeldSafetyWorseningThresholdWrite(dogId: string) {
+  let markReady: (() => void) | undefined;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve;
+  });
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const write = db.transaction(async (tx) => {
+    await lockDogSafety(tx, dogId);
+    markReady?.();
+    await hold;
+    await tx.insert(journalEntries).values({
+      dogId,
+      kind: "daily_checkin",
+      occurredAt: new Date(),
+      note: "threshold-crossing worsening",
+      intensity: 4,
+      trend: "harder",
+    });
+  });
+
+  return { ready, release: () => release?.(), write };
+}
+
+async function seedJustBelowWorseningThreshold(dogId: string): Promise<void> {
+  const occurredAt = new Date();
+  await db.insert(journalEntries).values([
+    {
+      dogId,
+      kind: "moment",
+      occurredAt,
+      note: "high intensity below threshold",
+      intensity: 4,
+    },
+    {
+      dogId,
+      kind: "daily_checkin",
+      occurredAt,
+      note: "harder below threshold",
+      trend: "harder",
+    },
+  ]);
+}
+
 describe("dogs: weekly focus", () => {
   let u: TestUser;
   beforeAll(async () => {
@@ -1059,6 +1105,113 @@ describe("dogs: weekly focus", () => {
             suppressed: true,
             ruleId: "reported_aggression_or_bite_risk",
             referral: "veterinary_behaviorist",
+          },
+        },
+      });
+    } finally {
+      safetyWrite.release();
+      await Promise.allSettled([safetyWrite.write, responsePromise]);
+    }
+  });
+
+  it("uses the post-lock safety clock when worsening crosses the threshold while focus waits", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    await db
+      .update(trainingSkills)
+      .set({ catalogSkillKey: "basic-manners.sit" })
+      .where(eq(trainingSkills.id, skill.id));
+    const focusWindow = currentFocusWindow();
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: focusWindow.weekKey,
+      position: 0,
+    });
+    const now = new Date();
+    const context = {
+      cueSupport: "hand_signal" as const,
+      environment: "home_quiet" as const,
+      distance: "few_steps" as const,
+      durationBand: "about_15_seconds" as const,
+      distraction: "none" as const,
+    };
+    for (const daysAgo of [2, 1]) {
+      const occurredAt = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+      await db.insert(practiceSessions).values({
+        skillId: skill.id,
+        occurredAt,
+        outcome: "went_well",
+        practiceDay: occurredAt.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      });
+    }
+    await seedJustBelowWorseningThreshold(dog.id);
+
+    const before = await app.request(`/api/dogs/${dog.id}/focus?${focusWindow.query}`, {
+      headers: u.authHeaders,
+    });
+    expect(before.status).toBe(200);
+    const beforeBody = (await before.json()) as {
+      focusSkills: Array<{
+        contextualProgress: {
+          status: string;
+          summary?: { safety: unknown; nextPracticeAction: unknown };
+        };
+      }>;
+    };
+    expect(beforeBody.focusSkills[0]?.contextualProgress).toEqual({
+      status: "ready",
+      summary: {
+        strongestContext: expect.any(Object),
+        nextPracticeAction: expect.any(Object),
+        safety: null,
+      },
+    });
+
+    const safetyWrite = beginHeldSafetyWorseningThresholdWrite(dog.id);
+    await safetyWrite.ready;
+    let completed = false;
+    const responsePromise = Promise.resolve(
+      app.request(`/api/dogs/${dog.id}/focus?${focusWindow.query}`, {
+        headers: u.authHeaders,
+      }),
+    ).then((response) => {
+      completed = true;
+      return response;
+    });
+
+    try {
+      await waitForAdvisoryLockWaiter();
+      expect(completed).toBe(false);
+      safetyWrite.release();
+      await safetyWrite.write;
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        focusSkills: Array<{
+          contextualProgress:
+            | {
+                status: "ready";
+                summary: {
+                  nextPracticeAction: unknown;
+                  safety: { ruleId: string; referral: string } | null;
+                };
+              }
+            | { status: "unavailable" };
+        }>;
+      };
+      expect(body.focusSkills[0]?.contextualProgress).toEqual({
+        status: "ready",
+        summary: {
+          strongestContext: expect.any(Object),
+          nextPracticeAction: null,
+          safety: {
+            suppressed: true,
+            ruleId: "sustained_worsening_intensity",
+            referral: "credentialed_trainer",
           },
         },
       });

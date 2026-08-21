@@ -106,7 +106,10 @@ list of every possible context combination.
 
 If the latest attempt in a Developing context is `too_hard`, owner-facing copy
 says the context needs more support. The next-practice action must reduce
-difficulty rather than suggest progression.
+difficulty rather than suggest progression. If the reviewed easier context is
+already Reliable, the API emits no support-oriented next action: the original
+failed context may still show its accurate support note, but a known-successful
+context is never relabeled as Developing.
 
 ## Owner Experience
 
@@ -208,14 +211,17 @@ an observed exact context by changing one controlled value.
 
 The policy applies these rules in order:
 
-1. If the latest relevant result is `too_hard`, choose the nearest recorded or
-   curriculum-supported context that reduces exactly one difficulty dimension.
-   If reviewed easing is unavailable, repeat only a recorded Developing context
-   that is proven no harder than the failed context on every controlled
-   dimension. It may be equal or easier across multiple dimensions, but the
-   failed exact context is excluded. A changed null/unknown value or an
-   unreviewed or ambiguous distance direction is not proven safe. If no such
-   Developing context exists, return no action.
+1. If the latest relevant result is `too_hard`, an unobserved reviewed adjacent
+   context may reduce exactly one difficulty dimension. If that adjacent target
+   is already non-Reliable or contains any recent `too_hard`, do not recommend
+   it. Instead, repeat only another recorded Developing context proven no
+   harder than the original failed context on every controlled dimension,
+   excluding both the original failed key and the rejected adjacent key. It may
+   be equal or easier across multiple dimensions, but a changed null/unknown
+   value or an unreviewed or ambiguous distance direction is not proven safe.
+   If no such Developing context exists, return no action. An already Reliable
+   adjacent target also returns no action rather than being recast with
+   support-oriented copy.
 2. Otherwise, if a Reliable context has a reviewed adjacent harder context,
    recommend that single-step progression only when the exact harder target is
    not already observed as non-Reliable or with a `too_hard` result. A failed
@@ -359,6 +365,10 @@ schema before either ownership query; malformed IDs use the same
 uses `evaluateSafetyWithLock` to derive the safety decision and full contextual
 evidence/action through the lock-held transaction executor, so a safety write
 cannot commit between the decision and the returned action or synthetic row.
+That helper samples one authoritative `lockedNow` immediately after acquiring
+the dog safety lock, passes it to both `loadSafetyInputs` and the callback, and
+the contextual loader uses that same instance for its evidence bounds. Callers
+must not capture a pre-lock clock.
 
 Expose `POST /api/dogs/:id/contextual-progress/events` beneath the same owned
 dog route. Its UUID guard runs before JSON validation, the ownership query, and
@@ -373,8 +383,9 @@ The existing focus response adds one compact `contextualProgressSummary` per
 returned focus skill. The loader derives all returned summaries from one
 bounded evidence query rather than issuing one query per skill. Focus evaluates
 the dog's active safety decision once per request under the dog safety lock and
-passes that transaction executor to the one batched evidence read, sharing the
-result across all returned summaries. A contextual evidence-read failure
+passes the same post-lock `lockedNow` plus transaction executor to the one
+batched evidence read, sharing the result across all returned summaries. A
+contextual evidence-read failure
 returns the explicit `unavailable` summary state; failures acquiring,
 evaluating, or committing the safety transaction propagate instead of yielding
 an unsafe ready result. The expanded skill card fetches the full skill-scoped
@@ -518,7 +529,10 @@ Cover:
 - at most one Not observed adjacent context derived from observed evidence;
 - no Not observed row when adjacency is missing or ambiguous;
 - any recent `too_hard` blocking Reliable in that exact context;
-- latest-`too_hard` selection reducing one difficulty dimension;
+- latest-`too_hard` selection reducing one difficulty dimension only to an
+  unobserved target, rejecting a failed adjacent target in favor of a proven
+  safe Developing fallback, returning null when none exists, and omitting a
+  support action for an already Reliable adjacent target;
 - Reliable progression increasing only one reviewed dimension;
 - an observed non-Reliable or `too_hard` harder target never being recommended,
   with safe Developing fallback selection;

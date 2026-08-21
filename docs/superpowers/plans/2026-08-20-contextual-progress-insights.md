@@ -141,11 +141,17 @@ plan before adding an index or migration.
 - A Reliable context never recommends a reviewed harder target already observed
   as non-Reliable or with any `too_hard` result; that failed target is excluded
   from Developing-repeat fallback selection.
-- When a latest `too_hard` context cannot be eased, a Developing-repeat
-  fallback must be proven no harder across every controlled dimension. Equal or
-  easier changes are allowed, but the failed exact context, changed
-  null/unknown values, and unreviewed or ambiguous distance direction are
-  unsafe. Return no action when no safe Developing fallback remains.
+- A latest `too_hard` can use an easier adjacent target only when that target is
+  unobserved. A non-Reliable or `too_hard` observed target is rejected; any
+  Developing-repeat fallback must be proven no harder across every controlled
+  dimension and excludes both the original failed key and rejected adjacent
+  key. Equal or easier changes are allowed, but changed null/unknown values and
+  unreviewed or ambiguous distance direction are unsafe. An already Reliable
+  adjacent target emits no support-oriented action, so it is never labeled
+  Developing. Return no action when no safe action remains.
+- Safety reads sample one authoritative `lockedNow` immediately after acquiring
+  the dog safety lock. `loadSafetyInputs` and every protected contextual loader
+  use that same clock; callers never pass a pre-lock request clock.
 - At most one Not observed row is derived from a real observed context by one
   reviewed adjacent change.
 - Contextual responses carry the server-owned active safety decision. When it
@@ -822,12 +828,14 @@ Define a fixture builder with all five context positions and test:
 8. outcome-only rows with all context positions null are ignored;
 9. strongest ranking follows status, successful days, relevant timestamp, then
    serialized context;
-10. latest `too_hard` creates an easier one-field action; when easing is
-    unavailable, it never falls through to a harder action and repeats the
-    highest-ranked Developing context that is proven no harder than the failed
-    context across every controlled dimension. It excludes the failed exact
-    context and any changed null/unknown or unreviewed/ambiguous distance
-    comparison, returning no action when no safe Developing fallback exists;
+10. latest `too_hard` creates an easier one-field action only for an unobserved
+    reviewed target. A non-Reliable or `too_hard` observed target is rejected,
+    and the fallback repeats the highest-ranked Developing context proven no
+    harder than the failed context across every controlled dimension while
+    excluding both failed keys. An already Reliable target emits no
+    support-oriented action. Exclude changed null/unknown or
+    unreviewed/ambiguous distance comparisons and return no action when no safe
+    Developing fallback exists;
 11. Reliable creates a harder one-field action when a reviewed harder adjacency
     exists, then repeats the highest-ranked Developing context when it does not;
 12. a Reliable context at level 5, at a maxed-out reviewed adjacency, or with
@@ -910,12 +918,15 @@ Implementation order:
 8. for harder movement, use the step into the next level
    (`levelSteps[level - 1]`) and return no harder adjacency at level 5;
 9. pass the matching reviewed strategy to the adjacency helper;
-10. select easier after the globally latest `too_hard`; if no easier action can
-   be derived, repeat the highest-ranked Developing context only when it is
-   proven no harder than the failed context across every controlled dimension.
-   Exclude the failed exact context and any changed null/unknown or
-   unreviewed/ambiguous distance comparison; otherwise return no action, and
-   never select a harder action for that latest `too_hard`;
+10. select easier after the globally latest `too_hard` only when the reviewed
+   target is unobserved. If it is non-Reliable or has any `too_hard`, exclude
+   both the failed source and rejected target, then repeat the highest-ranked
+   Developing context only when it is proven no harder than the failed source
+   across every controlled dimension. If the target is already Reliable,
+   return no action rather than attach support-oriented copy. Exclude any
+   changed null/unknown or unreviewed/ambiguous distance comparison; otherwise
+   return no action, and never select a harder action for that latest
+   `too_hard`;
 11. otherwise select a harder action after Reliable when reviewed adjacency
    exists only when its exact target is absent or already Reliable without a
    `too_hard`; if the target is observed non-Reliable, exclude it and repeat
@@ -1067,17 +1078,18 @@ Add after the existing progress route:
   if (!dog) return c.json({ error: "not_found" } as const, 404);
   const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId);
   if (!skill) return c.json({ error: "not_found" } as const, 404);
-  const now = new Date();
-  const progress = await evaluateSafetyWithLock(dog.id, now, (safety, tx) =>
-    loadContextualProgress(skill, now, safety, tx),
+  const progress = await evaluateSafetyWithLock(dog.id, (safety, tx, lockedNow) =>
+    loadContextualProgress(skill, lockedNow, safety, tx),
   );
   return c.json(progress);
 })
 ```
 
-The locked callback is the response linearization point: it must pass its
-transaction executor to the loader and must not use global `db` for contextual
-evidence after the safety decision.
+The locked callback is the response linearization point: the helper samples
+`lockedNow` immediately after acquiring the advisory lock, passes it to
+`loadSafetyInputs` and the callback, and the callback must pass that same clock
+plus its transaction executor to the loader. It must not use global `db` or a
+pre-lock request clock for contextual evidence after the safety decision.
 
 - [ ] **Step 5: Inspect the query plan**
 
@@ -1185,9 +1197,9 @@ empty map without querying when `skills.length === 0`.
 - [ ] **Step 4: Attach summaries in `loadFocusWeek`**
 
 Include `confidence` and `catalogSkillKey` in the focus select. Use
-`evaluateSafetyWithLock` once per dog/request and pass its transaction executor
-to the one batch loader, so the safety decision and contextual evidence/action
-share one linearization point. Isolate only the evidence read in a nested
+`evaluateSafetyWithLock` once per dog/request and pass its post-lock
+`lockedNow` plus transaction executor to the one batch loader, so the safety
+decision and contextual evidence/action share one linearization point. Isolate only the evidence read in a nested
 transaction/savepoint: log `[contextual-progress] focus_summary_failed`
 without owner content and return the explicit unavailable state for that
 failure, while lock acquisition, safety-input evaluation, and outer-transaction
@@ -1306,7 +1318,6 @@ Do not add them to `CLIENT_EVENTS`. Add a route UUID guard before `zValidator`, 
     if (event.name === "training.context_next_action_used") {
       const actionUseAllowed = await evaluateSafetyWithLock(
         dog.id,
-        new Date(),
         async (safety) => safety === null,
       );
       if (!actionUseAllowed) return c.json({ ok: true } as const, 202);

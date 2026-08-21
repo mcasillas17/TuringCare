@@ -389,9 +389,8 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId);
     if (!skill) return c.json({ error: "not_found" } as const, 404);
-    const now = new Date();
-    const progress = await evaluateSafetyWithLock(dog.id, now, (safety, tx) =>
-      loadContextualProgress(skill, now, safety, tx),
+    const progress = await evaluateSafetyWithLock(dog.id, (safety, tx, lockedNow) =>
+      loadContextualProgress(skill, lockedNow, safety, tx),
     );
     return c.json(progress);
   })
@@ -411,7 +410,6 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       if (event.name === "training.context_next_action_used") {
         const actionUseAllowed = await evaluateSafetyWithLock(
           dog.id,
-          new Date(),
           async (safety) => safety === null,
         );
         if (!actionUseAllowed) return c.json({ ok: true } as const, 202);

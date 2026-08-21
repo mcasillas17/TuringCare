@@ -185,6 +185,32 @@ function beginHeldSafetyWrite(dogId: string, type: "injury_or_pain" | "aggressio
   return { ready, release: () => release?.(), write };
 }
 
+function beginHeldSafetyWorseningThresholdWrite(dogId: string) {
+  let markReady: (() => void) | undefined;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve;
+  });
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const write = db.transaction(async (tx) => {
+    await lockDogSafety(tx, dogId);
+    markReady?.();
+    await hold;
+    await tx.insert(journalEntries).values({
+      dogId,
+      kind: "daily_checkin",
+      occurredAt: new Date(),
+      note: "threshold-crossing worsening",
+      intensity: 4,
+      trend: "harder",
+    });
+  });
+
+  return { ready, release: () => release?.(), write };
+}
+
 async function activateSafety(
   dogId: string,
   safetyCase: (typeof activeSafetyCases)[number],
@@ -227,6 +253,26 @@ async function activateSafety(
       kind: "daily_checkin",
       occurredAt,
       note: "harder check-in again",
+      trend: "harder",
+    },
+  ]);
+}
+
+async function seedJustBelowWorseningThreshold(dogId: string): Promise<void> {
+  const occurredAt = new Date();
+  await db.insert(journalEntries).values([
+    {
+      dogId,
+      kind: "moment",
+      occurredAt,
+      note: "high intensity below threshold",
+      intensity: 4,
+    },
+    {
+      dogId,
+      kind: "daily_checkin",
+      occurredAt,
+      note: "harder below threshold",
       trend: "harder",
     },
   ]);
@@ -445,6 +491,58 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
         exactContexts: Array<{ status: string }>;
       };
       expect(body.safety).toEqual(expect.objectContaining({ ruleId: "reported_injury_or_pain" }));
+      expect(body.nextPracticeAction).toBeNull();
+      expect(body.exactContexts).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ status: "not_observed" })]),
+      );
+    } finally {
+      safetyWrite.release();
+      await Promise.allSettled([safetyWrite.write, responsePromise]);
+    }
+  });
+
+  it("uses the post-lock safety clock when worsening crosses the threshold while detail waits", async () => {
+    const setupValue = await setup(users);
+    await seedReliableContext(setupValue.skillId);
+    await seedJustBelowWorseningThreshold(setupValue.dogId);
+
+    const before = await getDetail(setupValue);
+    expect(before.status).toBe(200);
+    const beforeBody = (await before.json()) as {
+      safety: unknown;
+      nextPracticeAction: unknown;
+      exactContexts: Array<{ status: string }>;
+    };
+    expect(beforeBody.safety).toBeNull();
+    expect(beforeBody.nextPracticeAction).not.toBeNull();
+    expect(beforeBody.exactContexts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ status: "not_observed" })]),
+    );
+
+    const safetyWrite = beginHeldSafetyWorseningThresholdWrite(setupValue.dogId);
+    await safetyWrite.ready;
+    let completed = false;
+    const responsePromise = getDetail(setupValue).then((response) => {
+      completed = true;
+      return response;
+    });
+
+    try {
+      await waitForAdvisoryLockWaiter();
+      expect(completed).toBe(false);
+      safetyWrite.release();
+      await safetyWrite.write;
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        safety: { ruleId: string } | null;
+        nextPracticeAction: unknown;
+        exactContexts: Array<{ status: string }>;
+      };
+      expect(body.safety).toEqual(
+        expect.objectContaining({ ruleId: "sustained_worsening_intensity" }),
+      );
       expect(body.nextPracticeAction).toBeNull();
       expect(body.exactContexts).not.toEqual(
         expect.arrayContaining([expect.objectContaining({ status: "not_observed" })]),
@@ -713,6 +811,56 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
       users.push(owner);
       const dog = await makeDog(owner);
       const safetyWrite = beginHeldSafetyWrite(dog.id, "aggression_or_bite_risk");
+      await safetyWrite.ready;
+      let completed = false;
+      const responsePromise = Promise.resolve(
+        app.request(eventPath(dog.id), {
+          method: "POST",
+          headers: owner.authHeaders,
+          body: JSON.stringify({
+            name: "training.context_next_action_used",
+            surface: "week",
+            ruleId: "advance_reliable_context",
+            direction: "harder",
+          }),
+        }),
+      ).then((response) => {
+        completed = true;
+        return response;
+      });
+
+      try {
+        await waitForAdvisoryLockWaiter();
+        expect(completed).toBe(false);
+        safetyWrite.release();
+        await safetyWrite.write;
+
+        const response = await responsePromise;
+        expect(response.status).toBe(202);
+        expect(await response.json()).toEqual({ ok: true });
+        const stored = await db
+          .select({ id: events.id })
+          .from(events)
+          .where(
+            and(
+              eq(events.name, "training.context_next_action_used"),
+              eq(events.userId, owner.userId),
+            ),
+          );
+        expect(stored).toEqual([]);
+      } finally {
+        safetyWrite.release();
+        await Promise.allSettled([safetyWrite.write, responsePromise]);
+      }
+    });
+
+    it("does not record action-use telemetry when worsening crosses the threshold while it waits", async () => {
+      const owner = await createTestUser();
+      users.push(owner);
+      const dog = await makeDog(owner);
+      await seedJustBelowWorseningThreshold(dog.id);
+
+      const safetyWrite = beginHeldSafetyWorseningThresholdWrite(dog.id);
       await safetyWrite.ready;
       let completed = false;
       const responsePromise = Promise.resolve(

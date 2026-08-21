@@ -137,15 +137,16 @@ export async function evaluateSafety(dogId: string, now: Date): Promise<Suggesti
 
 /**
  * Holds the shared safety lock through the guarded write, making this decision
- * and action a single linearization point.
+ * and action a single linearization point. The clock is sampled only after
+ * lock acquisition, then shared by the decision and guarded callback.
  */
 export async function evaluateSafetyWithLock<T>(
   dogId: string,
-  now: Date,
-  callback: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<T>,
+  callback: (decision: SuggestionSafety | null, tx: TransactionType, lockedNow: Date) => Promise<T>,
 ): Promise<T> {
   return withDogSafetyLock(dogId, async (tx) => {
-    const decision = decideSafety(await loadSafetyInputs(dogId, now, tx));
-    return await callback(decision, tx);
+    const lockedNow = new Date();
+    const decision = decideSafety(await loadSafetyInputs(dogId, lockedNow, tx));
+    return await callback(decision, tx, lockedNow);
   });
 }
