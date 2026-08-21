@@ -9,8 +9,8 @@ import { CURRICULUM_VERSION, skillDimensionMetadata } from "../data/training-cur
 import { db } from "../db";
 import { practiceSessions, type trainingSkills } from "../db/schema";
 import {
-  applyContextualSafety,
   type ContextualProgressRow,
+  applyContextualSafety,
   deriveContextualProgress,
 } from "./contextual-progress";
 

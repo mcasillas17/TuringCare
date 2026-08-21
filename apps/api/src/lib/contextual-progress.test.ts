@@ -8,8 +8,8 @@ import { describe, expect, it } from "vitest";
 import { skillDimensionMetadata } from "../data/training-curriculum";
 import {
   CONTEXTUAL_PROGRESS_POLICY_VERSION,
-  applyContextualSafety,
   type ContextualProgressRow,
+  applyContextualSafety,
   deriveContextualProgress,
 } from "./contextual-progress";
 

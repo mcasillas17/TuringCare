@@ -286,9 +286,7 @@ export function DogWeek() {
               key={skill.skillId}
               dogId={id}
               skill={skill}
-              showSafetyNotice={
-                !suggestionSafety && skill.skillId === summarySafetySkillId
-              }
+              showSafetyNotice={!suggestionSafety && skill.skillId === summarySafetySkillId}
               onRetry={() => refetchFocus()}
             />
           ))}
