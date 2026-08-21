@@ -510,6 +510,15 @@ describe("dogs: weekly focus", () => {
     ).toEqual([]);
   });
 
+  it("returns no summaries without querying evidence when no skills are provided", async () => {
+    const selectSpy = vi.spyOn(db, "select");
+
+    const summaries = await contextualProgressData.loadContextualProgressSummaries([], new Date());
+
+    expect(summaries).toEqual(new Map());
+    expect(selectSpy).not.toHaveBeenCalled();
+  });
+
   it("loads current contextual summaries in one batched query and keeps skill groups independent", async () => {
     const { dog, skill } = await setupDogWithSkill(u);
     const { skill: customSkill } = await setupDogWithSkillForDog(u, dog.id, "Down");
@@ -525,6 +534,7 @@ describe("dogs: weekly focus", () => {
     const now = new Date();
     const older = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
     const recent = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const sentinel = new Date(now.getTime() - 12 * 60 * 60 * 1000);
     const catalogCurrentLevel = 1;
     const customCurrentLevel = 2;
     const context = {
@@ -571,6 +581,15 @@ describe("dogs: weekly focus", () => {
         curriculumVersion: CURRICULUM_VERSION,
         ...context,
       },
+      {
+        skillId: customSkill.id,
+        occurredAt: sentinel,
+        outcome: "too_hard",
+        practiceDay: sentinel.toISOString().slice(0, 10),
+        curriculumLevel: catalogCurrentLevel,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
     ]);
 
     const selectSpy = vi.spyOn(db, "select");
@@ -589,15 +608,31 @@ describe("dogs: weekly focus", () => {
 
     expect(selectSpy).toHaveBeenCalledTimes(1);
     expect(perSkillLoader).not.toHaveBeenCalled();
-    expect(summaries.get(skill.id)).toMatchObject({
-      strongestContext: { status: "reliable", successfulDistinctDays: 2 },
-      nextPracticeAction: { direction: "harder" },
-    });
-    expect(summaries.get(customSkill.id)).toEqual({
-      strongestContext: expect.objectContaining({
+    expect(summaries.get(skill.id)).toEqual({
+      strongestContext: {
+        context,
         status: "reliable",
         successfulDistinctDays: 2,
-      }),
+        latestOutcome: "went_well",
+        lastObservedAt: recent.toISOString(),
+        lastSuccessfulAt: recent.toISOString(),
+      },
+      nextPracticeAction: {
+        ruleId: "advance_reliable_context",
+        direction: "harder",
+        context: { ...context, cueSupport: "verbal_cue" },
+        changedDimension: "cue_support",
+      },
+    });
+    expect(summaries.get(customSkill.id)).toEqual({
+      strongestContext: {
+        context,
+        status: "reliable",
+        successfulDistinctDays: 2,
+        latestOutcome: "went_well",
+        lastObservedAt: recent.toISOString(),
+        lastSuccessfulAt: recent.toISOString(),
+      },
       nextPracticeAction: null,
     });
   });
