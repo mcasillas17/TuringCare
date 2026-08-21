@@ -1074,4 +1074,4 @@ revalidation/error actions, and both new contextual routes reject malformed
 UUIDs with privacy-safe `404` responses before database access.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Commits: `59c26a2..ce274b5` on `feat/contextual-progress-insights`.
+- Commits: `59c26a2..cc57c88` on `feat/contextual-progress-insights`.
