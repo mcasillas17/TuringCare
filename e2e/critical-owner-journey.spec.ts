@@ -73,7 +73,9 @@ async function logManualContextSession(
     .getByRole("checkbox", { name: "I practiced this at the current Level 1.", exact: true })
     .check();
   await page.getByRole("button", { name: "Save session", exact: true }).click();
-  await expect(page.getByText("Session logged", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Session logged", { exact: true }).last()).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(page).toHaveURL(trainingUrl);
   await expect(expandedSkill).toBeVisible();
 }
