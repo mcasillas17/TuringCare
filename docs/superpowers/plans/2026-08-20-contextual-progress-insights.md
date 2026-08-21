@@ -178,7 +178,7 @@ plan before adding an index or migration.
 - Modify: `packages/shared/src/progress.test.ts`
 - Modify: `packages/shared/src/index.ts`
 
-- [ ] **Step 1: Write failing contract tests**
+- [x] **Step 1: Write failing contract tests**
 
 Add tests that require the manual confirmation flag to be request-only and
 mutually exclusive with an audited suggestion target:
@@ -288,7 +288,7 @@ describe("contextualProgressEventSchema", () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests and confirm RED**
+- [x] **Step 2: Run the tests and confirm RED**
 
 ```bash
 pnpm --filter @turingcare/shared exec vitest run \
@@ -298,7 +298,7 @@ pnpm --filter @turingcare/shared exec vitest run \
 Expected: failure because `confirmCurrentLevel` and
 `./contextual-progress` do not exist.
 
-- [ ] **Step 3: Add the shared contracts**
+- [x] **Step 3: Add the shared contracts**
 
 Extract the raw fields so the standalone evidence schema and the larger
 practice-session schema can each apply the same cross-field rule after object
@@ -485,7 +485,7 @@ export type ContextualProgressEvent = z.infer<typeof contextualProgressEventSche
 
 Export it from `packages/shared/src/index.ts`.
 
-- [ ] **Step 4: Run shared tests and typecheck**
+- [x] **Step 4: Run shared tests and typecheck**
 
 ```bash
 pnpm --filter @turingcare/shared exec vitest run \
@@ -495,7 +495,7 @@ pnpm --filter @turingcare/shared typecheck
 
 Expected: all selected tests pass and typecheck exits 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/shared/src/practice-evidence.ts \
@@ -518,7 +518,7 @@ git commit -m "feat: define contextual progress contracts"
 - Modify: `apps/api/src/routes/practice-evidence.test.ts`
 - Modify: `apps/api/src/routes/telemetry.test.ts`
 
-- [ ] **Step 1: Write failing API integration tests**
+- [x] **Step 1: Write failing API integration tests**
 
 Add cases to `practice-evidence.test.ts` that create a catalog skill at level 3,
 then assert:
@@ -552,7 +552,7 @@ Add a concurrency test that races level change and manual anchoring and asserts
 the session receives either the old or new locked level, never a client value
 or a mismatched curriculum version.
 
-- [ ] **Step 2: Run the focused route tests and confirm RED**
+- [x] **Step 2: Run the focused route tests and confirm RED**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run \
@@ -561,7 +561,7 @@ pnpm --filter @turingcare/api exec vitest run \
 
 Expected: assertions fail because manual confirmation is currently ignored.
 
-- [ ] **Step 3: Add one reusable manual-anchor resolver**
+- [x] **Step 3: Add one reusable manual-anchor resolver**
 
 In `dogs.ts`, add a small local helper used by both POST and PATCH transaction
 paths:
@@ -614,7 +614,7 @@ Keep the same `{ session, anchorRejected }` response shape in the web
 `target_locked`, and other non-null rejection values to the existing localized
 partial-save success copy while still reporting that the session was saved.
 
-- [ ] **Step 4: Add privacy-safe practice telemetry properties**
+- [x] **Step 4: Add privacy-safe practice telemetry properties**
 
 Change `training.practice_logged` to include scalar properties derived from the
 saved server row:
@@ -640,7 +640,7 @@ props: {
 Update telemetry assertions. Do not include notes, dog name, skill name, or a
 client identity.
 
-- [ ] **Step 5: Run focused API tests and typecheck**
+- [x] **Step 5: Run focused API tests and typecheck**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run \
@@ -650,7 +650,7 @@ pnpm --filter @turingcare/api typecheck
 
 Expected: selected tests pass and typecheck exits 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api/src/routes/dogs.ts \
@@ -668,7 +668,7 @@ git commit -m "feat: anchor confirmed manual practice"
 - Create: `apps/api/src/lib/context-adjacency.ts`
 - Create: `apps/api/src/lib/context-adjacency.test.ts`
 
-- [ ] **Step 1: Write failing adjacency tests**
+- [x] **Step 1: Write failing adjacency tests**
 
 Cover:
 
@@ -711,7 +711,7 @@ expect(
 Test every dimension boundary, null source values, and verify exactly one field
 changes.
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run src/lib/context-adjacency.test.ts
@@ -719,7 +719,7 @@ pnpm --filter @turingcare/api exec vitest run src/lib/context-adjacency.test.ts
 
 Expected: module resolution failure.
 
-- [ ] **Step 3: Implement explicit ordered values and strategy-aware distance**
+- [x] **Step 3: Implement explicit ordered values and strategy-aware distance**
 
 Create:
 
@@ -788,7 +788,7 @@ Implement `moveContextValue` as a generic internal helper that returns null
 outside the array and clones the source with only the named field changed. It
 must not use type assertions that weaken the public contract.
 
-- [ ] **Step 4: Run tests and typecheck**
+- [x] **Step 4: Run tests and typecheck**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run src/lib/context-adjacency.test.ts
@@ -797,7 +797,7 @@ pnpm --filter @turingcare/api typecheck
 
 Expected: tests pass and typecheck exits 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/lib/context-adjacency.ts \
@@ -814,7 +814,7 @@ git commit -m "feat: add reviewed context adjacency"
 - Create: `apps/api/src/lib/contextual-progress.ts`
 - Create: `apps/api/src/lib/contextual-progress.test.ts`
 
-- [ ] **Step 1: Write the complete policy matrix as failing tests**
+- [x] **Step 1: Write the complete policy matrix as failing tests**
 
 Define a fixture builder with all five context positions and test:
 
@@ -864,7 +864,7 @@ const input = {
 
 Assert the full policy result rather than internal helper calls.
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run src/lib/contextual-progress.test.ts
@@ -872,7 +872,7 @@ pnpm --filter @turingcare/api exec vitest run src/lib/contextual-progress.test.t
 
 Expected: module resolution failure.
 
-- [ ] **Step 3: Implement the pure derivation**
+- [x] **Step 3: Implement the pure derivation**
 
 Create these exported contracts:
 
@@ -937,7 +937,7 @@ Implementation order:
 
 Never mutate the input rows or source context object. Never parse notes.
 
-- [ ] **Step 4: Run policy tests and typecheck**
+- [x] **Step 4: Run policy tests and typecheck**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run \
@@ -947,7 +947,7 @@ pnpm --filter @turingcare/api typecheck
 
 Expected: all selected tests pass and typecheck exits 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/lib/contextual-progress.ts \
@@ -965,7 +965,7 @@ git commit -m "feat: derive exact-context progress"
 - Create: `apps/api/src/routes/contextual-progress.test.ts`
 - Modify: `apps/api/src/routes/dogs.ts`
 
-- [ ] **Step 1: Write failing route integration tests**
+- [x] **Step 1: Write failing route integration tests**
 
 Build tests with `createTestUser()` and real Postgres for:
 
@@ -988,7 +988,7 @@ Assert:
 - empty evidence returns `strongestContext: null`,
   `nextPracticeAction: null`, and `exactContexts: []`.
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run \
@@ -997,7 +997,7 @@ pnpm --filter @turingcare/api exec vitest run \
 
 Expected: `404` because the route does not exist.
 
-- [ ] **Step 3: Implement one bounded evidence loader**
+- [x] **Step 3: Implement one bounded evidence loader**
 
 Create:
 
@@ -1058,7 +1058,7 @@ export async function loadContextualProgress(
 The SQL bounds prove that the existing `(skill_id, occurred_at)` index applies.
 Keep the same defensive filters in the pure policy.
 
-- [ ] **Step 4: Add the owned route**
+- [x] **Step 4: Add the owned route**
 
 Validate both `:id` and `:skillId` with the existing repository UUID schema
 before calling `findOwnedDog` or `findOwnedSkill`. A malformed value must
@@ -1091,7 +1091,7 @@ The locked callback is the response linearization point: the helper samples
 plus its transaction executor to the loader. It must not use global `db` or a
 pre-lock request clock for contextual evidence after the safety decision.
 
-- [ ] **Step 5: Inspect the query plan**
+- [x] **Step 5: Inspect the query plan**
 
 Seed one owned skill with representative evidence, then run:
 
@@ -1117,7 +1117,7 @@ row count is large enough for index selection. If Postgres reasonably chooses a
 sequential scan for a tiny table, rerun after inserting at least 1,000
 nonmatching rows before proposing a new index.
 
-- [ ] **Step 6: Run route tests and typecheck**
+- [x] **Step 6: Run route tests and typecheck**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run \
@@ -1127,7 +1127,7 @@ pnpm --filter @turingcare/api typecheck
 
 Expected: route tests pass and typecheck exits 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/api/src/lib/contextual-progress-data.ts \
@@ -1146,7 +1146,7 @@ git commit -m "feat: expose contextual progress detail"
 - Modify: `apps/api/src/lib/focus.ts`
 - Modify: `apps/api/src/routes/focus.test.ts`
 
-- [ ] **Step 1: Write failing focus response tests**
+- [x] **Step 1: Write failing focus response tests**
 
 Use two skill fixtures only in the direct data-layer batch test: one weekly
 focus response supports one focused skill because `weekly_focus_dog_week`
@@ -1164,7 +1164,7 @@ window ends at request time. Force the batch loader to reject and assert that
 the same one-skill focus response still returns the skill and sessions with
 `contextualProgress: { status: "unavailable" }`.
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run src/routes/focus.test.ts
@@ -1172,7 +1172,7 @@ pnpm --filter @turingcare/api exec vitest run src/routes/focus.test.ts
 
 Expected: `contextualProgress` is absent.
 
-- [ ] **Step 3: Add a batch loader**
+- [x] **Step 3: Add a batch loader**
 
 Export:
 
@@ -1194,7 +1194,7 @@ fetch the bounded rows once, group by skill ID, and let
 `deriveContextualProgress` enforce each skill's current level/version. Return an
 empty map without querying when `skills.length === 0`.
 
-- [ ] **Step 4: Attach summaries in `loadFocusWeek`**
+- [x] **Step 4: Attach summaries in `loadFocusWeek`**
 
 Include `confidence` and `catalogSkillKey` in the focus select. Use
 `evaluateSafetyWithLock` once per dog/request and pass its post-lock
@@ -1228,7 +1228,7 @@ contextualProgress: summaries
 Do not merge the week-session query with the rolling evidence query: they have
 different date semantics and selected columns.
 
-- [ ] **Step 5: Run focus and policy tests**
+- [x] **Step 5: Run focus and policy tests**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run \
@@ -1240,7 +1240,7 @@ pnpm --filter @turingcare/api typecheck
 
 Expected: tests pass and typecheck exits 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/api/src/lib/contextual-progress-data.ts \
@@ -1260,7 +1260,7 @@ git commit -m "feat: batch weekly progress summaries"
 - Modify: `apps/api/src/routes/dogs.ts`
 - Modify: `apps/api/src/routes/contextual-progress.test.ts`
 
-- [ ] **Step 1: Write failing allowlist and route tests**
+- [x] **Step 1: Write failing allowlist and route tests**
 
 Require both event names in `KNOWN_EVENTS` but not in anonymous
 `CLIENT_EVENTS`. Exercise:
@@ -1281,7 +1281,7 @@ user ID rather than any client identity.
 - deterministic safety-write interleaving makes an action-use request wait for
   the dog lock and verifies it records nothing after the write commits.
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run \
@@ -1290,7 +1290,7 @@ pnpm --filter @turingcare/api exec vitest run \
 
 Expected: event names and route are absent.
 
-- [ ] **Step 3: Add event names and owned ingest route**
+- [x] **Step 3: Add event names and owned ingest route**
 
 Add to `KNOWN_EVENTS`:
 
@@ -1335,7 +1335,7 @@ Do not add them to `CLIENT_EVENTS`. Add a route UUID guard before `zValidator`, 
 
 Do not record raw errors or change the acknowledged telemetry response shape.
 
-- [ ] **Step 4: Run telemetry tests and typecheck**
+- [x] **Step 4: Run telemetry tests and typecheck**
 
 ```bash
 pnpm --filter @turingcare/api exec vitest run \
@@ -1347,7 +1347,7 @@ pnpm --filter @turingcare/api typecheck
 
 Expected: tests pass and typecheck exits 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/telemetry/events.ts \
@@ -1376,7 +1376,7 @@ git commit -m "feat: record contextual progress telemetry"
 - Modify: `apps/web/src/lib/guided-setup.test.tsx`
 - Modify: `apps/web/src/lib/weekly-focus.ts`
 
-- [ ] **Step 1: Write failing hook tests**
+- [x] **Step 1: Write failing hook tests**
 
 Test exact stable keys:
 
@@ -1419,7 +1419,7 @@ Practice mutations also retain these non-safety derived caches:
 ["dogs-overview"]
 ```
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 ```bash
 pnpm --filter @turingcare/web exec vitest run \
@@ -1428,7 +1428,7 @@ pnpm --filter @turingcare/web exec vitest run \
 
 Expected: module resolution failure.
 
-- [ ] **Step 3: Implement typed hooks**
+- [x] **Step 3: Implement typed hooks**
 
 Create:
 
@@ -1490,7 +1490,7 @@ journal, guided setup, and dog hooks can share it without import cycles.
 `invalidatePracticeDerivedData` must reuse that helper and add only its
 progress/overview caches; do not duplicate slightly different safety lists.
 
-- [ ] **Step 4: Run hook tests and typecheck**
+- [x] **Step 4: Run hook tests and typecheck**
 
 ```bash
 pnpm --filter @turingcare/web exec vitest run \
@@ -1500,7 +1500,7 @@ pnpm --filter @turingcare/web typecheck
 
 Expected: tests pass and typecheck exits 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/lib/contextual-progress.ts \
@@ -1525,7 +1525,7 @@ git commit -m "feat: add contextual progress web data"
 - Modify: `apps/web/src/i18n/en.ts`
 - Modify: `apps/web/src/i18n/es.ts`
 
-- [ ] **Step 1: Write failing form and quick-capture tests**
+- [x] **Step 1: Write failing form and quick-capture tests**
 
 Pass `currentLevel={3}` to both components. For manual forms assert:
 
@@ -1543,7 +1543,7 @@ Assert unchecked forms omit the property. In quick capture, when
 evidence can contribute; when an audited suggestion target exists, preserve the
 primary/fallback controls and do not render the manual confirmation.
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 ```bash
 pnpm --filter @turingcare/web exec vitest run \
@@ -1554,7 +1554,7 @@ pnpm --filter @turingcare/web exec vitest run \
 
 Expected: `currentLevel` is not accepted and the checkbox is absent.
 
-- [ ] **Step 3: Add positive confirmation without changing quick log**
+- [x] **Step 3: Add positive confirmation without changing quick log**
 
 Add the prop and checkbox:
 
@@ -1591,7 +1591,7 @@ When creating `pendingOutcome` in `dog-week.tsx`, include
 for an audited suggestion; otherwise use `focusSkill.dimensions` so a manual
 quick capture can record an actual context.
 
-- [ ] **Step 4: Add bilingual copy**
+- [x] **Step 4: Add bilingual copy**
 
 Add matching keys:
 
@@ -1609,7 +1609,7 @@ Add matching keys:
   "Esto permite que TuringCare compare esta práctica con otras del mismo nivel.",
 ```
 
-- [ ] **Step 5: Run UI tests, i18n parity, and typecheck**
+- [x] **Step 5: Run UI tests, i18n parity, and typecheck**
 
 ```bash
 pnpm --filter @turingcare/web exec vitest run \
@@ -1622,7 +1622,7 @@ pnpm --filter @turingcare/web typecheck
 
 Expected: tests pass and typecheck exits 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/components/progress/session-form.tsx \
@@ -1650,7 +1650,7 @@ git commit -m "feat: confirm manual practice level"
 - Modify: `apps/web/src/i18n/en.ts`
 - Modify: `apps/web/src/i18n/es.ts`
 
-- [ ] **Step 1: Write failing component tests**
+- [x] **Step 1: Write failing component tests**
 
 Cover:
 
@@ -1672,7 +1672,7 @@ Cover:
   prefilled with the recommended context;
 - one view event per mounted detail result, not per rerender.
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 ```bash
 pnpm --filter @turingcare/web exec vitest run \
@@ -1682,7 +1682,7 @@ pnpm --filter @turingcare/web exec vitest run \
 
 Expected: component module does not exist.
 
-- [ ] **Step 3: Implement the detail component**
+- [x] **Step 3: Implement the detail component**
 
 Use semantic sections:
 
@@ -1717,7 +1717,7 @@ safety rule to send `training.context_insight_viewed` once per mounted result.
 Telemetry failure must be ignored by the UI. A Reliable row labels
 `lastSuccessfulAt`; Developing labels `lastObservedAt`.
 
-- [ ] **Step 4: Prefill the selected next practice**
+- [x] **Step 4: Prefill the selected next practice**
 
 Add this optional prop to `SessionForm`:
 
@@ -1737,7 +1737,7 @@ When catalog dimensions hydrate from an empty list, merge new defaults without
 resetting dirty occurredAt, notes, outcome, context, or confirmation values;
 an intentional recommendation change still performs the existing full reset.
 
-- [ ] **Step 5: Fetch only for expanded skills**
+- [x] **Step 5: Fetch only for expanded skills**
 
 In `SkillCard`, call:
 
@@ -1748,7 +1748,7 @@ useContextualProgress(dogId, displaySkill.id, expanded)
 Render `ContextualProgressDetail` after `MilestoneStepper`. Clicking the
 next-practice CTA opens the prefilled form from Step 4.
 
-- [ ] **Step 6: Add bilingual status, field, empty, error, and CTA copy**
+- [x] **Step 6: Add bilingual status, field, empty, error, and CTA copy**
 
 Add exact matching keys for:
 
@@ -1782,7 +1782,7 @@ contextProgress.distraction
 Reuse existing practice-option value labels; do not duplicate translations for
 controlled values.
 
-- [ ] **Step 7: Run component tests, i18n parity, and typecheck**
+- [x] **Step 7: Run component tests, i18n parity, and typecheck**
 
 ```bash
 pnpm --filter @turingcare/web exec vitest run \
@@ -1795,7 +1795,7 @@ pnpm --filter @turingcare/web typecheck
 
 Expected: tests pass and typecheck exits 0.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/web/src/components/progress/contextual-progress-detail.tsx \
@@ -1821,7 +1821,7 @@ git commit -m "feat: show contextual skill evidence"
 - Modify: `apps/web/src/i18n/en.ts`
 - Modify: `apps/web/src/i18n/es.ts`
 
-- [ ] **Step 1: Write failing weekly-summary tests**
+- [x] **Step 1: Write failing weekly-summary tests**
 
 Cover:
 
@@ -1867,7 +1867,7 @@ Cover:
 - initial focus failure offers Retry and Edit focus without claiming an empty
   focus, while cached focus controls remain enabled;
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 ```bash
 pnpm --filter @turingcare/web exec vitest run \
@@ -1877,7 +1877,7 @@ pnpm --filter @turingcare/web exec vitest run \
 
 Expected: summary component does not exist.
 
-- [ ] **Step 3: Implement the compact decision-first component**
+- [x] **Step 3: Implement the compact decision-first component**
 
 Render only:
 
@@ -1907,7 +1907,7 @@ component explicit `actionsSuppressed`, `insightSettled`, and page-owned notice
 props; do not infer ownership from DOM queries or global safety state. Safety
 can then hide action controls while a settled card still records its view.
 
-- [ ] **Step 4: Mount below the weekly suggestion and above the grid**
+- [x] **Step 4: Mount below the weekly suggestion and above the grid**
 
 Map the focus skills and render one compact summary for every
 `contextualProgress.status === "ready"` focus skill. For `unavailable`, render
@@ -1916,14 +1916,14 @@ response data, not a separate query. Do not condition it on the selected
 historical week being current; instead always label the rolling 21-day window.
 Compact context labels omit null values; full detail keeps all five labels.
 
-- [ ] **Step 5: Handle deep-link expansion**
+- [x] **Step 5: Handle deep-link expansion**
 
 In `ProgressPanel`, react to `location.hash` after progress data loads. If it
 matches an owned rendered skill ID, initialize that `SkillCard` expanded and
 scroll it into view without forcing focus or adding a tab stop. Ignore unknown
 hashes.
 
-- [ ] **Step 6: Run weekly UI, progress panel, i18n, and typecheck**
+- [x] **Step 6: Run weekly UI, progress panel, i18n, and typecheck**
 
 ```bash
 pnpm --filter @turingcare/web exec vitest run \
@@ -1936,7 +1936,7 @@ pnpm --filter @turingcare/web typecheck
 
 Expected: tests pass and typecheck exits 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/src/components/week/contextual-progress-summary.tsx \
@@ -1958,7 +1958,7 @@ git commit -m "feat: add weekly contextual insight"
 - Modify: `e2e/critical-owner-journey.spec.ts`
 - Modify: `docs/PROJECT-LOG.md`
 
-- [ ] **Step 1: Extend the critical owner journey**
+- [x] **Step 1: Extend the critical owner journey**
 
 Use the existing registered owner and catalog skill. Through the skill-detail
 session form:
@@ -1976,7 +1976,7 @@ session form:
 Use role/name selectors and existing route/API helpers; do not insert evidence
 directly into Postgres for this owner journey.
 
-- [ ] **Step 2: Run the desktop journey and confirm RED before final wiring**
+- [x] **Step 2: Run the desktop journey and confirm RED before final wiring**
 
 ```bash
 pnpm exec playwright test e2e/critical-owner-journey.spec.ts \
@@ -1986,12 +1986,12 @@ pnpm exec playwright test e2e/critical-owner-journey.spec.ts \
 Expected before completing selectors/wiring: failure at the first contextual
 progress assertion.
 
-- [ ] **Step 3: Complete only the wiring exposed by the journey**
+- [x] **Step 3: Complete only the wiring exposed by the journey**
 
 Fix missing accessible names, focus behavior, or cache invalidation in the
 components already introduced. Do not add new product behavior in this task.
 
-- [ ] **Step 4: Run targeted accessibility-oriented UI tests**
+- [x] **Step 4: Run targeted accessibility-oriented UI tests**
 
 ```bash
 pnpm --filter @turingcare/web exec vitest run \
@@ -2003,7 +2003,7 @@ pnpm --filter @turingcare/web exec vitest run \
 
 Expected: all selected tests pass.
 
-- [ ] **Step 5: Run desktop and phone critical journeys**
+- [x] **Step 5: Run desktop and phone critical journeys**
 
 ```bash
 pnpm exec playwright test e2e/critical-owner-journey.spec.ts \
@@ -2015,7 +2015,7 @@ pnpm exec playwright test e2e/critical-owner-journey.spec.ts \
 Expected: selected journeys pass in both projects. Confirm the three cards or
 rows stack without horizontal clipping at the phone viewport.
 
-- [ ] **Step 6: Update the project log**
+- [x] **Step 6: Update the project log**
 
 Add a dated Gate 2 entry naming:
 
@@ -2026,7 +2026,7 @@ Add a dated Gate 2 entry naming:
 - expanded skill evidence;
 - no universal completion score and no automatic advancement.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add e2e/critical-owner-journey.spec.ts docs/PROJECT-LOG.md \
@@ -2051,7 +2051,7 @@ path is one of the files listed for this task.
 
 - Modify only files required by verified review findings.
 
-- [ ] **Step 1: Run the complete repository gate**
+- [x] **Step 1: Run the complete repository gate**
 
 ```bash
 pnpm lint
@@ -2066,7 +2066,7 @@ pnpm exec playwright test e2e/critical-owner-journey.spec.ts \
 
 Expected: every command exits 0 with nonzero tests collected.
 
-- [ ] **Step 2: Inspect persistence and privacy invariants**
+- [x] **Step 2: Inspect persistence and privacy invariants**
 
 Confirm through tests or read-only SQL:
 
@@ -2077,7 +2077,7 @@ Confirm through tests or read-only SQL:
 - no new migration exists;
 - `practice_sessions_skill_occurred_idx` remains present.
 
-- [ ] **Step 3: Dispatch the requested independent reviews**
+- [x] **Step 3: Dispatch the requested independent reviews**
 
 Run two read-only reviewers in parallel:
 
@@ -2089,7 +2089,7 @@ Give each reviewer the approved spec, this plan, and the full
 `origin/main...HEAD` diff. Require concrete file/line findings only, with no
 style-only comments.
 
-- [ ] **Step 4: Triage findings rigorously**
+- [x] **Step 4: Triage findings rigorously**
 
 Invoke `receiving-code-review`. For each finding:
 
@@ -2108,7 +2108,7 @@ ask one reviewer to validate the other.
 
 Repeat Step 1 after the latest code edit. Earlier output is stale.
 
-- [ ] **Step 7: Commit review fixes**
+- [x] **Step 7: Commit review fixes**
 
 ```bash
 git status --short

@@ -1086,6 +1086,16 @@ pending through a transient refetch and preserves its anchor after a same-safe
 result; a settled safety decision, error, or changed suggestion downgrades to
 manual capture, and evidence save remains fail-closed while cache authority is
 unsettled.
+
+Round-three API hardening moves the authoritative contextual-detail skill
+snapshot under dog safety, then the existing skill advisory lock and a shared
+skill-row lock, so level changes serialize with current-level evidence. Focus
+now reads its weekly-focus/skill snapshot under the same dog safety transaction,
+then the focus-week advisory lock and shared row locks; a focus replacement
+committed while the request waits is reflected coherently. The evidence loader
+remains one batched query and degrades only contextual summaries to unavailable.
+View telemetry now accepts only `reliable`, `developing`, or `null` for
+`strongestStatus`, matching the observable-evidence contract.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Commits: `59c26a2..5b4e65c` on `feat/contextual-progress-insights`.
+- Commits: `59c26a2..e5f1aea` on `feat/contextual-progress-insights`.
