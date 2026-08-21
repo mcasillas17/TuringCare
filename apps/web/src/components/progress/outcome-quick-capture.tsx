@@ -59,6 +59,7 @@ export function OutcomeQuickCapture({
   return (
     <section
       aria-label={t("practice.outcomeQuestion")}
+      aria-live="polite"
       className="flex flex-wrap items-center gap-2 rounded border border-silver bg-white p-3"
     >
       <span className="text-sm text-slate">{t("practice.outcomeQuestion")}</span>
