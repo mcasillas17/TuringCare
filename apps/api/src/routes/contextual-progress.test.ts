@@ -271,22 +271,59 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
     expect(body.exactContexts[0]?.lastObservedAt).toBe(inside.toISOString());
   });
 
-  it("does not synthesize adjacency or Not observed evidence for a custom skill", async () => {
-    const setupValue = await setup(users, { catalogSkillKey: null });
-    await insertSession(setupValue.skillId);
+  it("uses catalog metadata for adjacency while custom skills suppress synthetic evidence", async () => {
+    const catalogSetup = await setup(users);
+    const customSetup = await setup(users, { catalogSkillKey: null });
+    const firstOccurredAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const secondOccurredAt = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const firstPracticeDay = firstOccurredAt.toISOString().slice(0, 10);
+    const secondPracticeDay = secondOccurredAt.toISOString().slice(0, 10);
 
-    const response = await getDetail(setupValue);
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
+    for (const skillId of [catalogSetup.skillId, customSetup.skillId]) {
+      await insertSession(skillId, {
+        occurredAt: firstOccurredAt,
+        practiceDay: firstPracticeDay,
+      });
+      await insertSession(skillId, {
+        occurredAt: secondOccurredAt,
+        practiceDay: secondPracticeDay,
+      });
+    }
+
+    const catalogResponse = await getDetail(catalogSetup);
+    expect(catalogResponse.status).toBe(200);
+    const catalogBody = (await catalogResponse.json()) as {
+      nextPracticeAction: {
+        ruleId: string;
+        direction: string;
+        changedDimension: string | null;
+        context: typeof baseContext;
+      } | null;
+      exactContexts: Array<{ context: typeof baseContext; status: string }>;
+    };
+    expect(catalogBody.nextPracticeAction).toEqual({
+      ruleId: "advance_reliable_context",
+      direction: "harder",
+      context: { ...baseContext, environment: "home_busy" },
+      changedDimension: "environment",
+    });
+    expect(catalogBody.exactContexts).toEqual([
+      expect.objectContaining({ context: baseContext, status: "reliable" }),
+      expect.objectContaining({
+        context: { ...baseContext, environment: "home_busy" },
+        status: "not_observed",
+      }),
+    ]);
+
+    const customResponse = await getDetail(customSetup);
+    expect(customResponse.status).toBe(200);
+    const customBody = (await customResponse.json()) as {
       nextPracticeAction: unknown;
       exactContexts: Array<{ status: string }>;
     };
-    expect(body.nextPracticeAction).toMatchObject({
-      ruleId: "repeat_developing_context",
-      direction: "repeat",
-      changedDimension: null,
-    });
-    expect(body.exactContexts).toEqual([expect.objectContaining({ status: "developing" })]);
+    expect(customBody.nextPracticeAction).toBeNull();
+    expect(customBody.exactContexts).toEqual([expect.objectContaining({ status: "reliable" })]);
+    expect(customBody.exactContexts.some(({ status }) => status === "not_observed")).toBe(false);
   });
 
   it("returns the neutral response when there is no eligible evidence", async () => {
