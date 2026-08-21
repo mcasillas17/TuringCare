@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -77,6 +77,43 @@ describe("progress hooks", () => {
       session: { id: "session-1" },
       anchorRejected: "target_locked",
     });
+  });
+
+  it("waits for derived invalidation before resolving a logged-session mutation", async () => {
+    postSession.mockResolvedValue({
+      ok: true,
+      json: async () => ({ session: { id: "session-1" } }),
+    });
+    const queryClient = makeQueryClient();
+    let releaseInvalidation!: () => void;
+    const invalidation = new Promise<void>((resolve) => {
+      releaseInvalidation = resolve;
+    });
+    const invalidateQueries = vi
+      .spyOn(queryClient, "invalidateQueries")
+      .mockReturnValue(invalidation);
+    const { result } = renderHook(() => useLogSession("dog-1"), {
+      wrapper: makeWrapper(queryClient),
+    });
+
+    let resolved = false;
+    const mutation = result.current
+      .mutateAsync({
+        skillId: "skill-1",
+        body: { occurredAt: "2026-08-13T12:00:00.000Z" },
+      })
+      .then(() => {
+        resolved = true;
+      });
+
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalled());
+    expect(resolved).toBe(false);
+
+    releaseInvalidation();
+    await act(async () => {
+      await mutation;
+    });
+    expect(resolved).toBe(true);
   });
 
   it("patches session evidence and invalidates derived progress and suggestions", async () => {

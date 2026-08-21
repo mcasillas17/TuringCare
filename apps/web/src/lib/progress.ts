@@ -7,7 +7,7 @@ import type {
 } from "@turingcare/shared";
 import { CONFIDENCE_MAX } from "@turingcare/shared";
 import { api } from "./api";
-import { contextualProgressDogKey } from "./contextual-progress";
+import { invalidateTrainingSafetyData } from "./training-safety-cache";
 
 /** i18n keys for the generic confidence labels, indexed by level-1 (used as fallback milestone labels). */
 export const LEVEL_KEYS = [
@@ -59,10 +59,8 @@ export function invalidatePracticeDerivedData(
   dogId: string,
 ) {
   return Promise.all([
+    invalidateTrainingSafetyData(qc, dogId),
     qc.invalidateQueries({ queryKey: ["progress", dogId] }),
-    qc.invalidateQueries({ queryKey: contextualProgressDogKey(dogId) }),
-    qc.invalidateQueries({ queryKey: ["focus", dogId] }),
-    qc.invalidateQueries({ queryKey: ["suggestion", dogId] }),
     qc.invalidateQueries({ queryKey: ["overview"] }),
     qc.invalidateQueries({ queryKey: ["dogs-overview"] }),
   ]);
@@ -161,7 +159,7 @@ export function useLogSession(dogId: string) {
     },
     onSuccess: () => {
       celebrate(false);
-      invalidatePracticeDerivedData(qc, dogId);
+      return invalidatePracticeDerivedData(qc, dogId);
     },
   });
 }

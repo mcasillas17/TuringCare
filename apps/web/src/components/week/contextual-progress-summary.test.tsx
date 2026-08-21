@@ -51,6 +51,7 @@ function renderSummary(
     | { status: "unavailable" },
   onRetry = vi.fn(),
   showSafetyNotice?: boolean,
+  suppressActions = false,
 ) {
   const recordEvent = vi.fn();
   vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
@@ -64,6 +65,7 @@ function renderSummary(
           skill={{ skillId: "skill-1", name: "Sit", contextualProgress }}
           onRetry={onRetry}
           showSafetyNotice={showSafetyNotice}
+          suppressActions={suppressActions}
         />
       </MemoryRouter>
     </LocaleProvider>,
@@ -286,5 +288,28 @@ describe("ContextualProgressSummaryCard", () => {
     );
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("suppresses next-action content when the page owns a conservative refresh boundary", () => {
+    const { recordEvent } = renderSummary(
+      { status: "ready", summary: reliableSummary },
+      vi.fn(),
+      false,
+      true,
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "Practice next", level: 3 }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Use this practice plan" })).not.toBeInTheDocument();
+    expect(recordEvent).toHaveBeenCalledWith({
+      name: "training.context_insight_viewed",
+      surface: "week",
+      strongestStatus: "reliable",
+      hasNextAction: false,
+    });
+    expect(
+      recordEvent.mock.calls.some(([event]) => event.name === "training.context_next_action_used"),
+    ).toBe(false);
   });
 });

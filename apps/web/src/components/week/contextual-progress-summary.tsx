@@ -73,20 +73,21 @@ export function ContextualProgressSummaryCard({
   skill,
   onRetry,
   showSafetyNotice = true,
+  suppressActions = false,
 }: {
   dogId: string;
   skill: Pick<FocusSkill, "skillId" | "name" | "contextualProgress">;
   onRetry: () => unknown;
   showSafetyNotice?: boolean;
+  suppressActions?: boolean;
 }) {
   const { t } = useI18n();
   const recordEvent = useRecordContextualProgressEvent(dogId);
   const viewRecorded = useRef(false);
   const progress = skill.contextualProgress;
   const summary = progress.status === "ready" ? progress.summary : null;
-  const availableNextPracticeAction = summary?.safety
-    ? null
-    : (summary?.nextPracticeAction ?? null);
+  const availableNextPracticeAction =
+    suppressActions || summary?.safety ? null : (summary?.nextPracticeAction ?? null);
   const detailHref = `/my/dogs/${dogId}/training#skill-${skill.skillId}`;
 
   useEffect(() => {

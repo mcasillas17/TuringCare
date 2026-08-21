@@ -1,4 +1,5 @@
 import { OutcomeQuickCapture } from "@/components/progress/outcome-quick-capture";
+import { SafetyNotice } from "@/components/training/safety-notice";
 import { SuggestionCard } from "@/components/training/suggestion-card";
 import { useTuring } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ export function DogWeek() {
   const {
     data: focusSkills,
     isError: focusError,
+    isFetching: focusFetching,
     isLoading: focusLoading,
     refetch: refetchFocus,
   } = useFocusWeek(id, weekKey, timezoneOffsetMinutes, weekEndTimezoneOffsetMinutes);
@@ -55,6 +57,7 @@ export function DogWeek() {
   const {
     data: suggestion,
     isError: suggestionError,
+    isFetching: suggestionFetching,
     isLoading: suggestionLoading,
   } = useSuggestion(id, weekKey, currentTimezoneOffsetMinutes);
   const suggestionAction = useSuggestionAction(id, weekKey);
@@ -72,18 +75,21 @@ export function DogWeek() {
   const logDisabled = logSession.isPending || (weekKey === currentWeekKey && suggestionLoading);
 
   const skills = focusSkills ?? [];
-  const summarySafetySkillId =
-    skills.find(
-      (skill) =>
-        skill.contextualProgress.status === "ready" && skill.contextualProgress.summary.safety,
-    )?.skillId ?? null;
   const suggestionSafety =
-    weekKey === currentWeekKey &&
-    !suggestionError &&
-    suggestion?.weekKey === weekKey &&
-    suggestion.safety
+    weekKey === currentWeekKey && suggestion?.weekKey === weekKey && suggestion.safety
       ? suggestion.safety
       : null;
+  const summarySafetySkill = skills.find(
+    (skill) =>
+      skill.contextualProgress.status === "ready" && skill.contextualProgress.summary.safety,
+  );
+  const summarySafety =
+    summarySafetySkill?.contextualProgress.status === "ready"
+      ? summarySafetySkill.contextualProgress.summary.safety
+      : null;
+  const activeSafety = suggestionSafety ?? summarySafety;
+  const safetyDataFetching = suggestionFetching || focusFetching;
+  const recommendationsSuppressed = activeSafety !== null || safetyDataFetching;
   const canGoNext = !sameWeek(monday, today);
 
   const sessionCount = skills.reduce((sum, s) => sum + s.sessions.length, 0);
@@ -240,8 +246,11 @@ export function DogWeek() {
         onThisWeek={() => setMonday(mondayOf(new Date()))}
       />
 
+      {activeSafety && <SafetyNotice safety={activeSafety} />}
+
       {weekKey === currentWeekKey &&
         !suggestionError &&
+        !recommendationsSuppressed &&
         suggestion &&
         suggestion.weekKey === weekKey && (
           <SuggestionCard
@@ -286,7 +295,8 @@ export function DogWeek() {
               key={skill.skillId}
               dogId={id}
               skill={skill}
-              showSafetyNotice={!suggestionSafety && skill.skillId === summarySafetySkillId}
+              showSafetyNotice={false}
+              suppressActions={recommendationsSuppressed}
               onRetry={() => refetchFocus()}
             />
           ))}

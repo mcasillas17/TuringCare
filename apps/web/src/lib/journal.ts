@@ -7,6 +7,7 @@ import type {
   JournalTrend,
 } from "@turingcare/shared";
 import { api } from "./api";
+import { invalidateTrainingSafetyData } from "./training-safety-cache";
 
 const dogJournal = api.api.dogs[":id"].journal;
 
@@ -66,10 +67,13 @@ export function useAddEntry(dogId: string) {
     },
     onSuccess: () => {
       celebrate(false);
-      qc.invalidateQueries({ queryKey: ["journal"] });
-      qc.invalidateQueries({ queryKey: ["dog-journal", dogId] });
-      qc.invalidateQueries({ queryKey: ["overview"] });
-      qc.invalidateQueries({ queryKey: ["onboarding"] });
+      return Promise.all([
+        qc.invalidateQueries({ queryKey: ["journal"] }),
+        qc.invalidateQueries({ queryKey: ["dog-journal", dogId] }),
+        qc.invalidateQueries({ queryKey: ["overview"] }),
+        qc.invalidateQueries({ queryKey: ["onboarding"] }),
+        invalidateTrainingSafetyData(qc, dogId),
+      ]);
     },
   });
 }
@@ -84,11 +88,13 @@ export function useDeleteEntry(dogId: string) {
       if (!res.ok) throw new Error("delete_failed");
       return res.json();
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["journal"] });
-      qc.invalidateQueries({ queryKey: ["dog-journal", dogId] });
-      qc.invalidateQueries({ queryKey: ["overview"] });
-    },
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["journal"] }),
+        qc.invalidateQueries({ queryKey: ["dog-journal", dogId] }),
+        qc.invalidateQueries({ queryKey: ["overview"] }),
+        invalidateTrainingSafetyData(qc, dogId),
+      ]),
   });
 }
 
@@ -103,10 +109,12 @@ export function useUpdateEntry(dogId: string) {
       if (!res.ok) throw new Error("update_failed");
       return (await res.json()).entry as JournalEntry;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["journal"] });
-      qc.invalidateQueries({ queryKey: ["dog-journal", dogId] });
-      qc.invalidateQueries({ queryKey: ["overview"] });
-    },
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["journal"] }),
+        qc.invalidateQueries({ queryKey: ["dog-journal", dogId] }),
+        qc.invalidateQueries({ queryKey: ["overview"] }),
+        invalidateTrainingSafetyData(qc, dogId),
+      ]),
   });
 }

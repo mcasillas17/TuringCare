@@ -2,6 +2,7 @@ import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BehaviorConcernInput, DogProfile, TrainingGoalInput } from "@turingcare/shared";
 import { api } from "./api";
+import { invalidateTrainingSafetyData } from "./training-safety-cache";
 
 const dogs = api.api.dogs;
 
@@ -114,9 +115,12 @@ export function useDeleteDog() {
       }
       return res.json();
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["dogs"] });
-      qc.invalidateQueries({ queryKey: ["dogs-overview"] });
+    onSuccess: (_data, id) => {
+      return Promise.all([
+        qc.invalidateQueries({ queryKey: ["dogs"] }),
+        qc.invalidateQueries({ queryKey: ["dogs-overview"] }),
+        invalidateTrainingSafetyData(qc, id),
+      ]);
     },
   });
 }
@@ -129,7 +133,11 @@ export function useAddConcern(id: string) {
       if (!res.ok) throw new Error("save_failed");
       return (await res.json()).concern;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dogs", id] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["dogs", id] }),
+        invalidateTrainingSafetyData(qc, id),
+      ]),
   });
 }
 
@@ -143,7 +151,11 @@ export function useRemoveConcern(id: string) {
       if (!res.ok) throw new Error("delete_failed");
       return res.json();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dogs", id] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["dogs", id] }),
+        invalidateTrainingSafetyData(qc, id),
+      ]),
   });
 }
 

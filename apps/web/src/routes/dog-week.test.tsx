@@ -6,7 +6,7 @@ import { weekKeyOf } from "@/lib/week";
 import * as focusLib from "@/lib/weekly-focus";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { TrainingSuggestion } from "@turingcare/shared";
+import type { ContextualProgressSummary, TrainingSuggestion } from "@turingcare/shared";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -104,6 +104,7 @@ function setup(
   vi.mocked(focusLib.useFocusWeek).mockReturnValue({
     data: focusSkills,
     isLoading: false,
+    isFetching: false,
     isError: false,
     refetch: focusRefetch,
   } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
@@ -113,8 +114,9 @@ function setup(
   vi.mocked(focusLib.useRemoveFocus).mockReturnValue({
     mutate: vi.fn(),
   } as unknown as ReturnType<typeof focusLib.useRemoveFocus>);
+  const recordEvent = vi.fn();
   vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
-    mutate: vi.fn(),
+    mutate: recordEvent,
   } as never);
   vi.mocked(progressLib.useProgress).mockReturnValue({
     data: [
@@ -145,6 +147,7 @@ function setup(
   vi.mocked(suggestionLib.useSuggestion).mockReturnValue({
     data: suggestion,
     isLoading: false,
+    isFetching: false,
     isError: false,
   } as unknown as ReturnType<typeof suggestionLib.useSuggestion>);
   vi.mocked(suggestionLib.useSuggestionAction).mockReturnValue({
@@ -155,23 +158,29 @@ function setup(
     mutateAsync: vi.fn().mockResolvedValue({}),
     isPending: false,
   } as unknown as ReturnType<typeof suggestionLib.useAdvancementDecision>);
-  return { actionMutate, deleteMutate, evidenceMutate, focusRefetch, logMutate };
+  return { actionMutate, deleteMutate, evidenceMutate, focusRefetch, logMutate, recordEvent };
+}
+
+function weekElement(
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/dogs/d1/week"]}>
+          <Routes>
+            <Route path="/my/dogs/:id/week" element={<DogWeek />} />
+          </Routes>
+        </MemoryRouter>
+      </LocaleProvider>
+    </QueryClientProvider>
+  );
 }
 
 function renderWeek() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return {
-    ...render(
-      <QueryClientProvider client={qc}>
-        <LocaleProvider>
-          <MemoryRouter initialEntries={["/my/dogs/d1/week"]}>
-            <Routes>
-              <Route path="/my/dogs/:id/week" element={<DogWeek />} />
-            </Routes>
-          </MemoryRouter>
-        </LocaleProvider>
-      </QueryClientProvider>,
-    ),
+    ...render(weekElement(qc)),
     qc,
   };
 }
@@ -203,6 +212,51 @@ function focusWithSafety(): focusLib.FocusSkill {
       },
     },
   };
+}
+
+const reliableActionSummary: ContextualProgressSummary = {
+  strongestContext: {
+    context: {
+      cueSupport: "verbal_cue",
+      environment: "home_quiet",
+      distance: "few_steps",
+      durationBand: "about_15_seconds",
+      distraction: "none",
+    },
+    status: "reliable",
+    successfulDistinctDays: 2,
+    latestOutcome: "went_well",
+    lastObservedAt: "2026-08-20T12:00:00.000Z",
+    lastSuccessfulAt: "2026-08-20T12:00:00.000Z",
+  },
+  nextPracticeAction: {
+    ruleId: "advance_reliable_context",
+    direction: "harder",
+    context: {
+      cueSupport: "verbal_cue",
+      environment: "home_quiet",
+      distance: "across_room",
+      durationBand: "about_15_seconds",
+      distraction: "none",
+    },
+    changedDimension: "distance",
+  },
+  safety: null,
+};
+
+function focusWithSafetyAndAction(): focusLib.FocusSkill[] {
+  return [
+    focusWithSafety(),
+    {
+      ...sitFocus,
+      skillId: "s2",
+      name: "Stay",
+      contextualProgress: {
+        status: "ready",
+        summary: reliableActionSummary,
+      },
+    },
+  ];
 }
 
 function deferred<T>() {
@@ -412,17 +466,93 @@ describe("DogWeek", () => {
     expect(screen.getByText(/Please book a veterinary appointment/)).toBeInTheDocument();
   });
 
+  it("owns one page-level safety alert when a contextual safety response is newer than a suggestion", () => {
+    const { recordEvent } = setup(focusWithSafetyAndAction());
+    renderWeek();
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByText(/Please book a veterinary appointment/)).toBeInTheDocument();
+    expect(screen.queryByText("Lure into a sit.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "We did this" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Use this practice plan" })).not.toBeInTheDocument();
+    expect(
+      recordEvent.mock.calls.some(([event]) => event.name === "training.context_next_action_used"),
+    ).toBe(false);
+    expect(
+      recordEvent.mock.calls
+        .filter(([event]) => event.name === "training.context_insight_viewed")
+        .every(([event]) => event.hasNextAction === false),
+    ).toBe(true);
+  });
+
   it("keeps the summary referral alert when the weekly suggestion is unavailable", () => {
     setup([focusWithSafety()]);
     vi.mocked(suggestionLib.useSuggestion).mockReturnValue({
       data: undefined,
       isLoading: false,
+      isFetching: false,
       isError: true,
     } as unknown as ReturnType<typeof suggestionLib.useSuggestion>);
     renderWeek();
 
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(screen.getByText(/Please book a veterinary appointment/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "We did this" })).not.toBeInTheDocument();
+  });
+
+  it.each(["suggestion", "focus"] as const)(
+    "suppresses cached recommendation actions while the %s query is fetching",
+    (fetchingQuery) => {
+      setup(focusWithSafetyAndAction().slice(1));
+      if (fetchingQuery === "suggestion") {
+        vi.mocked(suggestionLib.useSuggestion).mockReturnValue({
+          data: exerciseSuggestion,
+          isLoading: false,
+          isFetching: true,
+          isError: false,
+        } as unknown as ReturnType<typeof suggestionLib.useSuggestion>);
+      } else {
+        vi.mocked(focusLib.useFocusWeek).mockReturnValue({
+          data: focusWithSafetyAndAction().slice(1),
+          isLoading: false,
+          isFetching: true,
+          isError: false,
+          refetch: vi.fn(),
+        } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
+      }
+
+      renderWeek();
+
+      expect(screen.queryByText("Lure into a sit.")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("link", { name: "Use this practice plan" }),
+      ).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /Log .* on/i })[0]).toBeEnabled();
+    },
+  );
+
+  it("restores safe recommendation actions after background fetching settles", () => {
+    setup(focusWithSafetyAndAction().slice(1));
+    let isFetching = true;
+    vi.mocked(suggestionLib.useSuggestion).mockImplementation(
+      () =>
+        ({
+          data: exerciseSuggestion,
+          isLoading: false,
+          isFetching,
+          isError: false,
+        }) as unknown as ReturnType<typeof suggestionLib.useSuggestion>,
+    );
+    const rendered = renderWeek();
+
+    expect(screen.queryByText("Lure into a sit.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Use this practice plan" })).not.toBeInTheDocument();
+
+    isFetching = false;
+    rendered.rerender(weekElement(rendered.qc));
+
+    expect(screen.getAllByText("Lure into a sit.")).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "Use this practice plan" })).toBeInTheDocument();
   });
 
   it("does not render cached suggestions on historical weeks", () => {
