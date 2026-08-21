@@ -245,7 +245,7 @@ export function ContextualProgressDetail({
   const seenResultKeys = useRef(new Set<string>());
 
   const resultKey = data
-    ? `${data.policyVersion}|${data.curriculumLevel}|${serializeContext(data.strongestContext?.context)}`
+    ? `${data.policyVersion}|${data.curriculumLevel}|${serializeContext(data.strongestContext?.context)}|${data.strongestContext?.status ?? "null"}|${Boolean(data.nextPracticeAction)}`
     : null;
 
   useEffect(() => {

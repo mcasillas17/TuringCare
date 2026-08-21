@@ -271,6 +271,113 @@ describe("ContextualProgressDetail", () => {
     expect(mutate).toHaveBeenCalledTimes(1);
   });
 
+  it("records each changed view result once when status or action availability changes", () => {
+    const mutate = vi.fn();
+    vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
+      mutate,
+    } as never);
+    const result = render(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData({
+            strongestContext: { ...strongestContext, status: "developing" },
+            nextPracticeAction: null,
+          })}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    result.rerender(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData({
+            strongestContext: { ...strongestContext, status: "developing" },
+            nextPracticeAction: null,
+          })}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    result.rerender(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData({
+            strongestContext: { ...strongestContext, status: "reliable" },
+            nextPracticeAction: null,
+          })}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+    expect(mutate).toHaveBeenNthCalledWith(2, {
+      name: "training.context_insight_viewed",
+      surface: "skill_detail",
+      strongestStatus: "reliable",
+      hasNextAction: false,
+    });
+    expect(mutate).toHaveBeenCalledTimes(2);
+
+    result.rerender(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData({
+            strongestContext: { ...strongestContext, status: "reliable" },
+            nextPracticeAction,
+          })}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+    expect(mutate).toHaveBeenNthCalledWith(3, {
+      name: "training.context_insight_viewed",
+      surface: "skill_detail",
+      strongestStatus: "reliable",
+      hasNextAction: true,
+    });
+    expect(mutate).toHaveBeenCalledTimes(3);
+
+    result.rerender(
+      <LocaleProvider>
+        <ContextualProgressDetail
+          dogId="dog-1"
+          skillId="skill-1"
+          data={makeData({
+            strongestContext: { ...strongestContext, status: "reliable" },
+            nextPracticeAction,
+          })}
+          isLoading={false}
+          isError={false}
+          refetch={vi.fn()}
+          onUseNextAction={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+    expect(mutate).toHaveBeenCalledTimes(3);
+  });
+
   it("records one view event for a distinct result while the detail remains mounted", () => {
     const mutate = vi.fn();
     vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
