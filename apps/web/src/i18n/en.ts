@@ -742,8 +742,7 @@ export const en = {
     selectFocusSkill: "Focus skill",
     cellLog: "Log {skill} on {day}",
     cellFilled: "{skill} on {day}: {n} sessions",
-    focusLoadError:
-      "Couldn't load this week's focus. Your saved practice controls remain available.",
+    focusLoadError: "Couldn't load this week's focus. Try again or edit your focus.",
   },
   brief: {
     title: "Behavior Brief",

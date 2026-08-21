@@ -275,14 +275,17 @@ describe("DogWeek", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Previous week" }));
 
-    expect(screen.getByRole("status")).toHaveTextContent("Couldn't load this week's focus.");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Couldn't load this week's focus. Try again or edit your focus.",
+    );
+    expect(screen.getAllByRole("button", { name: "Edit focus" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Sit", level: 2 })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Log Sit on/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /remove/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /log another/i })).not.toBeInTheDocument();
   });
 
-  it("keeps stale focus controls usable when the focus query reports an error", () => {
+  it("shows neutral focus-load copy while cached focus controls remain usable", () => {
     setup([sitFocus]);
     vi.mocked(focusLib.useFocusWeek).mockReturnValue({
       data: [sitFocus],
@@ -291,7 +294,10 @@ describe("DogWeek", () => {
     } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
     renderWeek();
 
-    expect(screen.getByRole("status")).toHaveTextContent("Couldn't load this week's focus.");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Couldn't load this week's focus. Try again or edit your focus.",
+    );
+    expect(screen.getByRole("button", { name: "Edit focus" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeEnabled();
   });
 

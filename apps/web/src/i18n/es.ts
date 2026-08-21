@@ -751,7 +751,7 @@ export const es = {
     cellLog: "Registrar {skill} el {day}",
     cellFilled: "{skill} el {day}: {n} sesiones",
     focusLoadError:
-      "No se pudo cargar el enfoque de esta semana. Tus controles de práctica guardados siguen disponibles.",
+      "No se pudo cargar el enfoque de esta semana. Intenta de nuevo o edita tu enfoque.",
   },
   brief: {
     title: "Resumen de conducta",

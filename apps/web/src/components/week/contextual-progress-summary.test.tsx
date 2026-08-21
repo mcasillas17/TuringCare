@@ -124,10 +124,25 @@ describe("ContextualProgressSummaryCard", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText("Not observed")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Practice next", level: 3 }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View all evidence" })).toHaveAttribute(
       "href",
       "/my/dogs/dog-1/training#skill-skill-1",
     );
+  });
+
+  it("omits the next-practice heading when a reliable context has no action", () => {
+    renderSummary({
+      status: "ready",
+      summary: { ...reliableSummary, nextPracticeAction: null },
+    });
+
+    expect(screen.getByText("Reliable")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Practice next", level: 3 }),
+    ).not.toBeInTheDocument();
   });
 
   it("uses the recent 21-day label for historical weekly summaries", () => {
