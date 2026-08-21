@@ -669,7 +669,75 @@ describe("practice evidence", () => {
     });
   });
 
-  it("29. PATCH keeps the original anchor when manual confirmation is target_locked", async () => {
+  it("29. PATCH preserves unanchored quick-log evidence while returning practice_day_required", async () => {
+    const s = await setup(users, 3);
+    const created = await postSession(s, {});
+    const { session } = (await created.json()) as { session: { id: string } };
+    const response = await app.request(
+      `/api/dogs/${s.dogId}/skills/${s.skillId}/sessions/${session.id}/evidence`,
+      {
+        method: "PATCH",
+        headers: s.user.authHeaders,
+        body: JSON.stringify({
+          outcome: "mixed",
+          cueSupport: "verbal_cue",
+          environment: "home_quiet",
+          distance: "few_steps",
+          durationBand: "about_15_seconds",
+          distraction: "mild",
+          confirmCurrentLevel: true,
+        }),
+      },
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      session: {
+        outcome: string | null;
+        cueSupport: string | null;
+        environment: string | null;
+        distance: string | null;
+        durationBand: string | null;
+        distraction: string | null;
+        curriculumLevel: number | null;
+        curriculumVersion: string | null;
+        practiceVariant: string | null;
+        suggestionId: string | null;
+        practiceDay: string | null;
+      };
+      anchorRejected: string | null;
+    };
+    expect(body).toMatchObject({
+      session: {
+        outcome: "mixed",
+        cueSupport: "verbal_cue",
+        environment: "home_quiet",
+        distance: "few_steps",
+        durationBand: "about_15_seconds",
+        distraction: "mild",
+        curriculumLevel: null,
+        curriculumVersion: null,
+        practiceVariant: null,
+        suggestionId: null,
+        practiceDay: null,
+      },
+      anchorRejected: "practice_day_required",
+    });
+    expect(await loadSession(session.id)).toMatchObject({
+      outcome: "mixed",
+      cueSupport: "verbal_cue",
+      environment: "home_quiet",
+      distance: "few_steps",
+      durationBand: "about_15_seconds",
+      distraction: "mild",
+      curriculumLevel: null,
+      curriculumVersion: null,
+      practiceVariant: null,
+      suggestionId: null,
+      practiceDay: null,
+    });
+  });
+
+  it("30. PATCH keeps the original anchor when manual confirmation is target_locked", async () => {
     const s = await setup(users, 3);
     const target = await suggestion(s.dogId, s.skillId);
     const created = await postSession(s, {
@@ -711,7 +779,7 @@ describe("practice evidence", () => {
     });
   });
 
-  it("30. races manual anchoring with a level change without mixing server-owned anchors", async () => {
+  it("31. races manual anchoring with a level change without mixing server-owned anchors", async () => {
     const s = await setup(users, 2);
     const created = await postSession(s, { timezoneOffsetMinutes: 0 });
     const { session } = (await created.json()) as { session: { id: string } };
