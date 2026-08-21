@@ -1068,16 +1068,24 @@ prefix invalidations across safety-producing web mutations, awaits their
 refetches, and conservatively suppresses stale recommendations during
 `isFetching` revalidation or relevant query errors while preserving practice
 logging. Awaited weekly session creation now re-checks the latest suggestion
-eligibility and fails closed to manual capture when safety or revalidation
-changes. Skill detail preserves cached evidence while failing closed on
+eligibility and fails closed to manual capture when safety or another settled
+cache-authority check fails. Skill detail preserves cached evidence while failing closed on
 revalidation/error actions, and both new contextual routes reject malformed
 UUIDs with privacy-safe `404` responses before database access.
 
 Follow-up timing hardening makes that session and evidence decision
 cache-authoritative: `DogWeek` reads the settled QueryClient suggestion/focus
-state and data through stable keys instead of render-written fetch flags,
-re-checks before evidence save, and keeps a neutral weekly suggestion shell
-while recommendation actions are suppressed.
+state and data through stable keys instead of render-written fetch flags and
+re-checks before evidence save. Round-three web hardening separates action
+suppression from insight readiness: settled safety records one accurate weekly
+view (`hasNextAction: false`) without exposing actions, while fetching/error
+state defers view telemetry until it settles. The weekly suggestion shell is
+busy only while fetching, uses neutral retry copy after a cached error, and
+defers safety rendering to the page-level notice. An open audited capture stays
+pending through a transient refetch and preserves its anchor after a same-safe
+result; a settled safety decision, error, or changed suggestion downgrades to
+manual capture, and evidence save remains fail-closed while cache authority is
+unsettled.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Commits: `59c26a2..8d59224` on `feat/contextual-progress-insights`.
+- Commits: `59c26a2..5b4e65c` on `feat/contextual-progress-insights`.

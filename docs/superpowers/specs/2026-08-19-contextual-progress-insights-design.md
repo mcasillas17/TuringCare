@@ -451,13 +451,19 @@ catalogs.
 - Weekly recommendation suppression is fail-closed for a relevant focus query
   error or a current-week suggestion query error, including when cached data is
   still present. Cached evidence, the week grid, and practice logging remain
-  usable; Retry remains available, but suggestion/context action CTAs and their
+  usable; Retry remains available, but suggestion/context action CTAs and
   telemetry stay suppressed until a successful response settles. A cold focus
-  load shows loading only, not the pick-focus empty state.
+  load shows loading only, not the pick-focus empty state. Action suppression
+  and insight telemetry readiness remain separate: query uncertainty defers a
+  weekly view event, while settled safety records one view with
+  `hasNextAction: false`.
 - Active safety suppression removes `nextPracticeAction` and action-derived
   synthetic `not_observed` rows, preserves observed evidence/status rows,
   renders the existing localized safety/referral guidance, and records no
-  next-action-use telemetry. Server action-use ingestion independently repeats
+  next-action-use telemetry. It does not suppress
+  `training.context_insight_viewed`: after focus and suggestion state settle,
+  each mounted weekly summary records its strongest status once with
+  `hasNextAction: false`. Server action-use ingestion independently repeats
   this safety check under the dog lock and returns its unchanged acknowledgment
   without recording when suppressed.
 - `DogWeek` derives one `activeSafety` from the current-week suggestion or any
@@ -467,13 +473,16 @@ catalogs.
 - During background revalidation, `isFetching` on either suggestion or focus
   query conservatively suppresses cached suggestion exercise/action controls
   and all contextual next-action CTAs and telemetry. A cached weekly
-  suggestion retains a neutral card shell when possible, but never exposes
-  stale primary/fallback exercise text or interactive controls. The week grid
-  and practice logging controls remain available. Skill detail receives its
-  own `isFetching` state: cached evidence and session controls remain visible
-  while its next-practice CTA and action telemetry are suppressed, then restore
-  after a settled safe result. A detail query error with cached data preserves
-  that evidence and Retry but fails closed on actions until a successful retry.
+  suggestion retains a busy, neutral card shell while fetching, but never
+  exposes stale primary/fallback exercise text or interactive controls. A
+  cached error instead uses neutral retry copy without `aria-busy`; the
+  page-level safety notice owns safety rendering and stale suggestion controls
+  disappear. The week grid and practice logging controls remain available.
+  Skill detail receives its own `isFetching` state: cached evidence and session
+  controls remain visible while its next-practice CTA and action telemetry are
+  suppressed, then restore after a settled safe result. A detail query error
+  with cached data preserves that evidence and Retry but fails closed on actions
+  until a successful retry.
 - After weekly session creation awaits, `DogWeek` reads authoritative
   QueryClient snapshots through `suggestionKey(id, weekKey)` and
   `focusKey(id, weekKey)`, rather than using render-written recommendation
@@ -482,9 +491,14 @@ catalogs.
   dog, week, skill, non-dismissed exercise, suggestion ID, and active-safety
   calculation. Otherwise the capture is manual with `suggestionId: null` and
   `usesAuditedSuggestion: false`, allowing explicit current-level
-  confirmation and never submitting `practicedTarget`. Evidence save repeats
-  the same scoped cache-authority check before attaching `practicedTarget`, so
-  a later safety, error, or revalidation change also downgrades to manual.
+  confirmation and never submitting `practicedTarget`. Once an audited capture
+  is open, a transient `fetchStatus: "fetching"` state is pending rather than
+  permanently invalid: a same-safe settled response preserves its
+  primary/fallback anchor. A settled safety decision, query error, dismissal or
+  changed suggestion, wrong scope, or any other failed eligibility check
+  permanently downgrades it to manual. Evidence save repeats the same scoped
+  cache-authority check before attaching `practicedTarget`, so saving while a
+  query remains unsettled or invalid still fails closed to manual capture.
 - Sparse evidence shows a neutral capture prompt.
 - A Developing context whose latest result is `too_hard` shows support-oriented
   language and never a harder next step.
@@ -510,11 +524,14 @@ small enum payload. Action-use telemetry is persisted only after a lock-held
 safety re-evaluation confirms exercises remain available; suppressed requests
 receive the same successful acknowledgment without revealing the decision.
 View telemetry remains recordable while safety is active. The weekly summary
-records at most one view event per mounted card after recommendation state
-settles. Skill detail records each distinct settled result once per mount,
-keyed by policy version, curriculum level, strongest context and status, and
-action availability. Existing route telemetry tests are updated for the changed
-`training.practice_logged` properties.
+records at most one view event per mounted card after insight state settles,
+independently of action suppression. Fetching or error state records no view;
+settled safety records the strongest status with `hasNextAction: false`, and a
+settled safe result records action availability accurately. Skill detail records
+each distinct settled result once per mount, keyed by policy version, curriculum
+level, strongest context and status, and action availability. Existing route
+telemetry tests are updated for the changed `training.practice_logged`
+properties.
 
 ## Testing
 
@@ -589,14 +606,18 @@ Cover:
 - all safety-producing mutation families invalidate the three dog-scoped
   suggestion/focus/contextual-progress prefixes and await completion;
 - stale exercise suggestion plus contextual safety renders one alert, no
-  exercise/CTA, and no next-action telemetry;
-- either recommendation query's `isFetching` suppresses cached CTAs, while
-  settled safe data restores them;
+  exercise/CTA, no next-action telemetry, and one accurate settled view event;
+- either recommendation query's `isFetching` suppresses cached CTAs and view
+  telemetry, while settled safe data restores them and records one view;
 - suggestion/focus errors suppress cached CTAs and view/action telemetry while
   preserving cached evidence, Retry, and practice logging; settled retry
-  restores telemetry with the correct `hasNextAction` value;
-- awaited weekly session creation fails closed when cached suggestions become
-  unsafe, revalidating, or errored, including omission of `practicedTarget`;
+  restores one view with the correct `hasNextAction` value;
+- an open audited capture survives transient revalidation, preserves its
+  primary/fallback target after a same-safe settled response, and still fails
+  closed when evidence is saved before settlement;
+- a settled safety decision, error, dismissal, changed suggestion, or scope
+  mismatch downgrades that audited capture to manual evidence without
+  `practicedTarget`;
 - malformed dog/skill UUIDs on the two contextual routes return privacy-safe
   `404` responses before database access and record no telemetry; the event
   route returns that `404` before JSON-body validation;

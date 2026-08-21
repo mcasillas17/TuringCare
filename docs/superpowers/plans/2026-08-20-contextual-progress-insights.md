@@ -1839,26 +1839,31 @@ Cover:
   week grid remains usable.
 - the unavailable summary has an inline Retry that refetches focus;
 - active safety shows the existing referral guidance, suppresses the weekly
-  practice CTA, and emits no next-action-use event;
+  practice CTA, emits no next-action-use event, and records one settled view
+  with `hasNextAction: false`;
 - stale exercise suggestion plus contextual safety renders one page-level
   alert, no exercise/CTA, and no contextual next-action telemetry;
 - suggestion errors still show contextual safety guidance when that summary
   reports active safety;
 - either suggestion or focus query `isFetching` suppresses cached suggestion
   exercise/action controls and contextual action CTAs, while a cached weekly
-  suggestion retains a neutral shell and settled safe data restores the CTAs;
+  suggestion retains a busy neutral shell, emits no view telemetry, and settled
+  safe data restores the CTAs and one accurate view;
 - a relevant focus error or current-week suggestion error suppresses cached
   suggestion/context actions and view/action telemetry while preserving Retry,
-  cached evidence, and the week-grid logging controls; telemetry resumes only
-  after a settled successful retry;
+  cached evidence, and the week-grid logging controls; cached suggestion errors
+  use neutral retry copy without `aria-busy`, and telemetry resumes only after
+  a settled successful retry;
 - an awaited session creation reads QueryClient state and data through
   `suggestionKey(id, weekKey)` and `focusKey(id, weekKey)`, requiring both
   queries to be successful, idle, error-free, current-scope, and safe before
-  retaining an audited target; it falls back to manual capture when safety,
-  revalidation, or an error becomes active, never sending `practicedTarget`;
+  retaining an audited target; an already-open audited capture remains pending
+  through transient revalidation, but a settled safety decision, error,
+  dismissal, changed suggestion, wrong scope, or other eligibility failure
+  falls back to manual capture without `practicedTarget`;
 - evidence save repeats that scoped cache-authority check against the captured
   suggestion ID before attaching `practicedTarget`, so a post-capture safety,
-  error, or revalidation change cannot retain the audited anchor;
+  error, or unsettled query cannot retain the audited anchor;
 - initial focus failure offers Retry and Edit focus without claiming an empty
   focus, while cached focus controls remain enabled;
 
@@ -1898,8 +1903,9 @@ Render only:
 
 If both summary fields are null, render the capture prompt and the same skill
 detail link. Never render the `exactContexts` list on This Week. Give the
-component explicit `suppressActions` and page-owned notice props; do not infer
-ownership from DOM queries or global safety state.
+component explicit `actionsSuppressed`, `insightSettled`, and page-owned notice
+props; do not infer ownership from DOM queries or global safety state. Safety
+can then hide action controls while a settled card still records its view.
 
 - [ ] **Step 4: Mount below the weekly suggestion and above the grid**
 
