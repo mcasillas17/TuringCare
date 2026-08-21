@@ -73,13 +73,14 @@ function derive(
 function expectActionContextChangedOnce(
   source: ExactPracticeContext,
   target: ExactPracticeContext,
-  changedDimension: PracticeDimension,
+  changedDimension: PracticeDimension | null | undefined,
 ) {
   const changedFields = (
     ["cueSupport", "environment", "distance", "durationBand", "distraction"] as const
   ).filter((field) => source[field] !== target[field]);
   expect(changedFields).toHaveLength(1);
   expect(changedDimension).toBeDefined();
+  expect(changedDimension).not.toBeNull();
 }
 
 describe("deriveContextualProgress", () => {
@@ -295,7 +296,7 @@ describe("deriveContextualProgress", () => {
     expectActionContextChangedOnce(
       context(),
       result.nextPracticeAction?.context ?? context(),
-      result.nextPracticeAction?.changedDimension ?? "distraction",
+      result.nextPracticeAction?.changedDimension,
     );
   });
 
@@ -335,13 +336,77 @@ describe("deriveContextualProgress", () => {
   it("does not advance a Reliable context at level five", () => {
     const result = derive(
       [
-        row("first", "2026-08-18T08:00:00.000Z", { practiceDay: "2026-08-18" }),
-        row("second", "2026-08-19T08:00:00.000Z", { practiceDay: "2026-08-19" }),
+        row("first", "2026-08-18T08:00:00.000Z", {
+          curriculumLevel: 5,
+          practiceDay: "2026-08-18",
+        }),
+        row("second", "2026-08-19T08:00:00.000Z", {
+          curriculumLevel: 5,
+          practiceDay: "2026-08-19",
+        }),
       ],
       { curriculumLevel: 5 },
     );
 
+    expect(result.strongestContext?.status).toBe("reliable");
     expect(result.nextPracticeAction).toBeNull();
+  });
+
+  it("repeats the strongest Developing context when a Reliable context is maxed at level five", () => {
+    const developing = context({ cueSupport: "food_lure" });
+    const result = derive(
+      [
+        row("reliable-first", "2026-08-18T08:00:00.000Z", {
+          curriculumLevel: 5,
+          practiceDay: "2026-08-18",
+        }),
+        row("reliable-second", "2026-08-19T08:00:00.000Z", {
+          curriculumLevel: 5,
+          practiceDay: "2026-08-19",
+        }),
+        row("developing", "2026-08-20T08:00:00.000Z", {
+          curriculumLevel: 5,
+          cueSupport: developing.cueSupport,
+          outcome: "mixed",
+        }),
+      ],
+      { curriculumLevel: 5 },
+    );
+
+    expect(result.strongestContext?.status).toBe("reliable");
+    expect(result.nextPracticeAction).toEqual({
+      ruleId: "repeat_developing_context",
+      direction: "repeat",
+      context: developing,
+      changedDimension: null,
+    });
+  });
+
+  it("repeats Developing when a Reliable context has no adjacent harder value", () => {
+    const maxedReliable = context({ environment: "busy_outdoor" });
+    const developing = context({ cueSupport: "food_lure" });
+    const result = derive([
+      row("reliable-first", "2026-08-18T08:00:00.000Z", {
+        environment: maxedReliable.environment,
+        practiceDay: "2026-08-18",
+      }),
+      row("reliable-second", "2026-08-19T08:00:00.000Z", {
+        environment: maxedReliable.environment,
+        practiceDay: "2026-08-19",
+      }),
+      row("developing", "2026-08-20T08:00:00.000Z", {
+        cueSupport: developing.cueSupport,
+        outcome: "mixed",
+      }),
+    ]);
+
+    expect(result.strongestContext?.status).toBe("reliable");
+    expect(result.nextPracticeAction).toEqual({
+      ruleId: "repeat_developing_context",
+      direction: "repeat",
+      context: developing,
+      changedDimension: null,
+    });
   });
 
   it("repeats a Developing strongest context", () => {
@@ -397,6 +462,63 @@ describe("deriveContextualProgress", () => {
     );
     expect(reliable.strongestContext?.status).toBe("reliable");
     expect(reliable.nextPracticeAction).toBeNull();
+  });
+
+  it("repeats Developing for a custom Reliable context when no harder adjacency exists", () => {
+    const developing = context({ cueSupport: "food_lure" });
+    const result = derive(
+      [
+        row("reliable-first", "2026-08-18T08:00:00.000Z", {
+          practiceDay: "2026-08-18",
+        }),
+        row("reliable-second", "2026-08-19T08:00:00.000Z", {
+          practiceDay: "2026-08-19",
+        }),
+        row("developing", "2026-08-20T08:00:00.000Z", {
+          cueSupport: developing.cueSupport,
+          outcome: "mixed",
+        }),
+      ],
+      { metadata: null, catalogSkillKey: null },
+    );
+
+    expect(result.strongestContext?.status).toBe("reliable");
+    expect(result.nextPracticeAction).toEqual({
+      ruleId: "repeat_developing_context",
+      direction: "repeat",
+      context: developing,
+      changedDimension: null,
+    });
+  });
+
+  it("never progresses after an un-easable latest too_hard, but repeats another Developing context", () => {
+    const fallback = context({ cueSupport: "food_lure" });
+    const result = derive([
+      row("reliable-first", "2026-08-17T08:00:00.000Z", {
+        cueSupport: "verbal_cue",
+        practiceDay: "2026-08-17",
+      }),
+      row("reliable-second", "2026-08-18T08:00:00.000Z", {
+        cueSupport: "verbal_cue",
+        practiceDay: "2026-08-18",
+      }),
+      row("fallback", "2026-08-19T08:00:00.000Z", {
+        cueSupport: fallback.cueSupport,
+        outcome: "mixed",
+      }),
+      row("latest-hard", "2026-08-20T11:00:00.000Z", {
+        distraction: "none",
+        outcome: "too_hard",
+      }),
+    ]);
+
+    expect(result.strongestContext?.status).toBe("reliable");
+    expect(result.nextPracticeAction).toEqual({
+      ruleId: "repeat_developing_context",
+      direction: "repeat",
+      context: fallback,
+      changedDimension: null,
+    });
   });
 
   it("adds one Not observed evidence row for an unobserved easier action target", () => {

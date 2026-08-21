@@ -793,12 +793,21 @@ Define a fixture builder with all five context positions and test:
 8. outcome-only rows with all context positions null are ignored;
 9. strongest ranking follows status, successful days, relevant timestamp, then
    serialized context;
-10. latest `too_hard` creates an easier one-field action;
-11. Reliable creates a harder one-field action;
-12. Developing repeats when no adjacent move exists;
-13. only one evidence-derived Not observed row appears;
-14. custom skills without metadata never synthesize Not observed;
-15. tied timestamps sort deterministically by row ID.
+10. latest `too_hard` creates an easier one-field action; when easing is
+    unavailable, it never falls through to a harder action and repeats the
+    highest-ranked Developing context only when that context is not the
+    too-hard context, otherwise returning no action;
+11. Reliable creates a harder one-field action when a reviewed harder adjacency
+    exists, then repeats the highest-ranked Developing context when it does not;
+12. a Reliable context at level 5, at a maxed-out reviewed adjacency, or with
+    custom/metadata-null context falls back to
+    `repeat_developing_context` with `direction: "repeat"` and
+    `changedDimension: null` when a Developing context exists, and returns null
+    only when no Developing fallback exists;
+13. Developing repeats when no adjacent move exists;
+14. only one evidence-derived Not observed row appears;
+15. custom skills without metadata never synthesize Not observed;
+16. tied timestamps sort deterministically by row ID.
 
 Use fixed dates:
 
@@ -870,9 +879,14 @@ Implementation order:
 8. for harder movement, use the step into the next level
    (`levelSteps[level - 1]`) and return no harder adjacency at level 5;
 9. pass the matching reviewed strategy to the adjacency helper;
-10. select easier after latest `too_hard`, harder after Reliable, otherwise
-   repeat the best Developing context;
-11. append at most one Not observed adjacent row only if the adjacent exact key
+10. select easier after the globally latest `too_hard`; if no easier action can
+   be derived, repeat the highest-ranked Developing context only when it is not
+   the too-hard context, otherwise return no action, and never select a harder
+   action for that latest `too_hard`;
+11. otherwise select a harder action after Reliable when reviewed adjacency
+   exists, then repeat the highest-ranked Developing context if no action was
+   produced, returning null only when no Developing fallback exists;
+12. append at most one Not observed adjacent row only if the adjacent exact key
    has no observed group.
 
 Never mutate the input rows or source context object. Never parse notes.

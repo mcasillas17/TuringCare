@@ -49,6 +49,8 @@ type ObservedContext = {
   evidence: ExactContextEvidence;
 };
 
+type ReviewedContextStep = SkillDimensionMetadata["baseEase"];
+
 function serializeContext(context: ExactPracticeContext): string {
   return JSON.stringify({
     cueSupport: context.cueSupport,
@@ -183,18 +185,10 @@ function deriveAdjacentAction(
 ): NextPracticeAction | null {
   if (!metadata) return null;
 
-  const stepIndex = direction === "easier" ? curriculumLevel - 2 : curriculumLevel - 1;
-  const dimension: PracticeDimension | undefined =
-    curriculumLevel === 1 && direction === "easier"
-      ? metadata.baseEase.dimension
-      : metadata.levelSteps[stepIndex];
-  const strategy =
-    curriculumLevel === 1 && direction === "easier"
-      ? metadata.baseEase.strategy
-      : metadata.levelStepStrategies[stepIndex];
-  if (!dimension || !strategy) return null;
+  const step = getReviewedContextStep(metadata, curriculumLevel, direction);
+  if (!step) return null;
 
-  const adjacent = adjacentContext(source, dimension, direction, strategy);
+  const adjacent = adjacentContext(source, step.dimension, direction, step.strategy);
   if (!adjacent) return null;
 
   return {
@@ -205,41 +199,76 @@ function deriveAdjacentAction(
   };
 }
 
+function getReviewedContextStep(
+  metadata: SkillDimensionMetadata,
+  curriculumLevel: number,
+  direction: "easier" | "harder",
+): ReviewedContextStep | null {
+  if (curriculumLevel === 1 && direction === "easier") {
+    return metadata.baseEase;
+  }
+
+  const stepIndex = direction === "easier" ? curriculumLevel - 2 : curriculumLevel - 1;
+  const dimension = metadata.levelSteps[stepIndex];
+  const strategy = metadata.levelStepStrategies[stepIndex];
+  if (!dimension || !strategy) return null;
+
+  return { dimension, strategy };
+}
+
+function deriveDevelopingRepeat(
+  observed: ObservedContext[],
+  excludedKey?: string,
+): NextPracticeAction | null {
+  const developing = observed.find(
+    ({ key, evidence }) => evidence.status === "developing" && key !== excludedKey,
+  );
+  if (!developing) return null;
+
+  return {
+    ruleId: "repeat_developing_context",
+    direction: "repeat",
+    context: developing.evidence.context,
+    changedDimension: null,
+  };
+}
+
 function deriveAction(input: {
   latestRow: EligibleContextualProgressRow | undefined;
+  observed: ObservedContext[];
   strongest: ExactContextEvidence | null;
   curriculumLevel: number;
   metadata: SkillDimensionMetadata | null;
 }): NextPracticeAction | null {
   if (input.latestRow?.outcome === "too_hard") {
-    return deriveAdjacentAction(
+    const easierAction = deriveAdjacentAction(
       input.latestRow.context,
       input.metadata,
       input.curriculumLevel,
       "easier",
       "ease_after_too_hard",
     );
+    return (
+      easierAction ??
+      deriveDevelopingRepeat(input.observed, serializeContext(input.latestRow.context))
+    );
   }
 
   if (!input.strongest) return null;
 
-  if (input.strongest.status === "reliable" && input.curriculumLevel < 5) {
-    return deriveAdjacentAction(
+  if (input.strongest.status === "reliable") {
+    const harderAction = deriveAdjacentAction(
       input.strongest.context,
       input.metadata,
       input.curriculumLevel,
       "harder",
       "advance_reliable_context",
     );
+    return harderAction ?? deriveDevelopingRepeat(input.observed);
   }
 
   if (input.strongest.status === "developing") {
-    return {
-      ruleId: "repeat_developing_context",
-      direction: "repeat",
-      context: input.strongest.context,
-      changedDimension: null,
-    };
+    return deriveDevelopingRepeat(input.observed);
   }
 
   return null;
@@ -272,6 +301,7 @@ export function deriveContextualProgress(input: {
   const eligibleByRecency = [...eligibleRows].sort(compareRowsDescending);
   const nextPracticeAction = deriveAction({
     latestRow: eligibleByRecency[0],
+    observed,
     strongest,
     curriculumLevel: input.curriculumLevel,
     metadata: input.metadata,
