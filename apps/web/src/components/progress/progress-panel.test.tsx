@@ -7,6 +7,7 @@ import * as catalogLib from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { CatalogTemplate, ContextualProgress } from "@turingcare/shared";
+import { toast } from "sonner";
 import { describe, expect, it, vi } from "vitest";
 import { ProgressPanel } from "./progress-panel";
 
@@ -20,6 +21,7 @@ vi.mock("@/lib/progress", async () => {
     useDeleteSkill: vi.fn(),
     useDeleteSession: vi.fn(),
     useSetSkillLevel: vi.fn(),
+    useLogSession: vi.fn(),
   };
 });
 vi.mock("@/lib/training-catalog", async () => {
@@ -37,6 +39,7 @@ vi.mock("@/lib/contextual-progress", async () => {
   );
   return { ...actual, useContextualProgress: vi.fn(), useRecordContextualProgressEvent: vi.fn() };
 });
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 const goals: ProgressGoal[] = [
   {
@@ -105,7 +108,7 @@ const contextualData: ContextualProgress = {
   strongestContext: {
     context: {
       cueSupport: null,
-      environment: null,
+      environment: "busy_outdoor",
       distance: null,
       durationBand: null,
       distraction: "mild",
@@ -121,7 +124,7 @@ const contextualData: ContextualProgress = {
     direction: "repeat",
     context: {
       cueSupport: null,
-      environment: null,
+      environment: "busy_outdoor",
       distance: null,
       durationBand: null,
       distraction: "mild",
@@ -131,13 +134,40 @@ const contextualData: ContextualProgress = {
   exactContexts: [],
 };
 
-function setup({ withContext = false }: { withContext?: boolean } = {}) {
-  const renderedGoals = withContext
-    ? goals.map((goal) => ({
-        ...goal,
-        skills: goal.skills.map((skill) => ({ ...skill, catalogSkillKey: "sit" })),
-      }))
-    : goals;
+const emptyActionContextData = {
+  ...contextualData,
+  strongestContext: null,
+  nextPracticeAction: {
+    ruleId: "repeat_developing_context",
+    direction: "repeat",
+    context: {
+      cueSupport: null,
+      environment: null,
+      distance: null,
+      durationBand: null,
+      distraction: null,
+    },
+    changedDimension: null,
+  },
+  exactContexts: [],
+} satisfies ContextualProgress;
+
+function setup({
+  withContext = false,
+  customSkill = false,
+  data = contextualData,
+}: {
+  withContext?: boolean;
+  customSkill?: boolean;
+  data?: ContextualProgress;
+} = {}) {
+  const renderedGoals =
+    withContext && !customSkill
+      ? goals.map((goal) => ({
+          ...goal,
+          skills: goal.skills.map((skill) => ({ ...skill, catalogSkillKey: "sit" })),
+        }))
+      : goals;
   vi.mocked(progressLib.useProgress).mockReturnValue({
     data: renderedGoals,
     isLoading: false,
@@ -164,11 +194,16 @@ function setup({ withContext = false }: { withContext?: boolean } = {}) {
     typeof dogsLib.useRemoveGoal
   >);
   vi.mocked(contextualProgressLib.useContextualProgress).mockReturnValue({
-    data: withContext ? contextualData : undefined,
+    data: withContext || customSkill ? data : undefined,
     isLoading: false,
     isError: false,
     refetch: vi.fn(),
   } as never);
+  const mutateAsync = vi.fn().mockResolvedValue({});
+  vi.mocked(progressLib.useLogSession).mockReturnValue({
+    mutateAsync,
+    isPending: false,
+  } as unknown as ReturnType<typeof progressLib.useLogSession>);
   const recordEvent = vi.fn();
   vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
     mutate: recordEvent,
@@ -180,7 +215,7 @@ function setup({ withContext = false }: { withContext?: boolean } = {}) {
       </QueryClientProvider>
     </LocaleProvider>,
   );
-  return { recordEvent };
+  return { mutateAsync, recordEvent };
 }
 
 describe("ProgressPanel", () => {
@@ -203,7 +238,6 @@ describe("ProgressPanel", () => {
     setup({ withContext: true });
     fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
     fireEvent.click(screen.getByRole("button", { name: "Use this practice plan" }));
-
     expect(screen.getByLabelText("What else was going on?")).toHaveValue("mild");
     expect(
       screen.getByRole("checkbox", {
@@ -217,6 +251,7 @@ describe("ProgressPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
     fireEvent.click(screen.getByRole("button", { name: "Log session" }));
     expect(screen.getByLabelText("What else was going on?")).toHaveValue("");
+    expect(screen.queryByLabelText("Where were you?")).not.toBeInTheDocument();
 
     recordEvent.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Use this practice plan" }));
@@ -228,6 +263,52 @@ describe("ProgressPanel", () => {
       ruleId: "repeat_developing_context",
       direction: "repeat",
     });
+  });
+
+  it("applies a contextual action to a custom skill and submits its recommended evidence", async () => {
+    const { mutateAsync, recordEvent } = setup({ customSkill: true });
+    fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Log session" }));
+    expect(screen.queryByLabelText("What else was going on?")).toBeNull();
+
+    recordEvent.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Use this practice plan" }));
+
+    expect(screen.getByLabelText("What else was going on?")).toHaveValue("mild");
+    expect(screen.getByLabelText("Where were you?")).toHaveValue("busy_outdoor");
+    expect(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 3.",
+      }),
+    ).not.toBeChecked();
+    expect(recordEvent).toHaveBeenCalledWith({
+      name: "training.context_next_action_used",
+      surface: "skill_detail",
+      ruleId: "repeat_developing_context",
+      direction: "repeat",
+    });
+
+    const form = screen.getByRole("button", { name: "Save session" }).closest("form");
+    if (!form) throw new Error("missing session form");
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    const body = mutateAsync.mock.calls[0]?.[0]?.body as Record<string, unknown>;
+    expect(body.distraction).toBe("mild");
+    expect(body.environment).toBe("busy_outdoor");
+    expect(body.confirmCurrentLevel).toBeUndefined();
+  });
+
+  it("reports an empty action context instead of silently ignoring the recommendation", () => {
+    const { recordEvent } = setup({ customSkill: true, data: emptyActionContextData });
+    fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
+    recordEvent.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use this practice plan" }));
+
+    expect(toast.error).toHaveBeenCalledWith("Couldn't load context progress.");
+    expect(screen.queryByRole("button", { name: "Save session" })).not.toBeInTheDocument();
+    expect(recordEvent).not.toHaveBeenCalled();
   });
 
   it("clears the recommended context when the prefilled form is cancelled", () => {

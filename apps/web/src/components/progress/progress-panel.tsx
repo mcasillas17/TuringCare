@@ -22,17 +22,34 @@ import { dateLabel } from "@/lib/when";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   type ExactPracticeContext,
+  type PracticeDimension,
   type TrainingSkillInput,
+  practiceDimensionValues,
   trainingSkillSchema,
 } from "@turingcare/shared";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
 
 function sessionCountLabel(skill: ProgressSkill, t: ReturnType<typeof useI18n>["t"]) {
   const label = skill.sessionCount === 1 ? t("progress.session") : t("progress.sessions");
   return `${skill.sessionCount} ${label}`;
+}
+
+function getSessionDimensions(
+  catalogDimensions: readonly PracticeDimension[],
+  recommendedContext: ExactPracticeContext | null,
+): PracticeDimension[] {
+  const selected = new Set<PracticeDimension>(catalogDimensions);
+  if (recommendedContext) {
+    for (const dimension of practiceDimensionValues) {
+      const field = DIMENSION_CONFIG[dimension].field;
+      if (recommendedContext[field] !== null) selected.add(dimension);
+    }
+  }
+  return practiceDimensionValues.filter((dimension) => selected.has(dimension));
 }
 
 export function ProgressPanel({ dogId }: { dogId: string }) {
@@ -157,6 +174,7 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   const { data: catalog } = useTrainingCatalog();
   const catalogSkill = findCatalogSkill(catalog, displaySkill.catalogSkillKey);
   const contextualProgress = useContextualProgress(dogId, displaySkill.id, expanded);
+  const dimensions = getSessionDimensions(catalogSkill?.dimensions ?? [], recommendedContext);
 
   return (
     <li className="space-y-3 rounded border border-silver p-3">
@@ -213,11 +231,10 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
             isError={contextualProgress.isError}
             refetch={contextualProgress.refetch}
             onUseNextAction={(context) => {
-              const dimensions = catalogSkill?.dimensions ?? [];
-              const canApply = dimensions.some(
-                (dimension) => context[DIMENSION_CONFIG[dimension].field] !== null,
-              );
-              if (!canApply) return false;
+              if (getSessionDimensions([], context).length === 0) {
+                toast.error(t("contextProgress.loadError"));
+                return false;
+              }
               setRecommendedContext(context);
               setMode("logging");
               return true;
@@ -276,7 +293,7 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
               key={recommendedContext ? "recommended" : "blank"}
               dogId={dogId}
               skillId={displaySkill.id}
-              dimensions={catalogSkill?.dimensions ?? []}
+              dimensions={dimensions}
               currentLevel={displaySkill.confidence}
               onCancel={() => {
                 setRecommendedContext(null);

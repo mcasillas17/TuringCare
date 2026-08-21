@@ -204,4 +204,10 @@ describe("SessionForm evidence capture", () => {
     expect(mutateAsync.mock.calls[0]?.[0]?.body.safetySignal).toBeUndefined();
     expect(mutateAsync.mock.calls[0]?.[0]?.body.environment).toBeUndefined();
   });
+
+  it("keeps initial context hidden when no dimensions are requested", () => {
+    setup([], 3, { distraction: "mild" });
+
+    expect(screen.queryByLabelText("What else was going on?")).not.toBeInTheDocument();
+  });
 });
