@@ -50,6 +50,7 @@ import { env } from "../env";
 import { decideAdvancementProposal } from "../lib/advancement";
 import { createBehaviorConcern } from "../lib/behavior-concern-writes";
 import { composeBrief } from "../lib/brief";
+import { loadContextualProgress } from "../lib/contextual-progress-data";
 import { createDog } from "../lib/dog-writes";
 import { loadDogsOverview } from "../lib/dogs-overview";
 import {
@@ -375,6 +376,28 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     return c.json(await loadProgress(dog.id));
+  })
+  .get("/:id/skills/:skillId/contextual-progress", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+    if (!skill) return c.json({ error: "not_found" } as const, 404);
+    const [skillCatalog] = await db
+      .select({ catalogSkillKey: trainingSkills.catalogSkillKey })
+      .from(trainingSkills)
+      .where(eq(trainingSkills.id, skill.id))
+      .limit(1);
+    if (!skillCatalog) return c.json({ error: "not_found" } as const, 404);
+    return c.json(
+      await loadContextualProgress(
+        {
+          id: skill.id,
+          confidence: skill.confidence,
+          catalogSkillKey: skillCatalog.catalogSkillKey,
+        },
+        new Date(),
+      ),
+    );
   })
   .post("/:id/goals/:goalId/skills", zValidator("json", trainingSkillSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
