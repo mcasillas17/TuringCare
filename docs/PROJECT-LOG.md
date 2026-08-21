@@ -1065,4 +1065,4 @@ headings semantically nested, and removes action-derived synthetic
 `not_observed` rows while preserving observed evidence.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Commits: `59c26a2..34ba811` on `feat/contextual-progress-insights`.
+- Commits: `59c26a2..5822883` on `feat/contextual-progress-insights`.
