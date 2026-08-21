@@ -349,20 +349,30 @@ existing owned dog and skill hierarchy. It returns the full contract and must
 call `findOwnedDog` and `findOwnedSkill`, returning `404` for cross-owner or
 missing resources. Validate both route parameters with the repository UUID
 schema before either ownership query; malformed IDs use the same
-`{ error: "not_found" }` `404` response and must not reach Drizzle.
+`{ error: "not_found" }` `404` response and must not reach Drizzle. The route
+uses `evaluateSafetyWithLock` to derive the safety decision and full contextual
+evidence/action through the lock-held transaction executor, so a safety write
+cannot commit between the decision and the returned action or synthetic row.
 
 Expose `POST /api/dogs/:id/contextual-progress/events` beneath the same owned
-dog route. Validate the dog UUID before the ownership query and before
-telemetry recording. A malformed dog ID returns the same privacy-safe
-`{ error: "not_found" }` `404` and records no event.
+dog route. Its UUID guard runs before JSON validation, the ownership query, and
+telemetry recording, so a malformed dog ID plus an invalid body still returns
+the same privacy-safe `{ error: "not_found" }` `404` and records no event.
+`training.context_next_action_used` re-evaluates safety under the dog safety
+lock; when exercises are suppressed, it returns the normal `202 { ok: true }`
+acknowledgment without a telemetry record. `training.context_insight_viewed`
+remains recordable while safety is active.
 
 The existing focus response adds one compact `contextualProgressSummary` per
 returned focus skill. The loader derives all returned summaries from one
 bounded evidence query rather than issuing one query per skill. Focus evaluates
-the dog's active safety decision once per request and shares it across all
-returned summaries. The expanded skill card fetches the full skill-scoped route
-only when opened and evaluates safety for the owned dog before returning its
-detail.
+the dog's active safety decision once per request under the dog safety lock and
+passes that transaction executor to the one batched evidence read, sharing the
+result across all returned summaries. A contextual evidence-read failure
+returns the explicit `unavailable` summary state; failures acquiring,
+evaluating, or committing the safety transaction propagate instead of yielding
+an unsafe ready result. The expanded skill card fetches the full skill-scoped
+route only when opened.
 
 ## Web Architecture
 
@@ -430,7 +440,9 @@ catalogs.
 - Active safety suppression removes `nextPracticeAction` and action-derived
   synthetic `not_observed` rows, preserves observed evidence/status rows,
   renders the existing localized safety/referral guidance, and records no
-  next-action-use telemetry.
+  next-action-use telemetry. Server action-use ingestion independently repeats
+  this safety check under the dog lock and returns its unchanged acknowledgment
+  without recording when suppressed.
 - `DogWeek` derives one `activeSafety` from the current-week suggestion or any
   ready contextual summary. It renders exactly one page-level referral notice,
   hides stale exercise suggestions, and passes page-owned notice/action
@@ -470,12 +482,15 @@ Server-side telemetry records scalar, privacy-safe events:
 Telemetry never copies notes, context labels derived from free text, dog names,
 or client-supplied identity. View and action events are accepted through an
 authenticated server route that supplies the user identity and validates the
-small enum payload. The weekly summary records at most one view event per
-mounted card after recommendation state settles. Skill detail records each
-distinct settled result once per mount, keyed by policy version, curriculum
-level, strongest context and status, and action availability. Existing route
-telemetry tests are updated for the changed `training.practice_logged`
-properties.
+small enum payload. Action-use telemetry is persisted only after a lock-held
+safety re-evaluation confirms exercises remain available; suppressed requests
+receive the same successful acknowledgment without revealing the decision.
+View telemetry remains recordable while safety is active. The weekly summary
+records at most one view event per mounted card after recommendation state
+settles. Skill detail records each distinct settled result once per mount,
+keyed by policy version, curriculum level, strongest context and status, and
+action availability. Existing route telemetry tests are updated for the changed
+`training.practice_logged` properties.
 
 ## Testing
 
@@ -517,7 +532,8 @@ Cover:
 - injury, aggression/bite, severe-fear, severe-concern, and sustained-worsening
   safety suppression on detail and batched focus responses, including removal
   of synthetic `not_observed` rows, preservation of observed evidence, and no
-  action telemetry;
+  action telemetry; deterministic advisory-lock interleavings prove a response
+  completing after a safety write cannot expose an action or synthetic row;
 - practice save succeeding independently from later insight loading;
 - server-side telemetry identity and scalar properties.
 
@@ -555,7 +571,8 @@ Cover:
 - awaited weekly session creation fails closed when cached suggestions become
   unsafe, revalidating, or errored, including omission of `practicedTarget`;
 - malformed dog/skill UUIDs on the two contextual routes return privacy-safe
-  `404` responses before database access and record no telemetry;
+  `404` responses before database access and record no telemetry; the event
+  route returns that `404` before JSON-body validation;
 - English and Spanish catalog parity;
 - keyboard, screen-reader, contrast, and mobile layout behavior.
 

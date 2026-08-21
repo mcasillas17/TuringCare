@@ -988,11 +988,13 @@ export async function loadContextualProgress(
     "id" | "confidence" | "catalogSkillKey"
   >,
   now: Date,
+  safety: SuggestionSafety | null = null,
+  executor: Pick<typeof db, "select"> = db,
 ): Promise<ContextualProgress> {
   const startsAt = new Date(
     now.getTime() - CONTEXTUAL_PROGRESS_WINDOW_DAYS * 24 * 60 * 60 * 1000,
   );
-  const rows = await db
+  const rows = await executor
     .select({
       id: practiceSessions.id,
       outcome: practiceSessions.outcome,
@@ -1047,17 +1049,26 @@ Add after the existing progress route:
 
 ```ts
 .get("/:id/skills/:skillId/contextual-progress", async (c) => {
-  const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+  const dogId = c.req.param("id");
+  const skillId = c.req.param("skillId");
+  if (!uuidSchema.safeParse(dogId).success || !uuidSchema.safeParse(skillId).success) {
+    return c.json({ error: "not_found" } as const, 404);
+  }
+  const dog = await findOwnedDog(c.get("userId"), dogId);
   if (!dog) return c.json({ error: "not_found" } as const, 404);
-  const skill = await findOwnedSkill(
-    c.get("userId"),
-    dog.id,
-    c.req.param("skillId"),
-  );
+  const skill = await findOwnedSkill(c.get("userId"), dog.id, skillId);
   if (!skill) return c.json({ error: "not_found" } as const, 404);
-  return c.json(await loadContextualProgress(skill, new Date()));
+  const now = new Date();
+  const progress = await evaluateSafetyWithLock(dog.id, now, (safety, tx) =>
+    loadContextualProgress(skill, now, safety, tx),
+  );
+  return c.json(progress);
 })
 ```
+
+The locked callback is the response linearization point: it must pass its
+transaction executor to the loader and must not use global `db` for contextual
+evidence after the safety decision.
 
 - [ ] **Step 5: Inspect the query plan**
 
@@ -1164,14 +1175,17 @@ empty map without querying when `skills.length === 0`.
 
 - [ ] **Step 4: Attach summaries in `loadFocusWeek`**
 
-Include `confidence` and `catalogSkillKey` in the focus select. Evaluate the
-shared server-owned safety decision once per dog/request, pass it to the batch
-loader, and call the batch loader once. Catch only that combined summary/safety
-read, log `[contextual-progress] focus_summary_failed` without owner content,
-and return the explicit unavailable state rather than silently inventing an
-empty summary. Active safety sets every returned summary's action to null, removes any
-action-derived synthetic `not_observed` rows from detail responses, and
-preserves observed evidence plus the safety decision. Add:
+Include `confidence` and `catalogSkillKey` in the focus select. Use
+`evaluateSafetyWithLock` once per dog/request and pass its transaction executor
+to the one batch loader, so the safety decision and contextual evidence/action
+share one linearization point. Isolate only the evidence read in a nested
+transaction/savepoint: log `[contextual-progress] focus_summary_failed`
+without owner content and return the explicit unavailable state for that
+failure, while lock acquisition, safety-input evaluation, and outer-transaction
+failures propagate instead of inventing a ready result. Active safety sets every
+returned summary's action to null, removes any action-derived synthetic
+`not_observed` rows from detail responses, and preserves observed evidence plus
+the safety decision. Add:
 
 ```ts
 currentLevel: f.confidence,
@@ -1238,7 +1252,13 @@ Assert an authenticated owner receives `202`, another owner receives `404`,
 unknown enum values receive `400`, and the stored event receives the session
 user ID rather than any client identity.
 - a malformed dog UUID returns `{ error: "not_found" }` with `404` before the
-  ownership query and records no telemetry.
+  ownership query or JSON validation and records no telemetry, even with an
+  invalid body;
+- `training.context_next_action_used` returns the same `202 { ok: true }`
+  acknowledgment but records no event for every active safety rule; the view
+  event remains recordable;
+- deterministic safety-write interleaving makes an action-use request wait for
+  the dog lock and verifies it records nothing after the write commits.
 
 - [ ] **Step 2: Run and confirm RED**
 
@@ -1258,20 +1278,30 @@ Add to `KNOWN_EVENTS`:
 "training.context_next_action_used",
 ```
 
-Do not add them to `CLIENT_EVENTS`. Add:
-
-Validate `:id` with the existing repository UUID schema before
-`findOwnedDog`; malformed IDs return the same privacy-safe `404` and must not
-record an event.
+Do not add them to `CLIENT_EVENTS`. Add a route UUID guard before `zValidator`, then:
 
 ```ts
 .post(
   "/:id/contextual-progress/events",
+  async (c, next) => {
+    if (!uuidSchema.safeParse(c.req.param("id")).success) {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    await next();
+  },
   zValidator("json", contextualProgressEventSchema),
   async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const event = c.req.valid("json");
+    if (event.name === "training.context_next_action_used") {
+      const actionUseAllowed = await evaluateSafetyWithLock(
+        dog.id,
+        new Date(),
+        async (safety) => safety === null,
+      );
+      if (!actionUseAllowed) return c.json({ ok: true } as const, 202);
+    }
     const { name, ...props } = event;
     await recordEvent(name, {
       userId: c.get("userId"),
@@ -1282,6 +1312,8 @@ record an event.
   },
 )
 ```
+
+Do not record raw errors or change the acknowledged telemetry response shape.
 
 - [ ] **Step 4: Run telemetry tests and typecheck**
 
