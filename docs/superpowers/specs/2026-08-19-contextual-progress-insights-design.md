@@ -470,9 +470,12 @@ Server-side telemetry records scalar, privacy-safe events:
 Telemetry never copies notes, context labels derived from free text, dog names,
 or client-supplied identity. View and action events are accepted through an
 authenticated server route that supplies the user identity and validates the
-small enum payload. The web records at most one view event per mounted insight
-surface. Existing route telemetry tests are updated for the changed
-`training.practice_logged` properties.
+small enum payload. The weekly summary records at most one view event per
+mounted card after recommendation state settles. Skill detail records each
+distinct settled result once per mount, keyed by policy version, curriculum
+level, strongest context and status, and action availability. Existing route
+telemetry tests are updated for the changed `training.practice_logged`
+properties.
 
 ## Testing
 
