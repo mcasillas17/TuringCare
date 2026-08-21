@@ -1096,6 +1096,14 @@ committed while the request waits is reflected coherently. The evidence loader
 remains one batched query and degrades only contextual summaries to unavailable.
 View telemetry now accepts only `reliable`, `developing`, or `null` for
 `strongestStatus`, matching the observable-evidence contract.
+
+Final launch-minor hardening gives a successful evidence save explicit partial
+feedback when client cache authority omits an originally audited suggestion
+target; server anchor-rejection copy remains reserved for actual server
+rejections. Training progress now coordinates one page-level referral alert
+from expanded contextual details while retaining each detail's evidence and
+controls. Telemetry documentation distinguishes weekly recommendation
+intent/navigation from skill-detail application of a recommended context.
 - Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
-- Commits: `59c26a2..e5f1aea` on `feat/contextual-progress-insights`.
+- Commits: `59c26a2..62d1569` on `feat/contextual-progress-insights`.
