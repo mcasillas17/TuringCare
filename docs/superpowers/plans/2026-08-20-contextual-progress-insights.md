@@ -2143,7 +2143,7 @@ git commit -m "fix: harden contextual progress insights"
 
 Skip this commit when reviewers are clean and no files changed.
 
-- [ ] **Step 8: Finish the branch**
+- [x] **Step 8: Finish the branch**
 
 Invoke `finishing-a-development-branch`. Preserve the approved spec and plan,
 include the requested Copilot trailers on commits, and never reset or overwrite
