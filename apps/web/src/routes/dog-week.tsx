@@ -65,6 +65,8 @@ export function DogWeek() {
     hasPrimary: boolean;
     hasFallback: boolean;
     dimensions: PracticeDimension[];
+    currentLevel: number;
+    usesAuditedSuggestion: boolean;
   } | null>(null);
   const logDisabled = logSession.isPending || (weekKey === currentWeekKey && suggestionLoading);
 
@@ -107,6 +109,8 @@ export function DogWeek() {
   }, [pendingScope]);
 
   const onLog = async (skillId: string, day: Date) => {
+    const focusSkill = skills.find((skill) => skill.skillId === skillId);
+    if (!focusSkill) return;
     const scopeAtStart = pendingScope;
     const isToday = dayKey(day) === dayKey(today);
     const occurredAt = isToday
@@ -127,14 +131,19 @@ export function DogWeek() {
       suggestion?.type === "exercise" &&
       !suggestion.dismissed &&
       suggestion.weekKey === weekKey &&
-      suggestion.skill?.id === skillId;
+      suggestion.skill?.id === skillId
+        ? suggestion
+        : null;
+    const usesAuditedSuggestion = Boolean(matchingSuggestion);
     setPendingOutcome({
       skillId,
       sessionId: created.id,
-      suggestionId: matchingSuggestion ? suggestion.suggestionId : null,
-      hasPrimary: matchingSuggestion && suggestion.primary !== null,
-      hasFallback: matchingSuggestion && suggestion.fallback !== null,
-      dimensions: matchingSuggestion ? suggestion.requestedDimensions : [],
+      suggestionId: matchingSuggestion?.suggestionId ?? null,
+      hasPrimary: Boolean(matchingSuggestion?.primary),
+      hasFallback: Boolean(matchingSuggestion?.fallback),
+      dimensions: matchingSuggestion?.requestedDimensions ?? focusSkill.dimensions,
+      currentLevel: focusSkill.currentLevel,
+      usesAuditedSuggestion,
     });
   };
 
@@ -233,6 +242,8 @@ export function DogWeek() {
           key={pendingOutcome.sessionId}
           hasFallback={pendingOutcome.hasFallback}
           dimensions={pendingOutcome.dimensions}
+          currentLevel={pendingOutcome.currentLevel}
+          usesAuditedSuggestion={pendingOutcome.usesAuditedSuggestion}
           saving={setEvidence.isPending}
           onSave={onSaveOutcome}
           onSkip={() => setPendingOutcome(null)}

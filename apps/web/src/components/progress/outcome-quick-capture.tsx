@@ -9,27 +9,52 @@ import {
   practiceOutcomeValues,
   safetySignalValues,
 } from "@turingcare/shared";
-import { useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 export function OutcomeQuickCapture({
   onSave,
   onSkip,
   hasFallback,
   dimensions,
+  currentLevel,
+  usesAuditedSuggestion,
   saving = false,
 }: {
   onSave: (input: PracticeEvidenceInput & { variant: "primary" | "fallback" }) => void;
   onSkip: () => void;
   hasFallback: boolean;
   dimensions: PracticeDimension[];
+  currentLevel: number;
+  usesAuditedSuggestion: boolean;
   saving?: boolean;
 }) {
   const { t } = useI18n();
+  const confirmationHelpId = useId();
   const [outcome, setOutcome] = useState<PracticeOutcome | null>(null);
   const [safetySignal, setSafetySignal] = useState<"" | SafetySignalType>("");
   const [safetyConfirmed, setSafetyConfirmed] = useState(false);
+  const [currentLevelConfirmed, setCurrentLevelConfirmed] = useState(false);
   const [variant, setVariant] = useState<"primary" | "fallback">("primary");
   const [context, setContext] = useState<PracticeEvidenceInput>({});
+  const hasStructuredEvidence = Boolean(
+    outcome || dimensions.some((dimension) => Boolean(context[DIMENSION_CONFIG[dimension].field])),
+  );
+
+  useEffect(() => {
+    if (!hasStructuredEvidence || usesAuditedSuggestion) {
+      setCurrentLevelConfirmed(false);
+    }
+  }, [hasStructuredEvidence, usesAuditedSuggestion]);
+
+  const handleSkip = () => {
+    setOutcome(null);
+    setSafetySignal("");
+    setSafetyConfirmed(false);
+    setCurrentLevelConfirmed(false);
+    setVariant("primary");
+    setContext({});
+    onSkip();
+  };
 
   return (
     <section
@@ -125,23 +150,45 @@ export function OutcomeQuickCapture({
           {t("practice.safetyConfirm")}
         </label>
       )}
+      {hasStructuredEvidence && !usesAuditedSuggestion && (
+        <label className="text-sm text-slate">
+          <input
+            type="checkbox"
+            className="mr-2 size-4 accent-copper"
+            aria-label={t("contextProgress.confirmCurrentLevel", { level: currentLevel })}
+            aria-describedby={confirmationHelpId}
+            checked={currentLevelConfirmed}
+            onChange={(event) => setCurrentLevelConfirmed(event.target.checked)}
+          />
+          <span>{t("contextProgress.confirmCurrentLevel", { level: currentLevel })}</span>
+          <span id={confirmationHelpId} className="ml-6 block text-xs text-slate-soft">
+            {t("contextProgress.confirmCurrentLevelHelp")}
+          </span>
+        </label>
+      )}
       <Button
         type="button"
         disabled={
-          saving || (!outcome && !safetySignal) || Boolean(safetySignal && !safetyConfirmed)
+          saving ||
+          (!outcome && !safetySignal) ||
+          Boolean(safetySignal && !safetyConfirmed) ||
+          Boolean(hasStructuredEvidence && !usesAuditedSuggestion && !currentLevelConfirmed)
         }
         onClick={() =>
           onSave({
             ...context,
             outcome: outcome ?? undefined,
             safetySignal: safetySignal || undefined,
+            ...(!usesAuditedSuggestion && currentLevelConfirmed
+              ? { confirmCurrentLevel: true }
+              : {}),
             variant,
           })
         }
       >
         {t("practice.saveEvidence")}
       </Button>
-      <Button type="button" variant="outline" onClick={onSkip}>
+      <Button type="button" variant="outline" onClick={handleSkip}>
         {t("practice.outcomeSkip")}
       </Button>
     </section>

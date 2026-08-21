@@ -566,6 +566,11 @@ export const es = {
     advSaved: "Actualizado.",
     advFailed: "No se pudo guardar tu respuesta.",
   },
+  contextProgress: {
+    confirmCurrentLevel: "Practiqué esto en el nivel actual {level}.",
+    confirmCurrentLevelHelp:
+      "Esto permite que TuringCare compare esta práctica con otras del mismo nivel.",
+  },
   practice: {
     outcomeQuestion: "¿Cómo les fue?",
     outcomeWentWell: "Salió bien",

@@ -3,20 +3,33 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { OutcomeQuickCapture } from "./outcome-quick-capture";
 
-function setup(saving = false) {
+function setup({
+  saving = false,
+  hasFallback = true,
+  currentLevel = 3,
+  usesAuditedSuggestion = true,
+}: {
+  saving?: boolean;
+  hasFallback?: boolean;
+  currentLevel?: number;
+  usesAuditedSuggestion?: boolean;
+} = {}) {
   const onSave = vi.fn();
+  const onSkip = vi.fn();
   render(
     <LocaleProvider>
       <OutcomeQuickCapture
         dimensions={["distraction"]}
-        hasFallback
+        hasFallback={hasFallback}
+        currentLevel={currentLevel}
+        usesAuditedSuggestion={usesAuditedSuggestion}
         onSave={onSave}
-        onSkip={vi.fn()}
+        onSkip={onSkip}
         saving={saving}
       />
     </LocaleProvider>,
   );
-  return { onSave };
+  return { onSave, onSkip };
 }
 
 describe("OutcomeQuickCapture", () => {
@@ -54,8 +67,61 @@ describe("OutcomeQuickCapture", () => {
   });
 
   it("disables saving while evidence is being persisted", () => {
-    setup(true);
+    setup({ saving: true });
     fireEvent.click(screen.getByRole("button", { name: "Too hard" }));
+    expect(screen.getByRole("button", { name: "Save response" })).toBeDisabled();
+  });
+
+  it("requires and submits current-level confirmation for manual structured evidence", () => {
+    const { onSave } = setup({ hasFallback: false, usesAuditedSuggestion: false });
+    fireEvent.click(screen.getByRole("button", { name: "Went well" }));
+    fireEvent.change(screen.getByLabelText("What else was going on?"), {
+      target: { value: "mild" },
+    });
+
+    const confirmation = screen.getByRole("checkbox", {
+      name: "I practiced this at the current Level 3.",
+    });
+    expect(confirmation).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Save response" })).toBeDisabled();
+
+    fireEvent.click(confirmation);
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      outcome: "went_well",
+      distraction: "mild",
+      safetySignal: undefined,
+      confirmCurrentLevel: true,
+      variant: "primary",
+    });
+  });
+
+  it("does not render manual confirmation for audited suggestion evidence", () => {
+    setup({ usesAuditedSuggestion: true });
+    expect(
+      screen.queryByRole("checkbox", {
+        name: "I practiced this at the current Level 3.",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("resets manual confirmation when the quick capture is cancelled", () => {
+    const { onSkip } = setup({ hasFallback: false, usesAuditedSuggestion: false });
+    fireEvent.click(screen.getByRole("button", { name: "Went well" }));
+    const confirmation = screen.getByRole("checkbox", {
+      name: "I practiced this at the current Level 3.",
+    });
+    fireEvent.click(confirmation);
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+
+    expect(onSkip).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Went well" }));
+    expect(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 3.",
+      }),
+    ).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Save response" })).toBeDisabled();
   });
 });

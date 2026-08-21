@@ -391,10 +391,16 @@ describe("DogWeek", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
     fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 1.",
+      }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save response" }));
 
     await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
     expect(evidenceMutate.mock.calls[0]?.[0]?.body.practicedTarget).toBeUndefined();
+    expect(evidenceMutate.mock.calls[0]?.[0]?.body.confirmCurrentLevel).toBe(true);
   });
 
   it("records suggestion actions and opens the focus picker on request", async () => {

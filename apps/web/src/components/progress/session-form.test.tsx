@@ -6,7 +6,7 @@ import { SessionForm } from "./session-form";
 
 vi.mock("@/lib/progress", () => ({ useLogSession: vi.fn() }));
 
-function setup(dimensions: Parameters<typeof SessionForm>[0]["dimensions"]) {
+function setup(dimensions: Parameters<typeof SessionForm>[0]["dimensions"], currentLevel = 3) {
   const mutateAsync = vi.fn().mockResolvedValue({});
   vi.mocked(progressLib.useLogSession).mockReturnValue({
     mutateAsync,
@@ -18,6 +18,7 @@ function setup(dimensions: Parameters<typeof SessionForm>[0]["dimensions"]) {
         dogId="d1"
         skillId="s1"
         dimensions={dimensions}
+        currentLevel={currentLevel}
         onCancel={vi.fn()}
         onSaved={vi.fn()}
       />
@@ -41,6 +42,7 @@ describe("SessionForm evidence capture", () => {
     expect(screen.getByLabelText("When")).toHaveAttribute("max");
     expect(body.outcome).toBeUndefined();
     expect(body.cueSupport).toBeUndefined();
+    expect(body.confirmCurrentLevel).toBeUndefined();
     expect(body.practicedTarget).toBeUndefined();
     expect(new Date(String(body.occurredAt)).toISOString()).toBe(body.occurredAt);
   });
@@ -65,12 +67,44 @@ describe("SessionForm evidence capture", () => {
     submitSession();
     await waitFor(() => expect(screen.getByText("Save session")).toBeEnabled());
     expect(mutateAsync).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("checkbox", { name: /confirm/i }));
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I confirm this safety event happened and understand training suggestions may pause.",
+      }),
+    );
     submitSession();
     await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
     const body = mutateAsync.mock.calls[0]?.[0]?.body as Record<string, unknown>;
     expect(body.outcome).toBe("too_hard");
     expect(body.distraction).toBe("strong");
     expect(body.safetySignal).toBe("injury_or_pain");
+    expect(body.confirmCurrentLevel).toBeUndefined();
+  });
+
+  it("submits current-level confirmation only when checked", async () => {
+    const { mutateAsync } = setup(["distraction"], 3);
+    fireEvent.change(screen.getByLabelText("How did it go?"), {
+      target: { value: "went_well" },
+    });
+    fireEvent.change(screen.getByLabelText("What else was going on?"), {
+      target: { value: "mild" },
+    });
+
+    const confirmation = screen.getByRole("checkbox", {
+      name: "I practiced this at the current Level 3.",
+    });
+    expect(confirmation).not.toBeChecked();
+    submitSession();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    expect(mutateAsync.mock.calls[0]?.[0]?.body.confirmCurrentLevel).toBeUndefined();
+
+    mutateAsync.mockClear();
+    fireEvent.click(confirmation);
+    submitSession();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    const body = mutateAsync.mock.calls[0]?.[0]?.body as Record<string, unknown>;
+    expect(body.confirmCurrentLevel).toBe(true);
+    expect(body.currentLevel).toBeUndefined();
+    expect(body.curriculumVersion).toBeUndefined();
   });
 });

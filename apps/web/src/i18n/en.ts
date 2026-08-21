@@ -560,6 +560,11 @@ export const en = {
     advSaved: "Updated.",
     advFailed: "Couldn't save your answer.",
   },
+  contextProgress: {
+    confirmCurrentLevel: "I practiced this at the current Level {level}.",
+    confirmCurrentLevelHelp:
+      "This lets TuringCare compare this practice with other work at the same level.",
+  },
   practice: {
     outcomeQuestion: "How did it go?",
     outcomeWentWell: "Went well",

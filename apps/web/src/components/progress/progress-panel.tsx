@@ -233,6 +233,7 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
               dogId={dogId}
               skillId={displaySkill.id}
               dimensions={catalogSkill?.dimensions ?? []}
+              currentLevel={displaySkill.confidence}
               onCancel={() => setMode("view")}
               onSaved={() => setMode("view")}
             />

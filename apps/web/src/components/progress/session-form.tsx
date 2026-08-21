@@ -10,7 +10,7 @@ import {
   practiceSessionSchema,
   safetySignalValues,
 } from "@turingcare/shared";
-import { useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -26,28 +26,45 @@ export function SessionForm({
   dogId,
   skillId,
   dimensions,
+  currentLevel,
   onCancel,
   onSaved,
 }: {
   dogId: string;
   skillId: string;
   dimensions: PracticeDimension[];
+  currentLevel: number;
   onCancel: () => void;
   onSaved?: () => void;
 }) {
   const { t } = useI18n();
   const logSession = useLogSession(dogId);
+  const confirmationHelpId = useId();
   const {
     register,
     handleSubmit,
+    unregister,
+    setValue,
     watch,
     formState: { errors, isSubmitting },
   } = useForm<PracticeSessionInput>({
     resolver: zodResolver(practiceSessionSchema),
     defaultValues: { occurredAt: localDateTime() },
   });
+  const values = watch();
   const selectedSafetySignal = watch("safetySignal");
+  const currentLevelConfirmed = watch("confirmCurrentLevel") === true;
+  const hasStructuredEvidence = Boolean(
+    values.outcome ||
+      dimensions.some((dimension) => Boolean(values[DIMENSION_CONFIG[dimension].field])),
+  );
   const [safetyConfirmed, setSafetyConfirmed] = useState(false);
+
+  useEffect(() => {
+    if (!hasStructuredEvidence) {
+      unregister("confirmCurrentLevel");
+    }
+  }, [hasStructuredEvidence, unregister]);
 
   const onSubmit = handleSubmit(async (body) => {
     if (body.safetySignal && !safetyConfirmed) {
@@ -178,6 +195,25 @@ export function SessionForm({
             onChange={(event) => setSafetyConfirmed(event.target.checked)}
           />
           {t("practice.safetyConfirm")}
+        </label>
+      )}
+      {hasStructuredEvidence && (
+        <label className="block text-sm">
+          <input
+            type="checkbox"
+            className="mr-2 size-4 accent-copper"
+            aria-label={t("contextProgress.confirmCurrentLevel", { level: currentLevel })}
+            aria-describedby={confirmationHelpId}
+            checked={currentLevelConfirmed}
+            onChange={(event) => {
+              if (event.target.checked) setValue("confirmCurrentLevel", true);
+              else unregister("confirmCurrentLevel");
+            }}
+          />
+          <span>{t("contextProgress.confirmCurrentLevel", { level: currentLevel })}</span>
+          <span id={confirmationHelpId} className="ml-6 block text-xs text-slate-soft">
+            {t("contextProgress.confirmCurrentLevelHelp")}
+          </span>
         </label>
       )}
       <div className="flex gap-2">
