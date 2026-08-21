@@ -1,4 +1,6 @@
+import type { ContextualProgressSummary, PracticeDimension } from "@turingcare/shared";
 import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { skillDimensionMetadata } from "../data/training-curriculum";
 import { db } from "../db";
 import {
   focusCompatibilityWeeks,
@@ -8,6 +10,7 @@ import {
   trainingSkills,
   weeklyFocus,
 } from "../db/schema";
+import * as contextualProgressData from "./contextual-progress-data";
 import type { TransactionType } from "./safety-lock";
 
 export type FocusSession = {
@@ -23,6 +26,11 @@ export type FocusSkill = {
   goalName: string;
   position: number;
   sessions: FocusSession[];
+  currentLevel: number;
+  dimensions: PracticeDimension[];
+  contextualProgress:
+    | { status: "ready"; summary: ContextualProgressSummary }
+    | { status: "unavailable" };
 };
 
 export class FocusSkillDogMismatchError extends Error {
@@ -81,6 +89,8 @@ export async function loadFocusWeek(
       name: trainingSkills.name,
       goalId: trainingSkills.goalId,
       goalName: trainingGoals.goal,
+      confidence: trainingSkills.confidence,
+      catalogSkillKey: trainingSkills.catalogSkillKey,
     })
     .from(weeklyFocus)
     .innerJoin(trainingSkills, eq(weeklyFocus.skillId, trainingSkills.id))
@@ -109,6 +119,22 @@ export async function loadFocusWeek(
           )
           .orderBy(asc(practiceSessions.occurredAt));
 
+  const now = new Date();
+  let summaries: Map<string, ContextualProgressSummary> | null;
+  try {
+    summaries = await contextualProgressData.loadContextualProgressSummaries(
+      focus.map((focusedSkill) => ({
+        id: focusedSkill.skillId,
+        confidence: focusedSkill.confidence,
+        catalogSkillKey: focusedSkill.catalogSkillKey,
+      })),
+      now,
+    );
+  } catch {
+    console.error("[contextual-progress] focus_summary_failed");
+    summaries = null;
+  }
+
   const bySkill = new Map<string, FocusSession[]>();
   for (const s of sessions) {
     const arr = bySkill.get(s.skillId) ?? [];
@@ -128,6 +154,19 @@ export async function loadFocusWeek(
       goalName: f.goalName,
       position: f.position,
       sessions: bySkill.get(f.skillId) ?? [],
+      currentLevel: f.confidence,
+      dimensions: f.catalogSkillKey
+        ? (skillDimensionMetadata[f.catalogSkillKey]?.dimensions ?? [])
+        : [],
+      contextualProgress: summaries
+        ? {
+            status: "ready" as const,
+            summary: summaries.get(f.skillId) ?? {
+              strongestContext: null,
+              nextPracticeAction: null,
+            },
+          }
+        : { status: "unavailable" as const },
     })),
   };
 }

@@ -1,8 +1,17 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
+import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
-import { dogs, focusCompatibilityWeeks, legacyFocusClaims, weeklyFocus } from "../db/schema";
+import {
+  dogs,
+  focusCompatibilityWeeks,
+  legacyFocusClaims,
+  practiceSessions,
+  trainingSkills,
+  weeklyFocus,
+} from "../db/schema";
+import * as contextualProgressData from "../lib/contextual-progress-data";
 import { claimLegacyFocus, legacyFocusWeekKey, rememberLegacyFocusWeek } from "../lib/focus";
 import { type TestUser, createTestUser } from "../test-helpers";
 
@@ -108,6 +117,7 @@ describe("dogs: weekly focus", () => {
     u = await createTestUser();
   });
   afterEach(async () => {
+    vi.restoreAllMocks();
     for (const dogId of dogIds) {
       await db.delete(dogs).where(eq(dogs.id, dogId));
     }
@@ -469,23 +479,234 @@ describe("dogs: weekly focus", () => {
     expect(get.status).toBe(200);
     const body = (await get.json()) as {
       focusSkills: Array<{
+        currentLevel: number;
+        dimensions: string[];
         name: string;
         goalName: string;
         sessions: Array<{ occurredAt: string }>;
+        contextualProgress: {
+          status: string;
+          summary: { strongestContext: unknown; nextPracticeAction: unknown };
+        };
       }>;
     };
     expect(body.focusSkills).toHaveLength(1);
     const [focusSkill] = body.focusSkills;
     expect(focusSkill?.name).toBe("Sit");
     expect(focusSkill?.goalName).toBe("Recall");
+    expect(focusSkill?.currentLevel).toBe(1);
+    expect(focusSkill?.dimensions).toEqual([]);
     expect(focusSkill?.sessions).toHaveLength(1);
     expect(focusSkill?.sessions[0]?.occurredAt).toContain("2026-06-03");
+    expect(focusSkill?.contextualProgress).toEqual({
+      status: "ready",
+      summary: { strongestContext: null, nextPracticeAction: null },
+    });
     expect(
       await db
         .select()
         .from(weeklyFocus)
         .where(and(eq(weeklyFocus.dogId, dog.id), isNull(weeklyFocus.weekStart))),
     ).toEqual([]);
+  });
+
+  it("loads current contextual summaries in one batched query and keeps skill groups independent", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    const { skill: customSkill } = await setupDogWithSkillForDog(u, dog.id, "Down");
+    await db
+      .update(trainingSkills)
+      .set({ catalogSkillKey: "basic-manners.sit" })
+      .where(eq(trainingSkills.id, skill.id));
+
+    const now = new Date();
+    const older = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+    const recent = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const context = {
+      cueSupport: "hand_signal" as const,
+      environment: "home_quiet" as const,
+      distance: "across_room" as const,
+      durationBand: "about_30_seconds" as const,
+      distraction: "mild" as const,
+    };
+    await db.insert(practiceSessions).values([
+      {
+        skillId: skill.id,
+        occurredAt: older,
+        outcome: "went_well",
+        practiceDay: older.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+      {
+        skillId: skill.id,
+        occurredAt: recent,
+        outcome: "went_well",
+        practiceDay: recent.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+      {
+        skillId: customSkill.id,
+        occurredAt: older,
+        outcome: "went_well",
+        practiceDay: older.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+      {
+        skillId: customSkill.id,
+        occurredAt: recent,
+        outcome: "went_well",
+        practiceDay: recent.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+    ]);
+
+    const selectSpy = vi.spyOn(db, "select");
+    const perSkillLoader = vi.spyOn(contextualProgressData, "loadContextualProgress");
+    const summaries = await contextualProgressData.loadContextualProgressSummaries(
+      [
+        { id: skill.id, confidence: 1, catalogSkillKey: "basic-manners.sit" },
+        { id: customSkill.id, confidence: 1, catalogSkillKey: null },
+      ],
+      now,
+    );
+
+    expect(selectSpy).toHaveBeenCalledTimes(1);
+    expect(perSkillLoader).not.toHaveBeenCalled();
+    expect(summaries.get(skill.id)).toMatchObject({
+      strongestContext: { status: "reliable" },
+      nextPracticeAction: { direction: "harder" },
+    });
+    expect(summaries.get(customSkill.id)).toEqual({
+      strongestContext: expect.objectContaining({ status: "reliable" }),
+      nextPracticeAction: null,
+    });
+  });
+
+  it("uses request time for current summaries even when the focus week is historical", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    await db
+      .update(trainingSkills)
+      .set({ catalogSkillKey: "basic-manners.sit" })
+      .where(eq(trainingSkills.id, skill.id));
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: WEEK_KEY,
+      position: 0,
+    });
+    const evidenceNow = new Date();
+    const older = new Date(evidenceNow.getTime() - 2 * 24 * 60 * 60 * 1000);
+    const recent = new Date(evidenceNow.getTime() - 24 * 60 * 60 * 1000);
+    const context = {
+      cueSupport: "hand_signal" as const,
+      environment: "home_quiet" as const,
+      distance: "across_room" as const,
+      durationBand: "about_30_seconds" as const,
+      distraction: "mild" as const,
+    };
+    await db.insert(practiceSessions).values([
+      {
+        skillId: skill.id,
+        occurredAt: older,
+        outcome: "went_well",
+        practiceDay: older.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+      {
+        skillId: skill.id,
+        occurredAt: recent,
+        outcome: "went_well",
+        practiceDay: recent.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+    ]);
+
+    const originalBatchLoader = contextualProgressData.loadContextualProgressSummaries;
+    let summaryNow: Date | undefined;
+    vi.spyOn(contextualProgressData, "loadContextualProgressSummaries").mockImplementation(
+      async (skills, now) => {
+        summaryNow = now;
+        return originalBatchLoader(skills, now);
+      },
+    );
+    const beforeRequest = Date.now();
+    const response = await app.request(`/api/dogs/${dog.id}/focus?${FOCUS_QUERY}`, {
+      headers: u.authHeaders,
+    });
+    const afterRequest = Date.now();
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      focusSkills: Array<{
+        contextualProgress: {
+          status: string;
+          summary: {
+            strongestContext: { status: string } | null;
+            nextPracticeAction: unknown;
+          };
+        };
+      }>;
+    };
+    const summary = body.focusSkills[0]?.contextualProgress;
+    expect(summary?.status).toBe("ready");
+    expect(summary?.summary).toEqual({
+      strongestContext: expect.objectContaining({ status: "reliable" }),
+      nextPracticeAction: expect.objectContaining({ direction: "harder" }),
+    });
+    expect(body.focusSkills).toHaveLength(1);
+    expect(summaryNow?.getTime()).toBeGreaterThanOrEqual(beforeRequest);
+    expect(summaryNow?.getTime()).toBeLessThanOrEqual(afterRequest);
+    expect(beforeRequest).toBeLessThanOrEqual(afterRequest);
+  });
+
+  it("preserves focus sessions and controls when contextual summaries are unavailable", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: WEEK_KEY,
+      position: 0,
+    });
+    await logSession(u, dog.id, skill.id, "2026-06-03T12:00:00.000Z");
+    const batchLoader = vi
+      .spyOn(contextualProgressData, "loadContextualProgressSummaries")
+      .mockRejectedValueOnce(new Error("forced contextual summary failure"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await app.request(`/api/dogs/${dog.id}/focus?${FOCUS_QUERY}`, {
+      headers: u.authHeaders,
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      focusSkills: Array<{
+        skillId: string;
+        name: string;
+        sessions: Array<{ occurredAt: string }>;
+        contextualProgress: { status: string };
+      }>;
+    };
+    expect(batchLoader).toHaveBeenCalledTimes(1);
+    expect(body.focusSkills).toEqual([
+      expect.objectContaining({
+        skillId: skill.id,
+        name: "Sit",
+        sessions: [expect.objectContaining({ occurredAt: expect.stringContaining("2026-06-03") })],
+        contextualProgress: { status: "unavailable" },
+      }),
+    ]);
+    expect(errorSpy).toHaveBeenCalledWith("[contextual-progress] focus_summary_failed");
   });
 
   it("returns 404 when a new-contract POST names an unowned skill", async () => {
