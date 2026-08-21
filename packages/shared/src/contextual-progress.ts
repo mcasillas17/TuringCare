@@ -8,6 +8,7 @@ import {
   practiceDimensionValues,
   practiceOutcomeValues,
 } from "./practice-evidence";
+import { suggestionSafetySchema } from "./suggestion";
 
 export const CONTEXTUAL_PROGRESS_WINDOW_DAYS = 21 as const;
 
@@ -57,6 +58,7 @@ export type NextPracticeAction = z.infer<typeof nextPracticeActionSchema>;
 export const contextualProgressSummarySchema = z.object({
   strongestContext: exactContextEvidenceSchema.nullable(),
   nextPracticeAction: nextPracticeActionSchema.nullable(),
+  safety: suggestionSafetySchema.nullable(),
 });
 export type ContextualProgressSummary = z.infer<typeof contextualProgressSummarySchema>;
 

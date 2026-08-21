@@ -132,6 +132,7 @@ describe("contextual progress hooks", () => {
         policyVersion: "2026-08-20",
         strongestContext: null,
         nextPracticeAction: null,
+        safety: null,
         exactContexts: [],
       }),
     });

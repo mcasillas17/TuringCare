@@ -583,6 +583,8 @@ export const es = {
     empty:
       "Agrega un resultado y el contexto después de practicar para ver dónde esta habilidad se vuelve confiable.",
     loadError: "No se pudo cargar el progreso por contexto.",
+    actionUnavailable:
+      "Este plan de práctica no está disponible. Registra un resultado y contexto nuevos antes de usarlo.",
     retry: "Reintentar",
     useAction: "Usar este plan de práctica",
     viewEvidence: "Evidencia del contexto",
@@ -590,6 +592,7 @@ export const es = {
     successfulDay: "{days} día exitoso",
     successfulDays: "{days} días exitosos",
     lastObserved: "Última observación: {date}",
+    lastSuccessful: "Última práctica exitosa: {date}",
     latestOutcome: "Último resultado: {outcome}",
     cueSupport: "Ayuda",
     environment: "Entorno",
@@ -752,6 +755,7 @@ export const es = {
     cellFilled: "{skill} el {day}: {n} sesiones",
     focusLoadError:
       "No se pudo cargar el enfoque de esta semana. Intenta de nuevo o edita tu enfoque.",
+    retryFocus: "Reintentar",
   },
   brief: {
     title: "Resumen de conducta",

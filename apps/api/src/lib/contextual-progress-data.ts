@@ -2,6 +2,7 @@ import {
   CONTEXTUAL_PROGRESS_WINDOW_DAYS,
   type ContextualProgress,
   type ContextualProgressSummary,
+  type SuggestionSafety,
 } from "@turingcare/shared";
 import { and, desc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import { CURRICULUM_VERSION, skillDimensionMetadata } from "../data/training-curriculum";
@@ -28,6 +29,7 @@ const contextualProgressColumns = {
 export async function loadContextualProgress(
   skill: Pick<typeof trainingSkills.$inferSelect, "id" | "confidence" | "catalogSkillKey">,
   now: Date,
+  safety: SuggestionSafety | null = null,
 ): Promise<ContextualProgress> {
   const startsAt = new Date(now.getTime() - CONTEXTUAL_PROGRESS_WINDOW_DAYS * DAY_MS);
   const rows: ContextualProgressRow[] = await db
@@ -51,7 +53,7 @@ export async function loadContextualProgress(
     ? (skillDimensionMetadata[skill.catalogSkillKey] ?? null)
     : null;
 
-  return deriveContextualProgress({
+  const progress = deriveContextualProgress({
     now,
     curriculumLevel: skill.confidence,
     curriculumVersion: CURRICULUM_VERSION,
@@ -59,11 +61,17 @@ export async function loadContextualProgress(
     metadata,
     rows,
   });
+  return {
+    ...progress,
+    nextPracticeAction: safety ? null : progress.nextPracticeAction,
+    safety,
+  };
 }
 
 export async function loadContextualProgressSummaries(
   skills: Array<Pick<typeof trainingSkills.$inferSelect, "id" | "confidence" | "catalogSkillKey">>,
   now: Date,
+  safety: SuggestionSafety | null = null,
 ): Promise<Map<string, ContextualProgressSummary>> {
   const summaries = new Map<string, ContextualProgressSummary>();
   if (skills.length === 0) return summaries;
@@ -112,7 +120,8 @@ export async function loadContextualProgressSummaries(
     });
     summaries.set(skill.id, {
       strongestContext: progress.strongestContext,
-      nextPracticeAction: progress.nextPracticeAction,
+      nextPracticeAction: safety ? null : progress.nextPracticeAction,
+      safety,
     });
   }
 

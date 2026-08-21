@@ -333,6 +333,36 @@ describe("deriveContextualProgress", () => {
     });
   });
 
+  it("does not re-recommend an observed failed harder context", () => {
+    const retreat = context({ environment: "home_quiet" });
+    const result = derive([
+      row("harder-failed", "2026-08-16T11:00:00.000Z", {
+        environment: "yard",
+        outcome: "too_hard",
+        practiceDay: "2026-08-16",
+      }),
+      row("retreat", "2026-08-19T11:00:00.000Z", {
+        environment: retreat.environment,
+        outcome: "mixed",
+        practiceDay: "2026-08-19",
+      }),
+      row("base-success-one", "2026-08-17T08:00:00.000Z", { practiceDay: "2026-08-17" }),
+      row("base-success-two", "2026-08-18T08:00:00.000Z", { practiceDay: "2026-08-18" }),
+    ]);
+
+    expect(result.strongestContext).toMatchObject({
+      context: baseContext,
+      status: "reliable",
+    });
+    expect(result.nextPracticeAction).toEqual({
+      ruleId: "repeat_developing_context",
+      direction: "repeat",
+      context: retreat,
+      changedDimension: null,
+    });
+    expect(result.nextPracticeAction?.context.environment).not.toBe("yard");
+  });
+
   it("does not advance a Reliable context at level five", () => {
     const result = derive(
       [

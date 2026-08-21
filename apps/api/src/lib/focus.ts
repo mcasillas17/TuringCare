@@ -13,6 +13,7 @@ import {
 import { classifyExceptionValue } from "../monitoring/sanitize-event";
 import { loadContextualProgressSummaries } from "./contextual-progress-data";
 import type { TransactionType } from "./safety-lock";
+import { evaluateSafety } from "./safety-policy";
 
 export type FocusSession = {
   id: string;
@@ -119,16 +120,22 @@ export async function loadFocusWeek(
             ),
           )
           .orderBy(asc(practiceSessions.occurredAt));
-
   const now = new Date();
-  const summariesPromise = loadContextualProgressSummaries(
-    focus.map((focusedSkill) => ({
-      id: focusedSkill.skillId,
-      confidence: focusedSkill.confidence,
-      catalogSkillKey: focusedSkill.catalogSkillKey,
-    })),
-    now,
-  ).catch((error: unknown) => {
+  const safetyAndSummariesPromise =
+    focus.length === 0
+      ? Promise.resolve(new Map<string, ContextualProgressSummary>())
+      : evaluateSafety(dogId, now).then((safety) =>
+          loadContextualProgressSummaries(
+            focus.map((focusedSkill) => ({
+              id: focusedSkill.skillId,
+              confidence: focusedSkill.confidence,
+              catalogSkillKey: focusedSkill.catalogSkillKey,
+            })),
+            now,
+            safety,
+          ),
+        );
+  const summariesPromise = safetyAndSummariesPromise.catch((error: unknown) => {
     const errorType = error instanceof Error ? error.constructor.name : undefined;
     console.error("[contextual-progress] focus_summary_failed", {
       dogId,
@@ -168,6 +175,7 @@ export async function loadFocusWeek(
             summary: summaries.get(f.skillId) ?? {
               strongestContext: null,
               nextPracticeAction: null,
+              safety: null,
             },
           }
         : { status: "unavailable" as const },

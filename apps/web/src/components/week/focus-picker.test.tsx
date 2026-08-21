@@ -42,7 +42,7 @@ const focusSkills: FocusSkill[] = [
     dimensions: [],
     contextualProgress: {
       status: "ready",
-      summary: { strongestContext: null, nextPracticeAction: null },
+      summary: { strongestContext: null, nextPracticeAction: null, safety: null },
     },
   },
 ];

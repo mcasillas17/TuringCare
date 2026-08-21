@@ -37,7 +37,7 @@ const strongestContext: ExactContextEvidence = {
   successfulDistinctDays: 2,
   latestOutcome: "went_well",
   lastObservedAt: "2026-08-20T12:00:00.000Z",
-  lastSuccessfulAt: "2026-08-20T12:00:00.000Z",
+  lastSuccessfulAt: "2026-08-18T12:00:00.000Z",
 };
 
 const nextPracticeAction: NextPracticeAction = {
@@ -61,6 +61,7 @@ function makeData(overrides: Partial<ContextualProgress> = {}): ContextualProgre
     policyVersion: "2026-08-20",
     strongestContext,
     nextPracticeAction,
+    safety: null,
     exactContexts: [strongestContext],
     ...overrides,
   };
@@ -107,7 +108,7 @@ describe("ContextualProgressDetail", () => {
     expect(screen.getByText("Recent 21-day window · Level 3 — Sometimes")).toBeInTheDocument();
     expect(screen.getAllByText("Reliable").length).toBeGreaterThan(0);
     expect(screen.getAllByText("2 successful days").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Last observed: Aug 20").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Last successful: Aug 18").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Spoken cue only").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Quiet room at home").length).toBeGreaterThan(0);
     expect(screen.getAllByText("A few steps away").length).toBeGreaterThan(0);
@@ -118,6 +119,38 @@ describe("ContextualProgressDetail", () => {
     expect(screen.getAllByText("Distance").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Duration").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Distraction").length).toBeGreaterThan(0);
+  });
+
+  it("uses the observed date for Developing evidence", () => {
+    setup({
+      data: makeData({
+        strongestContext: {
+          ...strongestContext,
+          status: "developing",
+          lastObservedAt: "2026-08-20T12:00:00.000Z",
+          lastSuccessfulAt: "2026-08-18T12:00:00.000Z",
+        },
+        nextPracticeAction: null,
+        exactContexts: [],
+      }),
+    });
+
+    expect(screen.getAllByText("Last observed: Aug 20").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Last successful: Aug 18")).not.toBeInTheDocument();
+  });
+
+  it("keeps all full-detail labels visible when a context value is missing", () => {
+    setup({
+      data: makeData({
+        strongestContext: {
+          ...strongestContext,
+          context: { ...strongestContext.context, environment: null },
+        },
+      }),
+    });
+
+    expect(screen.getAllByText("Environment").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Not recorded").length).toBeGreaterThan(0);
   });
 
   it("describes a latest too-hard developing context as needing more support", () => {
@@ -140,6 +173,72 @@ describe("ContextualProgressDetail", () => {
     expect(screen.getByText("Developing")).toBeInTheDocument();
     expect(screen.getByText("This context needs more support.")).toBeInTheDocument();
     expect(screen.queryByText(/failed/i)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      "injury",
+      {
+        suppressed: true as const,
+        ruleId: "reported_injury_or_pain" as const,
+        referral: "veterinarian" as const,
+      },
+      /Please book a veterinary appointment/,
+    ],
+    [
+      "aggression",
+      {
+        suppressed: true as const,
+        ruleId: "reported_aggression_or_bite_risk" as const,
+        referral: "veterinary_behaviorist" as const,
+      },
+      /Please contact a veterinary behaviorist/,
+    ],
+    [
+      "severe fear",
+      {
+        suppressed: true as const,
+        ruleId: "reported_severe_fear" as const,
+        referral: "veterinary_behaviorist" as const,
+      },
+      /Please contact a veterinary behaviorist/,
+    ],
+    [
+      "severe concern",
+      {
+        suppressed: true as const,
+        ruleId: "severe_recorded_concern" as const,
+        referral: "veterinary_behaviorist" as const,
+      },
+      /Please contact a veterinary behaviorist/,
+    ],
+    [
+      "sustained worsening",
+      {
+        suppressed: true as const,
+        ruleId: "sustained_worsening_intensity" as const,
+        referral: "credentialed_trainer" as const,
+      },
+      /Please work with a credentialed, reward-based trainer in person/,
+    ],
+  ])("suppresses the action and shows accessible %s safety guidance", (_name, safety, guidance) => {
+    const mutate = vi.fn();
+    setup({ data: makeData({ safety }) }, mutate);
+
+    expect(screen.getByRole("alert")).toHaveAccessibleName("Let's pause training suggestions");
+    expect(screen.getByText(guidance)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Use this practice plan" }),
+    ).not.toBeInTheDocument();
+    expect(mutate).toHaveBeenCalledWith({
+      name: "training.context_insight_viewed",
+      surface: "skill_detail",
+      strongestStatus: "reliable",
+      hasNextAction: false,
+    });
+    expect(
+      mutate.mock.calls.some(([event]) => event.name === "training.context_next_action_used"),
+    ).toBe(false);
   });
 
   it("uses singular copy for one successful day", () => {

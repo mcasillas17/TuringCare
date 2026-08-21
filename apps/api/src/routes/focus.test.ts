@@ -26,6 +26,7 @@ import { app } from "../app";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import {
+  dogSafetySignals,
   dogs,
   focusCompatibilityWeeks,
   legacyFocusClaims,
@@ -525,7 +526,7 @@ describe("dogs: weekly focus", () => {
     expect(focusSkill?.sessions[0]?.occurredAt).toContain("2026-06-03");
     expect(focusSkill?.contextualProgress).toEqual({
       status: "ready",
-      summary: { strongestContext: null, nextPracticeAction: null },
+      summary: { strongestContext: null, nextPracticeAction: null, safety: null },
     });
     expect(
       await db
@@ -654,6 +655,7 @@ describe("dogs: weekly focus", () => {
         context: { ...context, cueSupport: "verbal_cue" },
         changedDimension: "cue_support",
       },
+      safety: null,
     });
     expect(summaries.get(customSkill.id)).toEqual({
       strongestContext: {
@@ -665,6 +667,7 @@ describe("dogs: weekly focus", () => {
         lastSuccessfulAt: recent.toISOString(),
       },
       nextPracticeAction: null,
+      safety: null,
     });
   });
 
@@ -738,6 +741,7 @@ describe("dogs: weekly focus", () => {
     expect(summary?.summary).toEqual({
       strongestContext: expect.objectContaining({ status: "reliable" }),
       nextPracticeAction: expect.objectContaining({ direction: "harder" }),
+      safety: null,
     });
     expect(body.focusSkills).toHaveLength(1);
     expect(summaryNow?.getTime()).toBeGreaterThanOrEqual(beforeRequest);
@@ -786,6 +790,84 @@ describe("dogs: weekly focus", () => {
       errorType: "Unexpected TypeError",
     });
     expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(rawError);
+  });
+
+  it("suppresses batched next actions while the dog has active safety", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: currentFocusWindow().weekKey,
+      position: 0,
+    });
+    const now = new Date();
+    const first = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+    const second = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    await db.insert(practiceSessions).values([
+      {
+        skillId: skill.id,
+        occurredAt: first,
+        outcome: "went_well",
+        practiceDay: first.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        cueSupport: "hand_signal",
+        environment: "home_quiet",
+        distance: "few_steps",
+        durationBand: "about_15_seconds",
+        distraction: "none",
+      },
+      {
+        skillId: skill.id,
+        occurredAt: second,
+        outcome: "went_well",
+        practiceDay: second.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        cueSupport: "hand_signal",
+        environment: "home_quiet",
+        distance: "few_steps",
+        durationBand: "about_15_seconds",
+        distraction: "none",
+      },
+    ]);
+    await db.insert(dogSafetySignals).values({
+      dogId: dog.id,
+      type: "injury_or_pain",
+      source: "practice_session",
+      reportedAt: now,
+    });
+
+    const response = await app.request(`/api/dogs/${dog.id}/focus?${currentFocusWindow().query}`, {
+      headers: u.authHeaders,
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      focusSkills: Array<{
+        contextualProgress:
+          | {
+              status: "ready";
+              summary: {
+                strongestContext: { status: string } | null;
+                nextPracticeAction: unknown;
+                safety: { ruleId: string; referral: string } | null;
+              };
+            }
+          | { status: "unavailable" };
+      }>;
+    };
+    expect(body.focusSkills[0]?.contextualProgress).toEqual({
+      status: "ready",
+      summary: {
+        strongestContext: expect.objectContaining({ status: "reliable" }),
+        nextPracticeAction: null,
+        safety: {
+          suppressed: true,
+          ruleId: "reported_injury_or_pain",
+          referral: "veterinarian",
+        },
+      },
+    });
   });
 
   it("returns 404 when a new-contract POST names an unowned skill", async () => {

@@ -157,6 +157,7 @@ const contextualData: ContextualProgress = {
     },
     changedDimension: null,
   },
+  safety: null,
   exactContexts: [],
 };
 
@@ -321,10 +322,11 @@ describe("ProgressPanel", () => {
       expect(screen.getByRole("button", { name: /collapse sit/i })).toBeInTheDocument(),
     );
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
-    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(focus).not.toHaveBeenCalledWith({ preventScroll: true });
+    expect(document.getElementById("skill-s1")).not.toHaveAttribute("tabindex");
   });
 
-  it("reacts to an in-app training hash change and focuses the owned skill", async () => {
+  it("reacts to an in-app training hash change and scrolls to the owned skill", async () => {
     const scrollIntoView = vi.fn();
     const focus = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -345,7 +347,8 @@ describe("ProgressPanel", () => {
       expect(screen.getByRole("button", { name: /collapse sit/i })).toBeInTheDocument(),
     );
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
-    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(focus).not.toHaveBeenCalledWith({ preventScroll: true });
+    expect(document.getElementById("skill-s1")).not.toHaveAttribute("tabindex");
   });
 
   it("ignores a training hash for a skill that is not rendered", async () => {
@@ -419,7 +422,9 @@ describe("ProgressPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Use this practice plan" }));
 
-    expect(toast.error).toHaveBeenCalledWith("Couldn't load context progress.");
+    expect(toast.error).toHaveBeenCalledWith(
+      "This practice plan is unavailable. Record a new outcome and context before using it.",
+    );
     expect(screen.queryByRole("button", { name: "Save session" })).not.toBeInTheDocument();
     expect(recordEvent).not.toHaveBeenCalled();
   });

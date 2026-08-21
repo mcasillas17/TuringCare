@@ -53,6 +53,32 @@ function makeQueryClient() {
 afterEach(() => vi.clearAllMocks());
 
 describe("progress hooks", () => {
+  it("returns the session and partial anchor rejection from session creation", async () => {
+    postSession.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        session: { id: "session-1" },
+        anchorRejected: "target_locked",
+      }),
+    });
+    const { result } = renderHook(() => useLogSession("dog-1"), {
+      wrapper: makeWrapper(makeQueryClient()),
+    });
+
+    let saved: unknown;
+    await act(async () => {
+      saved = await result.current.mutateAsync({
+        skillId: "skill-1",
+        body: { occurredAt: "2026-08-13T12:00:00.000Z" },
+      });
+    });
+
+    expect(saved).toEqual({
+      session: { id: "session-1" },
+      anchorRejected: "target_locked",
+    });
+  });
+
   it("patches session evidence and invalidates derived progress and suggestions", async () => {
     patchEvidence.mockResolvedValue({
       ok: true,

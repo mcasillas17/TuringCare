@@ -71,6 +71,7 @@ import {
 } from "../lib/practice-anchor";
 import { loadProgress } from "../lib/progress";
 import { lockDogSafety, withDogSafetyLock } from "../lib/safety-lock";
+import { evaluateSafety } from "../lib/safety-policy";
 import { setSkillLevel } from "../lib/skill-level";
 import { currentWeekKey, loadSuggestion, recordSuggestionAction } from "../lib/suggestion";
 import { applyTrainingTemplate } from "../lib/training-template-writes";
@@ -383,7 +384,9 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
     if (!skill) return c.json({ error: "not_found" } as const, 404);
-    return c.json(await loadContextualProgress(skill, new Date()));
+    const now = new Date();
+    const safety = await evaluateSafety(dog.id, now);
+    return c.json(await loadContextualProgress(skill, now, safety));
   })
   .post(
     "/:id/contextual-progress/events",

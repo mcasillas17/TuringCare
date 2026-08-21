@@ -157,7 +157,7 @@ export function useLogSession(dogId: string) {
         const failed = await res.json();
         throw new Error("error" in failed ? failed.error : "save_failed");
       }
-      return (await res.json()).session;
+      return await res.json();
     },
     onSuccess: () => {
       celebrate(false);

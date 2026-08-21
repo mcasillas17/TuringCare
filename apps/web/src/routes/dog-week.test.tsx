@@ -85,10 +85,12 @@ function setup(
   focusSkills: focusLib.FocusSkill[],
   suggestion: TrainingSuggestion | undefined = exerciseSuggestion,
 ) {
+  const focusRefetch = vi.fn().mockResolvedValue({});
   vi.mocked(focusLib.useFocusWeek).mockReturnValue({
     data: focusSkills,
     isLoading: false,
     isError: false,
+    refetch: focusRefetch,
   } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
   vi.mocked(focusLib.useAddFocus).mockReturnValue({
     mutate: vi.fn(),
@@ -108,7 +110,10 @@ function setup(
       },
     ],
   } as unknown as ReturnType<typeof progressLib.useProgress>);
-  const logMutate = vi.fn().mockResolvedValue({ id: "session-1" });
+  const logMutate = vi.fn().mockResolvedValue({
+    session: { id: "session-1" },
+    anchorRejected: null,
+  });
   const deleteMutate = vi.fn().mockResolvedValue({});
   const evidenceMutate = vi.fn().mockResolvedValue({});
   vi.mocked(progressLib.useLogSession).mockReturnValue({
@@ -135,7 +140,7 @@ function setup(
     mutateAsync: vi.fn().mockResolvedValue({}),
     isPending: false,
   } as unknown as ReturnType<typeof suggestionLib.useAdvancementDecision>);
-  return { actionMutate, deleteMutate, evidenceMutate, logMutate };
+  return { actionMutate, deleteMutate, evidenceMutate, focusRefetch, logMutate };
 }
 
 function renderWeek() {
@@ -167,7 +172,7 @@ const sitFocus: focusLib.FocusSkill = {
   dimensions: [],
   contextualProgress: {
     status: "ready",
-    summary: { strongestContext: null, nextPracticeAction: null },
+    summary: { strongestContext: null, nextPracticeAction: null, safety: null },
   },
 };
 
@@ -185,6 +190,26 @@ afterEach(() => {
 });
 
 describe("DogWeek", () => {
+  it("shows retry and edit controls instead of a false empty state after focus failure", () => {
+    const { focusRefetch } = setup([]);
+    vi.mocked(focusLib.useFocusWeek).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: focusRefetch,
+    } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
+    renderWeek();
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Couldn't load this week's focus. Try again or edit your focus.",
+    );
+    expect(screen.queryByText("Pick one skill to focus on this week")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(focusRefetch).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit focus" })[0] as HTMLElement);
+    expect(screen.getByRole("radiogroup", { name: "Focus skill" })).toBeInTheDocument();
+  });
+
   it("shows the pick-focus empty state when there are no focus skills", () => {
     setup([]);
     renderWeek();
@@ -218,7 +243,7 @@ describe("DogWeek", () => {
   });
 
   it("keeps the practice grid usable when contextual progress is unavailable", () => {
-    setup([
+    const { focusRefetch } = setup([
       {
         ...sitFocus,
         contextualProgress: { status: "unavailable" },
@@ -227,6 +252,8 @@ describe("DogWeek", () => {
     renderWeek();
 
     expect(screen.getByRole("status")).toHaveTextContent("Couldn't load context progress.");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(focusRefetch).toHaveBeenCalledOnce();
     expect(screen.getByRole("heading", { name: "Sit", level: 2 })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View all evidence" })).toHaveAttribute(
       "href",
@@ -297,7 +324,7 @@ describe("DogWeek", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Couldn't load this week's focus. Try again or edit your focus.",
     );
-    expect(screen.getByRole("button", { name: "Edit focus" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Edit focus" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeEnabled();
   });
 
@@ -414,7 +441,9 @@ describe("DogWeek", () => {
 
   it("resets quick-capture answers when a different session is logged", async () => {
     const { logMutate } = setup([sitFocus]);
-    logMutate.mockResolvedValueOnce({ id: "session-1" }).mockResolvedValueOnce({ id: "session-2" });
+    logMutate
+      .mockResolvedValueOnce({ session: { id: "session-1" }, anchorRejected: null })
+      .mockResolvedValueOnce({ session: { id: "session-2" }, anchorRejected: null });
     renderWeek();
 
     const logButtons = screen.getAllByRole("button", { name: /Log Sit on/i });
@@ -450,7 +479,9 @@ describe("DogWeek", () => {
     const pendingEvidence = deferred<object>();
     const { evidenceMutate, logMutate } = setup([sitFocus]);
     evidenceMutate.mockReturnValueOnce(pendingEvidence.promise);
-    logMutate.mockResolvedValueOnce({ id: "session-1" }).mockResolvedValueOnce({ id: "session-2" });
+    logMutate
+      .mockResolvedValueOnce({ session: { id: "session-1" }, anchorRejected: null })
+      .mockResolvedValueOnce({ session: { id: "session-2" }, anchorRejected: null });
     renderWeek();
 
     const logButtons = screen.getAllByRole("button", { name: /Log Sit on/i });

@@ -222,7 +222,6 @@ function SkillCard({
     const scroll = () => {
       const skillElement = skillRef.current;
       skillElement?.scrollIntoView?.({ block: "start" });
-      skillElement?.focus({ preventScroll: true });
     };
     if (typeof window.requestAnimationFrame === "function") {
       const frame = window.requestAnimationFrame(scroll);
@@ -235,7 +234,6 @@ function SkillCard({
     <li
       ref={skillRef}
       id={`skill-${displaySkill.id}`}
-      tabIndex={-1}
       aria-labelledby={`skill-heading-${displaySkill.id}`}
       className="space-y-3 rounded border border-silver p-3"
     >
@@ -295,7 +293,7 @@ function SkillCard({
             refetch={contextualProgress.refetch}
             onUseNextAction={(context) => {
               if (getSessionDimensions([], context).length === 0) {
-                toast.error(t("contextProgress.loadError"));
+                toast.error(t("contextProgress.actionUnavailable"));
                 return false;
               }
               setRecommendedContext(context);

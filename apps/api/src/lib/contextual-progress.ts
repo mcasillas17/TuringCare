@@ -176,6 +176,22 @@ function compareObservedContexts(left: ObservedContext, right: ObservedContext):
   return left.key < right.key ? -1 : left.key > right.key ? 1 : 0;
 }
 
+function deriveAdjacentContext(
+  source: ExactPracticeContext,
+  catalogSkillKey: string | null,
+  metadata: SkillDimensionMetadata | null,
+  curriculumLevel: number,
+  direction: "easier" | "harder",
+): ExactPracticeContext | null {
+  if (!catalogSkillKey || !metadata) return null;
+
+  const step = getReviewedContextStep(metadata, curriculumLevel, direction);
+  if (!step) return null;
+
+  const adjacent = adjacentContext(source, step.dimension, direction, step.strategy);
+  return adjacent?.context ?? null;
+}
+
 function deriveAdjacentAction(
   source: ExactPracticeContext,
   catalogSkillKey: string | null,
@@ -184,20 +200,37 @@ function deriveAdjacentAction(
   direction: "easier" | "harder",
   ruleId: "ease_after_too_hard" | "advance_reliable_context",
 ): NextPracticeAction | null {
-  if (!catalogSkillKey || !metadata) return null;
-
-  const step = getReviewedContextStep(metadata, curriculumLevel, direction);
-  if (!step) return null;
-
-  const adjacent = adjacentContext(source, step.dimension, direction, step.strategy);
+  const adjacent = deriveAdjacentContext(
+    source,
+    catalogSkillKey,
+    metadata,
+    curriculumLevel,
+    direction,
+  );
   if (!adjacent) return null;
 
   return {
     ruleId,
     direction,
-    context: adjacent.context,
-    changedDimension: adjacent.changedDimension,
+    context: adjacent,
+    changedDimension: getChangedDimension(source, adjacent),
   };
+}
+
+function getChangedDimension(
+  source: ExactPracticeContext,
+  target: ExactPracticeContext,
+): PracticeDimension {
+  const changedDimension = contextFields.find((field) => source[field] !== target[field]);
+  if (!changedDimension) throw new Error("reviewed adjacent context did not change");
+  const dimensionByField = {
+    cueSupport: "cue_support",
+    environment: "environment",
+    distance: "distance",
+    durationBand: "duration",
+    distraction: "distraction",
+  } as const;
+  return dimensionByField[changedDimension];
 }
 
 function getReviewedContextStep(
@@ -260,15 +293,30 @@ function deriveAction(input: {
   if (!input.strongest) return null;
 
   if (input.strongest.status === "reliable") {
-    const harderAction = deriveAdjacentAction(
+    const harderContext = deriveAdjacentContext(
       input.strongest.context,
       input.catalogSkillKey,
       input.metadata,
       input.curriculumLevel,
       "harder",
-      "advance_reliable_context",
     );
-    return harderAction ?? deriveDevelopingRepeat(input.observed);
+    if (!harderContext) return deriveDevelopingRepeat(input.observed);
+
+    const harderKey = serializeContext(harderContext);
+    const observedHarder = input.observed.find(({ key }) => key === harderKey)?.evidence;
+    const harderTargetIsSafe =
+      !observedHarder ||
+      (observedHarder.status === "reliable" && observedHarder.latestOutcome !== "too_hard");
+    if (!harderTargetIsSafe) {
+      return deriveDevelopingRepeat(input.observed, harderKey);
+    }
+
+    return {
+      ruleId: "advance_reliable_context",
+      direction: "harder",
+      context: harderContext,
+      changedDimension: getChangedDimension(input.strongest.context, harderContext),
+    };
   }
 
   if (input.strongest.status === "developing") {
@@ -340,6 +388,7 @@ export function deriveContextualProgress(input: {
     policyVersion: CONTEXTUAL_PROGRESS_POLICY_VERSION,
     strongestContext: strongest,
     nextPracticeAction,
+    safety: null,
     exactContexts,
   };
 }

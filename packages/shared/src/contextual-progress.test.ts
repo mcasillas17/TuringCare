@@ -22,6 +22,7 @@ const fixture = {
   policyVersion: "2026-08-20",
   strongestContext: null,
   nextPracticeAction: null,
+  safety: null,
   exactContexts: [],
 };
 
@@ -60,6 +61,20 @@ describe("contextualProgressSchema", () => {
 
   it("accepts exact-context evidence with nullable context fields", () => {
     expect(exactContextEvidenceSchema.parse(exactContextEvidence)).toEqual(exactContextEvidence);
+  });
+
+  it("distinguishes safety suppression from a genuine empty response", () => {
+    const safety = {
+      suppressed: true as const,
+      ruleId: "reported_aggression_or_bite_risk" as const,
+      referral: "veterinary_behaviorist" as const,
+    };
+    expect(
+      contextualProgressSchema.parse({
+        ...fixture,
+        safety,
+      }),
+    ).toMatchObject({ safety });
   });
 
   it("rejects an unknown contextual status", () => {

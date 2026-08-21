@@ -1,3 +1,4 @@
+import { SafetyNotice } from "@/components/training/safety-notice";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useRecordContextualProgressEvent } from "@/lib/contextual-progress";
@@ -32,9 +33,13 @@ function EvidenceMeta({
     return <p className="text-sm text-slate-soft">{t("contextProgress.noEvidence")}</p>;
   }
 
-  const lastObserved = evidence.lastObservedAt
-    ? dateLabel(evidence.lastObservedAt, new Date(), locale)
-    : null;
+  const supportingAt =
+    evidence.status === "reliable" ? evidence.lastSuccessfulAt : evidence.lastObservedAt;
+  const supportingDate = supportingAt ? dateLabel(supportingAt, new Date(), locale) : null;
+  const supportingDateKey =
+    evidence.status === "reliable"
+      ? "contextProgress.lastSuccessful"
+      : "contextProgress.lastObserved";
   return (
     <div className="space-y-1 text-sm text-slate-soft">
       <p>
@@ -52,7 +57,7 @@ function EvidenceMeta({
           })}
         </p>
       )}
-      {lastObserved && <p>{t("contextProgress.lastObserved", { date: lastObserved })}</p>}
+      {supportingDate && <p>{t(supportingDateKey, { date: supportingDate })}</p>}
     </div>
   );
 }
@@ -164,9 +169,10 @@ export function ContextualProgressDetail({
   const { t, locale } = useI18n();
   const recordEvent = useRecordContextualProgressEvent(dogId);
   const seenResultKeys = useRef(new Set<string>());
+  const availableNextPracticeAction = data?.safety ? null : (data?.nextPracticeAction ?? null);
 
   const resultKey = data
-    ? `${data.policyVersion}|${data.curriculumLevel}|${serializeContext(data.strongestContext?.context)}|${data.strongestContext?.status ?? "null"}|${Boolean(data.nextPracticeAction)}`
+    ? `${data.policyVersion}|${data.curriculumLevel}|${serializeContext(data.strongestContext?.context)}|${data.strongestContext?.status ?? "null"}|${Boolean(availableNextPracticeAction)}|${data.safety?.ruleId ?? "none"}`
     : null;
 
   useEffect(() => {
@@ -178,9 +184,9 @@ export function ContextualProgressDetail({
       name: "training.context_insight_viewed",
       surface: "skill_detail",
       strongestStatus: data.strongestContext?.status ?? null,
-      hasNextAction: Boolean(data.nextPracticeAction),
+      hasNextAction: Boolean(availableNextPracticeAction),
     });
-  }, [data, isError, isLoading, recordEvent, resultKey]);
+  }, [availableNextPracticeAction, data, isError, isLoading, recordEvent, resultKey]);
 
   const sectionId = `context-progress-${skillId}`;
 
@@ -227,6 +233,7 @@ export function ContextualProgressDetail({
           })}
         </p>
       </div>
+      {data.safety && <SafetyNotice safety={data.safety} />}
       <StrongestContext
         evidence={data.strongestContext}
         headingId={`${sectionId}-strongest`}
@@ -234,18 +241,18 @@ export function ContextualProgressDetail({
         locale={locale}
       />
       <NextPracticeActionCard
-        action={data.nextPracticeAction}
+        action={availableNextPracticeAction}
         headingId={`${sectionId}-next`}
         t={t}
         onUse={() => {
-          if (!data.nextPracticeAction) return;
-          const applied = onUseNextAction(data.nextPracticeAction.context);
+          if (!availableNextPracticeAction) return;
+          const applied = onUseNextAction(availableNextPracticeAction.context);
           if (!applied) return;
           recordEvent.mutate({
             name: "training.context_next_action_used",
             surface: "skill_detail",
-            ruleId: data.nextPracticeAction.ruleId,
-            direction: data.nextPracticeAction.direction,
+            ruleId: availableNextPracticeAction.ruleId,
+            direction: availableNextPracticeAction.direction,
           });
         }}
       />

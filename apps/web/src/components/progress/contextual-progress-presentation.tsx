@@ -70,9 +70,12 @@ export function ContextLabels({
   t: ReturnType<typeof useI18n>["t"];
   compact?: boolean;
 }) {
+  const labels = compact
+    ? CONTEXT_DIMENSIONS.filter(({ field }) => context[field] !== null)
+    : CONTEXT_DIMENSIONS;
   return (
     <dl className={compact ? "grid gap-x-3 gap-y-1 sm:grid-cols-2" : "grid gap-2 sm:grid-cols-2"}>
-      {CONTEXT_DIMENSIONS.map(({ dimension, field, labelKey }) => (
+      {labels.map(({ dimension, field, labelKey }) => (
         <div key={field}>
           <dt className="text-xs text-slate-soft">{t(labelKey)}</dt>
           <dd className="text-sm text-slate">{contextValueLabel(dimension, context[field], t)}</dd>

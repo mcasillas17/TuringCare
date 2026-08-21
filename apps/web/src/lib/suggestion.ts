@@ -42,7 +42,7 @@ export function useSuggestionAction(dogId: string, weekKey: string) {
   });
 }
 
-export function useAdvancementDecision(dogId: string, _weekKey: string) {
+export function useAdvancementDecision(dogId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: { proposalId: string; decision: AdvancementDecision }) => {

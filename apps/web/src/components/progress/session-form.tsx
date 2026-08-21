@@ -11,7 +11,7 @@ import {
   practiceSessionSchema,
   safetySignalValues,
 } from "@turingcare/shared";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -60,26 +60,28 @@ export function SessionForm({
   const { t } = useI18n();
   const logSession = useLogSession(dogId);
   const confirmationHelpId = useId();
-  const initialEvidenceKey = dimensions
+  const dimensionsKey = dimensions.join("|");
+  const recommendationKey = (Object.keys(DIMENSION_CONFIG) as PracticeDimension[])
     .map((dimension) => {
       const field = DIMENSION_CONFIG[dimension].field;
       return `${field}:${initialEvidence?.[field] ?? ""}`;
     })
     .join("|");
   // The serialized key keeps unstable prop identities from resetting user input.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: initialEvidenceKey captures rendered dimensions and values
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keys capture rendered dimensions and recommendation values
   const initialFormValues = useMemo(
     () => ({
       occurredAt: localDateTime(),
       ...getRenderedInitialEvidence(dimensions, initialEvidence),
     }),
-    [initialEvidenceKey],
+    [dimensionsKey, recommendationKey],
   );
   const {
     register,
     handleSubmit,
     unregister,
     reset,
+    getValues,
     setValue,
     control,
     formState: { errors, isSubmitting },
@@ -96,12 +98,38 @@ export function SessionForm({
       dimensions.some((dimension) => Boolean(formValues[DIMENSION_CONFIG[dimension].field])),
   );
   const [safetyConfirmed, setSafetyConfirmed] = useState(false);
+  const previousFormShape = useRef({
+    dimensionsKey,
+    recommendationKey,
+  });
 
   useEffect(() => {
-    reset(initialFormValues);
-    unregister("confirmCurrentLevel");
-    setSafetyConfirmed(false);
-  }, [initialFormValues, reset, unregister]);
+    const previous = previousFormShape.current;
+    const recommendationChanged = previous.recommendationKey !== recommendationKey;
+    const dimensionsChanged = previous.dimensionsKey !== dimensionsKey;
+
+    if (recommendationChanged) {
+      reset(initialFormValues);
+      unregister("confirmCurrentLevel");
+      setSafetyConfirmed(false);
+    } else if (dimensionsChanged) {
+      reset({
+        ...initialFormValues,
+        ...getValues(),
+        ...(currentLevelConfirmed ? { confirmCurrentLevel: true } : {}),
+      });
+    }
+
+    previousFormShape.current = { dimensionsKey, recommendationKey };
+  }, [
+    dimensionsKey,
+    getValues,
+    initialFormValues,
+    currentLevelConfirmed,
+    recommendationKey,
+    reset,
+    unregister,
+  ]);
 
   useEffect(() => {
     if (!hasStructuredEvidence) {
@@ -127,7 +155,7 @@ export function SessionForm({
           ? { confirmCurrentLevel: true }
           : {}),
       };
-      await logSession.mutateAsync({
+      const result = await logSession.mutateAsync({
         skillId,
         body: {
           ...submittedBody,
@@ -135,7 +163,15 @@ export function SessionForm({
           timezoneOffsetMinutes: occurredAt.getTimezoneOffset(),
         },
       });
-      toast.success(t("progress.saved"));
+      const feedback =
+        result.anchorRejected === "practice_day_required"
+          ? t("practice.anchorRejectedPracticeDay")
+          : result.anchorRejected === "target_locked"
+            ? t("practice.anchorRejectedTargetLocked")
+            : result.anchorRejected
+              ? t("practice.anchorRejectedGeneric")
+              : t("progress.saved");
+      toast.success(feedback);
       onSaved?.();
     } catch (error) {
       toast.error(
@@ -266,6 +302,13 @@ export function SessionForm({
             />
             <span>{t("contextProgress.confirmCurrentLevel", { level: currentLevel })}</span>
           </label>
+          {currentLevelConfirmed && (
+            <input
+              type="hidden"
+              {...register("confirmCurrentLevel", { setValueAs: () => true })}
+              value="true"
+            />
+          )}
           <span id={confirmationHelpId} className="ml-6 block text-xs text-slate-soft">
             {t("contextProgress.confirmCurrentLevelHelp")}
           </span>

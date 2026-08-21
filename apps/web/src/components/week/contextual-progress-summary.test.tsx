@@ -42,12 +42,14 @@ const reliableSummary: ContextualProgressSummary = {
     },
     changedDimension: "distance",
   },
+  safety: null,
 };
 
 function renderSummary(
   contextualProgress:
     | { status: "ready"; summary: ContextualProgressSummary }
     | { status: "unavailable" },
+  onRetry = vi.fn(),
 ) {
   const recordEvent = vi.fn();
   vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
@@ -59,6 +61,7 @@ function renderSummary(
         <ContextualProgressSummaryCard
           dogId="dog-1"
           skill={{ skillId: "skill-1", name: "Sit", contextualProgress }}
+          onRetry={onRetry}
         />
       </MemoryRouter>
     </LocaleProvider>,
@@ -104,6 +107,7 @@ describe("ContextualProgressSummaryCard", () => {
           ruleId: "ease_after_too_hard",
           direction: "easier",
         },
+        safety: null,
       },
     });
 
@@ -115,7 +119,7 @@ describe("ContextualProgressSummaryCard", () => {
   it("shows a neutral capture prompt without a Not observed list", () => {
     renderSummary({
       status: "ready",
-      summary: { strongestContext: null, nextPracticeAction: null },
+      summary: { strongestContext: null, nextPracticeAction: null, safety: null },
     });
 
     expect(
@@ -152,6 +156,24 @@ describe("ContextualProgressSummaryCard", () => {
       screen.getByText(`Based on the most recent ${CONTEXTUAL_PROGRESS_WINDOW_DAYS} days`),
     ).toBeInTheDocument();
     expect(screen.queryByText(/this week/i)).not.toBeInTheDocument();
+  });
+
+  it("omits missing context values from compact weekly labels", () => {
+    const strongestContext = reliableSummary.strongestContext;
+    if (!strongestContext) throw new Error("reliable fixture is incomplete");
+    renderSummary({
+      status: "ready",
+      summary: {
+        ...reliableSummary,
+        strongestContext: {
+          ...strongestContext,
+          context: { ...reliableContext, environment: null },
+        },
+      },
+    });
+
+    expect(screen.queryByText("Not recorded")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Environment").length).toBeGreaterThan(0);
   });
 
   it("records action use but not when viewing all evidence", () => {
@@ -194,6 +216,7 @@ describe("ContextualProgressSummaryCard", () => {
               name: "Sit",
               contextualProgress: { status: "ready", summary: reliableSummary },
             }}
+            onRetry={vi.fn()}
           />
         </MemoryRouter>
       </LocaleProvider>,
@@ -203,12 +226,40 @@ describe("ContextualProgressSummaryCard", () => {
   });
 
   it("keeps an unavailable summary inline instead of hiding practice controls", () => {
-    renderSummary({ status: "unavailable" });
+    const onRetry = vi.fn();
+    renderSummary({ status: "unavailable" }, onRetry);
 
     expect(screen.getByRole("status")).toHaveTextContent("Couldn't load context progress.");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetry).toHaveBeenCalledOnce();
     expect(screen.getByRole("link", { name: "View all evidence" })).toHaveAttribute(
       "href",
       "/my/dogs/dog-1/training#skill-skill-1",
     );
+  });
+
+  it("shows safety guidance without a practice CTA or action telemetry", () => {
+    const recordEvent = vi.fn();
+    vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
+      mutate: recordEvent,
+    } as never);
+    renderSummary({
+      status: "ready",
+      summary: {
+        ...reliableSummary,
+        safety: {
+          suppressed: true,
+          ruleId: "reported_injury_or_pain",
+          referral: "veterinarian",
+        },
+      },
+    });
+
+    expect(screen.getByRole("alert")).toHaveAccessibleName("Let's pause training suggestions");
+    expect(screen.getByText(/Please book a veterinary appointment/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Use this practice plan" })).not.toBeInTheDocument();
+    expect(
+      recordEvent.mock.calls.some(([event]) => event.name === "training.context_next_action_used"),
+    ).toBe(false);
   });
 });

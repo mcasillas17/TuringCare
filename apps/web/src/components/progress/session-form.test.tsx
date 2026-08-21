@@ -134,6 +134,99 @@ describe("SessionForm evidence capture", () => {
     expect(body.curriculumVersion).toBeUndefined();
   });
 
+  it("preserves entered values while catalog dimensions hydrate", async () => {
+    const { mutateAsync, rendered } = setup([]);
+    fireEvent.change(screen.getByLabelText("When"), {
+      target: { value: "2026-08-18T10:30" },
+    });
+    fireEvent.change(screen.getByLabelText("Notes"), {
+      target: { value: "kept note" },
+    });
+    fireEvent.change(screen.getByLabelText("How did it go?"), {
+      target: { value: "went_well" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 3.",
+      }),
+    );
+
+    rendered.rerender(
+      <LocaleProvider>
+        <SessionForm
+          dogId="d1"
+          skillId="s1"
+          dimensions={["distraction"]}
+          currentLevel={3}
+          onCancel={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("What else was going on?"), {
+      target: { value: "mild" },
+    });
+
+    rendered.rerender(
+      <LocaleProvider>
+        <SessionForm
+          dogId="d1"
+          skillId="s1"
+          dimensions={["cue_support", "environment", "distance", "duration", "distraction"]}
+          currentLevel={3}
+          onCancel={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByLabelText("When")).toHaveValue("2026-08-18T10:30");
+    expect(screen.getByLabelText("Notes")).toHaveValue("kept note");
+    expect(screen.getByLabelText("How did it go?")).toHaveValue("went_well");
+    expect(screen.getByLabelText("What else was going on?")).toHaveValue("mild");
+    expect(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 3.",
+      }),
+    ).toBeChecked();
+
+    submitSession();
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    const body = mutateAsync.mock.calls[0]?.[0]?.body as Record<string, unknown>;
+    expect(body.outcome).toBe("went_well");
+    expect(body.distraction).toBe("mild");
+    expect(body.confirmCurrentLevel).toBe(true);
+    expect(body.notes).toBe("kept note");
+    expect(Date.parse(String(body.occurredAt))).toBe(new Date("2026-08-18T10:30").getTime());
+  });
+
+  it("reports a partial anchor rejection while confirming that the session was saved", async () => {
+    const { mutateAsync } = setup(["distraction"]);
+    mutateAsync.mockResolvedValueOnce({
+      session: { id: "session-1" },
+      anchorRejected: "target_locked",
+    });
+    fireEvent.change(screen.getByLabelText("How did it go?"), {
+      target: { value: "went_well" },
+    });
+    fireEvent.change(screen.getByLabelText("What else was going on?"), {
+      target: { value: "mild" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 3.",
+      }),
+    );
+
+    submitSession();
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(
+        "Practice was saved, but current-level confirmation was not recorded because this practice already has a different training anchor.",
+      ),
+    );
+  });
+
   it("omits a stale confirmation after all structured evidence is cleared", async () => {
     const { mutateAsync } = setup(["distraction"]);
     fireEvent.change(screen.getByLabelText("What else was going on?"), {

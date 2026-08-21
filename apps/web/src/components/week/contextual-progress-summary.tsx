@@ -4,6 +4,8 @@ import {
   contextActionDirection,
   contextActionReason,
 } from "@/components/progress/contextual-progress-presentation";
+import { SafetyNotice } from "@/components/training/safety-notice";
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useRecordContextualProgressEvent } from "@/lib/contextual-progress";
 import type { FocusSkill } from "@/lib/weekly-focus";
@@ -69,15 +71,20 @@ function NextActionCompact({
 export function ContextualProgressSummaryCard({
   dogId,
   skill,
+  onRetry,
 }: {
   dogId: string;
   skill: Pick<FocusSkill, "skillId" | "name" | "contextualProgress">;
+  onRetry: () => unknown;
 }) {
   const { t } = useI18n();
   const recordEvent = useRecordContextualProgressEvent(dogId);
   const viewRecorded = useRef(false);
   const progress = skill.contextualProgress;
   const summary = progress.status === "ready" ? progress.summary : null;
+  const availableNextPracticeAction = summary?.safety
+    ? null
+    : (summary?.nextPracticeAction ?? null);
   const detailHref = `/my/dogs/${dogId}/training#skill-${skill.skillId}`;
 
   useEffect(() => {
@@ -87,9 +94,9 @@ export function ContextualProgressSummaryCard({
       name: "training.context_insight_viewed",
       surface: "week",
       strongestStatus: progress.summary.strongestContext?.status ?? null,
-      hasNextAction: Boolean(progress.summary.nextPracticeAction),
+      hasNextAction: Boolean(availableNextPracticeAction),
     });
-  }, [progress, recordEvent]);
+  }, [availableNextPracticeAction, progress, recordEvent]);
 
   return (
     <section
@@ -106,9 +113,17 @@ export function ContextualProgressSummaryCard({
       </div>
 
       {progress.status === "unavailable" ? (
-        <output className="block text-sm text-slate-soft">{t("contextProgress.loadError")}</output>
+        <div className="space-y-2">
+          <output className="block text-sm text-slate-soft">
+            {t("contextProgress.loadError")}
+          </output>
+          <Button type="button" variant="outline" onClick={() => void onRetry()}>
+            {t("contextProgress.retry")}
+          </Button>
+        </div>
       ) : (
         <>
+          {summary?.safety && <SafetyNotice safety={summary.safety} />}
           <section aria-labelledby={`week-context-${skill.skillId}-strongest`}>
             <h3
               id={`week-context-${skill.skillId}-strongest`}
@@ -118,7 +133,7 @@ export function ContextualProgressSummaryCard({
             </h3>
             <StrongestContextCompact evidence={summary?.strongestContext ?? null} t={t} />
           </section>
-          {summary?.nextPracticeAction && (
+          {availableNextPracticeAction && (
             <section aria-labelledby={`week-context-${skill.skillId}-next`}>
               <h3
                 id={`week-context-${skill.skillId}-next`}
@@ -126,24 +141,22 @@ export function ContextualProgressSummaryCard({
               >
                 {t("contextProgress.practiceNext")}
               </h3>
-              <NextActionCompact action={summary.nextPracticeAction} t={t} />
+              <NextActionCompact action={availableNextPracticeAction} t={t} />
             </section>
           )}
         </>
       )}
 
-      {progress.status === "ready" && progress.summary.nextPracticeAction && (
+      {progress.status === "ready" && availableNextPracticeAction && (
         <Link
           to={detailHref}
           className="inline-flex text-sm font-medium text-copper hover:underline"
           onClick={() => {
-            const action = progress.summary.nextPracticeAction;
-            if (!action) return;
             recordEvent.mutate({
               name: "training.context_next_action_used",
               surface: "week",
-              ruleId: action.ruleId,
-              direction: action.direction,
+              ruleId: availableNextPracticeAction.ruleId,
+              direction: availableNextPracticeAction.direction,
             });
           }}
         >

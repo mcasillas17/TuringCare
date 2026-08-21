@@ -45,6 +45,7 @@ export function DogWeek() {
     data: focusSkills,
     isError: focusError,
     isLoading: focusLoading,
+    refetch: refetchFocus,
   } = useFocusWeek(id, weekKey, timezoneOffsetMinutes, weekEndTimezoneOffsetMinutes);
   const logSession = useLogSession(id);
   const deleteSession = useDeleteSession(id);
@@ -57,7 +58,7 @@ export function DogWeek() {
     isLoading: suggestionLoading,
   } = useSuggestion(id, weekKey, currentTimezoneOffsetMinutes);
   const suggestionAction = useSuggestionAction(id, weekKey);
-  const advancementDecision = useAdvancementDecision(id, weekKey);
+  const advancementDecision = useAdvancementDecision(id);
   const [pendingOutcome, setPendingOutcome] = useState<{
     skillId: string;
     sessionId: string;
@@ -140,7 +141,7 @@ export function DogWeek() {
     const usesAuditedSuggestion = Boolean(matchingSuggestion);
     setPendingOutcome({
       skillId,
-      sessionId: created.id,
+      sessionId: created.session.id,
       suggestionId: matchingSuggestion?.suggestionId ?? null,
       hasPrimary: Boolean(matchingSuggestion?.primary),
       hasFallback: Boolean(matchingSuggestion?.fallback),
@@ -244,7 +245,17 @@ export function DogWeek() {
         <output className="text-sm text-slate-soft">{t("suggestion.loadError")}</output>
       )}
       {focusError && (
-        <output className="text-sm text-slate-soft">{t("week.focusLoadError")}</output>
+        <div className="space-y-2">
+          <output className="block text-sm text-slate-soft">{t("week.focusLoadError")}</output>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => void refetchFocus()}>
+              {t("week.retryFocus")}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setPickerOpen(true)}>
+              {t("week.editFocus")}
+            </Button>
+          </div>
+        </div>
       )}
       {focusLoading && (
         <output aria-live="polite" className="text-sm text-slate-soft">
@@ -259,7 +270,12 @@ export function DogWeek() {
       {skills.length > 0 && (
         <div className="space-y-3">
           {skills.map((skill) => (
-            <ContextualProgressSummaryCard key={skill.skillId} dogId={id} skill={skill} />
+            <ContextualProgressSummaryCard
+              key={skill.skillId}
+              dogId={id}
+              skill={skill}
+              onRetry={() => refetchFocus()}
+            />
           ))}
         </div>
       )}
@@ -286,7 +302,7 @@ export function DogWeek() {
         />
       )}
 
-      {skills.length === 0 ? (
+      {!focusError && skills.length === 0 ? (
         <section className="space-y-3 rounded border border-silver bg-white p-6 text-center">
           <p className="text-slate-soft">{t("week.pickFocus")}</p>
           <Button type="button" className="bg-slate text-cream" onClick={() => setPickerOpen(true)}>

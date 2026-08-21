@@ -6,7 +6,9 @@ import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import {
   events,
+  dogSafetySignals,
   dogs,
+  journalEntries,
   practiceSessions,
   session,
   trainingGoals,
@@ -195,6 +197,7 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
       "exactContexts",
       "nextPracticeAction",
       "policyVersion",
+      "safety",
       "strongestContext",
       "window",
     ]);
@@ -222,6 +225,98 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
       status: "reliable",
       successfulDistinctDays: 2,
     });
+  });
+
+  it.each([
+    {
+      name: "injury",
+      signal: "injury_or_pain" as const,
+      referral: "veterinarian" as const,
+      ruleId: "reported_injury_or_pain" as const,
+    },
+    {
+      name: "aggression",
+      signal: "aggression_or_bite_risk" as const,
+      referral: "veterinary_behaviorist" as const,
+      ruleId: "reported_aggression_or_bite_risk" as const,
+    },
+    {
+      name: "severe fear",
+      signal: "severe_fear_or_panic" as const,
+      referral: "veterinary_behaviorist" as const,
+      ruleId: "reported_severe_fear" as const,
+    },
+    {
+      name: "severe recorded concern",
+      signal: "severe_behavior_concern" as const,
+      referral: "veterinary_behaviorist" as const,
+      ruleId: "severe_recorded_concern" as const,
+    },
+    {
+      name: "sustained worsening",
+      signal: null,
+      referral: "credentialed_trainer" as const,
+      ruleId: "sustained_worsening_intensity" as const,
+    },
+  ])("suppresses only the next action for active $name safety", async (safetyCase) => {
+    const setupValue = await setup(users);
+    await insertSession(setupValue.skillId);
+
+    if (safetyCase.signal) {
+      await db.insert(dogSafetySignals).values({
+        dogId: setupValue.dogId,
+        type: safetyCase.signal,
+        source: "practice_session",
+        reportedAt: new Date(),
+      });
+    } else {
+      const occurredAt = new Date();
+      await db.insert(journalEntries).values([
+        {
+          dogId: setupValue.dogId,
+          kind: "moment",
+          occurredAt,
+          note: "high intensity",
+          intensity: 4,
+        },
+        {
+          dogId: setupValue.dogId,
+          kind: "moment",
+          occurredAt,
+          note: "high intensity again",
+          intensity: 4,
+        },
+        {
+          dogId: setupValue.dogId,
+          kind: "daily_checkin",
+          occurredAt,
+          note: "harder check-in",
+          trend: "harder",
+        },
+        {
+          dogId: setupValue.dogId,
+          kind: "daily_checkin",
+          occurredAt,
+          note: "harder check-in again",
+          trend: "harder",
+        },
+      ]);
+    }
+
+    const response = await getDetail(setupValue);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      safety: { suppressed: true; ruleId: string; referral: string } | null;
+      nextPracticeAction: unknown;
+      exactContexts: Array<{ status: string }>;
+    };
+    expect(body.safety).toEqual({
+      suppressed: true,
+      ruleId: safetyCase.ruleId,
+      referral: safetyCase.referral,
+    });
+    expect(body.nextPracticeAction).toBeNull();
+    expect(body.exactContexts).toEqual([expect.objectContaining({ status: "developing" })]);
   });
 
   describe("POST /api/dogs/:id/contextual-progress/events", () => {
@@ -610,6 +705,7 @@ describe("GET /api/dogs/:id/skills/:skillId/contextual-progress", () => {
       "exactContexts",
       "nextPracticeAction",
       "policyVersion",
+      "safety",
       "strongestContext",
       "window",
     ]);

@@ -577,6 +577,8 @@ export const en = {
     empty:
       "Add an outcome and context after practice to see where this skill is becoming reliable.",
     loadError: "Couldn't load context progress.",
+    actionUnavailable:
+      "This practice plan is unavailable. Record a new outcome and context before using it.",
     retry: "Retry",
     useAction: "Use this practice plan",
     viewEvidence: "Context evidence",
@@ -584,6 +586,7 @@ export const en = {
     successfulDay: "{days} successful day",
     successfulDays: "{days} successful days",
     lastObserved: "Last observed: {date}",
+    lastSuccessful: "Last successful: {date}",
     latestOutcome: "Latest outcome: {outcome}",
     cueSupport: "Help",
     environment: "Environment",
@@ -743,6 +746,7 @@ export const en = {
     cellLog: "Log {skill} on {day}",
     cellFilled: "{skill} on {day}: {n} sessions",
     focusLoadError: "Couldn't load this week's focus. Try again or edit your focus.",
+    retryFocus: "Retry",
   },
   brief: {
     title: "Behavior Brief",

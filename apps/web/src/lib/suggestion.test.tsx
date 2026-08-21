@@ -126,7 +126,7 @@ describe("suggestion hooks", () => {
     }
 
     postDecision.mockResolvedValue({ ok: false, json: async () => failed });
-    const { result } = renderHook(() => useAdvancementDecision("dog-1", "2026-08-10"), {
+    const { result } = renderHook(() => useAdvancementDecision("dog-1"), {
       wrapper: makeWrapper(queryClient),
     });
     await expect(
@@ -138,7 +138,7 @@ describe("suggestion hooks", () => {
     postDecision.mockResolvedValue({ ok: true, json: async () => ({}) });
     const queryClient = makeQueryClient();
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
-    const { result } = renderHook(() => useAdvancementDecision("dog-1", "2026-08-10"), {
+    const { result } = renderHook(() => useAdvancementDecision("dog-1"), {
       wrapper: makeWrapper(queryClient),
     });
 
