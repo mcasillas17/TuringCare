@@ -172,7 +172,7 @@ function AddSkillForm({ dogId, goalId }: { dogId: string; goalId: string }) {
       className="space-y-3 rounded border border-silver bg-cream p-3"
       onSubmit={(event) => {
         event.stopPropagation();
-        onSubmit();
+        void onSubmit(event);
       }}
     >
       <SkillFields register={register} />
@@ -404,7 +404,7 @@ function EditSkillForm({
       className="space-y-3 rounded border border-silver bg-cream p-3"
       onSubmit={(event) => {
         event.stopPropagation();
-        onSubmit();
+        void onSubmit(event);
       }}
     >
       <SkillFields register={register} />

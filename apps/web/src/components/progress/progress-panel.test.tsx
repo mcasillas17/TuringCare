@@ -5,7 +5,7 @@ import * as progressLib from "@/lib/progress";
 import type { ProgressGoal } from "@/lib/progress";
 import * as catalogLib from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { CatalogTemplate, ContextualProgress } from "@turingcare/shared";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -250,6 +250,31 @@ function setup({
 }
 
 describe("ProgressPanel", () => {
+  it("prevents native navigation from the Add skill form", () => {
+    setup();
+    fireEvent.click(screen.getByRole("button", { name: "Add skill" }));
+    const form = screen.getByText("Save changes").closest("form");
+    if (!form) throw new Error("missing add skill form");
+
+    const submitEvent = createEvent.submit(form);
+    fireEvent(form, submitEvent);
+
+    expect(submitEvent.defaultPrevented).toBe(true);
+  });
+
+  it("prevents native navigation from the Edit skill form", () => {
+    setup();
+    fireEvent.click(screen.getByRole("button", { name: /expand sit/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit skill" }));
+    const form = screen.getByText("Save changes").closest("form");
+    if (!form) throw new Error("missing edit skill form");
+
+    const submitEvent = createEvent.submit(form);
+    fireEvent(form, submitEvent);
+
+    expect(submitEvent.defaultPrevented).toBe(true);
+  });
+
   it("shows a level badge on the collapsed skill row and the stepper when expanded", () => {
     setup();
     expect(screen.getByText(/Level 3 — Sometimes/i)).toBeInTheDocument();

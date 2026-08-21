@@ -40,8 +40,11 @@ function makeEmail(project: string): string {
   return `e2e+${slug}${ts}@turingcare.test`;
 }
 
-function localDateTimeDaysAgo(daysAgo: number): string {
-  const date = new Date();
+function localDateTimeDaysAgo(
+  daysAgo: number,
+  reference = new Date(Date.now() - 10 * 60_000),
+): string {
+  const date = new Date(reference);
   date.setDate(date.getDate() - daysAgo);
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
@@ -51,9 +54,17 @@ async function logManualContextSession(
   page: Page,
   outcome: "went_well" | "too_hard",
   daysAgo: number,
+  reference?: Date,
 ) {
+  const trainingUrl = page.url();
+  const expandedSkill = page.getByRole("button", { name: "Collapse Sit", exact: true });
+  if ((await expandedSkill.count()) === 0) {
+    await expect(page.getByRole("button", { name: "Expand Sit", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Expand Sit", exact: true }).click();
+  }
+  await expect(expandedSkill).toBeVisible();
   await page.getByRole("button", { name: "Log session", exact: true }).click();
-  await page.getByLabel("When", { exact: true }).fill(localDateTimeDaysAgo(daysAgo));
+  await page.getByLabel("When", { exact: true }).fill(localDateTimeDaysAgo(daysAgo, reference));
   await page.getByLabel("How did it go?", { exact: true }).selectOption(outcome);
   await page.getByLabel("How much help did you give?", { exact: true }).selectOption("hand_signal");
   await page.getByLabel("Where were you?", { exact: true }).selectOption("home_quiet");
@@ -62,7 +73,9 @@ async function logManualContextSession(
     .getByRole("checkbox", { name: "I practiced this at the current Level 1.", exact: true })
     .check();
   await page.getByRole("button", { name: "Save session", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Save session", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Session logged", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page).toHaveURL(trainingUrl);
+  await expect(expandedSkill).toBeVisible();
 }
 
 async function verifyEmail(page: Page, request: APIRequestContext, email: string) {
@@ -205,15 +218,15 @@ test("full owner journey: register → guided setup → training → brief → s
 
   // ─── 7. Contextual progress: exact evidence and adjacent next practice ───
   await page.getByRole("link", { name: "Training", exact: true }).click();
-  await page.getByRole("button", { name: "Expand Sit", exact: true }).click();
-  await logManualContextSession(page, "went_well", 2);
-  await page.getByRole("button", { name: "Expand Sit", exact: true }).click();
-  await logManualContextSession(page, "went_well", 1);
+  const contextReference = new Date(Date.now() - 10 * 60_000);
+  await logManualContextSession(page, "went_well", 2, contextReference);
+  await logManualContextSession(page, "went_well", 1, contextReference);
 
   await page.getByRole("link", { name: "This Week", exact: true }).click();
   const contextualSummary = page
-    .getByRole("heading", { name: "Sit", exact: true })
-    .locator("xpath=ancestor::section[1]");
+    .locator('section[aria-labelledby^="week-context-"]')
+    .filter({ has: page.getByRole("heading", { name: "Sit", exact: true }) });
+  await expect(contextualSummary).toHaveCount(1);
   await expect(contextualSummary).toBeVisible();
   await expect(contextualSummary.getByText("Reliable", { exact: true })).toBeVisible();
   await expect(
@@ -238,7 +251,7 @@ test("full owner journey: register → guided setup → training → brief → s
   await expect(reliableContext.getByText("Reliable", { exact: true })).toBeVisible();
   await expect(reliableContext.getByText("2 successful days", { exact: true })).toBeVisible();
 
-  await expect(reliableContext.locator("dl dd").allTextContents()).resolves.toEqual([
+  await expect(reliableContext.locator("dl dd")).toHaveText([
     "Hand signal",
     "Quiet room at home",
     "Not recorded",
@@ -253,7 +266,7 @@ test("full owner journey: register → guided setup → training → brief → s
     "verbal_cue",
   );
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await logManualContextSession(page, "too_hard", 0);
+  await logManualContextSession(page, "too_hard", 0, contextReference);
   await expect(reliableContext.getByText("Developing", { exact: true })).toBeVisible({
     timeout: 10_000,
   });
@@ -264,7 +277,7 @@ test("full owner journey: register → guided setup → training → brief → s
     .getByRole("heading", { name: "Practice next", level: 6 })
     .locator("xpath=ancestor::section[1]");
   await expect(easierAction.getByText("Easier", { exact: true })).toBeVisible();
-  await expect(easierAction.locator("dl dd").allTextContents()).resolves.toEqual([
+  await expect(easierAction.locator("dl dd")).toHaveText([
     "Food lure",
     "Quiet room at home",
     "Not recorded",
@@ -273,12 +286,14 @@ test("full owner journey: register → guided setup → training → brief → s
   ]);
   if (testInfo.project.name === "phone-chromium") {
     const viewport = await page.evaluate(() => ({
-      clientWidth: document.documentElement.clientWidth,
-      scrollWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+      bodyScrollWidth: document.body.scrollWidth,
     }));
-    expect(viewport.scrollWidth, "context evidence does not clip horizontally").toBeLessThanOrEqual(
-      viewport.clientWidth,
-    );
+    expect(
+      Math.max(viewport.documentScrollWidth, viewport.bodyScrollWidth),
+      "context evidence does not clip horizontally",
+    ).toBeLessThanOrEqual(viewport.viewportWidth);
   }
 
   // ─── 8. Brief: generate, share, finalize ───────────────────────────────

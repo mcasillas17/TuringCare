@@ -151,7 +151,7 @@ export function SessionForm({
       className="space-y-3 rounded border border-silver bg-cream p-3"
       onSubmit={(event) => {
         event.stopPropagation();
-        onSubmit();
+        void onSubmit(event);
       }}
     >
       <label className="block">

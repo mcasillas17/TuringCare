@@ -1,6 +1,6 @@
 import { LocaleProvider } from "@/i18n";
 import * as progressLib from "@/lib/progress";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { PracticeEvidenceInput } from "@turingcare/shared";
 import { toast } from "sonner";
 import { describe, expect, it, vi } from "vitest";
@@ -45,6 +45,17 @@ function submitSession() {
 }
 
 describe("SessionForm evidence capture", () => {
+  it("prevents the browser's native form submission", () => {
+    setup([]);
+    const form = screen.getByText("Save session").closest("form");
+    if (!form) throw new Error("missing session form");
+
+    const submitEvent = createEvent.submit(form);
+    fireEvent(form, submitEvent);
+
+    expect(submitEvent.defaultPrevented).toBe(true);
+  });
+
   it("saves with no evidence answered at all", async () => {
     const { mutateAsync } = setup(["cue_support"]);
     submitSession();
