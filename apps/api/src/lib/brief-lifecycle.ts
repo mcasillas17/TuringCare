@@ -7,9 +7,7 @@ export async function lockBriefLifecycle(
   tx: Pick<typeof db, "execute">,
   dogId: string,
 ): Promise<void> {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${`brief-lifecycle:${dogId}`}))`,
-  );
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`brief-lifecycle:${dogId}`}))`);
 }
 
 export function withBriefLifecycleLock<T>(
