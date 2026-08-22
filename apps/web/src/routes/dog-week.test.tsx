@@ -1,14 +1,18 @@
 import { LocaleProvider } from "@/i18n";
+import * as contextualProgressLib from "@/lib/contextual-progress";
 import * as progressLib from "@/lib/progress";
 import * as suggestionLib from "@/lib/suggestion";
 import { weekKeyOf } from "@/lib/week";
 import * as focusLib from "@/lib/weekly-focus";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { TrainingSuggestion } from "@turingcare/shared";
+import type { ContextualProgressSummary, TrainingSuggestion } from "@turingcare/shared";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DogWeek } from "./dog-week";
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
 vi.mock("@/lib/weekly-focus", async () => {
   const actual = await vi.importActual<typeof import("@/lib/weekly-focus")>("@/lib/weekly-focus");
@@ -18,6 +22,12 @@ vi.mock("@/lib/weekly-focus", async () => {
     useAddFocus: vi.fn(),
     useRemoveFocus: vi.fn(),
   };
+});
+vi.mock("@/lib/contextual-progress", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/contextual-progress")>(
+    "@/lib/contextual-progress",
+  );
+  return { ...actual, useRecordContextualProgressEvent: vi.fn() };
 });
 vi.mock("@/lib/progress", () => ({
   useProgress: vi.fn(),
@@ -71,14 +81,32 @@ const exerciseSuggestion: TrainingSuggestion = {
   advancementProposal: null,
 };
 
+const activeSafety = {
+  suppressed: true as const,
+  ruleId: "reported_injury_or_pain" as const,
+  referral: "veterinarian" as const,
+};
+
+const safetySuggestion: TrainingSuggestion = {
+  ...exerciseSuggestion,
+  type: "safety_suppressed",
+  ruleId: null,
+  primary: null,
+  fallback: null,
+  safety: activeSafety,
+};
+
 function setup(
   focusSkills: focusLib.FocusSkill[],
   suggestion: TrainingSuggestion | undefined = exerciseSuggestion,
 ) {
+  const focusRefetch = vi.fn().mockResolvedValue({});
   vi.mocked(focusLib.useFocusWeek).mockReturnValue({
     data: focusSkills,
     isLoading: false,
+    isFetching: false,
     isError: false,
+    refetch: focusRefetch,
   } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
   vi.mocked(focusLib.useAddFocus).mockReturnValue({
     mutate: vi.fn(),
@@ -86,6 +114,10 @@ function setup(
   vi.mocked(focusLib.useRemoveFocus).mockReturnValue({
     mutate: vi.fn(),
   } as unknown as ReturnType<typeof focusLib.useRemoveFocus>);
+  const recordEvent = vi.fn();
+  vi.mocked(contextualProgressLib.useRecordContextualProgressEvent).mockReturnValue({
+    mutate: recordEvent,
+  } as never);
   vi.mocked(progressLib.useProgress).mockReturnValue({
     data: [
       {
@@ -95,7 +127,10 @@ function setup(
       },
     ],
   } as unknown as ReturnType<typeof progressLib.useProgress>);
-  const logMutate = vi.fn().mockResolvedValue({ id: "session-1" });
+  const logMutate = vi.fn().mockResolvedValue({
+    session: { id: "session-1" },
+    anchorRejected: null,
+  });
   const deleteMutate = vi.fn().mockResolvedValue({});
   const evidenceMutate = vi.fn().mockResolvedValue({});
   vi.mocked(progressLib.useLogSession).mockReturnValue({
@@ -112,7 +147,9 @@ function setup(
   vi.mocked(suggestionLib.useSuggestion).mockReturnValue({
     data: suggestion,
     isLoading: false,
+    isFetching: false,
     isError: false,
+    refetch: vi.fn(),
   } as unknown as ReturnType<typeof suggestionLib.useSuggestion>);
   vi.mocked(suggestionLib.useSuggestionAction).mockReturnValue({
     mutateAsync: actionMutate,
@@ -122,25 +159,37 @@ function setup(
     mutateAsync: vi.fn().mockResolvedValue({}),
     isPending: false,
   } as unknown as ReturnType<typeof suggestionLib.useAdvancementDecision>);
-  return { actionMutate, deleteMutate, evidenceMutate, logMutate };
+  return { actionMutate, deleteMutate, evidenceMutate, focusRefetch, logMutate, recordEvent };
+}
+
+function weekElement(
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <LocaleProvider>
+        <MemoryRouter initialEntries={["/my/dogs/d1/week"]}>
+          <Routes>
+            <Route path="/my/dogs/:id/week" element={<DogWeek />} />
+          </Routes>
+        </MemoryRouter>
+      </LocaleProvider>
+    </QueryClientProvider>
+  );
 }
 
 function renderWeek() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return {
-    ...render(
-      <QueryClientProvider client={qc}>
-        <LocaleProvider>
-          <MemoryRouter initialEntries={["/my/dogs/d1/week"]}>
-            <Routes>
-              <Route path="/my/dogs/:id/week" element={<DogWeek />} />
-            </Routes>
-          </MemoryRouter>
-        </LocaleProvider>
-      </QueryClientProvider>,
-    ),
+    ...render(weekElement(qc)),
     qc,
   };
+}
+
+function seedAuditedSuggestion(queryClient: QueryClient) {
+  const weekKey = weekKeyOf(new Date());
+  queryClient.setQueryData(focusLib.focusKey("d1", weekKey), [sitFocus]);
+  queryClient.setQueryData(suggestionLib.suggestionKey("d1", weekKey), exerciseSuggestion);
 }
 
 const sitFocus: focusLib.FocusSkill = {
@@ -150,7 +199,85 @@ const sitFocus: focusLib.FocusSkill = {
   goalName: "Basic manners",
   position: 0,
   sessions: [],
+  currentLevel: 1,
+  dimensions: [],
+  contextualProgress: {
+    status: "ready",
+    summary: { strongestContext: null, nextPracticeAction: null, safety: null },
+  },
 };
+
+function focusWithSafety(): focusLib.FocusSkill {
+  return {
+    ...sitFocus,
+    contextualProgress: {
+      status: "ready",
+      summary: {
+        strongestContext: null,
+        nextPracticeAction: null,
+        safety: activeSafety,
+      },
+    },
+  };
+}
+
+const reliableActionSummary: ContextualProgressSummary = {
+  strongestContext: {
+    context: {
+      cueSupport: "verbal_cue",
+      environment: "home_quiet",
+      distance: "few_steps",
+      durationBand: "about_15_seconds",
+      distraction: "none",
+    },
+    status: "reliable",
+    successfulDistinctDays: 2,
+    latestOutcome: "went_well",
+    lastObservedAt: "2026-08-20T12:00:00.000Z",
+    lastSuccessfulAt: "2026-08-20T12:00:00.000Z",
+  },
+  nextPracticeAction: {
+    ruleId: "advance_reliable_context",
+    direction: "harder",
+    context: {
+      cueSupport: "verbal_cue",
+      environment: "home_quiet",
+      distance: "across_room",
+      durationBand: "about_15_seconds",
+      distraction: "none",
+    },
+    changedDimension: "distance",
+  },
+  safety: null,
+};
+
+function focusWithSafetyAndAction(): focusLib.FocusSkill[] {
+  return [
+    focusWithSafety(),
+    {
+      ...sitFocus,
+      skillId: "s2",
+      name: "Stay",
+      contextualProgress: {
+        status: "ready",
+        summary: reliableActionSummary,
+      },
+    },
+  ];
+}
+
+function focusWithSafetyAndReliableContext(): focusLib.FocusSkill {
+  return {
+    ...sitFocus,
+    contextualProgress: {
+      status: "ready",
+      summary: {
+        ...reliableActionSummary,
+        safety: activeSafety,
+      },
+    },
+  };
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -166,6 +293,26 @@ afterEach(() => {
 });
 
 describe("DogWeek", () => {
+  it("shows retry and edit controls instead of a false empty state after focus failure", () => {
+    const { focusRefetch } = setup([]);
+    vi.mocked(focusLib.useFocusWeek).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: focusRefetch,
+    } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
+    renderWeek();
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Couldn't load this week's focus. Try again or edit your focus.",
+    );
+    expect(screen.queryByText("Pick one skill to focus on this week")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(focusRefetch).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit focus" })[0] as HTMLElement);
+    expect(screen.getByRole("radiogroup", { name: "Focus skill" })).toBeInTheDocument();
+  });
+
   it("shows the pick-focus empty state when there are no focus skills", () => {
     setup([]);
     renderWeek();
@@ -181,8 +328,121 @@ describe("DogWeek", () => {
       },
     ]);
     renderWeek();
-    expect(screen.getByText("Recall")).toBeInTheDocument();
+    expect(screen.getAllByText("Recall").length).toBeGreaterThan(0);
     expect(screen.getByText("Reliability")).toBeInTheDocument();
+  });
+
+  it("renders a compact contextual summary above the practice grid", () => {
+    setup([sitFocus]);
+    renderWeek();
+
+    expect(screen.getByRole("heading", { name: "Sit" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Add an outcome and context after practice to see where this skill is becoming reliable.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeEnabled();
+  });
+
+  it("keeps the practice grid usable when contextual progress is unavailable", () => {
+    const { focusRefetch } = setup([
+      {
+        ...sitFocus,
+        contextualProgress: { status: "unavailable" },
+      },
+    ]);
+    renderWeek();
+
+    expect(screen.getByRole("status")).toHaveTextContent("Couldn't load context progress.");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(focusRefetch).toHaveBeenCalledOnce();
+    expect(screen.getByRole("heading", { name: "Sit", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View all evidence" })).toHaveAttribute(
+      "href",
+      "/my/dogs/d1/training#skill-s1",
+    );
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeEnabled();
+  });
+
+  it("does not reuse a previous week's focus controls after the focus scope changes", () => {
+    const currentWeek = weekKeyOf(new Date());
+    setup([
+      {
+        ...sitFocus,
+        sessions: [
+          { id: "session-1", occurredAt: new Date().toISOString(), durationMinutes: null },
+        ],
+      },
+    ]);
+    vi.mocked(focusLib.useFocusWeek).mockImplementation((_dogId, weekKey) =>
+      weekKey === currentWeek
+        ? ({
+            data: [
+              {
+                ...sitFocus,
+                sessions: [
+                  { id: "session-1", occurredAt: new Date().toISOString(), durationMinutes: null },
+                ],
+              },
+            ],
+            isLoading: false,
+            isError: false,
+          } as unknown as ReturnType<typeof focusLib.useFocusWeek>)
+        : ({
+            data: undefined,
+            isLoading: false,
+            isError: true,
+          } as unknown as ReturnType<typeof focusLib.useFocusWeek>),
+    );
+    renderWeek();
+
+    expect(screen.getByRole("heading", { name: "Sit", level: 2 })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Sit on .*: 1 sessions/i }));
+    expect(screen.getByRole("button", { name: /remove/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /log another/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous week" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Couldn't load this week's focus. Try again or edit your focus.",
+    );
+    expect(screen.getAllByRole("button", { name: "Edit focus" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Sit", level: 2 })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Log Sit on/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /remove/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /log another/i })).not.toBeInTheDocument();
+  });
+
+  it("shows neutral focus-load copy while cached focus controls remain usable", () => {
+    const { recordEvent } = setup([sitFocus]);
+    vi.mocked(focusLib.useFocusWeek).mockReturnValue({
+      data: [sitFocus],
+      isLoading: false,
+      isError: true,
+    } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
+    renderWeek();
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Couldn't load this week's focus. Try again or edit your focus.",
+    );
+    expect(screen.getAllByRole("button", { name: "Edit focus" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeEnabled();
+    expect(recordEvent).not.toHaveBeenCalled();
+  });
+
+  it("announces focus loading without disabling saved practice controls", () => {
+    setup([sitFocus]);
+    vi.mocked(focusLib.useFocusWeek).mockReturnValue({
+      data: [sitFocus],
+      isLoading: true,
+      isError: false,
+    } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
+    renderWeek();
+
+    expect(screen.getByRole("status")).toHaveTextContent("Loading…");
+    expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeEnabled();
   });
 
   it("logs a session with the selected day's instant and timezone offset", async () => {
@@ -219,6 +479,170 @@ describe("DogWeek", () => {
     expect(screen.getAllByText("Lure into a sit.")).toHaveLength(2);
   });
 
+  it("renders one referral alert when suggestion and summary share active safety", () => {
+    setup([focusWithSafety()], safetySuggestion);
+    renderWeek();
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByText(/Please book a veterinary appointment/)).toBeInTheDocument();
+  });
+
+  it("owns one page-level safety alert when a contextual safety response is newer than a suggestion", () => {
+    const { recordEvent } = setup([focusWithSafetyAndReliableContext()]);
+    const rendered = renderWeek();
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByText(/Please book a veterinary appointment/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "This week's suggestion", level: 2 }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Lure into a sit.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "We did this" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Use this practice plan" })).not.toBeInTheDocument();
+    expect(recordEvent).toHaveBeenCalledTimes(1);
+    expect(recordEvent).toHaveBeenCalledWith({
+      name: "training.context_insight_viewed",
+      surface: "week",
+      strongestStatus: "reliable",
+      hasNextAction: false,
+    });
+
+    rendered.rerender(weekElement(rendered.qc));
+
+    expect(recordEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the summary referral alert when the weekly suggestion is unavailable", () => {
+    setup([focusWithSafety()]);
+    vi.mocked(suggestionLib.useSuggestion).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isFetching: false,
+      isError: true,
+    } as unknown as ReturnType<typeof suggestionLib.useSuggestion>);
+    renderWeek();
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByText(/Please book a veterinary appointment/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "We did this" })).not.toBeInTheDocument();
+  });
+
+  it.each(["suggestion", "focus"] as const)(
+    "suppresses cached recommendation actions while the %s query is fetching",
+    (fetchingQuery) => {
+      const { recordEvent } = setup(focusWithSafetyAndAction().slice(1));
+      if (fetchingQuery === "suggestion") {
+        vi.mocked(suggestionLib.useSuggestion).mockReturnValue({
+          data: exerciseSuggestion,
+          isLoading: false,
+          isFetching: true,
+          isError: false,
+        } as unknown as ReturnType<typeof suggestionLib.useSuggestion>);
+      } else {
+        vi.mocked(focusLib.useFocusWeek).mockReturnValue({
+          data: focusWithSafetyAndAction().slice(1),
+          isLoading: false,
+          isFetching: true,
+          isError: false,
+          refetch: vi.fn(),
+        } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
+      }
+
+      renderWeek();
+
+      expect(
+        screen.getByRole("heading", { name: "This week's suggestion", level: 2 }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Lure into a sit.")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("link", { name: "Use this practice plan" }),
+      ).not.toBeInTheDocument();
+      expect(recordEvent).not.toHaveBeenCalled();
+      expect(screen.getAllByRole("button", { name: /Log .* on/i })[0]).toBeEnabled();
+    },
+  );
+
+  it("restores safe recommendation actions after background fetching settles", () => {
+    const { recordEvent } = setup(focusWithSafetyAndAction().slice(1));
+    let isFetching = true;
+    vi.mocked(suggestionLib.useSuggestion).mockImplementation(
+      () =>
+        ({
+          data: exerciseSuggestion,
+          isLoading: false,
+          isFetching,
+          isError: false,
+        }) as unknown as ReturnType<typeof suggestionLib.useSuggestion>,
+    );
+    const rendered = renderWeek();
+
+    expect(screen.queryByText("Lure into a sit.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Use this practice plan" })).not.toBeInTheDocument();
+    expect(recordEvent).not.toHaveBeenCalled();
+
+    isFetching = false;
+    rendered.rerender(weekElement(rendered.qc));
+
+    expect(screen.getAllByText("Lure into a sit.")).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "Use this practice plan" })).toBeInTheDocument();
+    expect(recordEvent).toHaveBeenCalledTimes(1);
+    expect(recordEvent).toHaveBeenCalledWith({
+      name: "training.context_insight_viewed",
+      surface: "week",
+      strongestStatus: "reliable",
+      hasNextAction: true,
+    });
+
+    rendered.rerender(weekElement(rendered.qc));
+
+    expect(recordEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps cached weekly evidence and retry while suggestion errors suppress actions", () => {
+    const { recordEvent } = setup(focusWithSafetyAndAction().slice(1));
+    const refetchSuggestion = vi.fn();
+    let suggestionState = {
+      data: exerciseSuggestion,
+      isLoading: false,
+      isFetching: false,
+      isError: true,
+      refetch: refetchSuggestion,
+    };
+    vi.mocked(suggestionLib.useSuggestion).mockImplementation(
+      () => suggestionState as unknown as ReturnType<typeof suggestionLib.useSuggestion>,
+    );
+    const rendered = renderWeek();
+
+    expect(screen.getByRole("status")).toHaveTextContent(/load this week's suggestion/i);
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "This week's suggestion", level: 2 }).closest("section"),
+    ).not.toHaveAttribute("aria-busy");
+    expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetchSuggestion).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("link", { name: "Use this practice plan" })).not.toBeInTheDocument();
+    expect(recordEvent).not.toHaveBeenCalled();
+    expect(screen.getAllByRole("button", { name: /Log .* on/i })[0]).toBeEnabled();
+
+    suggestionState = { ...suggestionState, isError: false };
+    rendered.rerender(weekElement(rendered.qc));
+
+    expect(screen.getByRole("link", { name: "Use this practice plan" })).toBeInTheDocument();
+    expect(recordEvent).toHaveBeenCalledTimes(1);
+    expect(recordEvent).toHaveBeenCalledWith({
+      name: "training.context_insight_viewed",
+      surface: "week",
+      strongestStatus: "reliable",
+      hasNextAction: true,
+    });
+
+    rendered.rerender(weekElement(rendered.qc));
+
+    expect(recordEvent).toHaveBeenCalledTimes(1);
+  });
+
   it("does not render cached suggestions on historical weeks", () => {
     setup([sitFocus]);
     renderWeek();
@@ -253,9 +677,79 @@ describe("DogWeek", () => {
     await waitFor(() => expect(logMutate).toHaveBeenCalled());
   });
 
+  it("treats a cached exercise as manual when contextual safety is active", async () => {
+    const { evidenceMutate } = setup([focusWithSafety()]);
+    renderWeek();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+
+    expect(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 1.",
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 1.",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
+    expect(evidenceMutate.mock.calls[0]?.[0]?.body).toMatchObject({
+      confirmCurrentLevel: true,
+    });
+    expect(evidenceMutate.mock.calls[0]?.[0]?.body.practicedTarget).toBeUndefined();
+  });
+
+  it("fails closed when a suggestion error starts during session creation", async () => {
+    const pendingLog = deferred<{ session: { id: string }; anchorRejected: null }>();
+    const { evidenceMutate, logMutate } = setup([sitFocus]);
+    logMutate.mockReturnValueOnce(pendingLog.promise);
+    let suggestionState = {
+      data: exerciseSuggestion,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    vi.mocked(suggestionLib.useSuggestion).mockImplementation(
+      () => suggestionState as unknown as ReturnType<typeof suggestionLib.useSuggestion>,
+    );
+    const rendered = renderWeek();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+    suggestionState = { ...suggestionState, isError: true };
+    await act(async () => rendered.rerender(weekElement(rendered.qc)));
+    await act(async () => {
+      pendingLog.resolve({ session: { id: "session-1" }, anchorRejected: null });
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+    expect(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 1.",
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 1.",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
+    expect(evidenceMutate.mock.calls[0]?.[0]?.body).toMatchObject({
+      confirmCurrentLevel: true,
+    });
+    expect(evidenceMutate.mock.calls[0]?.[0]?.body.practicedTarget).toBeUndefined();
+  });
+
   it("captures evidence anchored to the matching current suggestion after grid logging", async () => {
     const { evidenceMutate } = setup([sitFocus]);
-    renderWeek();
+    const { qc } = renderWeek();
+    seedAuditedSuggestion(qc);
 
     fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
     fireEvent.click(await screen.findByRole("button", { name: "Too hard" }));
@@ -285,7 +779,9 @@ describe("DogWeek", () => {
 
   it("resets quick-capture answers when a different session is logged", async () => {
     const { logMutate } = setup([sitFocus]);
-    logMutate.mockResolvedValueOnce({ id: "session-1" }).mockResolvedValueOnce({ id: "session-2" });
+    logMutate
+      .mockResolvedValueOnce({ session: { id: "session-1" }, anchorRejected: null })
+      .mockResolvedValueOnce({ session: { id: "session-2" }, anchorRejected: null });
     renderWeek();
 
     const logButtons = screen.getAllByRole("button", { name: /Log Sit on/i });
@@ -321,7 +817,9 @@ describe("DogWeek", () => {
     const pendingEvidence = deferred<object>();
     const { evidenceMutate, logMutate } = setup([sitFocus]);
     evidenceMutate.mockReturnValueOnce(pendingEvidence.promise);
-    logMutate.mockResolvedValueOnce({ id: "session-1" }).mockResolvedValueOnce({ id: "session-2" });
+    logMutate
+      .mockResolvedValueOnce({ session: { id: "session-1" }, anchorRejected: null })
+      .mockResolvedValueOnce({ session: { id: "session-2" }, anchorRejected: null });
     renderWeek();
 
     const logButtons = screen.getAllByRole("button", { name: /Log Sit on/i });
@@ -360,6 +858,22 @@ describe("DogWeek", () => {
     expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeDisabled();
   });
 
+  it("does not show the pick-focus empty state during the initial focus load", () => {
+    setup([]);
+    vi.mocked(focusLib.useFocusWeek).mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isFetching: true,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof focusLib.useFocusWeek>);
+    renderWeek();
+
+    expect(screen.getByRole("status")).toHaveTextContent("Loading…");
+    expect(screen.queryByText("Pick one skill to focus on this week")).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
   it("keeps a saved session and the confirmed safety report available after an evidence failure", async () => {
     const { evidenceMutate, logMutate } = setup([sitFocus]);
     evidenceMutate.mockRejectedValueOnce(new Error("temporary"));
@@ -385,15 +899,109 @@ describe("DogWeek", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
     fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I practiced this at the current Level 1.",
+      }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save response" }));
 
     await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
     expect(evidenceMutate.mock.calls[0]?.[0]?.body.practicedTarget).toBeUndefined();
+    expect(evidenceMutate.mock.calls[0]?.[0]?.body.confirmCurrentLevel).toBe(true);
+  });
+
+  it("saves manual quick evidence without current-level confirmation", async () => {
+    const { evidenceMutate } = setup(
+      [
+        {
+          ...sitFocus,
+          dimensions: ["distraction"],
+        },
+      ],
+      { ...exerciseSuggestion, dismissed: true, requestedDimensions: ["distraction"] },
+    );
+    renderWeek();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
+    expect(evidenceMutate.mock.calls[0]?.[0]?.body.confirmCurrentLevel).toBeUndefined();
+  });
+
+  it("warns when current-level confirmation is rejected after saving practice", async () => {
+    const { evidenceMutate } = setup([sitFocus]);
+    evidenceMutate.mockResolvedValueOnce({ anchorRejected: "practice_day_required" });
+    renderWeek();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
+    expect(toast.warning).toHaveBeenCalledWith(
+      "Practice was saved, but current-level confirmation was not recorded because this practice was not on a valid practice day.",
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("warns about a locked anchor rejection without turning the saved practice into a failure", async () => {
+    const { evidenceMutate } = setup([sitFocus]);
+    evidenceMutate.mockResolvedValueOnce({ anchorRejected: "target_locked" });
+    renderWeek();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+    fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
+    expect(toast.warning).toHaveBeenCalledWith(
+      "Practice was saved, but current-level confirmation was not recorded because this practice already has a different training anchor.",
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("warns when a saved response loses its audited suggestion anchor", async () => {
+    const { evidenceMutate } = setup([sitFocus]);
+    const { qc } = renderWeek();
+    seedAuditedSuggestion(qc);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+    await screen.findByRole("button", { name: "Went well" });
+    qc.setQueryData(suggestionLib.suggestionKey("d1", weekKeyOf(new Date())), {
+      ...exerciseSuggestion,
+      dismissed: true,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Went well" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save response" }));
+
+    await waitFor(() => expect(evidenceMutate).toHaveBeenCalled());
+    expect(evidenceMutate.mock.calls[0]?.[0]?.body.practicedTarget).toBeUndefined();
+    expect(toast.warning).toHaveBeenCalledWith(
+      "Practice response was saved, but it was not linked to the original training suggestion.",
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("shows an error if a logged focus skill is no longer available", async () => {
+    const focusSkills = [sitFocus];
+    setup(focusSkills);
+    renderWeek();
+    focusSkills.length = 0;
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
+
+    expect(toast.error).toHaveBeenCalledWith("Couldn't save");
   });
 
   it("records suggestion actions and opens the focus picker on request", async () => {
     const { actionMutate } = setup([sitFocus]);
-    renderWeek();
+    const { qc } = renderWeek();
+    seedAuditedSuggestion(qc);
 
     fireEvent.click(screen.getByRole("button", { name: "We did this" }));
     await waitFor(() =>
@@ -403,8 +1011,20 @@ describe("DogWeek", () => {
     expect(screen.getByRole("radiogroup", { name: "Focus skill" })).toBeInTheDocument();
   });
 
-  it("invalidates the exact weekly suggestion after deleting a session", async () => {
-    setup([
+  it("shows retry feedback when an enabled suggestion action has no audited target", async () => {
+    const { actionMutate } = setup([sitFocus]);
+    renderWeek();
+
+    const action = screen.getByRole("button", { name: "We did this" });
+    expect(action).toBeEnabled();
+    fireEvent.click(action);
+
+    expect(actionMutate).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Couldn't save that.");
+  });
+
+  it("deletes a session through the progress mutation", async () => {
+    const { deleteMutate } = setup([
       {
         ...sitFocus,
         sessions: [
@@ -412,16 +1032,13 @@ describe("DogWeek", () => {
         ],
       },
     ]);
-    const { qc } = renderWeek();
-    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    renderWeek();
 
     fireEvent.click(screen.getByRole("button", { name: /Sit on .*: 1 sessions/i }));
     fireEvent.click(screen.getByRole("button", { name: /remove/i }));
 
     await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: ["suggestion", "d1", expect.any(String)],
-      }),
+      expect(deleteMutate).toHaveBeenCalledWith({ skillId: "s1", sessionId: "session-1" }),
     );
   });
 });

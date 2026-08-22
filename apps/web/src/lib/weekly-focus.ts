@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ContextualProgressSummary, PracticeDimension } from "@turingcare/shared";
 import { api } from "./api";
 import { suggestionKey } from "./suggestion-key";
 
@@ -15,6 +16,11 @@ export type FocusSkill = {
   goalName: string;
   position: number;
   sessions: FocusSession[];
+  currentLevel: number;
+  dimensions: PracticeDimension[];
+  contextualProgress:
+    | { status: "ready"; summary: ContextualProgressSummary }
+    | { status: "unavailable" };
 };
 
 const focusApi = api.api.dogs[":id"].focus;

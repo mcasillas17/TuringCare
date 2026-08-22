@@ -6,6 +6,7 @@ export * from "./focus";
 export * from "./journal";
 export * from "./guided-setup";
 export * from "./practice-evidence";
+export * from "./contextual-progress";
 export * from "./progress";
 export * from "./suggestion";
 export * from "./profile";

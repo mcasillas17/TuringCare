@@ -13,6 +13,7 @@ import type {
 import type { InferResponseType } from "hono/client";
 import type { z } from "zod";
 import { suggestionKey } from "./suggestion-key";
+import { invalidateTrainingSafetyData } from "./training-safety-cache";
 import { focusKey } from "./weekly-focus";
 
 export const guidedSetupKey = ["guided-setup"] as const;
@@ -144,6 +145,7 @@ function invalidateActionCaches(
   queryClient: ReturnType<typeof useQueryClient>,
   dogId: string | null,
   weekKey?: string,
+  safetyDerived = false,
 ) {
   const invalidations: Promise<unknown>[] = [invalidateAggregateCaches(queryClient)];
   if (dogId !== null) {
@@ -156,6 +158,9 @@ function invalidateActionCaches(
         queryClient.invalidateQueries({ queryKey: focusKey(dogId, weekKey) }),
         queryClient.invalidateQueries({ queryKey: suggestionKey(dogId, weekKey) }),
       );
+    }
+    if (safetyDerived) {
+      invalidations.push(invalidateTrainingSafetyData(queryClient, dogId));
     }
   }
   return Promise.all(invalidations);
@@ -208,7 +213,7 @@ export function useCompleteBehaviorSetup(
       ),
     onSuccess: (response) => {
       options.onCompleted?.(response);
-      return invalidateActionCaches(queryClient, response.setup.dogId);
+      return invalidateActionCaches(queryClient, response.setup.dogId, undefined, true);
     },
   });
 }
@@ -242,7 +247,7 @@ export function useCompleteProgressSetup(
       ),
     onSuccess: (response) => {
       options.onCompleted?.(response);
-      return invalidateActionCaches(queryClient, response.setup.dogId);
+      return invalidateActionCaches(queryClient, response.setup.dogId, undefined, true);
     },
   });
 }

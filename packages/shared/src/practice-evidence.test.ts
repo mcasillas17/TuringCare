@@ -1,47 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
-  type CueSupport,
-  type EasingStrategy,
-  type PracticeDimension,
-  type PracticeDistance,
-  type PracticeDistraction,
-  type PracticeDurationBand,
-  type PracticeEnvironment,
-  type PracticeOutcome,
-  type SafetySignalType,
   cueSupportValues,
   distanceValues,
   distractionValues,
   durationBandValues,
-  easingStrategyValues,
   environmentValues,
   practiceDimensionValues,
+  practiceEvidenceFields,
   practiceEvidenceSchema,
   practiceOutcomeValues,
   safetySignalValues,
 } from "./practice-evidence";
 
-describe("practiceEvidenceSchema", () => {
-  it("exports the stable practice evidence vocabularies and types", () => {
-    const outcome: PracticeOutcome = "went_well";
-    const dimension: PracticeDimension = "distance";
-    const cueSupport: CueSupport = "hand_signal";
-    const environment: PracticeEnvironment = "yard";
-    const distance: PracticeDistance = "few_steps";
-    const durationBand: PracticeDurationBand = "about_30_seconds";
-    const distraction: PracticeDistraction = "mild";
-    const safetySignal: SafetySignalType = "injury_or_pain";
-    const easingStrategy: EasingStrategy = "reduce_distractions";
-
-    expect(outcome).toBe("went_well");
-    expect(dimension).toBe("distance");
-    expect(cueSupport).toBe("hand_signal");
-    expect(environment).toBe("yard");
-    expect(distance).toBe("few_steps");
-    expect(durationBand).toBe("about_30_seconds");
-    expect(distraction).toBe("mild");
-    expect(safetySignal).toBe("injury_or_pain");
-    expect(easingStrategy).toBe("reduce_distractions");
+describe("practice evidence vocabularies", () => {
+  it("keeps controlled evidence values stable", () => {
     expect(practiceOutcomeValues).toEqual(["went_well", "mixed", "too_hard"]);
     expect(practiceDimensionValues).toEqual([
       "cue_support",
@@ -81,61 +53,71 @@ describe("practiceEvidenceSchema", () => {
       "injury_or_pain",
       "severe_fear_or_panic",
     ]);
-    expect(easingStrategyValues).toEqual([
-      "add_cue_help",
-      "use_quieter_environment",
-      "increase_trigger_distance",
-      "decrease_owner_distance",
-      "shorten_duration",
-      "reduce_distractions",
-    ]);
+    expect(practiceEvidenceFields.practicedTarget).toBeDefined();
+    expect(
+      practiceEvidenceSchema.parse({
+        practicedTarget: {
+          suggestionId: "00000000-0000-4000-8000-000000000001",
+          variant: "fallback",
+        },
+      }),
+    ).toEqual({
+      practicedTarget: {
+        suggestionId: "00000000-0000-4000-8000-000000000001",
+        variant: "fallback",
+      },
+    });
+  });
+});
+
+describe("practiceEvidenceSchema", () => {
+  it("accepts an entirely empty payload so capture friction can never block a save", () => {
+    expect(practiceEvidenceSchema.parse({})).toEqual({});
   });
 
-  it("accepts structured practice evidence", () => {
+  it("accepts explicit nulls when owners clear a prior value", () => {
+    expect(practiceEvidenceSchema.parse({ outcome: null, distraction: null })).toEqual({
+      outcome: null,
+      distraction: null,
+    });
+  });
+
+  it("accepts structured current-level confirmation", () => {
+    expect(
+      practiceEvidenceSchema.parse({
+        outcome: "went_well",
+        confirmCurrentLevel: true,
+      }),
+    ).toEqual({
+      outcome: "went_well",
+      confirmCurrentLevel: true,
+    });
+  });
+
+  it("rejects manual and suggestion anchors together", () => {
     expect(
       practiceEvidenceSchema.safeParse({
-        outcome: "went_well",
-        cueSupport: "hand_signal",
-        environment: "yard",
-        distance: "few_steps",
-        durationBand: "about_30_seconds",
-        distraction: "mild",
-        safetySignal: "injury_or_pain",
+        confirmCurrentLevel: true,
         practicedTarget: {
-          suggestionId: "07f8f6f4-3f8d-4f47-8f08-65f5d4c207f0",
+          suggestionId: "00000000-0000-4000-8000-000000000001",
           variant: "primary",
         },
       }).success,
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("rejects current-level confirmation without structured training evidence", () => {
+    expect(
+      practiceEvidenceSchema.safeParse({
+        confirmCurrentLevel: true,
+        safetySignal: "injury_or_pain",
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects values outside the controlled vocabulary", () => {
     expect(practiceEvidenceSchema.safeParse({ outcome: "great" }).success).toBe(false);
     expect(practiceEvidenceSchema.safeParse({ distraction: "extreme" }).success).toBe(false);
     expect(practiceEvidenceSchema.safeParse({ safetySignal: "bit someone" }).success).toBe(false);
-  });
-
-  it("accepts omitted and null evidence fields and rejects invalid practiced target metadata", () => {
-    expect(practiceEvidenceSchema.safeParse({}).success).toBe(true);
-    expect(
-      practiceEvidenceSchema.safeParse({
-        outcome: null,
-        cueSupport: null,
-        environment: null,
-        distance: null,
-        durationBand: null,
-        distraction: null,
-        safetySignal: null,
-        practicedTarget: null,
-      }).success,
-    ).toBe(true);
-    expect(
-      practiceEvidenceSchema.safeParse({
-        practicedTarget: {
-          suggestionId: "not-a-uuid",
-          variant: "backup",
-        },
-      }).success,
-    ).toBe(false);
   });
 });

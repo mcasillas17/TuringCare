@@ -1053,3 +1053,77 @@ verified through isolated same-origin Vite proxy servers on ports 3310/3311.
 - Spec/plan: `docs/superpowers/specs/2026-08-15-first-run-guided-setup-design.md`,
   `docs/superpowers/plans/2026-08-15-first-run-guided-setup.md`
 - Commits: `d52d82b..34b25de` on `feat/first-run-guided-setup`.
+
+## 2026-08-21 — Personalized training Gate 2 — contextual progress
+Exact-context, current-level reliability is derived from recent practice evidence.
+Owners can manually confirm current-level practice; one evidence-derived adjacent
+next context is offered for the next attempt. This Week presents a decision-first
+summary, while expanded skill detail shows the supporting evidence. There is no
+universal completion score and no automatic advancement. Round-two hardening
+coordinates one safety referral alert across weekly surfaces, keeps safety
+headings semantically nested, and removes action-derived synthetic
+`not_observed` rows while preserving observed evidence. Final safety-cache
+hardening centralizes the three dog-scoped suggestion/focus/contextual-progress
+prefix invalidations across safety-producing web mutations, awaits their
+refetches, and conservatively suppresses stale recommendations during
+`isFetching` revalidation or relevant query errors while preserving practice
+logging. Awaited weekly session creation now re-checks the latest suggestion
+eligibility and fails closed to manual capture when safety or another settled
+cache-authority check fails. Skill detail preserves cached evidence while failing closed on
+revalidation/error actions, and both new contextual routes reject malformed
+UUIDs with privacy-safe `404` responses before database access.
+
+Follow-up timing hardening makes that session and evidence decision
+cache-authoritative: `DogWeek` reads the settled QueryClient suggestion/focus
+state and data through stable keys instead of render-written fetch flags and
+re-checks before evidence save. Round-three web hardening separates action
+suppression from insight readiness: settled safety records one accurate weekly
+view (`hasNextAction: false`) without exposing actions, while fetching/error
+state defers view telemetry until it settles. The weekly suggestion shell is
+busy only while fetching, uses neutral retry copy after a cached error, and
+defers safety rendering to the page-level notice. An open audited capture stays
+pending through a transient refetch and preserves its anchor after a same-safe
+result; a settled safety decision, error, or changed suggestion downgrades to
+manual capture, and evidence save remains fail-closed while cache authority is
+unsettled.
+
+Round-three API hardening moves the authoritative contextual-detail skill
+snapshot under dog safety, then the existing skill advisory lock and a shared
+skill-row lock, so level changes serialize with current-level evidence. Focus
+now reads its weekly-focus/skill snapshot under the same dog safety transaction,
+then the focus-week advisory lock and shared row locks; a focus replacement
+committed while the request waits is reflected coherently. The evidence loader
+remains one batched query and degrades only contextual summaries to unavailable.
+View telemetry now accepts only `reliable`, `developing`, or `null` for
+`strongestStatus`, matching the observable-evidence contract.
+
+Final launch-minor hardening gives a successful evidence save explicit partial
+feedback when client cache authority omits an originally audited suggestion
+target; server anchor-rejection copy remains reserved for actual server
+rejections. Training progress now coordinates one page-level referral alert
+from expanded contextual details while retaining each detail's evidence and
+controls. Telemetry documentation distinguishes weekly recommendation
+intent/navigation from skill-detail application of a recommended context.
+
+Round-four launch hardening replaces the exclusive dog-safety lock on
+contextual detail, focus, and suggestion safety derivation with a PostgreSQL
+shared transaction advisory lock, so compatible readers proceed concurrently
+while safety writers remain exclusive. The locked clock and dog-safety-to-skill
+or-focus lock ordering remain authoritative; critical sections stay bounded to
+keyed safety/ownership work and indexed evidence reads rather than introducing
+a lock timeout. Action-use telemetry remains exclusive and records its event in
+the same safety transaction. Partial server anchor rejections and
+client-detected audited-anchor omissions now use warning feedback, while an
+enabled suggestion action with no valid audited target shows localized retry
+feedback without a mutation. View telemetry explicitly treats
+`strongestStatus` and `hasNextAction` as validated bounded client assertions,
+not server recomputation; dashboards segment weekly settled-mount views from
+distinct settled skill-detail results and never compare their raw counts.
+Final feedback aligns documented evidence ordering with the occurrence-time and
+stable-row-ID implementation, specifies `safety.ruleId` in detail-result
+deduplication, adds its mounted regression, and removes redundant action-return
+and pre-lock-clock plumbing.
+- Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
+  `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
+- Code commits: `59c26a2..6b9d1b2` on `feat/contextual-progress-insights`.
+- Pull request: [#68](https://github.com/mcasillas17/TuringCare/pull/68).

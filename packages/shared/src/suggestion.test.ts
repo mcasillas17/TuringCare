@@ -9,6 +9,7 @@ import {
   suggestionActionValues,
   suggestionQuerySchema,
   suggestionRuleValues,
+  suggestionSafetySchema,
   suggestionTypeValues,
 } from "./suggestion";
 
@@ -66,6 +67,20 @@ describe("suggestion vocabularies", () => {
 });
 
 describe("suggestion request schemas", () => {
+  it("accepts the server-owned safety suppression contract", () => {
+    expect(
+      suggestionSafetySchema.parse({
+        suppressed: true,
+        ruleId: "reported_injury_or_pain",
+        referral: "veterinarian",
+      }),
+    ).toEqual({
+      suppressed: true,
+      ruleId: "reported_injury_or_pain",
+      referral: "veterinarian",
+    });
+  });
+
   it("suggestionQuerySchema requires a Monday week key and timezone offset", () => {
     expect(
       suggestionQuerySchema.parse({

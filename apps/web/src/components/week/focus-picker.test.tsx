@@ -38,6 +38,12 @@ const focusSkills: FocusSkill[] = [
     goalName: "Manners",
     position: 0,
     sessions: [],
+    currentLevel: 1,
+    dimensions: [],
+    contextualProgress: {
+      status: "ready",
+      summary: { strongestContext: null, nextPracticeAction: null, safety: null },
+    },
   },
 ];
 

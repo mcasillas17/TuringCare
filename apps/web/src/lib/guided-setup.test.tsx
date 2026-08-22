@@ -108,6 +108,16 @@ function expectAggregateInvalidations(invalidateQueries: unknown) {
   }
 }
 
+function expectSafetyInvalidations(invalidateQueries: unknown) {
+  for (const queryKey of [
+    ["suggestion", dogId],
+    ["focus", dogId],
+    ["contextual-progress", dogId],
+  ]) {
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey });
+  }
+}
+
 afterEach(() => vi.clearAllMocks());
 
 describe("guided setup hooks", () => {
@@ -357,6 +367,7 @@ describe("guided setup hooks", () => {
     expect(completeBehavior).toHaveBeenCalledWith({ json: body });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["dog-journal", dogId] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["progress", dogId] });
+    expectSafetyInvalidations(invalidateQueries);
   });
 
   it("narrows a progress tombstone and does not invalidate a null dog key", async () => {
@@ -411,6 +422,7 @@ describe("guided setup hooks", () => {
     expect(completeProgress).toHaveBeenCalledWith({ json: body });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["dog-journal", dogId] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["progress", dogId] });
+    expectSafetyInvalidations(invalidateQueries);
   });
 
   it("completes training with setupId, week, offset, and all affected caches", async () => {

@@ -22,7 +22,7 @@ import { loadRecentObservation } from "./observations";
 import { isSuggestionSkipped, lockSuggestionAnchor } from "./practice-anchor";
 import { EVIDENCE_WINDOW_DAYS, loadSkillEvidence } from "./practice-evidence";
 import type { TransactionType } from "./safety-lock";
-import { evaluateSafety, evaluateSafetyWithLock } from "./safety-policy";
+import { evaluateSafety, evaluateSafetyWithSharedLock } from "./safety-policy";
 import { selectSuggestionRule } from "./suggestion-rules";
 
 const EMPTY_EVIDENCE = {
@@ -183,24 +183,24 @@ async function emitAfterCommit(userId: string, suggestion: TrainingSuggestion): 
 }
 
 /**
- * Takes the final safety decision and writes the audit rows in one transaction
- * holding the dog safety lock. A recognized audit-write failure rolls back and
- * returns the built suggestion without an audit ID; every other error surfaces.
+ * Takes the final safety decision and writes audit rows in one transaction
+ * holding the shared dog safety lock. The audit does not change a safety input,
+ * so concurrent suggestion reads may proceed while safety writers still wait.
+ * A recognized audit-write failure rolls back and returns the built suggestion
+ * without an audit ID; every other error surfaces.
  */
-async function finalizeUnderSafetyLock(input: {
+async function finalizeUnderSharedSafetyLock(input: {
   userId: string;
   dogId: string;
   weekKey: string;
   auditDay: string;
-  now: Date;
   build: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<TrainingSuggestion>;
 }): Promise<TrainingSuggestion> {
   // A plain `let` would be narrowed to `null`; the holder remains readable from `catch`.
   const state: { built: TrainingSuggestion | null } = { built: null };
   try {
-    const { suggestion, inserted } = await evaluateSafetyWithLock(
+    const { suggestion, inserted } = await evaluateSafetyWithSharedLock(
       input.dogId,
-      input.now,
       async (decision, tx) => {
         const built = await input.build(decision, tx);
         state.built = built;
@@ -292,12 +292,11 @@ export async function loadSuggestion(input: {
   };
 
   if (safety) {
-    return finalizeUnderSafetyLock({
+    return finalizeUnderSharedSafetyLock({
       userId: input.userId,
       dogId: input.dogId,
       weekKey: input.weekKey,
       auditDay,
-      now,
       build: (decision, tx) => buildSuppressed(decision ?? safety, tx),
     });
   }
@@ -342,12 +341,11 @@ export async function loadSuggestion(input: {
         lastPracticeAt: evidence.summary.lastPracticeAt,
       },
     };
-    return finalizeUnderSafetyLock({
+    return finalizeUnderSharedSafetyLock({
       userId: input.userId,
       dogId: input.dogId,
       weekKey: input.weekKey,
       auditDay,
-      now,
       build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : unsupported),
     });
   }
@@ -394,12 +392,11 @@ export async function loadSuggestion(input: {
     },
     advancementProposal: advancement.proposal,
   };
-  return finalizeUnderSafetyLock({
+  return finalizeUnderSharedSafetyLock({
     userId: input.userId,
     dogId: input.dogId,
     weekKey: input.weekKey,
     auditDay,
-    now,
     build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : suggestion),
   });
 }

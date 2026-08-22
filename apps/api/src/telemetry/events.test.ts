@@ -14,6 +14,8 @@ describe("telemetry events allowlist", () => {
     expect(isKnownEvent("safety.signal_reported")).toBe(true);
     expect(isKnownEvent("safety.suppression_shown")).toBe(true);
     expect(isKnownEvent("training.level_set")).toBe(true);
+    expect(isKnownEvent("training.context_insight_viewed")).toBe(true);
+    expect(isKnownEvent("training.context_next_action_used")).toBe(true);
     expect(isKnownEvent("trainer.viewed")).toBe(true);
     expect(isKnownEvent("course.viewed")).toBe(true);
   });
@@ -32,10 +34,24 @@ describe("telemetry events allowlist", () => {
     expect(eventIngestSchema.safeParse({ name: "safety.signal_reported", props: {} }).success).toBe(
       false,
     );
+    expect(
+      eventIngestSchema.safeParse({
+        name: "training.context_insight_viewed",
+        props: {},
+      }).success,
+    ).toBe(false);
+    expect(
+      eventIngestSchema.safeParse({
+        name: "training.context_next_action_used",
+        props: {},
+      }).success,
+    ).toBe(false);
   });
 
   it("exposes the two new client events", () => {
     expect(CLIENT_EVENTS).toContain("trainer.viewed");
     expect(CLIENT_EVENTS).toContain("course.viewed");
+    expect(CLIENT_EVENTS).not.toContain("training.context_insight_viewed");
+    expect(CLIENT_EVENTS).not.toContain("training.context_next_action_used");
   });
 });

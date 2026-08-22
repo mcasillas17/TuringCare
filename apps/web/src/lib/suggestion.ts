@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdvancementDecision, SuggestionAction, TrainingSuggestion } from "@turingcare/shared";
 import { api } from "./api";
+import { invalidatePracticeDerivedData } from "./progress";
 import { suggestionKey } from "./suggestion-key";
 import { weekKeyAtOffset } from "./week";
 
@@ -41,7 +42,7 @@ export function useSuggestionAction(dogId: string, weekKey: string) {
   });
 }
 
-export function useAdvancementDecision(dogId: string, weekKey: string) {
+export function useAdvancementDecision(dogId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: { proposalId: string; decision: AdvancementDecision }) => {
@@ -55,11 +56,6 @@ export function useAdvancementDecision(dogId: string, weekKey: string) {
       }
       return res.json();
     },
-    onSuccess: () =>
-      Promise.all([
-        qc.invalidateQueries({ queryKey: suggestionKey(dogId, weekKey) }),
-        qc.invalidateQueries({ queryKey: ["progress", dogId] }),
-        qc.invalidateQueries({ queryKey: ["overview"] }),
-      ]),
+    onSuccess: () => invalidatePracticeDerivedData(qc, dogId),
   });
 }

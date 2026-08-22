@@ -1,9 +1,43 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+const contextualProgressSummaryControl = vi.hoisted(() => ({
+  captureNow: undefined as ((now: Date) => void) | undefined,
+  rejection: undefined as Error | undefined,
+}));
+
+vi.mock("../lib/contextual-progress-data", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/contextual-progress-data")>();
+  return {
+    ...actual,
+    loadContextualProgressSummaries: vi.fn(
+      async (...args: Parameters<typeof actual.loadContextualProgressSummaries>) => {
+        contextualProgressSummaryControl.captureNow?.(args[1]);
+        if (contextualProgressSummaryControl.rejection) {
+          throw contextualProgressSummaryControl.rejection;
+        }
+        return actual.loadContextualProgressSummaries(...args);
+      },
+    ),
+  };
+});
+
 import { app } from "../app";
-import { db } from "../db";
-import { dogs, focusCompatibilityWeeks, legacyFocusClaims, weeklyFocus } from "../db/schema";
+import { CURRICULUM_VERSION } from "../data/training-curriculum";
+import { db, pool } from "../db";
+import {
+  dogSafetySignals,
+  dogs,
+  focusCompatibilityWeeks,
+  journalEntries,
+  legacyFocusClaims,
+  practiceSessions,
+  trainingSkills,
+  weeklyFocus,
+} from "../db/schema";
+import { loadContextualProgressSummaries } from "../lib/contextual-progress-data";
 import { claimLegacyFocus, legacyFocusWeekKey, rememberLegacyFocusWeek } from "../lib/focus";
+import { lockDogSafety } from "../lib/safety-lock";
 import { type TestUser, createTestUser } from "../test-helpers";
 
 const validDog = {
@@ -18,6 +52,38 @@ const WEEK_KEY = "2026-06-01";
 const NEXT_WEEK_KEY = "2026-06-08";
 const FOCUS_QUERY = `weekKey=${WEEK_KEY}&timezoneOffsetMinutes=0&weekEndTimezoneOffsetMinutes=0`;
 const dogIds = new Set<string>();
+const activeSafetyCases = [
+  {
+    name: "injury",
+    signal: "injury_or_pain" as const,
+    referral: "veterinarian" as const,
+    ruleId: "reported_injury_or_pain" as const,
+  },
+  {
+    name: "aggression",
+    signal: "aggression_or_bite_risk" as const,
+    referral: "veterinary_behaviorist" as const,
+    ruleId: "reported_aggression_or_bite_risk" as const,
+  },
+  {
+    name: "severe fear",
+    signal: "severe_fear_or_panic" as const,
+    referral: "veterinary_behaviorist" as const,
+    ruleId: "reported_severe_fear" as const,
+  },
+  {
+    name: "severe recorded concern",
+    signal: "severe_behavior_concern" as const,
+    referral: "veterinary_behaviorist" as const,
+    ruleId: "severe_recorded_concern" as const,
+  },
+  {
+    name: "sustained worsening",
+    signal: null,
+    referral: "credentialed_trainer" as const,
+    ruleId: "sustained_worsening_intensity" as const,
+  },
+] as const;
 
 async function makeDog(u: TestUser) {
   const res = await app.request("/api/dogs", {
@@ -89,6 +155,53 @@ function currentFocusWindow() {
   };
 }
 
+async function activateSafety(
+  dogId: string,
+  safetyCase: (typeof activeSafetyCases)[number],
+): Promise<void> {
+  if (safetyCase.signal) {
+    await db.insert(dogSafetySignals).values({
+      dogId,
+      type: safetyCase.signal,
+      source: "practice_session",
+      reportedAt: new Date(),
+    });
+    return;
+  }
+
+  const occurredAt = new Date();
+  await db.insert(journalEntries).values([
+    {
+      dogId,
+      kind: "moment",
+      occurredAt,
+      note: "high intensity",
+      intensity: 4,
+    },
+    {
+      dogId,
+      kind: "moment",
+      occurredAt,
+      note: "high intensity again",
+      intensity: 4,
+    },
+    {
+      dogId,
+      kind: "daily_checkin",
+      occurredAt,
+      note: "harder check-in",
+      trend: "harder",
+    },
+    {
+      dogId,
+      kind: "daily_checkin",
+      occurredAt,
+      note: "harder check-in again",
+      trend: "harder",
+    },
+  ]);
+}
+
 async function expectDatabaseError(operation: Promise<unknown>, message: string) {
   try {
     await operation;
@@ -102,12 +215,115 @@ async function expectDatabaseError(operation: Promise<unknown>, message: string)
   }
 }
 
+async function waitForAdvisoryLockWaiter() {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const result = await pool.query<{ waiting: boolean }>(
+      "select exists (select 1 from pg_locks where locktype = 'advisory' and not granted and database = (select oid from pg_database where datname = current_database())) as waiting",
+    );
+    if (result.rows[0]?.waiting) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error("timed out waiting for a focus advisory lock waiter");
+}
+
+function beginHeldSafetyWrite(dogId: string) {
+  let markReady: (() => void) | undefined;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve;
+  });
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const write = db.transaction(async (tx) => {
+    await lockDogSafety(tx, dogId);
+    await tx.insert(dogSafetySignals).values({
+      dogId,
+      type: "aggression_or_bite_risk",
+      source: "practice_session",
+      reportedAt: new Date(),
+    });
+    markReady?.();
+    await hold;
+  });
+
+  return { ready, release: () => release?.(), write };
+}
+
+function beginHeldSafetyLock(dogId: string) {
+  let markReady: (() => void) | undefined;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve;
+  });
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const lock = db.transaction(async (tx) => {
+    await lockDogSafety(tx, dogId);
+    markReady?.();
+    await hold;
+  });
+
+  return { ready, release: () => release?.(), lock };
+}
+
+function beginHeldSafetyWorseningThresholdWrite(dogId: string) {
+  let markReady: (() => void) | undefined;
+  let release: (() => void) | undefined;
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve;
+  });
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const write = db.transaction(async (tx) => {
+    await lockDogSafety(tx, dogId);
+    markReady?.();
+    await hold;
+    await tx.insert(journalEntries).values({
+      dogId,
+      kind: "daily_checkin",
+      occurredAt: new Date(),
+      note: "threshold-crossing worsening",
+      intensity: 4,
+      trend: "harder",
+    });
+  });
+
+  return { ready, release: () => release?.(), write };
+}
+
+async function seedJustBelowWorseningThreshold(dogId: string): Promise<void> {
+  const occurredAt = new Date();
+  await db.insert(journalEntries).values([
+    {
+      dogId,
+      kind: "moment",
+      occurredAt,
+      note: "high intensity below threshold",
+      intensity: 4,
+    },
+    {
+      dogId,
+      kind: "daily_checkin",
+      occurredAt,
+      note: "harder below threshold",
+      trend: "harder",
+    },
+  ]);
+}
+
 describe("dogs: weekly focus", () => {
   let u: TestUser;
   beforeAll(async () => {
     u = await createTestUser();
   });
   afterEach(async () => {
+    contextualProgressSummaryControl.captureNow = undefined;
+    contextualProgressSummaryControl.rejection = undefined;
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
     for (const dogId of dogIds) {
       await db.delete(dogs).where(eq(dogs.id, dogId));
     }
@@ -469,23 +685,682 @@ describe("dogs: weekly focus", () => {
     expect(get.status).toBe(200);
     const body = (await get.json()) as {
       focusSkills: Array<{
+        currentLevel: number;
+        dimensions: string[];
         name: string;
         goalName: string;
         sessions: Array<{ occurredAt: string }>;
+        contextualProgress: {
+          status: string;
+          summary: { strongestContext: unknown; nextPracticeAction: unknown };
+        };
       }>;
     };
     expect(body.focusSkills).toHaveLength(1);
     const [focusSkill] = body.focusSkills;
     expect(focusSkill?.name).toBe("Sit");
     expect(focusSkill?.goalName).toBe("Recall");
+    expect(focusSkill?.currentLevel).toBe(1);
+    expect(focusSkill?.dimensions).toEqual([]);
     expect(focusSkill?.sessions).toHaveLength(1);
     expect(focusSkill?.sessions[0]?.occurredAt).toContain("2026-06-03");
+    expect(focusSkill?.contextualProgress).toEqual({
+      status: "ready",
+      summary: { strongestContext: null, nextPracticeAction: null, safety: null },
+    });
     expect(
       await db
         .select()
         .from(weeklyFocus)
         .where(and(eq(weeklyFocus.dogId, dog.id), isNull(weeklyFocus.weekStart))),
     ).toEqual([]);
+  });
+
+  it("returns no summaries without querying evidence when no skills are provided", async () => {
+    const selectSpy = vi.spyOn(db, "select");
+
+    const summaries = await loadContextualProgressSummaries([], new Date());
+
+    expect(summaries).toEqual(new Map());
+    expect(selectSpy).not.toHaveBeenCalled();
+  });
+
+  it("loads current contextual summaries in one batched query and keeps skill groups independent", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    const { skill: customSkill } = await setupDogWithSkillForDog(u, dog.id, "Down");
+    await db
+      .update(trainingSkills)
+      .set({ catalogSkillKey: "basic-manners.sit" })
+      .where(eq(trainingSkills.id, skill.id));
+    await db
+      .update(trainingSkills)
+      .set({ confidence: 2 })
+      .where(eq(trainingSkills.id, customSkill.id));
+
+    const now = new Date();
+    const older = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+    const recent = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const sentinel = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+    const catalogCurrentLevel = 1;
+    const customCurrentLevel = 2;
+    const context = {
+      cueSupport: "hand_signal" as const,
+      environment: "home_quiet" as const,
+      distance: "across_room" as const,
+      durationBand: "about_30_seconds" as const,
+      distraction: "mild" as const,
+    };
+    await db.insert(practiceSessions).values([
+      {
+        skillId: skill.id,
+        occurredAt: older,
+        outcome: "went_well",
+        practiceDay: older.toISOString().slice(0, 10),
+        curriculumLevel: catalogCurrentLevel,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+      {
+        skillId: skill.id,
+        occurredAt: recent,
+        outcome: "went_well",
+        practiceDay: recent.toISOString().slice(0, 10),
+        curriculumLevel: catalogCurrentLevel,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+      {
+        skillId: customSkill.id,
+        occurredAt: older,
+        outcome: "went_well",
+        practiceDay: older.toISOString().slice(0, 10),
+        curriculumLevel: customCurrentLevel,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+      {
+        skillId: customSkill.id,
+        occurredAt: recent,
+        outcome: "went_well",
+        practiceDay: recent.toISOString().slice(0, 10),
+        curriculumLevel: customCurrentLevel,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+      {
+        skillId: customSkill.id,
+        occurredAt: sentinel,
+        outcome: "too_hard",
+        practiceDay: sentinel.toISOString().slice(0, 10),
+        curriculumLevel: catalogCurrentLevel,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+      {
+        skillId: skill.id,
+        occurredAt: sentinel,
+        outcome: "went_well",
+        practiceDay: sentinel.toISOString().slice(0, 10),
+        curriculumLevel: catalogCurrentLevel,
+        curriculumVersion: "obsolete-version",
+        ...context,
+      },
+    ]);
+
+    const selectSpy = vi.spyOn(db, "select");
+    const summaries = await loadContextualProgressSummaries(
+      [
+        {
+          id: skill.id,
+          confidence: catalogCurrentLevel,
+          catalogSkillKey: "basic-manners.sit",
+        },
+        { id: customSkill.id, confidence: customCurrentLevel, catalogSkillKey: null },
+      ],
+      now,
+    );
+    expect(selectSpy).toHaveBeenCalledTimes(1);
+    expect(summaries.get(skill.id)).toEqual({
+      strongestContext: {
+        context,
+        status: "reliable",
+        successfulDistinctDays: 2,
+        latestOutcome: "went_well",
+        lastObservedAt: recent.toISOString(),
+        lastSuccessfulAt: recent.toISOString(),
+      },
+      nextPracticeAction: {
+        ruleId: "advance_reliable_context",
+        direction: "harder",
+        context: { ...context, cueSupport: "verbal_cue" },
+        changedDimension: "cue_support",
+      },
+      safety: null,
+    });
+    expect(summaries.get(customSkill.id)).toEqual({
+      strongestContext: {
+        context,
+        status: "reliable",
+        successfulDistinctDays: 2,
+        latestOutcome: "went_well",
+        lastObservedAt: recent.toISOString(),
+        lastSuccessfulAt: recent.toISOString(),
+      },
+      nextPracticeAction: null,
+      safety: null,
+    });
+  });
+
+  it("uses request time for current summaries even when the focus week is historical", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    await db
+      .update(trainingSkills)
+      .set({ catalogSkillKey: "basic-manners.sit" })
+      .where(eq(trainingSkills.id, skill.id));
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: WEEK_KEY,
+      position: 0,
+    });
+    const evidenceNow = new Date();
+    const older = new Date(evidenceNow.getTime() - 2 * 24 * 60 * 60 * 1000);
+    const recent = new Date(evidenceNow.getTime() - 24 * 60 * 60 * 1000);
+    const context = {
+      cueSupport: "hand_signal" as const,
+      environment: "home_quiet" as const,
+      distance: "across_room" as const,
+      durationBand: "about_30_seconds" as const,
+      distraction: "mild" as const,
+    };
+    await db.insert(practiceSessions).values([
+      {
+        skillId: skill.id,
+        occurredAt: older,
+        outcome: "went_well",
+        practiceDay: older.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+      {
+        skillId: skill.id,
+        occurredAt: recent,
+        outcome: "went_well",
+        practiceDay: recent.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      },
+    ]);
+
+    let summaryNow: Date | undefined;
+    contextualProgressSummaryControl.captureNow = (now) => {
+      summaryNow = now;
+    };
+    const beforeRequest = Date.now();
+    const response = await app.request(`/api/dogs/${dog.id}/focus?${FOCUS_QUERY}`, {
+      headers: u.authHeaders,
+    });
+    const afterRequest = Date.now();
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      focusSkills: Array<{
+        contextualProgress: {
+          status: string;
+          summary: {
+            strongestContext: { status: string } | null;
+            nextPracticeAction: unknown;
+          };
+        };
+      }>;
+    };
+    const summary = body.focusSkills[0]?.contextualProgress;
+    expect(summary?.status).toBe("ready");
+    expect(summary?.summary).toEqual({
+      strongestContext: expect.objectContaining({ status: "reliable" }),
+      nextPracticeAction: expect.objectContaining({ direction: "harder" }),
+      safety: null,
+    });
+    expect(body.focusSkills).toHaveLength(1);
+    expect(summaryNow?.getTime()).toBeGreaterThanOrEqual(beforeRequest);
+    expect(summaryNow?.getTime()).toBeLessThanOrEqual(afterRequest);
+  });
+
+  it("preserves focus sessions and controls when contextual summaries are unavailable", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: WEEK_KEY,
+      position: 0,
+    });
+    await logSession(u, dog.id, skill.id, "2026-06-03T12:00:00.000Z");
+    const rawError = "summary-owner-content-sentinel";
+    contextualProgressSummaryControl.rejection = new TypeError(rawError);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await app.request(`/api/dogs/${dog.id}/focus?${FOCUS_QUERY}`, {
+      headers: u.authHeaders,
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      focusSkills: Array<{
+        skillId: string;
+        name: string;
+        sessions: Array<{ occurredAt: string }>;
+        contextualProgress: { status: string };
+      }>;
+    };
+    expect(body.focusSkills).toEqual([
+      expect.objectContaining({
+        skillId: skill.id,
+        name: "Sit",
+        sessions: [expect.objectContaining({ occurredAt: expect.stringContaining("2026-06-03") })],
+        contextualProgress: { status: "unavailable" },
+      }),
+    ]);
+    expect(vi.mocked(loadContextualProgressSummaries)).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith("[contextual-progress] focus_summary_failed", {
+      dogId: dog.id,
+      weekKey: WEEK_KEY,
+      errorType: "Unexpected TypeError",
+    });
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(rawError);
+  });
+
+  it.each(activeSafetyCases)(
+    "suppresses batched next actions while the dog has active $name safety",
+    async (safetyCase) => {
+      const { dog, skill } = await setupDogWithSkill(u);
+      await db.insert(weeklyFocus).values({
+        dogId: dog.id,
+        skillId: skill.id,
+        weekStart: currentFocusWindow().weekKey,
+        position: 0,
+      });
+      const now = new Date();
+      const first = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+      const second = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      await db.insert(practiceSessions).values([
+        {
+          skillId: skill.id,
+          occurredAt: first,
+          outcome: "went_well",
+          practiceDay: first.toISOString().slice(0, 10),
+          curriculumLevel: 1,
+          curriculumVersion: CURRICULUM_VERSION,
+          cueSupport: "hand_signal",
+          environment: "home_quiet",
+          distance: "few_steps",
+          durationBand: "about_15_seconds",
+          distraction: "none",
+        },
+        {
+          skillId: skill.id,
+          occurredAt: second,
+          outcome: "went_well",
+          practiceDay: second.toISOString().slice(0, 10),
+          curriculumLevel: 1,
+          curriculumVersion: CURRICULUM_VERSION,
+          cueSupport: "hand_signal",
+          environment: "home_quiet",
+          distance: "few_steps",
+          durationBand: "about_15_seconds",
+          distraction: "none",
+        },
+      ]);
+      await activateSafety(dog.id, safetyCase);
+
+      const response = await app.request(
+        `/api/dogs/${dog.id}/focus?${currentFocusWindow().query}`,
+        {
+          headers: u.authHeaders,
+        },
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        focusSkills: Array<{
+          contextualProgress:
+            | {
+                status: "ready";
+                summary: {
+                  strongestContext: { status: string } | null;
+                  nextPracticeAction: unknown;
+                  safety: { ruleId: string; referral: string } | null;
+                };
+              }
+            | { status: "unavailable" };
+        }>;
+      };
+      expect(body.focusSkills[0]?.contextualProgress).toEqual({
+        status: "ready",
+        summary: {
+          strongestContext: expect.objectContaining({ status: "reliable" }),
+          nextPracticeAction: null,
+          safety: {
+            suppressed: true,
+            ruleId: safetyCase.ruleId,
+            referral: safetyCase.referral,
+          },
+        },
+      });
+    },
+  );
+
+  it("waits for a concurrent aggression report before deriving batched contextual progress", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    const focusWindow = currentFocusWindow();
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: focusWindow.weekKey,
+      position: 0,
+    });
+    const now = new Date();
+    const context = {
+      cueSupport: "hand_signal" as const,
+      environment: "home_quiet" as const,
+      distance: "few_steps" as const,
+      durationBand: "about_15_seconds" as const,
+      distraction: "none" as const,
+    };
+    for (const daysAgo of [2, 1]) {
+      const occurredAt = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+      await db.insert(practiceSessions).values({
+        skillId: skill.id,
+        occurredAt,
+        outcome: "went_well",
+        practiceDay: occurredAt.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      });
+    }
+
+    const safetyWrite = beginHeldSafetyWrite(dog.id);
+    await safetyWrite.ready;
+    let completed = false;
+    const responsePromise = Promise.resolve(
+      app.request(`/api/dogs/${dog.id}/focus?${focusWindow.query}`, {
+        headers: u.authHeaders,
+      }),
+    ).then((response) => {
+      completed = true;
+      return response;
+    });
+
+    try {
+      await waitForAdvisoryLockWaiter();
+      expect(completed).toBe(false);
+      safetyWrite.release();
+      await safetyWrite.write;
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        focusSkills: Array<{
+          contextualProgress:
+            | {
+                status: "ready";
+                summary: {
+                  nextPracticeAction: unknown;
+                  safety: { ruleId: string; referral: string } | null;
+                };
+              }
+            | { status: "unavailable" };
+        }>;
+      };
+      expect(body.focusSkills[0]?.contextualProgress).toEqual({
+        status: "ready",
+        summary: {
+          strongestContext: expect.any(Object),
+          nextPracticeAction: null,
+          safety: {
+            suppressed: true,
+            ruleId: "reported_aggression_or_bite_risk",
+            referral: "veterinary_behaviorist",
+          },
+        },
+      });
+    } finally {
+      safetyWrite.release();
+      await Promise.allSettled([safetyWrite.write, responsePromise]);
+    }
+  });
+
+  it("uses the post-lock safety clock when worsening crosses the threshold while focus waits", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    await db
+      .update(trainingSkills)
+      .set({ catalogSkillKey: "basic-manners.sit" })
+      .where(eq(trainingSkills.id, skill.id));
+    const focusWindow = currentFocusWindow();
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: focusWindow.weekKey,
+      position: 0,
+    });
+    const now = new Date();
+    const context = {
+      cueSupport: "hand_signal" as const,
+      environment: "home_quiet" as const,
+      distance: "few_steps" as const,
+      durationBand: "about_15_seconds" as const,
+      distraction: "none" as const,
+    };
+    for (const daysAgo of [2, 1]) {
+      const occurredAt = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+      await db.insert(practiceSessions).values({
+        skillId: skill.id,
+        occurredAt,
+        outcome: "went_well",
+        practiceDay: occurredAt.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        ...context,
+      });
+    }
+    await seedJustBelowWorseningThreshold(dog.id);
+
+    const before = await app.request(`/api/dogs/${dog.id}/focus?${focusWindow.query}`, {
+      headers: u.authHeaders,
+    });
+    expect(before.status).toBe(200);
+    const beforeBody = (await before.json()) as {
+      focusSkills: Array<{
+        contextualProgress: {
+          status: string;
+          summary?: { safety: unknown; nextPracticeAction: unknown };
+        };
+      }>;
+    };
+    expect(beforeBody.focusSkills[0]?.contextualProgress).toEqual({
+      status: "ready",
+      summary: {
+        strongestContext: expect.any(Object),
+        nextPracticeAction: expect.any(Object),
+        safety: null,
+      },
+    });
+
+    const safetyWrite = beginHeldSafetyWorseningThresholdWrite(dog.id);
+    await safetyWrite.ready;
+    let completed = false;
+    const responsePromise = Promise.resolve(
+      app.request(`/api/dogs/${dog.id}/focus?${focusWindow.query}`, {
+        headers: u.authHeaders,
+      }),
+    ).then((response) => {
+      completed = true;
+      return response;
+    });
+
+    try {
+      await waitForAdvisoryLockWaiter();
+      expect(completed).toBe(false);
+      safetyWrite.release();
+      await safetyWrite.write;
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        focusSkills: Array<{
+          contextualProgress:
+            | {
+                status: "ready";
+                summary: {
+                  nextPracticeAction: unknown;
+                  safety: { ruleId: string; referral: string } | null;
+                };
+              }
+            | { status: "unavailable" };
+        }>;
+      };
+      expect(body.focusSkills[0]?.contextualProgress).toEqual({
+        status: "ready",
+        summary: {
+          strongestContext: expect.any(Object),
+          nextPracticeAction: null,
+          safety: {
+            suppressed: true,
+            ruleId: "sustained_worsening_intensity",
+            referral: "credentialed_trainer",
+          },
+        },
+      });
+    } finally {
+      safetyWrite.release();
+      await Promise.allSettled([safetyWrite.write, responsePromise]);
+    }
+  });
+
+  it("uses the new level when a level update commits while focus waits for safety", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    const focusWindow = currentFocusWindow();
+    await db
+      .update(trainingSkills)
+      .set({ catalogSkillKey: "basic-manners.sit" })
+      .where(eq(trainingSkills.id, skill.id));
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: focusWindow.weekKey,
+      position: 0,
+    });
+    const now = new Date();
+    for (const daysAgo of [2, 1]) {
+      const occurredAt = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+      await db.insert(practiceSessions).values({
+        skillId: skill.id,
+        occurredAt,
+        outcome: "went_well",
+        practiceDay: occurredAt.toISOString().slice(0, 10),
+        curriculumLevel: 1,
+        curriculumVersion: CURRICULUM_VERSION,
+        cueSupport: "hand_signal",
+        environment: "home_quiet",
+        distance: "few_steps",
+        durationBand: "about_15_seconds",
+        distraction: "none",
+      });
+    }
+
+    const safetyLock = beginHeldSafetyLock(dog.id);
+    await safetyLock.ready;
+    let completed = false;
+    const responsePromise = Promise.resolve(
+      app.request(`/api/dogs/${dog.id}/focus?${focusWindow.query}`, {
+        headers: u.authHeaders,
+      }),
+    ).then((response) => {
+      completed = true;
+      return response;
+    });
+
+    try {
+      await waitForAdvisoryLockWaiter();
+      expect(completed).toBe(false);
+
+      const levelUpdate = await app.request(`/api/dogs/${dog.id}/skills/${skill.id}/level`, {
+        method: "PUT",
+        headers: u.authHeaders,
+        body: JSON.stringify({ level: 2 }),
+      });
+      expect(levelUpdate.status).toBe(200);
+
+      safetyLock.release();
+      await safetyLock.lock;
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        focusSkills: [
+          {
+            skillId: skill.id,
+            currentLevel: 2,
+            contextualProgress: {
+              status: "ready",
+              summary: {
+                strongestContext: null,
+                nextPracticeAction: null,
+                safety: null,
+              },
+            },
+          },
+        ],
+      });
+    } finally {
+      safetyLock.release();
+      await Promise.allSettled([safetyLock.lock, responsePromise]);
+    }
+  });
+
+  it("uses the focus replacement committed while focus waits for safety", async () => {
+    const { dog, skill } = await setupDogWithSkill(u);
+    const { skill: replacement } = await setupDogWithSkillForDog(u, dog.id, "Down");
+    const focusWindow = currentFocusWindow();
+    await db.insert(weeklyFocus).values({
+      dogId: dog.id,
+      skillId: skill.id,
+      weekStart: focusWindow.weekKey,
+      position: 0,
+    });
+
+    const safetyLock = beginHeldSafetyLock(dog.id);
+    await safetyLock.ready;
+    const responsePromise = Promise.resolve(
+      app.request(`/api/dogs/${dog.id}/focus?${focusWindow.query}`, {
+        headers: u.authHeaders,
+      }),
+    );
+
+    try {
+      await waitForAdvisoryLockWaiter();
+
+      const focusUpdate = await app.request(`/api/dogs/${dog.id}/focus`, {
+        method: "POST",
+        headers: u.authHeaders,
+        body: JSON.stringify({ skillId: replacement.id, weekKey: focusWindow.weekKey }),
+      });
+      expect(focusUpdate.status).toBe(200);
+
+      safetyLock.release();
+      await safetyLock.lock;
+
+      const response = await responsePromise;
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        focusSkills: [expect.objectContaining({ skillId: replacement.id })],
+      });
+    } finally {
+      safetyLock.release();
+      await Promise.allSettled([safetyLock.lock, responsePromise]);
+    }
   });
 
   it("returns 404 when a new-contract POST names an unowned skill", async () => {

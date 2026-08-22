@@ -5,16 +5,34 @@ import { useLogSession } from "@/lib/progress";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   type PracticeDimension,
+  type PracticeEvidenceInput,
   type PracticeSessionInput,
   practiceOutcomeValues,
   practiceSessionSchema,
   safetySignalValues,
 } from "@turingcare/shared";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
 const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
+type InitialEvidence = Pick<
+  PracticeEvidenceInput,
+  "cueSupport" | "environment" | "distance" | "durationBand" | "distraction"
+>;
+
+function getRenderedInitialEvidence(
+  dimensions: PracticeDimension[],
+  initialEvidence: InitialEvidence | undefined,
+): Partial<InitialEvidence> {
+  const values: Partial<InitialEvidence> = {};
+  for (const dimension of dimensions) {
+    const field = DIMENSION_CONFIG[dimension].field;
+    const value = initialEvidence?.[field];
+    Object.assign(values, { [field]: value });
+  }
+  return values;
+}
 
 function localDateTime() {
   const now = new Date();
@@ -26,28 +44,98 @@ export function SessionForm({
   dogId,
   skillId,
   dimensions,
+  currentLevel,
+  initialEvidence,
   onCancel,
   onSaved,
 }: {
   dogId: string;
   skillId: string;
   dimensions: PracticeDimension[];
+  currentLevel: number;
+  initialEvidence?: InitialEvidence;
   onCancel: () => void;
   onSaved?: () => void;
 }) {
   const { t } = useI18n();
   const logSession = useLogSession(dogId);
+  const confirmationHelpId = useId();
+  const dimensionsKey = dimensions.join("|");
+  const recommendationKey = (Object.keys(DIMENSION_CONFIG) as PracticeDimension[])
+    .map((dimension) => {
+      const field = DIMENSION_CONFIG[dimension].field;
+      return `${field}:${initialEvidence?.[field] ?? ""}`;
+    })
+    .join("|");
+  // The serialized key keeps unstable prop identities from resetting user input.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keys capture rendered dimensions and recommendation values
+  const initialFormValues = useMemo(
+    () => ({
+      occurredAt: localDateTime(),
+      ...getRenderedInitialEvidence(dimensions, initialEvidence),
+    }),
+    [dimensionsKey, recommendationKey],
+  );
   const {
     register,
     handleSubmit,
-    watch,
+    unregister,
+    reset,
+    getValues,
+    setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<PracticeSessionInput>({
     resolver: zodResolver(practiceSessionSchema),
-    defaultValues: { occurredAt: localDateTime() },
+    defaultValues: initialFormValues,
+    shouldUnregister: true,
   });
-  const selectedSafetySignal = watch("safetySignal");
+  const formValues = useWatch({ control });
+  const selectedSafetySignal = useWatch({ control, name: "safetySignal" });
+  const currentLevelConfirmed = useWatch({ control, name: "confirmCurrentLevel" }) === true;
+  const hasStructuredEvidence = Boolean(
+    formValues.outcome ||
+      dimensions.some((dimension) => Boolean(formValues[DIMENSION_CONFIG[dimension].field])),
+  );
   const [safetyConfirmed, setSafetyConfirmed] = useState(false);
+  const previousFormShape = useRef({
+    dimensionsKey,
+    recommendationKey,
+  });
+
+  useEffect(() => {
+    const previous = previousFormShape.current;
+    const recommendationChanged = previous.recommendationKey !== recommendationKey;
+    const dimensionsChanged = previous.dimensionsKey !== dimensionsKey;
+
+    if (recommendationChanged) {
+      reset(initialFormValues);
+      unregister("confirmCurrentLevel");
+      setSafetyConfirmed(false);
+    } else if (dimensionsChanged) {
+      reset({
+        ...initialFormValues,
+        ...getValues(),
+        ...(currentLevelConfirmed ? { confirmCurrentLevel: true } : {}),
+      });
+    }
+
+    previousFormShape.current = { dimensionsKey, recommendationKey };
+  }, [
+    dimensionsKey,
+    getValues,
+    initialFormValues,
+    currentLevelConfirmed,
+    recommendationKey,
+    reset,
+    unregister,
+  ]);
+
+  useEffect(() => {
+    if (!hasStructuredEvidence) {
+      unregister("confirmCurrentLevel");
+    }
+  }, [hasStructuredEvidence, unregister]);
 
   const onSubmit = handleSubmit(async (body) => {
     if (body.safetySignal && !safetyConfirmed) {
@@ -56,15 +144,38 @@ export function SessionForm({
     }
     try {
       const occurredAt = new Date(body.occurredAt);
-      await logSession.mutateAsync({
+      const { confirmCurrentLevel, ...bodyWithoutConfirmation } = body;
+      const submittedHasStructuredEvidence = Boolean(
+        body.outcome ||
+          dimensions.some((dimension) => Boolean(body[DIMENSION_CONFIG[dimension].field])),
+      );
+      const submittedBody: PracticeSessionInput = {
+        ...bodyWithoutConfirmation,
+        ...(submittedHasStructuredEvidence && confirmCurrentLevel
+          ? { confirmCurrentLevel: true }
+          : {}),
+      };
+      const result = await logSession.mutateAsync({
         skillId,
         body: {
-          ...body,
+          ...submittedBody,
           occurredAt: occurredAt.toISOString(),
           timezoneOffsetMinutes: occurredAt.getTimezoneOffset(),
         },
       });
-      toast.success(t("progress.saved"));
+      const feedback =
+        result.anchorRejected === "practice_day_required"
+          ? t("practice.anchorRejectedPracticeDay")
+          : result.anchorRejected === "target_locked"
+            ? t("practice.anchorRejectedTargetLocked")
+            : result.anchorRejected
+              ? t("practice.anchorRejectedGeneric")
+              : t("progress.saved");
+      if (result.anchorRejected) {
+        toast.warning(feedback);
+      } else {
+        toast.success(feedback);
+      }
       onSaved?.();
     } catch (error) {
       toast.error(
@@ -80,7 +191,7 @@ export function SessionForm({
       className="space-y-3 rounded border border-silver bg-cream p-3"
       onSubmit={(event) => {
         event.stopPropagation();
-        onSubmit();
+        void onSubmit(event);
       }}
     >
       <label className="block">
@@ -179,6 +290,33 @@ export function SessionForm({
           />
           {t("practice.safetyConfirm")}
         </label>
+      )}
+      {hasStructuredEvidence && (
+        <div className="block text-sm">
+          <label>
+            <input
+              type="checkbox"
+              className="mr-2 size-4 accent-copper"
+              aria-describedby={confirmationHelpId}
+              checked={currentLevelConfirmed}
+              onChange={(event) => {
+                if (event.target.checked) setValue("confirmCurrentLevel", true);
+                else unregister("confirmCurrentLevel");
+              }}
+            />
+            <span>{t("contextProgress.confirmCurrentLevel", { level: currentLevel })}</span>
+          </label>
+          {currentLevelConfirmed && (
+            <input
+              type="hidden"
+              {...register("confirmCurrentLevel", { setValueAs: () => true })}
+              value="true"
+            />
+          )}
+          <span id={confirmationHelpId} className="ml-6 block text-xs text-slate-soft">
+            {t("contextProgress.confirmCurrentLevelHelp")}
+          </span>
+        </div>
       )}
       <div className="flex gap-2">
         <Button type="submit" disabled={isSubmitting || logSession.isPending}>

@@ -36,7 +36,7 @@ const validDog = {
 
 type Setup = { user: TestUser; dogId: string; skillId: string };
 
-async function setup(users: TestUser[]): Promise<Setup> {
+async function setup(users: TestUser[], confidence = 2): Promise<Setup> {
   const user = await createTestUser();
   users.push(user);
   const dogResponse = await app.request("/api/dogs", {
@@ -54,7 +54,7 @@ async function setup(users: TestUser[]): Promise<Setup> {
   const skillResponse = await app.request(`/api/dogs/${dog.id}/goals/${goal.id}/skills`, {
     method: "POST",
     headers: user.authHeaders,
-    body: JSON.stringify({ name: "Sit", confidence: 2 }),
+    body: JSON.stringify({ name: "Sit", confidence }),
   });
   const { skill } = (await skillResponse.json()) as { skill: { id: string } };
   return { user, dogId: dog.id, skillId: skill.id };
@@ -93,6 +93,12 @@ function postSession(s: Setup, body: Record<string, unknown>) {
   });
 }
 
+async function loadSession(id: string) {
+  const [row] = await db.select().from(practiceSessions).where(eq(practiceSessions.id, id));
+  if (!row) throw new Error("failed to load practice session");
+  return row;
+}
+
 describe("practice evidence", () => {
   const users: TestUser[] = [];
   afterEach(async () => {
@@ -129,6 +135,10 @@ describe("practice evidence", () => {
         distance: "few_steps",
         durationBand: "about_15_seconds",
         distraction: "mild",
+        curriculumLevel: null,
+        curriculumVersion: null,
+        practiceVariant: null,
+        suggestionId: null,
       },
     });
   });
@@ -580,5 +590,232 @@ describe("practice evidence", () => {
     await expect(
       db.insert(advancementProposals).values({ ...values, status: "proposed" }),
     ).rejects.toThrow();
+  });
+
+  it("26. stamps the locked skill level for confirmed manual POST evidence", async () => {
+    const s = await setup(users, 3);
+    const response = await postSession(s, {
+      timezoneOffsetMinutes: 0,
+      outcome: "went_well",
+      confirmCurrentLevel: true,
+    });
+    expect(response.status).toBe(201);
+    expect((await response.json()) as object).toMatchObject({
+      session: {
+        outcome: "went_well",
+        curriculumLevel: 3,
+        curriculumVersion: CURRICULUM_VERSION,
+        practiceVariant: null,
+        suggestionId: null,
+      },
+      anchorRejected: null,
+    });
+  });
+
+  it("27. returns practice_day_required while saving unanchored confirmed POST evidence", async () => {
+    const s = await setup(users, 3);
+    const response = await postSession(s, {
+      outcome: "mixed",
+      confirmCurrentLevel: true,
+    });
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as {
+      session: { id: string };
+      anchorRejected: string | null;
+    };
+    expect(body).toMatchObject({
+      session: {
+        outcome: "mixed",
+        curriculumLevel: null,
+        curriculumVersion: null,
+        practiceVariant: null,
+        suggestionId: null,
+        practiceDay: null,
+      },
+      anchorRejected: "practice_day_required",
+    });
+    expect(await loadSession(body.session.id)).toMatchObject({
+      outcome: "mixed",
+      curriculumLevel: null,
+      curriculumVersion: null,
+      practiceVariant: null,
+      suggestionId: null,
+      practiceDay: null,
+    });
+  });
+
+  it("28. PATCH anchors an unanchored quick log only from the saved practice day", async () => {
+    const s = await setup(users, 3);
+    const created = await postSession(s, { timezoneOffsetMinutes: 0 });
+    const { session } = (await created.json()) as { session: { id: string } };
+    const response = await app.request(
+      `/api/dogs/${s.dogId}/skills/${s.skillId}/sessions/${session.id}/evidence`,
+      {
+        method: "PATCH",
+        headers: s.user.authHeaders,
+        body: JSON.stringify({ outcome: "went_well", confirmCurrentLevel: true }),
+      },
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()) as object).toMatchObject({
+      session: {
+        outcome: "went_well",
+        curriculumLevel: 3,
+        curriculumVersion: CURRICULUM_VERSION,
+        practiceVariant: null,
+        suggestionId: null,
+      },
+      anchorRejected: null,
+    });
+  });
+
+  it("29. PATCH preserves unanchored quick-log evidence while returning practice_day_required", async () => {
+    const s = await setup(users, 3);
+    const created = await postSession(s, {});
+    const { session } = (await created.json()) as { session: { id: string } };
+    const response = await app.request(
+      `/api/dogs/${s.dogId}/skills/${s.skillId}/sessions/${session.id}/evidence`,
+      {
+        method: "PATCH",
+        headers: s.user.authHeaders,
+        body: JSON.stringify({
+          outcome: "mixed",
+          cueSupport: "verbal_cue",
+          environment: "home_quiet",
+          distance: "few_steps",
+          durationBand: "about_15_seconds",
+          distraction: "mild",
+          confirmCurrentLevel: true,
+        }),
+      },
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      session: {
+        outcome: string | null;
+        cueSupport: string | null;
+        environment: string | null;
+        distance: string | null;
+        durationBand: string | null;
+        distraction: string | null;
+        curriculumLevel: number | null;
+        curriculumVersion: string | null;
+        practiceVariant: string | null;
+        suggestionId: string | null;
+        practiceDay: string | null;
+      };
+      anchorRejected: string | null;
+    };
+    expect(body).toMatchObject({
+      session: {
+        outcome: "mixed",
+        cueSupport: "verbal_cue",
+        environment: "home_quiet",
+        distance: "few_steps",
+        durationBand: "about_15_seconds",
+        distraction: "mild",
+        curriculumLevel: null,
+        curriculumVersion: null,
+        practiceVariant: null,
+        suggestionId: null,
+        practiceDay: null,
+      },
+      anchorRejected: "practice_day_required",
+    });
+    expect(await loadSession(session.id)).toMatchObject({
+      outcome: "mixed",
+      cueSupport: "verbal_cue",
+      environment: "home_quiet",
+      distance: "few_steps",
+      durationBand: "about_15_seconds",
+      distraction: "mild",
+      curriculumLevel: null,
+      curriculumVersion: null,
+      practiceVariant: null,
+      suggestionId: null,
+      practiceDay: null,
+    });
+  });
+
+  it("30. PATCH keeps the original anchor when manual confirmation is target_locked", async () => {
+    const s = await setup(users, 3);
+    const target = await suggestion(s.dogId, s.skillId);
+    const created = await postSession(s, {
+      timezoneOffsetMinutes: 0,
+      practicedTarget: { suggestionId: target.id, variant: "primary" },
+    });
+    const { session } = (await created.json()) as { session: { id: string } };
+    const response = await app.request(
+      `/api/dogs/${s.dogId}/skills/${s.skillId}/sessions/${session.id}/evidence`,
+      {
+        method: "PATCH",
+        headers: s.user.authHeaders,
+        body: JSON.stringify({
+          outcome: "mixed",
+          cueSupport: "verbal_cue",
+          confirmCurrentLevel: true,
+        }),
+      },
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()) as object).toMatchObject({
+      session: {
+        outcome: "mixed",
+        cueSupport: "verbal_cue",
+        curriculumLevel: 2,
+        curriculumVersion: CURRICULUM_VERSION,
+        practiceVariant: "primary",
+        suggestionId: target.id,
+      },
+      anchorRejected: "target_locked",
+    });
+    expect(await loadSession(session.id)).toMatchObject({
+      outcome: "mixed",
+      cueSupport: "verbal_cue",
+      curriculumLevel: 2,
+      curriculumVersion: CURRICULUM_VERSION,
+      practiceVariant: "primary",
+      suggestionId: target.id,
+    });
+  });
+
+  it("31. races manual anchoring with a level change without mixing server-owned anchors", async () => {
+    const s = await setup(users, 2);
+    const created = await postSession(s, { timezoneOffsetMinutes: 0 });
+    const { session } = (await created.json()) as { session: { id: string } };
+    const [response, levelResponse] = await Promise.all([
+      app.request(`/api/dogs/${s.dogId}/skills/${s.skillId}/sessions/${session.id}/evidence`, {
+        method: "PATCH",
+        headers: s.user.authHeaders,
+        body: JSON.stringify({ outcome: "went_well", confirmCurrentLevel: true }),
+      }),
+      app.request(`/api/dogs/${s.dogId}/skills/${s.skillId}/level`, {
+        method: "PUT",
+        headers: s.user.authHeaders,
+        body: JSON.stringify({ level: 3 }),
+      }),
+    ]);
+    expect(levelResponse.status).toBe(200);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      session: {
+        curriculumLevel: number | null;
+        curriculumVersion: string | null;
+        practiceVariant: string | null;
+        suggestionId: string | null;
+      };
+      anchorRejected: string | null;
+    };
+    expect(body.anchorRejected).toBeNull();
+    expect([2, 3]).toContain(body.session.curriculumLevel);
+    expect(body.session.curriculumVersion).toBe(CURRICULUM_VERSION);
+    expect(body.session.practiceVariant).toBeNull();
+    expect(body.session.suggestionId).toBeNull();
+    expect(await loadSession(session.id)).toMatchObject({
+      curriculumLevel: body.session.curriculumLevel,
+      curriculumVersion: CURRICULUM_VERSION,
+      practiceVariant: null,
+      suggestionId: null,
+    });
   });
 });

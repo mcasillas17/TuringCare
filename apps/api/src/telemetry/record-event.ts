@@ -8,6 +8,8 @@ export interface RecordEventArgs {
   props?: Record<string, unknown>;
 }
 
+type EventWriter = Pick<DB, "insert">;
+
 /**
  * Error-safe telemetry write. Callers `await` it, but it NEVER throws into
  * the request path: a failed/absent events table must not break signup or
@@ -16,7 +18,7 @@ export interface RecordEventArgs {
 export async function recordEvent(
   name: EventName,
   args: RecordEventArgs = {},
-  database: DB = defaultDb,
+  database: EventWriter = defaultDb,
 ): Promise<void> {
   try {
     await database.insert(events).values({

@@ -46,6 +46,12 @@ export const referralCategoryValues = [
 ] as const;
 export type ReferralCategory = (typeof referralCategoryValues)[number];
 
+export const suggestionSafetySchema = z.object({
+  suppressed: z.literal(true),
+  ruleId: z.enum(safetyRuleValues),
+  referral: z.enum(referralCategoryValues),
+});
+
 /** Owner-initiated actions on a shown suggestion. */
 export const suggestionActionValues = [
   "started",
@@ -141,11 +147,7 @@ export type AdvancementProposalDto = {
   decidedAt: string | null;
 };
 
-export type SuggestionSafety = {
-  suppressed: true;
-  ruleId: SafetyRule;
-  referral: ReferralCategory;
-};
+export type SuggestionSafety = z.infer<typeof suggestionSafetySchema>;
 
 export type TrainingSuggestion = {
   suggestionId: string | null;

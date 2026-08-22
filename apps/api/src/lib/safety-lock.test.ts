@@ -5,7 +5,7 @@ import { app } from "../app";
 import { db, pool } from "../db";
 import { dogSafetySignals } from "../db/schema";
 import { type TestUser, createTestUser } from "../test-helpers";
-import { withDogSafetyLock } from "./safety-lock";
+import { withDogSafetyLock, withDogSafetySharedLock } from "./safety-lock";
 
 /**
  * Asks an independent connection whether the dog-safety advisory lock is free.
@@ -17,6 +17,21 @@ async function dogSafetyLockIsFree(dogId: string): Promise<boolean> {
     await probe.query("begin");
     const { rows } = await probe.query<{ acquired: boolean }>(
       "select pg_try_advisory_xact_lock(hashtext($1)) as acquired",
+      [`dog-safety:${dogId}`],
+    );
+    return rows[0]?.acquired === true;
+  } finally {
+    await probe.query("rollback");
+    probe.release();
+  }
+}
+
+async function dogSafetySharedLockIsFree(dogId: string): Promise<boolean> {
+  const probe = await pool.connect();
+  try {
+    await probe.query("begin");
+    const { rows } = await probe.query<{ acquired: boolean }>(
+      "select pg_try_advisory_xact_lock_shared(hashtext($1)) as acquired",
       [`dog-safety:${dogId}`],
     );
     return rows[0]?.acquired === true;
@@ -71,6 +86,32 @@ describe("withDogSafetyLock", () => {
     const dogId = randomUUID();
     const otherDogId = randomUUID();
     expect(await withDogSafetyLock(dogId, async () => dogSafetyLockIsFree(otherDogId))).toBe(true);
+  });
+
+  it("allows two safety readers for the same dog to enter concurrently", async () => {
+    const dogId = randomUUID();
+
+    const secondReader = await withDogSafetySharedLock(dogId, async () =>
+      withDogSafetySharedLock(dogId, async () => "second reader entered"),
+    );
+
+    expect(secondReader).toBe("second reader entered");
+  });
+
+  it("makes an exclusive safety writer wait while a safety reader is active", async () => {
+    const dogId = randomUUID();
+
+    await withDogSafetySharedLock(dogId, async () => {
+      expect(await dogSafetyLockIsFree(dogId)).toBe(false);
+    });
+  });
+
+  it("makes a safety reader wait while an exclusive safety writer is active", async () => {
+    const dogId = randomUUID();
+
+    await withDogSafetyLock(dogId, async () => {
+      expect(await dogSafetySharedLockIsFree(dogId)).toBe(false);
+    });
   });
 
   it("rolls the guarded write back and releases the lock when the callback throws", async () => {

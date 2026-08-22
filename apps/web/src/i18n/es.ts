@@ -566,6 +566,47 @@ export const es = {
     advSaved: "Actualizado.",
     advFailed: "No se pudo guardar tu respuesta.",
   },
+  contextProgress: {
+    confirmCurrentLevel: "Practiqué esto en el nivel actual {level}.",
+    confirmCurrentLevelHelp:
+      "Esto permite que TuringCare compare esta práctica con otras del mismo nivel.",
+    title: "Progreso por contexto",
+    window: "Ventana reciente de {days} días",
+    recentWindow: "Basado en los {days} días más recientes",
+    strongest: "Contexto reciente más sólido",
+    practiceNext: "Próxima práctica",
+    reliable: "Confiable",
+    developing: "En desarrollo",
+    notObserved: "Sin observar",
+    needsSupport: "Este contexto necesita más apoyo.",
+    noEvidence: "No hay evidencia reciente",
+    empty:
+      "Agrega un resultado y el contexto después de practicar para ver dónde esta habilidad se vuelve confiable.",
+    loadError: "No se pudo cargar el progreso por contexto.",
+    actionUnavailable:
+      "Este plan de práctica no está disponible. Registra un resultado y contexto nuevos antes de usarlo.",
+    retry: "Reintentar",
+    useAction: "Usar este plan de práctica",
+    viewEvidence: "Evidencia del contexto",
+    viewAllEvidence: "Ver toda la evidencia",
+    successfulDay: "{days} día exitoso",
+    successfulDays: "{days} días exitosos",
+    lastObserved: "Última observación: {date}",
+    lastSuccessful: "Última práctica exitosa: {date}",
+    latestOutcome: "Último resultado: {outcome}",
+    cueSupport: "Ayuda",
+    environment: "Entorno",
+    distance: "Distancia",
+    durationBand: "Duración",
+    distraction: "Distracciones",
+    notRecorded: "No registrado",
+    directionEasier: "Más fácil",
+    directionHarder: "Un paso más difícil",
+    directionRepeat: "Repetir este contexto",
+    reasonEasier: "Usa un poco más de apoyo antes de avanzar.",
+    reasonHarder: "Este contexto es confiable para probar un pequeño paso.",
+    reasonRepeat: "Sigue construyendo consistencia en este contexto.",
+  },
   practice: {
     outcomeQuestion: "¿Cómo les fue?",
     outcomeWentWell: "Salió bien",
@@ -578,6 +619,14 @@ export const es = {
     practicedFallback: "Alternativa más fácil",
     outcomeSaved: "Gracias, quedó registrado.",
     outcomeFailed: "No se pudo guardar.",
+    anchorRejectedPracticeDay:
+      "Se guardó la práctica, pero no se registró la confirmación del nivel actual porque esta práctica no corresponde a un día válido.",
+    anchorRejectedTargetLocked:
+      "Se guardó la práctica, pero no se registró la confirmación del nivel actual porque esta práctica ya tiene otro anclaje de entrenamiento.",
+    anchorRejectedGeneric:
+      "Se guardó la práctica, pero no se registró la confirmación del nivel actual.",
+    auditedAnchorOmitted:
+      "La respuesta de práctica se guardó, pero no quedó vinculada a la sugerencia de entrenamiento original.",
     contextTitle: "Detalles de la práctica",
     contextOptional: "opcional",
     dimCueSupport: "ayuda",
@@ -706,6 +755,9 @@ export const es = {
     selectFocusSkill: "Habilidad en foco",
     cellLog: "Registrar {skill} el {day}",
     cellFilled: "{skill} el {day}: {n} sesiones",
+    focusLoadError:
+      "No se pudo cargar el enfoque de esta semana. Intenta de nuevo o edita tu enfoque.",
+    retryFocus: "Reintentar",
   },
   brief: {
     title: "Resumen de conducta",

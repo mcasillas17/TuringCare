@@ -29,6 +29,8 @@ export const KNOWN_EVENTS = [
   "safety.signal_reported",
   "safety.suppression_shown",
   "training.level_set",
+  "training.context_insight_viewed",
+  "training.context_next_action_used",
   "trainer.viewed",
   "course.viewed",
 ] as const;
