@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   advancementProposals,
   advancementStatusEnum,
+  briefs,
   dogSafetySignals,
   dogs,
   guidedSetups,
@@ -99,6 +100,41 @@ describe("journal schema", () => {
       "occurred_at",
       "id",
     ]);
+  });
+});
+
+describe("briefs schema", () => {
+  it("declares one active share index per dog for non-private briefs", () => {
+    const index = getTableConfig(briefs).indexes.find(
+      ({ config }) => config.name === "briefs_one_active_share_per_dog_idx",
+    );
+
+    expect(index?.config.unique).toBe(true);
+    expect(index?.config.columns.map((column) => ("name" in column ? column.name : null))).toEqual([
+      "dog_id",
+    ]);
+    expect(summarizeSql(index?.config.where)).toEqual([
+      { kind: "string", value: "" },
+      { kind: "column", name: "share_token" },
+      { kind: "string", value: " IS NOT NULL" },
+    ]);
+  });
+
+  it("keeps the committed brief share privacy cleanup migration", () => {
+    const migrationSql = readFileSync(
+      new URL("../../drizzle/0020_brief_share_privacy.sql", import.meta.url),
+      "utf8",
+    );
+
+    expect(migrationSql).toMatch(
+      /row_number\(\) OVER \(\s*PARTITION BY "dog_id"\s*ORDER BY "version" DESC, "generated_at" DESC, "id" DESC\s*\)/s,
+    );
+    expect(migrationSql).toMatch(
+      /UPDATE "briefs"\s+SET "share_token" = NULL\s+FROM ranked_briefs\s+WHERE "briefs"\."id" = ranked_briefs\."id"\s+AND ranked_briefs\.brief_rank > 1\s+AND "briefs"\."share_token" IS NOT NULL;/s,
+    );
+    expect(migrationSql).toMatch(
+      /CREATE UNIQUE INDEX "briefs_one_active_share_per_dog_idx" ON "briefs" USING btree \("dog_id"\) WHERE (?:"briefs"\.)?"share_token" IS NOT NULL;/,
+    );
   });
 });
 
