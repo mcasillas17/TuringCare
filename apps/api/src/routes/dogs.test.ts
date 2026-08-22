@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { db, pool } from "../db";
 import {
+  briefSends,
   briefs,
   guidedSetups,
   practiceSessions,
@@ -893,6 +894,31 @@ describe("dogs: brief", () => {
     });
     return ((await r.json()) as { dog: { id: string } }).dog;
   }
+
+  async function seedDuplicateVersionBriefs(dogId: string) {
+    const [older, newer] = await db
+      .insert(briefs)
+      .values([
+        {
+          dogId,
+          summary: "Older duplicate version Brief",
+          version: 7,
+          status: "draft",
+          generatedAt: new Date("2026-02-01T08:00:00.000Z"),
+        },
+        {
+          dogId,
+          summary: "Newer duplicate version Brief",
+          version: 7,
+          status: "draft",
+          generatedAt: new Date("2026-02-01T09:00:00.000Z"),
+        },
+      ])
+      .returning({ id: briefs.id, summary: briefs.summary });
+    if (!older || !newer) throw new Error("expected seeded duplicate Brief rows");
+    return { older, newer };
+  }
+
   it("generates, fetches, finalizes a brief", async () => {
     const u = await createTestUser();
     users.push(u);
@@ -950,6 +976,51 @@ describe("dogs: brief", () => {
     });
     expect(fin.status).toBe(200);
     expect(((await fin.json()) as { brief: { status: string } }).brief.status).toBe("finalized");
+  });
+
+  it("selects the newest generated Brief when duplicate versions exist", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const seeded = await seedDuplicateVersionBriefs(dog.id);
+
+    const fetchedResponse = await app.request(`/api/dogs/${dog.id}/brief`, {
+      headers: u.authHeaders,
+    });
+    expect(fetchedResponse.status).toBe(200);
+    expect(
+      (
+        (await fetchedResponse.json()) as {
+          brief: { id: string; summary: string; status: string };
+        }
+      ).brief,
+    ).toMatchObject({
+      id: seeded.newer.id,
+      summary: seeded.newer.summary,
+      status: "draft",
+    });
+
+    const finalizedResponse = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "PUT",
+      headers: u.authHeaders,
+    });
+    expect(finalizedResponse.status).toBe(200);
+    expect(
+      ((await finalizedResponse.json()) as { brief: { id: string; status: string } }).brief,
+    ).toMatchObject({
+      id: seeded.newer.id,
+      status: "finalized",
+    });
+
+    const rows = await db
+      .select({ id: briefs.id, status: briefs.status })
+      .from(briefs)
+      .where(eq(briefs.dogId, dog.id))
+      .orderBy(asc(briefs.generatedAt));
+    expect(rows).toEqual([
+      { id: seeded.older.id, status: "draft" },
+      { id: seeded.newer.id, status: "finalized" },
+    ]);
   });
 
   it("serializes simultaneous generation into sequential Brief versions", async () => {
@@ -1481,6 +1552,45 @@ describe("dogs: brief send", () => {
     };
     expect(send.recipient).toBe("sarah@example.com");
     expect(send.message).toBe("Hi Sarah");
+  });
+
+  it("POST send: uses the newest generated finalized brief when duplicate versions exist", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const [, newer] = await db
+      .insert(briefs)
+      .values([
+        {
+          dogId: dog.id,
+          summary: "Older duplicate finalized Brief",
+          version: 7,
+          status: "finalized",
+          generatedAt: new Date("2026-03-01T08:00:00.000Z"),
+        },
+        {
+          dogId: dog.id,
+          summary: "Newer duplicate finalized Brief",
+          version: 7,
+          status: "finalized",
+          generatedAt: new Date("2026-03-01T09:00:00.000Z"),
+        },
+      ])
+      .returning({ id: briefs.id });
+    if (!newer) throw new Error("expected newer duplicate finalized Brief row");
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "sarah@example.com", message: "Hi Sarah" }),
+    });
+    expect(response.status).toBe(201);
+
+    const sends = await db
+      .select({ briefId: briefSends.briefId })
+      .from(briefSends)
+      .where(eq(briefSends.sentByUserId, u.userId));
+    expect(sends).toEqual([{ briefId: newer.id }]);
   });
 
   it("POST send: returns 409 when brief is draft", async () => {

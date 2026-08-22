@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
@@ -173,14 +174,17 @@ describe("brief share mint/revoke", () => {
     const cookie = await signedUpCookie(email);
     const firstDogId = await createDog(cookie, "First");
     const secondDogId = await createDog(cookie, "Second");
+    const firstToken = `first-${randomUUID()}`;
+    const secondToken = `second-${randomUUID()}`;
+    const thirdToken = `third-${randomUUID()}`;
 
     await db.insert(briefs).values([
-      { dogId: firstDogId, summary: "First shared Brief", version: 1, shareToken: "first-token" },
+      { dogId: firstDogId, summary: "First shared Brief", version: 1, shareToken: firstToken },
       {
         dogId: secondDogId,
         summary: "Second shared Brief",
         version: 1,
-        shareToken: "second-token",
+        shareToken: secondToken,
       },
     ]);
 
@@ -189,7 +193,7 @@ describe("brief share mint/revoke", () => {
         dogId: firstDogId,
         summary: "Invalid second active Brief",
         version: 2,
-        shareToken: "third-token",
+        shareToken: thirdToken,
       }),
     ).rejects.toThrow();
   });

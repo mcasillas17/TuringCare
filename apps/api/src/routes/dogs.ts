@@ -86,6 +86,7 @@ const invalidJournalField = (path: "occurredAt" | "trend", message: string) =>
       issues: [{ code: "custom", path: [path], message }],
     },
   }) as const;
+const latestBriefOrder = [desc(briefs.version), desc(briefs.generatedAt), desc(briefs.id)] as const;
 
 function hasConstraint(error: unknown, constraint: string): boolean {
   if (!error || typeof error !== "object") return false;
@@ -1169,7 +1170,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .select()
       .from(briefs)
       .where(eq(briefs.dogId, dog.id))
-      .orderBy(desc(briefs.version))
+      .orderBy(...latestBriefOrder)
       .limit(1);
     return c.json({ brief: brief ?? null });
   })
@@ -1181,7 +1182,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         .select()
         .from(briefs)
         .where(eq(briefs.dogId, dog.id))
-        .orderBy(desc(briefs.version), desc(briefs.generatedAt), desc(briefs.id))
+        .orderBy(...latestBriefOrder)
         .limit(1);
       if (!latest) return null;
       if (latest.shareToken) return latest.shareToken;
@@ -1263,7 +1264,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         .select({ version: briefs.version })
         .from(briefs)
         .where(eq(briefs.dogId, dog.id))
-        .orderBy(desc(briefs.version), desc(briefs.generatedAt), desc(briefs.id))
+        .orderBy(...latestBriefOrder)
         .limit(1);
       const [inserted] = await tx
         .insert(briefs)
@@ -1282,7 +1283,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .select()
       .from(briefs)
       .where(eq(briefs.dogId, dog.id))
-      .orderBy(desc(briefs.version))
+      .orderBy(...latestBriefOrder)
       .limit(1);
     if (!latest) return c.json({ error: "not_found" } as const, 404);
     const [brief] = await db
@@ -1313,7 +1314,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .select()
       .from(briefs)
       .where(eq(briefs.dogId, dog.id))
-      .orderBy(desc(briefs.version))
+      .orderBy(...latestBriefOrder)
       .limit(1);
     if (!brief) return c.json({ error: "not_found" } as const, 404);
     if (brief.status !== "finalized") {
