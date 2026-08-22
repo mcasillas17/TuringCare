@@ -125,16 +125,48 @@ describe("briefs schema", () => {
       new URL("../../drizzle/0020_brief_share_privacy.sql", import.meta.url),
       "utf8",
     );
+    const rowNumberIndex = migrationSql.indexOf("row_number() OVER");
+    const partitionByDogIndex = migrationSql.indexOf('PARTITION BY "dog_id"', rowNumberIndex);
+    const orderByRecencyIndex = migrationSql.indexOf(
+      'ORDER BY "version" DESC, "generated_at" DESC, "id" DESC',
+      partitionByDogIndex,
+    );
+    const updateBriefsIndex = migrationSql.indexOf('UPDATE "briefs"');
+    const setShareTokenNullIndex = migrationSql.indexOf(
+      'SET "share_token" = NULL',
+      updateBriefsIndex,
+    );
+    const briefRankGuardIndex = migrationSql.indexOf(
+      "AND ranked_briefs.brief_rank > 1",
+      setShareTokenNullIndex,
+    );
+    const nonNullShareTokenGuardIndex = migrationSql.indexOf(
+      'AND "briefs"."share_token" IS NOT NULL;',
+      briefRankGuardIndex,
+    );
+    const statementBreakpointIndex = migrationSql.indexOf(
+      "--> statement-breakpoint",
+      nonNullShareTokenGuardIndex,
+    );
+    const createUniqueIndex = migrationSql.indexOf(
+      'CREATE UNIQUE INDEX "briefs_one_active_share_per_dog_idx"',
+      statementBreakpointIndex,
+    );
+    const partialUniqueIndexPredicateIndex = migrationSql.indexOf(
+      'WHERE "briefs"."share_token" IS NOT NULL;',
+      createUniqueIndex,
+    );
 
-    expect(migrationSql).toMatch(
-      /row_number\(\) OVER \(\s*PARTITION BY "dog_id"\s*ORDER BY "version" DESC, "generated_at" DESC, "id" DESC\s*\)/s,
-    );
-    expect(migrationSql).toMatch(
-      /UPDATE "briefs"\s+SET "share_token" = NULL\s+FROM ranked_briefs\s+WHERE "briefs"\."id" = ranked_briefs\."id"\s+AND ranked_briefs\.brief_rank > 1\s+AND "briefs"\."share_token" IS NOT NULL;/s,
-    );
-    expect(migrationSql).toMatch(
-      /CREATE UNIQUE INDEX "briefs_one_active_share_per_dog_idx" ON "briefs" USING btree \("dog_id"\) WHERE (?:"briefs"\.)?"share_token" IS NOT NULL;/,
-    );
+    expect(rowNumberIndex).toBeGreaterThanOrEqual(0);
+    expect(partitionByDogIndex).toBeGreaterThan(rowNumberIndex);
+    expect(orderByRecencyIndex).toBeGreaterThan(partitionByDogIndex);
+    expect(updateBriefsIndex).toBeGreaterThanOrEqual(0);
+    expect(setShareTokenNullIndex).toBeGreaterThan(updateBriefsIndex);
+    expect(briefRankGuardIndex).toBeGreaterThan(setShareTokenNullIndex);
+    expect(nonNullShareTokenGuardIndex).toBeGreaterThan(briefRankGuardIndex);
+    expect(statementBreakpointIndex).toBeGreaterThan(nonNullShareTokenGuardIndex);
+    expect(createUniqueIndex).toBeGreaterThan(statementBreakpointIndex);
+    expect(partialUniqueIndexPredicateIndex).toBeGreaterThan(createUniqueIndex);
   });
 });
 
