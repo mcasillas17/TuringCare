@@ -21,7 +21,7 @@ import {
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
-import { and, count, desc, eq, gte, isNull, lt, max, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNotNull, isNull, lt, max, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -51,6 +51,7 @@ import { env } from "../env";
 import { decideAdvancementProposal } from "../lib/advancement";
 import { createBehaviorConcern } from "../lib/behavior-concern-writes";
 import { composeBrief } from "../lib/brief";
+import { withBriefLifecycleLock } from "../lib/brief-lifecycle";
 import { loadContextualProgress } from "../lib/contextual-progress-data";
 import { createDog } from "../lib/dog-writes";
 import { loadDogsOverview } from "../lib/dogs-overview";
@@ -1175,32 +1176,50 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   .post("/:id/brief/share", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const [brief] = await db
-      .select()
-      .from(briefs)
-      .where(eq(briefs.dogId, dog.id))
-      .orderBy(desc(briefs.version))
-      .limit(1);
-    if (!brief) return c.json({ error: "no_brief" } as const, 404);
-    let token = brief.shareToken;
-    if (!token) {
-      token = randomBytes(18).toString("base64url");
-      await db.update(briefs).set({ shareToken: token }).where(eq(briefs.id, brief.id));
-    }
+    const token = await withBriefLifecycleLock(dog.id, async (tx) => {
+      const [latest] = await tx
+        .select()
+        .from(briefs)
+        .where(eq(briefs.dogId, dog.id))
+        .orderBy(desc(briefs.version), desc(briefs.generatedAt), desc(briefs.id))
+        .limit(1);
+      if (!latest) return null;
+      if (latest.shareToken) return latest.shareToken;
+
+      await tx
+        .update(briefs)
+        .set({ shareToken: null })
+        .where(and(eq(briefs.dogId, dog.id), isNotNull(briefs.shareToken)));
+      const generatedToken = randomBytes(18).toString("base64url");
+      const [updated] = await tx
+        .update(briefs)
+        .set({ shareToken: generatedToken })
+        .where(eq(briefs.id, latest.id))
+        .returning({ shareToken: briefs.shareToken });
+      if (!updated?.shareToken) throw new Error("failed to share Brief");
+      return updated.shareToken;
+    });
+    if (!token) return c.json({ error: "no_brief" } as const, 404);
     await recordEvent("brief.shared", { userId: c.get("userId") });
     return c.json({ token, url: `${env.FRONTEND_URL}/b/${token}` });
   })
   .delete("/:id/brief/share", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const [brief] = await db
-      .select()
-      .from(briefs)
-      .where(eq(briefs.dogId, dog.id))
-      .orderBy(desc(briefs.version))
-      .limit(1);
-    if (!brief) return c.json({ error: "not_found" } as const, 404);
-    await db.update(briefs).set({ shareToken: null }).where(eq(briefs.id, brief.id));
+    const hasBrief = await withBriefLifecycleLock(dog.id, async (tx) => {
+      const [brief] = await tx
+        .select({ id: briefs.id })
+        .from(briefs)
+        .where(eq(briefs.dogId, dog.id))
+        .limit(1);
+      if (!brief) return false;
+      await tx
+        .update(briefs)
+        .set({ shareToken: null })
+        .where(and(eq(briefs.dogId, dog.id), isNotNull(briefs.shareToken)));
+      return true;
+    });
+    if (!hasBrief) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
   .post("/:id/brief", zValidator("query", briefGenerateSchema), async (c) => {
@@ -1212,17 +1231,11 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     const journalWhere = cutoff
       ? and(eq(journalEntries.dogId, dog.id), gte(journalEntries.occurredAt, cutoff))
       : eq(journalEntries.dogId, dog.id);
-    const [concerns, goals, entries, progress, [last]] = await Promise.all([
+    const [concerns, goals, entries, progress] = await Promise.all([
       db.select().from(behaviorConcerns).where(eq(behaviorConcerns.dogId, dog.id)),
       db.select().from(trainingGoals).where(eq(trainingGoals.dogId, dog.id)),
       db.select().from(journalEntries).where(journalWhere),
       loadProgress(dog.id),
-      db
-        .select()
-        .from(briefs)
-        .where(eq(briefs.dogId, dog.id))
-        .orderBy(desc(briefs.version))
-        .limit(1),
     ]);
     const summary = composeBrief({
       dog: { name: dog.name, breed: dog.breed, size: dog.size, sex: dog.sex },
@@ -1241,10 +1254,24 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       windowDays,
       progress: progress.goals,
     });
-    const [brief] = await db
-      .insert(briefs)
-      .values({ dogId: dog.id, summary, version: (last?.version ?? 0) + 1, status: "draft" })
-      .returning();
+    const brief = await withBriefLifecycleLock(dog.id, async (tx) => {
+      await tx
+        .update(briefs)
+        .set({ shareToken: null })
+        .where(and(eq(briefs.dogId, dog.id), isNotNull(briefs.shareToken)));
+      const [latest] = await tx
+        .select({ version: briefs.version })
+        .from(briefs)
+        .where(eq(briefs.dogId, dog.id))
+        .orderBy(desc(briefs.version), desc(briefs.generatedAt), desc(briefs.id))
+        .limit(1);
+      const [inserted] = await tx
+        .insert(briefs)
+        .values({ dogId: dog.id, summary, version: (latest?.version ?? 0) + 1, status: "draft" })
+        .returning();
+      if (!inserted) throw new Error("failed to generate Brief");
+      return inserted;
+    });
     await recordEvent("brief.generated", { userId: c.get("userId"), props: { window } });
     return c.json({ brief }, 201);
   })
