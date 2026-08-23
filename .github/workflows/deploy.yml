@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
 
+# A production rollout is one indivisible queue item. Never cancel an older
+# migration/API/web sequence in favor of a newer commit, and never interleave
+# two schema rollouts.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   # Same gate as ci.yml (inlined). Must pass before anything deploys.
   ci:
@@ -46,6 +53,10 @@ jobs:
         run: pnpm -r test
       - name: Build
         run: pnpm -r build
+      - name: Build production API image
+        run: docker build --file Dockerfile.api --tag turingcare-api:ci .
+      - name: Smoke production API image
+        run: scripts/smoke-api-image.sh turingcare-api:ci
 
   # Apply every pending migration through 0013. The locale-aware API requires
   # 0013, while the version constraint in 0014 must wait until legacy read-max
@@ -99,10 +110,10 @@ jobs:
       - name: Migrate production database
         run: pnpm --filter @turingcare/api db:migrate
 
-  # Frontend is independent of the API path — runs in parallel with
-  # deploy-api/migrate, gated only on ci.
+  # The locale-aware frontend requires the compatible API and schema. Publish
+  # it only after the API rollout and every migration complete successfully.
   deploy-web:
-    needs: ci
+    needs: migrate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

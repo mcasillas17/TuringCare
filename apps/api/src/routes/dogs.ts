@@ -22,6 +22,7 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { getTrainingCatalog } from "../data/training-catalog";
 import { db } from "../db";
+import { resolveLatestBriefRows } from "../db/latest-brief";
 import { findOwnedDog } from "../db/owned-dog";
 import { findOwnedSkill } from "../db/owned-skill";
 import {
@@ -473,13 +474,17 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .get("/:id/brief", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const [brief] = await db
+    const rows = await db
       .select()
       .from(briefs)
       .where(eq(briefs.dogId, dog.id))
       .orderBy(desc(briefs.version))
-      .limit(1);
-    return c.json({ brief: brief ?? null });
+      .limit(2);
+    const latest = resolveLatestBriefRows(rows);
+    if (latest.kind === "conflict") {
+      return c.json({ error: "brief_version_conflict" } as const, 409);
+    }
+    return c.json({ brief: latest.kind === "found" ? latest.brief : null });
   })
   .post("/:id/brief/share", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
@@ -492,14 +497,18 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         .for("update");
       if (!lockedDog) return { kind: "not_found" } as const;
 
-      const [brief] = await tx
-        .select()
-        .from(briefs)
-        .where(eq(briefs.dogId, lockedDog.id))
-        .orderBy(desc(briefs.version))
-        .limit(1)
-        .for("update");
-      if (!brief) return { kind: "no_brief" } as const;
+      const latest = resolveLatestBriefRows(
+        await tx
+          .select()
+          .from(briefs)
+          .where(eq(briefs.dogId, lockedDog.id))
+          .orderBy(desc(briefs.version))
+          .limit(2)
+          .for("update"),
+      );
+      if (latest.kind !== "found")
+        return latest.kind === "conflict" ? latest : ({ kind: "no_brief" } as const);
+      const brief = latest.brief;
       if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
       if (brief.shareToken) return { kind: "shared", token: brief.shareToken } as const;
 
@@ -514,6 +523,9 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     });
     if (result.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
     if (result.kind === "no_brief") return c.json({ error: "no_brief" } as const, 404);
+    if (result.kind === "conflict") {
+      return c.json({ error: "brief_version_conflict" } as const, 409);
+    }
     if (result.kind === "not_finalized") {
       return c.json({ error: "not_finalized" } as const, 409);
     }
@@ -523,22 +535,25 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .delete("/:id/brief/share", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const revoked = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [lockedDog] = await tx
         .select({ id: dogs.id })
         .from(dogs)
         .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
         .for("update");
-      if (!lockedDog) return false;
+      if (!lockedDog) return { kind: "not_found" } as const;
 
-      const [brief] = await tx
-        .select({ id: briefs.id })
-        .from(briefs)
-        .where(eq(briefs.dogId, lockedDog.id))
-        .orderBy(desc(briefs.version))
-        .limit(1)
-        .for("update");
-      if (!brief) return false;
+      const latest = resolveLatestBriefRows(
+        await tx
+          .select({ id: briefs.id, version: briefs.version })
+          .from(briefs)
+          .where(eq(briefs.dogId, lockedDog.id))
+          .orderBy(desc(briefs.version))
+          .limit(2)
+          .for("update"),
+      );
+      if (latest.kind !== "found") return latest;
+      const brief = latest.brief;
 
       const [updated] = await tx
         .update(briefs)
@@ -546,9 +561,14 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         .where(eq(briefs.id, brief.id))
         .returning({ id: briefs.id });
       if (!updated) throw new Error("failed to revoke brief share token");
-      return true;
+      return { kind: "revoked" } as const;
     });
-    if (!revoked) return c.json({ error: "not_found" } as const, 404);
+    if (result.kind === "missing" || result.kind === "not_found") {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    if (result.kind === "conflict") {
+      return c.json({ error: "brief_version_conflict" } as const, 409);
+    }
     return c.json({ ok: true } as const);
   })
   .post("/:id/brief", stableZValidator("query", briefGenerateSchema), async (c) => {
@@ -630,24 +650,30 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
         .for("update");
       if (!lockedDog) return null;
-      const [latest] = await tx
-        .select({ id: briefs.id })
-        .from(briefs)
-        .where(eq(briefs.dogId, lockedDog.id))
-        .orderBy(desc(briefs.version))
-        .limit(1)
-        .for("update");
-      if (!latest) return null;
+      const latest = resolveLatestBriefRows(
+        await tx
+          .select({ id: briefs.id, version: briefs.version })
+          .from(briefs)
+          .where(eq(briefs.dogId, lockedDog.id))
+          .orderBy(desc(briefs.version))
+          .limit(2)
+          .for("update"),
+      );
+      if (latest.kind !== "found") return latest;
       const [updated] = await tx
         .update(briefs)
         .set({ status: "finalized" })
-        .where(and(eq(briefs.id, latest.id), eq(briefs.dogId, lockedDog.id)))
+        .where(and(eq(briefs.id, latest.brief.id), eq(briefs.dogId, lockedDog.id)))
         .returning();
-      return updated ?? null;
+      return updated ? ({ kind: "finalized", brief: updated } as const) : null;
     });
     if (!brief) return c.json({ error: "not_found" } as const, 404);
+    if (brief.kind === "missing") return c.json({ error: "not_found" } as const, 404);
+    if (brief.kind === "conflict") {
+      return c.json({ error: "brief_version_conflict" } as const, 409);
+    }
     await recordEvent("brief.finalized", { userId: c.get("userId") });
-    return c.json({ brief });
+    return c.json({ brief: brief.brief });
   })
   .post("/:id/brief/send", stableZValidator("json", briefSendSchema), async (c) => {
     const userId = c.get("userId");
@@ -657,9 +683,17 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     const windowStart = new Date(Date.now() - 86_400_000);
     const body = c.req.valid("json");
     const result = await db.transaction(async (tx) => {
-      // Keep the same dog→Brief lock order as generation, finalization, and
-      // sharing. Dog deletion therefore cannot commit between provider
-      // delivery and the transaction that commits its audit.
+      // One user row serializes the per-user daily quota across all dogs.
+      // Every send follows user→dog→Brief; account deletion takes the user
+      // row first, while dog deletion only takes the dog row, so neither can
+      // create an opposing lock edge.
+      const [owner] = await tx
+        .select({ id: user.id, email: user.email, name: user.name })
+        .from(user)
+        .where(eq(user.id, userId))
+        .for("update");
+      if (!owner) return { kind: "not_found" } as const;
+
       const [lockedDog] = await tx
         .select({ id: dogs.id, name: dogs.name })
         .from(dogs)
@@ -697,6 +731,20 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
           : ({ kind: "idempotency_conflict" } as const);
       }
 
+      const latest = resolveLatestBriefRows(
+        await tx
+          .select()
+          .from(briefs)
+          .where(eq(briefs.dogId, lockedDog.id))
+          .orderBy(desc(briefs.version))
+          .limit(2)
+          .for("update"),
+      );
+      if (latest.kind === "missing") return { kind: "not_found" } as const;
+      if (latest.kind === "conflict") return latest;
+      const brief = latest.brief;
+      if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
+
       // Replays return before this quota check; only new provider deliveries count.
       const [sendCount] = await tx
         .select({ value: count() })
@@ -704,22 +752,6 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         .where(and(eq(briefSends.sentByUserId, userId), gte(briefSends.sentAt, windowStart)));
       if ((sendCount?.value ?? 0) >= 10) return { kind: "rate_limited" } as const;
 
-      const [brief] = await tx
-        .select()
-        .from(briefs)
-        .where(eq(briefs.dogId, lockedDog.id))
-        .orderBy(desc(briefs.version))
-        .limit(1)
-        .for("update");
-      if (!brief) return { kind: "not_found" } as const;
-      if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
-
-      const [owner] = await tx
-        .select({ email: user.email, name: user.name })
-        .from(user)
-        .where(eq(user.id, userId))
-        .limit(1);
-      if (!owner) return { kind: "not_found" } as const;
       const email = renderBriefEmail(
         {
           dogName: lockedDog.name,
@@ -769,6 +801,9 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     if (result.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
     if (result.kind === "not_finalized") {
       return c.json({ error: "not_finalized" } as const, 409);
+    }
+    if (result.kind === "conflict") {
+      return c.json({ error: "brief_version_conflict" } as const, 409);
     }
     if (result.kind === "rate_limited") {
       return c.json({ error: "send_rate_limited" } as const, 429);

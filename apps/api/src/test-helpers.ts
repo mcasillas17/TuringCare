@@ -11,17 +11,26 @@ export type TestUser = {
   cleanup: () => Promise<void>;
 };
 
+function nextTestIp() {
+  const hex = randomUUID().replaceAll("-", "");
+  return `10.${Number.parseInt(hex.slice(0, 2), 16)}.${Number.parseInt(hex.slice(2, 4), 16)}.${Number.parseInt(hex.slice(4, 6), 16)}`;
+}
+
 /**
  * Sign a throwaway user up via Better Auth and return its session cookie.
- * Each user gets a unique x-forwarded-for so the global rate-limiter never
- * cross-talks between tests. cleanup() deletes the user (cascade removes
- * dogs/concerns/goals/session/account).
+ * Each user gets a fresh valid IP for Better Auth's proxy-aware limiter and
+ * the app's trusted Fly-IP limiter, preventing cross-test rate-limit state.
+ * cleanup() deletes the user (cascade removes dogs/concerns/goals/session/account).
  */
 export async function createTestUser(): Promise<TestUser> {
   const id = randomUUID();
-  const ip = `198.51.100.${Math.floor(Math.random() * 254) + 1}`;
+  const ip = nextTestIp();
   const email = `test-${id}@example.com`;
-  const baseHeaders = { "Content-Type": "application/json", "x-forwarded-for": ip };
+  const baseHeaders = {
+    "Content-Type": "application/json",
+    "fly-client-ip": ip,
+    "x-forwarded-for": ip,
+  };
 
   const res = await app.request("/api/auth/sign-up/email", {
     method: "POST",

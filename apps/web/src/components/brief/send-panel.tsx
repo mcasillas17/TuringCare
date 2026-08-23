@@ -1,10 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useValidationMessage } from "@/i18n/validation";
+import { createBriefSendIdempotencyKey } from "@/lib/brief-idempotency";
 import { useBriefSends, useSendBrief } from "@/lib/brief-send";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type BriefSendInput, briefSendSchema } from "@turingcare/shared";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -22,6 +23,7 @@ export function SendPanel({
   const { t, locale } = useI18n();
   const validationMessage = useValidationMessage();
   const send = useSendBrief(dogId);
+  const submission = useRef<{ intent: string; idempotencyKey: string } | undefined>(undefined);
   const { data: sends } = useBriefSends(dogId);
   const {
     register,
@@ -44,7 +46,12 @@ export function SendPanel({
 
   const onSubmit = handleSubmit(async (v) => {
     try {
-      await send.mutateAsync(v);
+      const intent = JSON.stringify([v.recipient, v.message ?? null]);
+      if (submission.current?.intent !== intent) {
+        submission.current = { intent, idempotencyKey: createBriefSendIdempotencyKey() };
+      }
+      await send.mutateAsync({ ...v, idempotencyKey: submission.current.idempotencyKey });
+      submission.current = undefined;
       toast.success(t("briefSend.sent"));
       reset();
     } catch {

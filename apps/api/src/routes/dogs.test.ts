@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
@@ -1061,6 +1061,99 @@ describe("dogs: brief", () => {
     );
   });
 
+  it("fails every latest-Brief read and side effect closed on a legacy duplicate maximum", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const legacyToken = `legacy-duplicate-${Date.now()}`;
+    let constraintDropped = false;
+
+    try {
+      await pool.query(`ALTER TABLE "briefs" DROP CONSTRAINT "briefs_dog_id_version_unique"`);
+      constraintDropped = true;
+      await db.insert(briefs).values([
+        {
+          dogId: dog.id,
+          summary: "older finalized artifact",
+          version: 7,
+          status: "finalized",
+          locale: "en",
+          generatedAt: new Date("2026-08-22T12:00:00Z"),
+          shareToken: legacyToken,
+        },
+        {
+          dogId: dog.id,
+          summary: "newer draft artifact",
+          version: 7,
+          status: "draft",
+          locale: "es",
+          generatedAt: new Date("2026-08-23T12:00:00Z"),
+        },
+      ]);
+      const { sendEmail } = await import("../email/send-email");
+      vi.mocked(sendEmail).mockClear();
+
+      const responses = await Promise.all([
+        app.request(`/api/dogs/${dog.id}/brief`, { headers: u.authHeaders }),
+        app.request(`/api/dogs/${dog.id}/brief`, { method: "PUT", headers: u.authHeaders }),
+        app.request(`/api/dogs/${dog.id}/brief/share`, {
+          method: "POST",
+          headers: u.authHeaders,
+        }),
+        app.request(`/api/dogs/${dog.id}/brief/share`, {
+          method: "DELETE",
+          headers: u.authHeaders,
+        }),
+        app.request(`/api/dogs/${dog.id}/brief/send`, {
+          method: "POST",
+          headers: u.authHeaders,
+          body: JSON.stringify({ recipient: "legacy-conflict@example.com" }),
+        }),
+      ]);
+
+      expect(responses.map(({ status }) => status)).toEqual([409, 409, 409, 409, 409]);
+      for (const response of responses) {
+        expect(await response.json()).toEqual({ error: "brief_version_conflict" });
+      }
+      expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+      const repaired = await app.request(`/api/dogs/${dog.id}/brief`, {
+        method: "POST",
+        headers: u.authHeaders,
+      });
+      expect(repaired.status).toBe(201);
+      expect((await repaired.json()) as object).toMatchObject({ brief: { version: 8 } });
+      const latestAfterRepair = await app.request(`/api/dogs/${dog.id}/brief`, {
+        headers: u.authHeaders,
+      });
+      expect(latestAfterRepair.status).toBe(200);
+      expect((await latestAfterRepair.json()) as object).toMatchObject({ brief: { version: 8 } });
+      expect(
+        await db
+          .select({ status: briefs.status, shareToken: briefs.shareToken })
+          .from(briefs)
+          .where(eq(briefs.dogId, dog.id)),
+      ).toEqual(
+        expect.arrayContaining([
+          { status: "finalized", shareToken: legacyToken },
+          { status: "draft", shareToken: null },
+        ]),
+      );
+      expect(
+        await db
+          .select({ id: briefSends.id })
+          .from(briefSends)
+          .where(eq(briefSends.sentByUserId, u.userId)),
+      ).toEqual([]);
+    } finally {
+      if (constraintDropped) {
+        await db.delete(briefs).where(eq(briefs.dogId, dog.id));
+        await pool.query(
+          `ALTER TABLE "briefs" ADD CONSTRAINT "briefs_dog_id_version_unique" UNIQUE ("dog_id", "version")`,
+        );
+      }
+    }
+  });
+
   it("owner isolation: other user 404", async () => {
     const a = await createTestUser();
     const b = await createTestUser();
@@ -1511,6 +1604,97 @@ describe("dogs: brief send", () => {
     expect(secondBody.send.id).toBe(firstBody.send.id);
     expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(sendEmail).mock.calls[0]?.[0].idempotencyKey).toBe(firstBody.send.id);
+  });
+
+  it("POST send: serializes the daily quota across two dogs owned by one user", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const firstDog = await makeDog(u);
+    const secondDog = await makeDog(u);
+    const firstBrief = await makeFinalizedBrief(u, firstDog.id);
+    await makeFinalizedBrief(u, secondDog.id);
+    await db.insert(briefSends).values(
+      Array.from({ length: 9 }, (_, index) => ({
+        briefId: firstBrief.id,
+        recipient: `previous-${index}@example.com`,
+        sentByUserId: u.userId,
+      })),
+    );
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const blocker = await pool.connect();
+    let blockerOpen = false;
+
+    try {
+      await blocker.query("BEGIN");
+      blockerOpen = true;
+      await blocker.query(`SELECT "id" FROM "user" WHERE "id" = $1 FOR UPDATE`, [u.userId]);
+      const pidResult = await blocker.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const blockerPid = Number(pidResult.rows[0]?.pid);
+      const sends = [firstDog, secondDog].map((dog, index) =>
+        app.request(`/api/dogs/${dog.id}/brief/send`, {
+          method: "POST",
+          headers: u.authHeaders,
+          body: JSON.stringify({ recipient: `concurrent-${index}@example.com` }),
+        }),
+      );
+      await waitForBlockingChain(pool, blockerPid, 2);
+      await blocker.query("COMMIT");
+      blockerOpen = false;
+
+      const responses = await Promise.all(sends);
+      expect(responses.map(({ status }) => status).sort()).toEqual([201, 429]);
+      expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+      const [{ value: sendCount } = { value: 0 }] = await db
+        .select({ value: count() })
+        .from(briefSends)
+        .where(eq(briefSends.sentByUserId, u.userId));
+      expect(Number(sendCount)).toBe(10);
+    } finally {
+      if (blockerOpen) await blocker.query("ROLLBACK");
+      blocker.release();
+    }
+  });
+
+  it("POST send: takes the user lock before dog rows so account deletion cannot deadlock", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const deleter = await pool.connect();
+    let deleterOpen = false;
+
+    try {
+      await deleter.query("BEGIN");
+      deleterOpen = true;
+      await deleter.query(`SELECT "id" FROM "user" WHERE "id" = $1 FOR UPDATE`, [u.userId]);
+      const pidResult = await deleter.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const deleterPid = Number(pidResult.rows[0]?.pid);
+      const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
+        method: "POST",
+        headers: u.authHeaders,
+        body: JSON.stringify({ recipient: "account-delete@example.com" }),
+      });
+      await waitForBlockingChain(pool, deleterPid, 1);
+
+      await deleter.query(`DELETE FROM "user" WHERE "id" = $1`, [u.userId]);
+      await deleter.query("COMMIT");
+      deleterOpen = false;
+
+      const response = await send;
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
+      expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+    } finally {
+      if (deleterOpen) await deleter.query("ROLLBACK");
+      deleter.release();
+    }
   });
 
   it("POST send: uses the stored brief locale instead of the current request locale", async () => {

@@ -1,6 +1,7 @@
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { BriefSendInput } from "@turingcare/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SendPanel } from "./send-panel";
 
@@ -99,6 +100,60 @@ describe("SendPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
     await waitFor(() => expect(input.value).toBe(""));
+  });
+
+  it("reuses one idempotency key when an unchanged submission is retried after an ambiguous error", async () => {
+    const posted: BriefSendInput[] = [];
+    stubFetch(async (_url, init) => {
+      if (init?.method === "POST") {
+        posted.push(JSON.parse(String(init.body)) as BriefSendInput);
+        if (posted.length === 1) {
+          return new Response(JSON.stringify({ error: "send_failed" }), { status: 502 });
+        }
+        return new Response(JSON.stringify({ send: { id: posted[0]?.idempotencyKey } }), {
+          status: 201,
+        });
+      }
+      return new Response(JSON.stringify({ sends: [] }), { status: 200 });
+    });
+    setup("finalized");
+    fireEvent.change(await screen.findByLabelText(/Recipient email/i), {
+      target: { value: "retry@example.com" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await waitFor(() => expect(posted).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Send$/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await waitFor(() => expect(posted).toHaveLength(2));
+
+    expect(posted[0]?.idempotencyKey).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(posted[1]?.idempotencyKey).toBe(posted[0]?.idempotencyKey);
+  });
+
+  it("creates a new idempotency key when the submission intent changes after an error", async () => {
+    const posted: BriefSendInput[] = [];
+    stubFetch(async (_url, init) => {
+      if (init?.method === "POST") {
+        posted.push(JSON.parse(String(init.body)) as BriefSendInput);
+        return new Response(JSON.stringify({ error: "send_failed" }), { status: 502 });
+      }
+      return new Response(JSON.stringify({ sends: [] }), { status: 200 });
+    });
+    setup("finalized");
+    const recipient = await screen.findByLabelText(/Recipient email/i);
+    fireEvent.change(recipient, { target: { value: "first@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await waitFor(() => expect(posted).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Send$/i })).toBeEnabled());
+
+    fireEvent.change(recipient, { target: { value: "second@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await waitFor(() => expect(posted).toHaveLength(2));
+
+    expect(posted[1]?.idempotencyKey).not.toBe(posted[0]?.idempotencyKey);
   });
 
   it("renders history list when sends exist", async () => {
