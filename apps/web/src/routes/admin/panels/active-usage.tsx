@@ -9,12 +9,14 @@ import {
   YAxis,
 } from "recharts";
 import type { Metrics } from "../use-metrics";
+import { formatAdminChartDate } from "./chart-date";
 
 export function ActiveUsage({
   active,
   kpis,
 }: { active: Metrics["active"]; kpis: Metrics["kpis"] }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const dateLabel = (dateBucket: unknown) => formatAdminChartDate(locale, dateBucket);
 
   return (
     <section className="rounded-lg border border-silver bg-white p-4">
@@ -28,9 +30,9 @@ export function ActiveUsage({
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={active}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="day" fontSize={11} />
+          <XAxis dataKey="day" fontSize={11} tickFormatter={dateLabel} />
           <YAxis allowDecimals={false} fontSize={11} />
-          <Tooltip />
+          <Tooltip labelFormatter={dateLabel} />
           <Line
             type="monotone"
             dataKey="count"

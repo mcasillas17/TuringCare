@@ -92,7 +92,7 @@ it("adopts a signed-in account locale while rendering the public landing route",
   expect(requestedPaths).toContain("/api/profile");
 });
 
-it("mounts the central cache boundary without blocking the public landing route", async () => {
+it("clears private cache before rendering a signed-in public landing route", async () => {
   window.history.replaceState({}, "", "/");
   useSessionMock.mockReturnValue({ data: { user: { id: "u1" } }, isPending: false });
   vi.stubGlobal(
@@ -142,7 +142,9 @@ it("mounts the central cache boundary without blocking the public landing route"
   expect(queryClient.getQueryData(["training-catalog", "en"])).toEqual({
     marker: "public-catalog",
   });
-  expect(
-    screen.getByRole("heading", { name: /train with positive reinforcement/i }),
-  ).toBeInTheDocument();
+  await waitFor(() =>
+    expect(
+      screen.getByRole("heading", { name: /train with positive reinforcement/i }),
+    ).toBeInTheDocument(),
+  );
 });

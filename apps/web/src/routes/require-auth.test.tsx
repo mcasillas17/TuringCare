@@ -81,4 +81,13 @@ describe("RequireAuth", () => {
     expect(screen.getByText("login page")).toBeInTheDocument();
     expect(screen.queryByText("private content")).not.toBeInTheDocument();
   });
+
+  it.each(["", "   ", 42])("fails closed for the runtime-invalid session user id %j", (userId) => {
+    useSessionMock.mockReturnValue({ data: { user: { id: userId } }, isPending: false });
+
+    setup();
+
+    expect(screen.getByText("login page")).toBeInTheDocument();
+    expect(screen.queryByText("private content")).not.toBeInTheDocument();
+  });
 });

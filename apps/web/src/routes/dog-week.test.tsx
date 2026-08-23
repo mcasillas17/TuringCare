@@ -47,7 +47,8 @@ function setup(focusSkills: focusLib.FocusSkill[]) {
   return { logMutate };
 }
 
-function renderWeek() {
+function renderWeek(locale: "en" | "es" = "en") {
+  localStorage.setItem("tc-locale", locale);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -62,7 +63,12 @@ function renderWeek() {
   );
 }
 
-afterEach(() => vi.resetAllMocks());
+afterEach(() => {
+  localStorage.clear();
+  vi.resetAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe("DogWeek", () => {
   it("shows the pick-focus empty state when there are no focus skills", () => {
@@ -102,5 +108,38 @@ describe("DogWeek", () => {
     const cell = screen.getAllByRole("button", { name: /Log Recall on/i })[0] as HTMLElement;
     fireEvent.click(cell);
     expect(logMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("localizes visual and screen-reader dates plus duration units in Spanish", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-20T18:00:00.000Z"));
+    vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US"] });
+    setup([
+      {
+        skillId: "s1",
+        name: "Recall",
+        goalId: "g1",
+        goalName: "Reliability",
+        position: 0,
+        sessions: [
+          {
+            id: "session-1",
+            occurredAt: "2026-05-18T19:00:00.000Z",
+            durationMinutes: 12,
+          },
+        ],
+      },
+    ]);
+
+    renderWeek("es");
+
+    expect(screen.getByRole("button", { name: "18 may – 24 may" })).toBeInTheDocument();
+    const filledCell = screen.getByRole("button", {
+      name: "Recall el lunes, 18 de mayo de 2026: 1 sesiones",
+    });
+    fireEvent.click(filledCell);
+    expect(screen.getByText(/12 minutos/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /2026-05-18/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/12m/)).not.toBeInTheDocument();
   });
 });

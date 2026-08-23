@@ -5,7 +5,7 @@ import type { ProgressGoal } from "@/lib/progress";
 import * as catalogLib from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProgressPanel } from "./progress-panel";
 
 vi.mock("@/lib/progress", async () => {
@@ -54,9 +54,10 @@ const goals: ProgressGoal[] = [
   },
 ];
 
-function setup() {
+function setup(progressGoals: ProgressGoal[] = goals, locale: "en" | "es" = "en") {
+  localStorage.setItem("tc-locale", locale);
   vi.mocked(progressLib.useProgress).mockReturnValue({
-    data: goals,
+    data: progressGoals,
     isLoading: false,
     isError: false,
   } as unknown as ReturnType<typeof progressLib.useProgress>);
@@ -89,6 +90,12 @@ function setup() {
   );
 }
 
+afterEach(() => {
+  localStorage.clear();
+  vi.resetAllMocks();
+  vi.unstubAllGlobals();
+});
+
 describe("ProgressPanel", () => {
   it("shows a level badge on the collapsed skill row and the stepper when expanded", () => {
     setup();
@@ -101,5 +108,46 @@ describe("ProgressPanel", () => {
     setup();
     expect(screen.queryByText(/Confidence: 1-5/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /remove basic manners/i })).toBeInTheDocument();
+  });
+
+  it("formats Spanish progress dates and duration units independently of browser English", () => {
+    vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US"] });
+    const baseGoal = goals[0];
+    const baseSkill = baseGoal?.skills[0];
+    if (!baseGoal || !baseSkill) throw new Error("missing progress fixture");
+
+    setup(
+      [
+        {
+          ...baseGoal,
+          skills: [
+            {
+              ...baseSkill,
+              confidence: 2,
+              sessionCount: 1,
+              lastSessionAt: "2026-05-19T00:30:00.000Z",
+              sessions: [
+                {
+                  id: "session-1",
+                  occurredAt: "2026-05-19T00:30:00.000Z",
+                  durationMinutes: 12,
+                  notes: null,
+                  createdAt: "2026-05-19T00:30:00.000Z",
+                },
+              ],
+              milestones: [{ level: 2, reachedAt: "2026-05-19T00:30:00.000Z" }],
+            },
+          ],
+        },
+      ],
+      "es",
+    );
+
+    expect(screen.getByText(/Última sesión: 19 may/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /mostrar sit/i }));
+    expect(screen.getByText(/alcanzado 19 may/)).toBeInTheDocument();
+    expect(screen.getByText(/19 de mayo de 2026 · 12 minutos/)).toBeInTheDocument();
+    expect(screen.queryByText(/2026-05-19/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/May 18/)).not.toBeInTheDocument();
   });
 });

@@ -16,6 +16,7 @@ import {
 } from "@/lib/week";
 import { focusKey, useFocusWeek } from "@/lib/weekly-focus";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatDateInUtc } from "@turingcare/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -78,7 +79,12 @@ export function DogWeek() {
     refreshFocus();
   };
 
-  const rangeLabel = `${days[0]?.toLocaleDateString(locale, { month: "short", day: "numeric" })} – ${days[6]?.toLocaleDateString(locale, { month: "short", day: "numeric" })}`;
+  const firstDay = days[0];
+  const lastDay = days[6];
+  const rangeLabel =
+    firstDay && lastDay
+      ? `${formatDateInUtc(locale, dayKey(firstDay), { month: "short", day: "numeric" }) ?? ""} – ${formatDateInUtc(locale, dayKey(lastDay), { month: "short", day: "numeric" }) ?? ""}`
+      : "";
 
   return (
     <div className="space-y-4">

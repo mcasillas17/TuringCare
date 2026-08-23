@@ -16,6 +16,7 @@ import {
 } from "@/lib/progress";
 import { findCatalogSkill, useTrainingCatalog } from "@/lib/training-catalog";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { formatDateInUtc } from "@turingcare/i18n";
 import { type TrainingSkillInput, trainingSkillSchema } from "@turingcare/shared";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -27,11 +28,9 @@ function sessionCountLabel(skill: ProgressSkill, t: ReturnType<typeof useI18n>["
   return `${skill.sessionCount} ${label}`;
 }
 
-function formatDate(value: string | null) {
+function formatProgressDate(value: string | null, locale: "en" | "es") {
   if (!value) return null;
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
-    new Date(value),
-  );
+  return formatDateInUtc(locale, value, { month: "short", day: "numeric" });
 }
 
 export function ProgressPanel({ dogId }: { dogId: string }) {
@@ -140,7 +139,7 @@ function AddSkillForm({ dogId, goalId }: { dogId: string; goalId: string }) {
 }
 
 function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const [mode, setMode] = useState<"view" | "editing" | "logging">("view");
   const updateSkill = useUpdateSkill(dogId);
@@ -149,7 +148,7 @@ function SkillCard({ dogId, skill }: { dogId: string; skill: ProgressSkill }) {
   // PUT mutation returns a bare DB row without milestones/sessions, so reading it
   // here would crash the stepper/session list after a name edit.
   const displaySkill = skill;
-  const lastSession = formatDate(displaySkill.lastSessionAt);
+  const lastSession = formatProgressDate(displaySkill.lastSessionAt, locale);
   const { data: catalog } = useTrainingCatalog();
   const catalogSkill = findCatalogSkill(catalog, displaySkill.catalogSkillKey);
 
@@ -312,7 +311,7 @@ function SessionList({
   skillId: string;
   sessions: ProgressSession[];
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const deleteSession = useDeleteSession(dogId);
 
   if (sessions.length === 0)
@@ -320,25 +319,38 @@ function SessionList({
 
   return (
     <ul className="space-y-1 border-t border-silver pt-2">
-      {sessions.map((session) => (
-        <li
-          key={session.id}
-          className="flex items-start justify-between gap-2 text-sm text-slate-soft"
-        >
-          <span>
-            {String(session.occurredAt).slice(0, 10)}
-            {session.durationMinutes != null ? ` · ${session.durationMinutes} min` : ""}
-            {session.notes ? ` · ${session.notes}` : ""}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => deleteSession.mutate({ skillId, sessionId: session.id })}
+      {sessions.map((session) => {
+        const sessionDate = formatDateInUtc(locale, session.occurredAt, {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        });
+        const duration =
+          session.durationMinutes == null
+            ? null
+            : t(session.durationMinutes === 1 ? "units.minuteOne" : "units.minuteOther", {
+                n: session.durationMinutes,
+              });
+        const details = [sessionDate, duration, session.notes].filter((detail): detail is string =>
+          Boolean(detail),
+        );
+
+        return (
+          <li
+            key={session.id}
+            className="flex items-start justify-between gap-2 text-sm text-slate-soft"
           >
-            {t("progress.removeSession")}
-          </Button>
-        </li>
-      ))}
+            <span>{details.join(" · ")}</span>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => deleteSession.mutate({ skillId, sessionId: session.id })}
+            >
+              {t("progress.removeSession")}
+            </Button>
+          </li>
+        );
+      })}
     </ul>
   );
 }

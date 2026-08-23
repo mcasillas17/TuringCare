@@ -28,7 +28,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function decodeProfileResponse(
   response: { json: () => Promise<unknown> },
-  expectedUserId?: string | null,
+  expectedUserId: string,
 ): Promise<ProfileUser> {
   try {
     const body = await response.json();
@@ -36,7 +36,7 @@ async function decodeProfileResponse(
     if (
       !profile ||
       typeof profile.id !== "string" ||
-      (expectedUserId && profile.id !== expectedUserId) ||
+      profile.id !== expectedUserId ||
       typeof profile.name !== "string" ||
       typeof profile.email !== "string" ||
       !(profile.locale === null || isLocale(profile.locale))
@@ -70,18 +70,21 @@ async function decodeProfileLocaleResponse(response: {
   }
 }
 
-function profileQueryKey(userId?: string | null) {
-  return userId ? (["profile", userId] as const) : (["profile"] as const);
+function validProfileUserId(userId: unknown): string | null {
+  return typeof userId === "string" && userId.trim().length > 0 ? userId : null;
 }
 
-export function useProfile(userId?: string | null) {
+export function useProfile(userId: string | null) {
+  const scopedUserId = validProfileUserId(userId);
+
   return useQuery({
-    queryKey: profileQueryKey(userId),
-    enabled: userId !== null,
+    queryKey: ["profile", scopedUserId] as const,
+    enabled: scopedUserId !== null,
     queryFn: async (): Promise<ProfileUser> => {
+      if (!scopedUserId) throw new ProfileResponseError("invalid_profile_response");
       const res = await api.api.profile.$get();
       if (!res.ok) throw new Error("load_failed");
-      return decodeProfileResponse(res, userId);
+      return decodeProfileResponse(res, scopedUserId);
     },
   });
 }

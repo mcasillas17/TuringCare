@@ -7,6 +7,10 @@ export const en = {
     nameEs: "Español",
     label: "Language",
   },
+  units: {
+    minuteOne: "{n} minute",
+    minuteOther: "{n} minutes",
+  },
   nav: {
     mainLabel: "Main",
     howItWorks: "How it works",

@@ -1,13 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { useApplyTemplate, useTrainingCatalog } from "@/lib/training-catalog";
-import type { CatalogTemplate } from "@turingcare/shared";
+import { findCatalogTemplate, useApplyTemplate, useTrainingCatalog } from "@/lib/training-catalog";
 import { useState } from "react";
 import { toast } from "sonner";
 
 type Props = { dogId: string };
 
-type Phase = { kind: "closed" } | { kind: "open" } | { kind: "preview"; template: CatalogTemplate };
+type Phase = { kind: "closed" } | { kind: "open" } | { kind: "preview"; templateKey: string };
 
 export function TemplatePicker({ dogId }: Props) {
   const { t } = useI18n();
@@ -24,7 +23,15 @@ export function TemplatePicker({ dogId }: Props) {
   }
 
   if (phase.kind === "preview") {
-    const template = phase.template;
+    const template = findCatalogTemplate(catalog, phase.templateKey);
+    if (!template) {
+      return (
+        <Button type="button" variant="outline" onClick={() => setPhase({ kind: "open" })}>
+          {t("training.templatesButton")}
+        </Button>
+      );
+    }
+
     return (
       <section className="space-y-3 rounded border border-silver bg-cream p-3">
         <div>
@@ -81,7 +88,7 @@ export function TemplatePicker({ dogId }: Props) {
               <button
                 type="button"
                 className="block w-full rounded px-2 py-1 text-left hover:bg-surface-sand"
-                onClick={() => setPhase({ kind: "preview", template })}
+                onClick={() => setPhase({ kind: "preview", templateKey: template.key })}
               >
                 <div className="font-medium text-slate">{template.name}</div>
                 <div className="text-xs text-slate-soft">{template.description}</div>

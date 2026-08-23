@@ -15,7 +15,7 @@ describe("composeBrief", () => {
           kind: "moment",
           behavior: "Barked",
           intensity: 4,
-          occurredAt: "2026-05-18T10:00:00.000Z",
+          occurredAt: "2026-05-18T00:30:00.000Z",
         },
         {
           note: "Recovered faster on walk",
@@ -32,6 +32,8 @@ describe("composeBrief", () => {
     expect(out).toContain("Calm greetings");
     expect(out).toContain("2 entries in the last 30 days");
     expect(out).toContain("average intensity 4.0");
+    expect(out).toContain("- May 18, 2026: Barked at delivery truck");
+    expect(out).not.toContain("- 2026-05-18:");
     expect(out).toContain("Barked at delivery truck");
     expect(out).toContain("Recovered faster on walk");
     expect(composeBrief({ dog, concerns: [], goals: [], entries: [], windowDays: 30 })).toBe(
@@ -64,7 +66,7 @@ describe("composeBrief", () => {
               lastSessionAt: "2026-05-22T10:00:00.000Z",
               lastNote: "held sit through a very long note that should stay readable",
               sessions: [],
-              milestones: [{ level: 3, reachedAt: "2026-06-03T10:00:00.000Z" }],
+              milestones: [{ level: 3, reachedAt: "2026-06-03T00:30:00.000Z" }],
             },
             {
               id: "s2",
@@ -142,7 +144,7 @@ describe("composeBrief", () => {
 
     expect(out).toContain("16 entries in the last 30 days");
     expect(out).toContain("Check-ins: 2 better, 1 same, 1 harder.");
-    const listed = out.split("\n").filter((line) => /^- \d{4}-\d{2}-\d{2}:/.test(line));
+    const listed = out.split("\n").filter((line) => /^- May \d{1,2}, 2026:/.test(line));
     expect(listed).toHaveLength(10);
   });
 
@@ -171,7 +173,7 @@ describe("composeBrief", () => {
             kind: "daily_checkin",
             trend: "better",
             intensity: null,
-            occurredAt: "2026-05-18T10:00:00.000Z",
+            occurredAt: "2026-05-18T00:30:00.000Z",
           },
           {
             note: "Paseo tranquilo",
@@ -199,7 +201,7 @@ describe("composeBrief", () => {
                 lastSessionAt: "2026-05-01T10:00:00.000Z",
                 lastNote: "se sentó al primer toque",
                 sessions: [],
-                milestones: [{ level: 2, reachedAt: "2026-06-03T10:00:00.000Z" }],
+                milestones: [{ level: 2, reachedAt: "2026-06-03T00:30:00.000Z" }],
               },
             ],
           },

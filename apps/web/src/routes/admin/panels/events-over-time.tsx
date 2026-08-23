@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import type { Metrics } from "../use-metrics";
+import { formatAdminChartDate } from "./chart-date";
 import { CATEGORIES, type Category } from "./event-category";
 import { buildSeries } from "./events-series";
 
@@ -46,7 +47,7 @@ function Segmented<T extends string>({
 }
 
 export function EventsOverTime({ eventsByDay }: { eventsByDay: Metrics["eventsByDay"] }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [breakdown, setBreakdown] = useState<Breakdown>("total");
   const [granularity, setGranularity] = useState<Granularity>("day");
   const [hidden, setHidden] = useState<Set<Category>>(new Set());
@@ -59,6 +60,7 @@ export function EventsOverTime({ eventsByDay }: { eventsByDay: Metrics["eventsBy
   const categoryLabels = Object.fromEntries(
     CATEGORIES.map((c) => [c.key, t(c.labelKey)]),
   ) as Record<Category, string>;
+  const dateLabel = (dateBucket: unknown) => formatAdminChartDate(locale, dateBucket);
 
   function toggle(cat: Category) {
     setHidden((prev) => {
@@ -123,9 +125,9 @@ export function EventsOverTime({ eventsByDay }: { eventsByDay: Metrics["eventsBy
         {breakdown === "total" ? (
           <AreaChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="bucket" fontSize={11} />
+            <XAxis dataKey="bucket" fontSize={11} tickFormatter={dateLabel} />
             <YAxis allowDecimals={false} fontSize={11} />
-            <Tooltip />
+            <Tooltip labelFormatter={dateLabel} />
             <Area
               type="monotone"
               dataKey="total"
@@ -139,9 +141,9 @@ export function EventsOverTime({ eventsByDay }: { eventsByDay: Metrics["eventsBy
         ) : (
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="bucket" fontSize={11} />
+            <XAxis dataKey="bucket" fontSize={11} tickFormatter={dateLabel} />
             <YAxis allowDecimals={false} fontSize={11} />
-            <Tooltip />
+            <Tooltip labelFormatter={dateLabel} />
             <Legend />
             {visible.map((c) => (
               <Bar

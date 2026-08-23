@@ -1,4 +1,11 @@
-import { type Locale, type MessageKey, createI18n, translate } from "@turingcare/i18n";
+import {
+  type Locale,
+  type MessageKey,
+  type UtcDateFormatOptions,
+  createI18n,
+  formatDateInUtc,
+  translate,
+} from "@turingcare/i18n";
 import type { ProgressGoal } from "./progress";
 
 type BriefInput = {
@@ -20,14 +27,6 @@ type BriefInput = {
 };
 
 type BriefTranslator = (key: MessageKey, vars?: Record<string, string | number>) => string;
-
-const esMonthDay = new Intl.DateTimeFormat("es", { month: "short", day: "numeric" });
-const esDayMonthYear = new Intl.DateTimeFormat("es", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
-const enMonthDay = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
 
 function stripSpanishDatePeriods(value: string) {
   return value.replace(/\./g, "");
@@ -93,16 +92,18 @@ function dogLine(dog: BriefInput["dog"], t: BriefTranslator) {
   });
 }
 
-function entryDate(iso: string, locale: Locale) {
-  return locale === "es"
-    ? stripSpanishDatePeriods(esDayMonthYear.format(new Date(iso)))
-    : iso.slice(0, 10);
+function formatBriefDate(value: string, locale: Locale, options: UtcDateFormatOptions): string {
+  const formatted = formatDateInUtc(locale, value, options);
+  if (!formatted) throw new RangeError("Invalid generated Brief date");
+  return locale === "es" ? stripSpanishDatePeriods(formatted) : formatted;
 }
 
-function reachedDate(date: Date, locale: Locale) {
-  return locale === "es"
-    ? stripSpanishDatePeriods(esMonthDay.format(date))
-    : enMonthDay.format(date);
+function entryDate(iso: string, locale: Locale) {
+  return formatBriefDate(iso, locale, { day: "numeric", month: "short", year: "numeric" });
+}
+
+function reachedDate(iso: string, locale: Locale) {
+  return formatBriefDate(iso, locale, { day: "numeric", month: "short" });
 }
 
 function weeksBetween(first: string | null, last: string | null) {
@@ -211,7 +212,7 @@ export function composeBrief(i: BriefInput, locale: Locale = "en"): string {
         const label = confidenceLabel(skill.confidence, t);
         const reached = skill.milestones?.find((m) => m.level === skill.confidence)?.reachedAt;
         const when = reached
-          ? t("generatedBrief.reached", { date: reachedDate(new Date(reached), locale) })
+          ? t("generatedBrief.reached", { date: reachedDate(reached, locale) })
           : "";
         lines.push(
           t("generatedBrief.skillProgress", {

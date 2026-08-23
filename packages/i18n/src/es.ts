@@ -17,6 +17,10 @@ export const es = {
     nameEs: "Español",
     label: "Idioma",
   },
+  units: {
+    minuteOne: "{n} minuto",
+    minuteOther: "{n} minutos",
+  },
   nav: {
     mainLabel: "Navegación principal",
     howItWorks: "Cómo funciona",

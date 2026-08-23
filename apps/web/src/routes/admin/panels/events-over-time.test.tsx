@@ -30,6 +30,30 @@ vi.mock("recharts", () => {
     );
   }
 
+  function DateAxis({
+    dataKey,
+    tickFormatter,
+  }: {
+    dataKey: string;
+    tickFormatter?: (value: string) => string;
+  }) {
+    const dateBucket = "2026-05-19";
+    return (
+      <div data-testid={`axis-${dataKey}`}>
+        {tickFormatter ? tickFormatter(dateBucket) : dateBucket}
+      </div>
+    );
+  }
+
+  function DateTooltip({ labelFormatter }: { labelFormatter?: (value: string) => ReactNode }) {
+    const dateBucket = "2026-05-19";
+    return (
+      <div data-testid="tooltip-date-label">
+        {labelFormatter ? labelFormatter(dateBucket) : dateBucket}
+      </div>
+    );
+  }
+
   return {
     Area: Series,
     AreaChart: ChartContainer,
@@ -38,8 +62,8 @@ vi.mock("recharts", () => {
     CartesianGrid: SilentPart,
     Legend: SilentPart,
     ResponsiveContainer: ChartContainer,
-    Tooltip: SilentPart,
-    XAxis: SilentPart,
+    Tooltip: DateTooltip,
+    XAxis: DateAxis,
     YAxis: SilentPart,
   };
 });
@@ -113,6 +137,9 @@ it("localizes Spanish series names used by tooltips while keeping data keys stab
 
   expect(screen.getByTestId("series-total")).toHaveAttribute("data-series-name", "Eventos totales");
   expect(screen.queryByText("tooltip series: total")).not.toBeInTheDocument();
+  expect(screen.getByTestId("axis-bucket")).toHaveTextContent("19 may");
+  expect(screen.getByTestId("tooltip-date-label")).toHaveTextContent("19 may");
+  expect(screen.queryByText("2026-05-19")).not.toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "Por tipo" }));
 

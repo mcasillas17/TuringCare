@@ -1,4 +1,4 @@
-import { LocaleProvider } from "@/i18n";
+import { LocaleProvider, useI18n } from "@/i18n";
 import * as catalogLib from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -6,7 +6,8 @@ import type { CatalogTemplate } from "@turingcare/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TemplatePicker } from "./template-picker";
 
-vi.mock("@/lib/training-catalog", () => ({
+vi.mock("@/lib/training-catalog", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/training-catalog")>()),
   useTrainingCatalog: vi.fn(),
   useApplyTemplate: vi.fn(),
 }));
@@ -45,6 +46,37 @@ const sampleCatalog: CatalogTemplate[] = [
   },
 ];
 
+const spanishCatalog: CatalogTemplate[] = [
+  {
+    key: "basic-manners",
+    name: "Modales básicos",
+    description: "Conductas fundamentales que todo perro debería conocer",
+    skills: [
+      {
+        key: "basic-manners.sit",
+        name: "Sentado",
+        description: "El perro se sienta de forma confiable con una señal",
+        levels: [
+          { level: 1, description: "Se guía hasta sentarse con comida" },
+          { level: 2, description: "x" },
+          { level: 3, description: "x" },
+          { level: 4, description: "x" },
+          { level: 5, description: "x" },
+        ],
+      },
+    ],
+  },
+];
+
+function LocaleSwitch() {
+  const { locale, selectLocale } = useI18n();
+  return (
+    <button type="button" onClick={() => selectLocale(locale === "en" ? "es" : "en")}>
+      switch locale
+    </button>
+  );
+}
+
 function setupMocks(opts: { mutateAsync?: ReturnType<typeof vi.fn> } = {}) {
   vi.mocked(catalogLib.useTrainingCatalog).mockReturnValue({
     data: sampleCatalog,
@@ -64,6 +96,7 @@ function renderPicker() {
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
+        <LocaleSwitch />
         <TemplatePicker dogId="d1" />
       </LocaleProvider>
     </QueryClientProvider>,
@@ -117,6 +150,34 @@ describe("TemplatePicker", () => {
     fireEvent.click(screen.getByRole("button", { name: /Templates/i }));
     fireEvent.click(screen.getByText("Basic Manners"));
     fireEvent.click(screen.getByRole("button", { name: /^Apply$/i }));
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith("basic-manners"));
+  });
+
+  it("re-derives an open preview from the current locale catalog before applying", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    vi.mocked(catalogLib.useTrainingCatalog).mockImplementation(() => {
+      const { locale } = useI18n();
+      return {
+        data: locale === "es" ? spanishCatalog : sampleCatalog,
+        isLoading: false,
+        isError: false,
+      } as unknown as ReturnType<typeof catalogLib.useTrainingCatalog>;
+    });
+    vi.mocked(catalogLib.useApplyTemplate).mockReturnValue({
+      mutateAsync,
+      isPending: false,
+    } as unknown as ReturnType<typeof catalogLib.useApplyTemplate>);
+    renderPicker();
+
+    fireEvent.click(screen.getByRole("button", { name: /Templates/i }));
+    fireEvent.click(screen.getByText("Basic Manners"));
+    fireEvent.click(screen.getByRole("button", { name: "switch locale" }));
+
+    expect(screen.getByText("Modales básicos")).toBeInTheDocument();
+    expect(screen.getByText("Sentado")).toBeInTheDocument();
+    expect(screen.queryByText("Basic Manners")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Aplicar" }));
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith("basic-manners"));
   });
 });

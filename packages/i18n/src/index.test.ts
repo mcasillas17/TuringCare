@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createI18n, en, es, isLocale, resolveBrowserLocale, translate } from "./index";
+import {
+  createI18n,
+  en,
+  es,
+  formatDateInUtc,
+  isLocale,
+  resolveBrowserLocale,
+  translate,
+} from "./index";
 
 function keyPaths(o: Record<string, unknown>, prefix = ""): string[] {
   return Object.entries(o).flatMap(([key, value]) =>
@@ -15,6 +23,17 @@ afterEach(() => {
 });
 
 describe("@turingcare/i18n locale helpers", () => {
+  it("formats an instant in the explicit locale while preserving its UTC calendar day", () => {
+    expect(
+      formatDateInUtc("es", "2026-05-19T00:30:00.000Z", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }),
+    ).toBe("19 de mayo de 2026");
+    expect(formatDateInUtc("en", "not-a-date", { day: "numeric" })).toBeNull();
+  });
+
   it("allowlists only the supported locales", () => {
     expect(isLocale("en")).toBe(true);
     expect(isLocale("es")).toBe(true);

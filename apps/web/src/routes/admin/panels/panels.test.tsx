@@ -29,6 +29,30 @@ vi.mock("recharts", () => {
     return <div data-testid={`series-${dataKey}`} data-series-name={name ?? dataKey} />;
   }
 
+  function DateAxis({
+    dataKey,
+    tickFormatter,
+  }: {
+    dataKey: string;
+    tickFormatter?: (value: string) => string;
+  }) {
+    const dateBucket = "2026-05-19";
+    return (
+      <div data-testid={`axis-${dataKey}`}>
+        {tickFormatter ? tickFormatter(dateBucket) : dateBucket}
+      </div>
+    );
+  }
+
+  function DateTooltip({ labelFormatter }: { labelFormatter?: (value: string) => ReactNode }) {
+    const dateBucket = "2026-05-19";
+    return (
+      <div data-testid="tooltip-date-label">
+        {labelFormatter ? labelFormatter(dateBucket) : dateBucket}
+      </div>
+    );
+  }
+
   return {
     Bar: Series,
     BarChart: ChartContainer,
@@ -37,8 +61,8 @@ vi.mock("recharts", () => {
     Line: Series,
     LineChart: ChartContainer,
     ResponsiveContainer: ChartContainer,
-    Tooltip: SilentPart,
-    XAxis: SilentPart,
+    Tooltip: DateTooltip,
+    XAxis: DateAxis,
     YAxis: SilentPart,
   };
 });
@@ -114,6 +138,9 @@ it("Growth gives the count series a localized Spanish chart name", () => {
   renderSpanish(<Growth signups={metrics.signups} />);
 
   expect(screen.getByTestId("series-count")).toHaveAttribute("data-series-name", "Altas");
+  expect(screen.getByTestId("axis-day")).toHaveTextContent("19 may");
+  expect(screen.getByTestId("tooltip-date-label")).toHaveTextContent("19 may");
+  expect(screen.queryByText("2026-05-19")).not.toBeInTheDocument();
 });
 
 it("ActiveUsage gives the count series a localized Spanish chart name and summary labels", () => {
@@ -126,6 +153,9 @@ it("ActiveUsage gives the count series a localized Spanish chart name and summar
   expect(screen.getByText(/Usuarios activos diarios 9/)).toBeInTheDocument();
   expect(screen.getByText(/Usuarios activos semanales 41/)).toBeInTheDocument();
   expect(screen.getByText(/Usuarios activos mensuales 60/)).toBeInTheDocument();
+  expect(screen.getByTestId("axis-day")).toHaveTextContent("19 may");
+  expect(screen.getByTestId("tooltip-date-label")).toHaveTextContent("19 may");
+  expect(screen.queryByText("2026-05-19")).not.toBeInTheDocument();
 });
 
 it("FeatureUsage lists events and excludes page.viewed", () => {

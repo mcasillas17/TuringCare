@@ -15,6 +15,41 @@ afterEach(() => {
 });
 
 describe("profile response decoding", () => {
+  it("does not fetch or create an unscoped query when the session user id is null", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useProfile(null), { wrapper: wrapper(queryClient) });
+
+    await act(async () => {});
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      queryClient.getQueryCache().find({ exact: true, queryKey: ["profile"] }),
+    ).toBeUndefined();
+  });
+
+  it.each(["", "   ", undefined, 42])(
+    "fails closed without fetching for the runtime-invalid user id %j",
+    async (runtimeUserId) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      const { result } = renderHook(() => useProfile(runtimeUserId as unknown as string | null), {
+        wrapper: wrapper(queryClient),
+      });
+
+      await act(async () => {});
+      expect(result.current.fetchStatus).toBe("idle");
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(
+        queryClient.getQueryCache().find({ exact: true, queryKey: ["profile"] }),
+      ).toBeUndefined();
+    },
+  );
+
   it("fails distinctly when a profile response contains a non-allowlisted locale", async () => {
     vi.stubGlobal(
       "fetch",
