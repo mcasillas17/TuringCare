@@ -5,7 +5,9 @@ export const profileUpdateSchema = z.object({
 });
 export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
 
-export const profileLocaleUpdateSchema = z.object({
-  locale: z.enum(["en", "es"]),
-});
+export const profileLocaleUpdateSchema = z
+  .object({
+    locale: z.enum(["en", "es"]),
+  })
+  .strict();
 export type ProfileLocaleUpdateInput = z.infer<typeof profileLocaleUpdateSchema>;

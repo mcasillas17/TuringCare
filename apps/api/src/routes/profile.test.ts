@@ -85,7 +85,7 @@ describe("profile", () => {
     expect(patch.status).toBe(401);
   });
 
-  it("ignores request user ids when updating locale", async () => {
+  it("rejects unknown fields on locale updates", async () => {
     const u1 = await createTestUser();
     const u2 = await createTestUser();
     users.push(u1, u2);
@@ -94,6 +94,20 @@ describe("profile", () => {
       method: "PATCH",
       headers: u1.authHeaders,
       body: JSON.stringify({ locale: "es", userId: u2.userId }),
+    });
+
+    expect(patch.status).toBe(400);
+  });
+
+  it("updates only the authenticated user's locale", async () => {
+    const u1 = await createTestUser();
+    const u2 = await createTestUser();
+    users.push(u1, u2);
+
+    const patch = await app.request("/api/profile/locale", {
+      method: "PATCH",
+      headers: u1.authHeaders,
+      body: JSON.stringify({ locale: "es" }),
     });
 
     expect(patch.status).toBe(200);

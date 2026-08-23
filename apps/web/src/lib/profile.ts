@@ -10,9 +10,14 @@ export type ProfileUser = {
   locale: Locale | null;
 };
 
-export function useProfile() {
+function profileQueryKey(userId?: string | null) {
+  return userId ? (["profile", userId] as const) : (["profile"] as const);
+}
+
+export function useProfile(userId?: string | null) {
   return useQuery({
-    queryKey: ["profile"],
+    queryKey: profileQueryKey(userId),
+    enabled: userId !== null,
     queryFn: async (): Promise<ProfileUser> => {
       const res = await api.api.profile.$get();
       if (!res.ok) throw new Error("load_failed");
@@ -36,7 +41,7 @@ export function useUpdateProfile() {
   });
 }
 
-export function useUpdateProfileLocale() {
+export function useUpdateProfileLocale(userId?: string | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: ProfileLocaleUpdateInput) => {
@@ -45,7 +50,7 @@ export function useUpdateProfileLocale() {
       return (await res.json()).user as { locale: Locale };
     },
     onSuccess: (updated) => {
-      qc.setQueryData<ProfileUser>(["profile"], (current) =>
+      qc.setQueryData<ProfileUser>(profileQueryKey(userId), (current) =>
         current ? { ...current, locale: updated.locale } : current,
       );
       qc.invalidateQueries({ queryKey: ["profile"] });

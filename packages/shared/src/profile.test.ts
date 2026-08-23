@@ -15,8 +15,8 @@ describe("profileLocaleUpdateSchema", () => {
     expect(profileLocaleUpdateSchema.safeParse({ locale }).success).toBe(true);
   });
 
-  it.each([{}, { locale: "" }, { locale: "fr" }])(
-    "rejects missing, empty, and unsupported account locales",
+  it.each([{}, { locale: "" }, { locale: "fr" }, { locale: "es", userId: "u2" }])(
+    "rejects missing, empty, unsupported, and extra account locale fields",
     (input) => {
       expect(profileLocaleUpdateSchema.safeParse(input).success).toBe(false);
     },
