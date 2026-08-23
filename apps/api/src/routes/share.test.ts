@@ -321,6 +321,30 @@ describe("brief share mint/revoke", () => {
 });
 
 describe("public GET /api/share/brief/:token", () => {
+  it("returns the same 404 for a legacy draft token as for an unknown token", async () => {
+    const email = `pub_legacy_draft_${Date.now()}@example.com`;
+    emails.push(email);
+    const cookie = await signedUpCookie(email);
+    const dogId = await createDogWithBrief(cookie, {}, false);
+    const legacyToken = `legacy-draft-${crypto.randomUUID()}`;
+    await db.update(briefs).set({ shareToken: legacyToken }).where(eq(briefs.dogId, dogId));
+
+    const legacyDraft = await app.request(`/api/share/brief/${legacyToken}`);
+    const unknown = await app.request(`/api/share/brief/unknown-${crypto.randomUUID()}`);
+
+    expect(legacyDraft.status).toBe(404);
+    expect(await legacyDraft.json()).toEqual({ error: "not_found" });
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toEqual({ error: "not_found" });
+
+    const finalize = await app.request(`/api/dogs/${dogId}/brief`, {
+      method: "PUT",
+      headers: { cookie },
+    });
+    expect(finalize.status).toBe(200);
+    expect((await app.request(`/api/share/brief/${legacyToken}`)).status).toBe(200);
+  });
+
   it("returns whitelisted fields for a valid token and 404 after revoke/for unknown", async () => {
     const email = `pub_${Date.now()}@example.com`;
     emails.push(email);

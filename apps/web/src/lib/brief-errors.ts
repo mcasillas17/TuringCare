@@ -34,6 +34,17 @@ export class BriefRequestError extends Error {
   }
 }
 
+export function isBriefVersionConflict(
+  error: unknown,
+  context: BriefRequestContext,
+): error is BriefRequestError {
+  return (
+    error instanceof BriefRequestError &&
+    error.code === "brief_version_conflict" &&
+    error.context === context
+  );
+}
+
 type ErrorResponse = Pick<Response, "status" | "json">;
 
 export async function readBriefRequestError(

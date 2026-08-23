@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { useI18n } from "@/i18n";
 import { useFinalizeBrief, useRevokeShare, useShareBrief } from "@/lib/brief";
+import { isBriefVersionConflict } from "@/lib/brief-errors";
 import type { DogForPdf } from "@/lib/brief-pdf-model";
 import type { Locale } from "@turingcare/i18n";
 import { Suspense, lazy, useState } from "react";
@@ -59,8 +60,14 @@ export function BriefShareSheet({
     try {
       await ensureFinalized();
       setPanel("email");
-    } catch {
-      toast.error(t("brief.genFailed"));
+    } catch (error) {
+      toast.error(
+        t(
+          isBriefVersionConflict(error, "finalize")
+            ? "briefSend.versionConflict"
+            : "brief.genFailed",
+        ),
+      );
     }
   };
 
@@ -72,8 +79,14 @@ export function BriefShareSheet({
         setCreatedToken(res.token);
       }
       setPanel("link");
-    } catch {
-      toast.error(t("brief.shareFailed"));
+    } catch (error) {
+      toast.error(
+        t(
+          isBriefVersionConflict(error, "finalize") || isBriefVersionConflict(error, "share")
+            ? "briefSend.versionConflict"
+            : "brief.shareFailed",
+        ),
+      );
     }
   };
 
@@ -182,8 +195,14 @@ export function BriefShareSheet({
                       await revoke.mutateAsync();
                       setCreatedToken(null);
                       setPanel("menu");
-                    } catch {
-                      toast.error(t("brief.shareFailed"));
+                    } catch (error) {
+                      toast.error(
+                        t(
+                          isBriefVersionConflict(error, "revoke")
+                            ? "briefSend.versionConflict"
+                            : "brief.shareFailed",
+                        ),
+                      );
                     }
                   }}
                 >
