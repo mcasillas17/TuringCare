@@ -47,9 +47,44 @@ jobs:
       - name: Build
         run: pnpm -r build
 
-  # Run the real migrations against production Supabase.
-  migrate:
+  # Apply every pending migration through 0013. The locale-aware API requires
+  # 0013, while the version constraint in 0014 must wait until legacy read-max
+  # Brief generators have drained.
+  migrate-compatible:
     needs: ci
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migrate production database through the compatible schema
+        run: pnpm --filter @turingcare/api db:migrate:predeploy
+
+  # `flyctl deploy` does not return successfully until the rolling replacement
+  # completes. After this job, every serving machine uses the dog-locking Brief
+  # generator and no legacy writer can resume after 0014 is installed.
+  deploy-api:
+    needs: migrate-compatible
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy to Fly
+        run: flyctl deploy --remote-only --strategy rolling --config apps/api/fly.toml
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  # Apply 0014 only after all production API machines use the dog-locking
+  # Brief generator. The predeploy command fails closed if 0014 is not last,
+  # forcing future releases to choose and test their own migration phase.
+  migrate:
+    needs: deploy-api
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -64,21 +99,8 @@ jobs:
       - name: Migrate production database
         run: pnpm --filter @turingcare/api db:migrate
 
-  # Deploy the API to Fly only after migrations succeed.
-  # --remote-only builds the image on Fly's builders, not the GitHub runner.
-  deploy-api:
-    needs: migrate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy to Fly
-        run: flyctl deploy --remote-only --config apps/api/fly.toml
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
   # Frontend is independent of the API path — runs in parallel with
-  # migrate/deploy-api, gated only on ci.
+  # deploy-api/migrate, gated only on ci.
   deploy-web:
     needs: ci
     runs-on: ubuntu-latest

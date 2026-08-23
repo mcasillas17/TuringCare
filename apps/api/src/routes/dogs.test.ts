@@ -1,12 +1,13 @@
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { db, pool } from "../db";
-import { briefs, practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
+import { briefSends, briefs, practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
 import { createMonitoringErrorHandler } from "../monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "../monitoring/request-id";
 import { type TestUser, createTestUser } from "../test-helpers";
-import { waitForBlockingChain } from "../test-pg-concurrency";
+import { waitForBlockingChain, waitForSessionBlocked } from "../test-pg-concurrency";
 import { sendFailedException } from "./dogs";
 
 // Wraps the real `sendEmail` so its normal (log-mode, no RESEND_API_KEY)
@@ -953,6 +954,95 @@ describe("dogs: brief", () => {
     }
   });
 
+  it("finalizes the newest Brief when generation queued first on the dog lifecycle lock", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: u.authHeaders });
+    const blocker = await pool.connect();
+    let blockerOpen = false;
+
+    try {
+      await blocker.query("BEGIN");
+      blockerOpen = true;
+      await blocker.query(`SELECT "id" FROM "dogs" WHERE "id" = $1 FOR UPDATE`, [dog.id]);
+      const pidResult = await blocker.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const blockerPid = Number(pidResult.rows[0]?.pid);
+
+      const generation = app.request(`/api/dogs/${dog.id}/brief`, {
+        method: "POST",
+        headers: u.authHeaders,
+      });
+      await waitForBlockingChain(pool, blockerPid, 1);
+      const finalization = app.request(`/api/dogs/${dog.id}/brief`, {
+        method: "PUT",
+        headers: u.authHeaders,
+      });
+      await waitForBlockingChain(pool, blockerPid, 2);
+      await blocker.query("COMMIT");
+      blockerOpen = false;
+
+      const [generatedResponse, finalizedResponse] = await Promise.all([generation, finalization]);
+      const generated = (await generatedResponse.json()) as {
+        brief: { id: string; version: number };
+      };
+      const finalized = (await finalizedResponse.json()) as {
+        brief: { id: string; version: number; status: string };
+      };
+      expect(finalizedResponse.status).toBe(200);
+      expect(finalized.brief).toMatchObject({
+        id: generated.brief.id,
+        version: generated.brief.version,
+        status: "finalized",
+      });
+    } finally {
+      if (blockerOpen) await blocker.query("ROLLBACK");
+      blocker.release();
+    }
+  });
+
+  it("returns 404 when dog deletion queued before finalization", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: u.authHeaders });
+    const blocker = await pool.connect();
+    let blockerOpen = false;
+
+    try {
+      await blocker.query("BEGIN");
+      blockerOpen = true;
+      await blocker.query(`SELECT "id" FROM "dogs" WHERE "id" = $1 FOR UPDATE`, [dog.id]);
+      const pidResult = await blocker.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const blockerPid = Number(pidResult.rows[0]?.pid);
+
+      const deletion = app.request(`/api/dogs/${dog.id}`, {
+        method: "DELETE",
+        headers: u.authHeaders,
+      });
+      await waitForBlockingChain(pool, blockerPid, 1);
+      const finalization = app.request(`/api/dogs/${dog.id}/brief`, {
+        method: "PUT",
+        headers: u.authHeaders,
+      });
+      await waitForBlockingChain(pool, blockerPid, 2);
+      await blocker.query("COMMIT");
+      blockerOpen = false;
+
+      const [deletedResponse, finalizedResponse] = await Promise.all([deletion, finalization]);
+      expect(deletedResponse.status).toBe(200);
+      expect(finalizedResponse.status).toBe(404);
+      expect(await finalizedResponse.json()).toEqual({ error: "not_found" });
+    } finally {
+      if (blockerOpen) await blocker.query("ROLLBACK");
+      blocker.release();
+    }
+  });
+
   it("enforces unique Brief versions per dog at the database boundary", async () => {
     const u = await createTestUser();
     users.push(u);
@@ -1391,6 +1481,38 @@ describe("dogs: brief send", () => {
     expect(send.message).toBe("Hi Sarah");
   });
 
+  it("POST send: replays a committed idempotency key without duplicate delivery", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const body = JSON.stringify({
+      recipient: "idempotent@example.com",
+      idempotencyKey: "95acbb6a-9189-4614-9a6e-c732efcc5d1d",
+    });
+
+    const first = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+    const second = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+    const firstBody = (await first.json()) as { send: { id: string } };
+    const secondBody = (await second.json()) as { send: { id: string } };
+
+    expect([first.status, second.status]).toEqual([201, 201]);
+    expect(firstBody.send.id).toBe("95acbb6a-9189-4614-9a6e-c732efcc5d1d");
+    expect(secondBody.send.id).toBe(firstBody.send.id);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendEmail).mock.calls[0]?.[0].idempotencyKey).toBe(firstBody.send.id);
+  });
+
   it("POST send: uses the stored brief locale instead of the current request locale", async () => {
     const u = await createTestUser();
     users.push(u);
@@ -1433,6 +1555,117 @@ describe("dogs: brief send", () => {
     });
     expect(r.status).toBe(409);
     expect(await r.json()).toEqual({ error: "not_finalized" });
+  });
+
+  it("POST send: commits delivery audit before a concurrent dog deletion can proceed", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    let releaseProvider: (() => void) | undefined;
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
+    const providerRelease = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    vi.mocked(sendEmail).mockImplementationOnce(async () => {
+      markProviderStarted?.();
+      await providerRelease;
+    });
+    const deleter = await pool.connect();
+    let deleterOpen = false;
+
+    try {
+      const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
+        method: "POST",
+        headers: u.authHeaders,
+        body: JSON.stringify({ recipient: "race@example.com" }),
+      });
+      await providerStarted;
+
+      await deleter.query("BEGIN");
+      deleterOpen = true;
+      const pidResult = await deleter.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const deleterPid = Number(pidResult.rows[0]?.pid);
+      const deletion = deleter.query(`DELETE FROM "dogs" WHERE "id" = $1`, [dog.id]);
+      await waitForSessionBlocked(pool, deleterPid);
+      releaseProvider?.();
+
+      const sendResponse = await send;
+      expect(sendResponse.status).toBe(201);
+      await deletion;
+      const audits = await db
+        .select({ recipient: briefSends.recipient })
+        .from(briefSends)
+        .where(eq(briefSends.recipient, "race@example.com"));
+      expect(audits).toEqual([{ recipient: "race@example.com" }]);
+      await deleter.query("COMMIT");
+      deleterOpen = false;
+    } finally {
+      releaseProvider?.();
+      if (deleterOpen) await deleter.query("ROLLBACK");
+      deleter.release();
+    }
+  });
+
+  it("POST send: rolls back its audit and releases deletion when the provider fails", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    let rejectProvider: ((reason: Error) => void) | undefined;
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
+    const providerResult = new Promise<void>((_resolve, reject) => {
+      rejectProvider = reject;
+    });
+    vi.mocked(sendEmail).mockImplementationOnce(async () => {
+      markProviderStarted?.();
+      await providerResult;
+    });
+    const deleter = await pool.connect();
+    let deleterOpen = false;
+
+    try {
+      const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
+        method: "POST",
+        headers: u.authHeaders,
+        body: JSON.stringify({ recipient: "failed-race@example.com" }),
+      });
+      await providerStarted;
+      await deleter.query("BEGIN");
+      deleterOpen = true;
+      const pidResult = await deleter.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const deleterPid = Number(pidResult.rows[0]?.pid);
+      const deletion = deleter.query(`DELETE FROM "dogs" WHERE "id" = $1`, [dog.id]);
+      await waitForSessionBlocked(pool, deleterPid);
+      rejectProvider?.(new Error("deferred-provider-failure"));
+
+      const sendResponse = await send;
+      expect(sendResponse.status).toBe(502);
+      await deletion;
+      const audits = await db
+        .select({ id: briefSends.id })
+        .from(briefSends)
+        .where(eq(briefSends.recipient, "failed-race@example.com"));
+      expect(audits).toEqual([]);
+      await deleter.query("COMMIT");
+      deleterOpen = false;
+    } finally {
+      rejectProvider?.(new Error("test cleanup"));
+      if (deleterOpen) await deleter.query("ROLLBACK");
+      deleter.release();
+    }
   });
 
   it("POST send: returns 404 when no brief exists", async () => {

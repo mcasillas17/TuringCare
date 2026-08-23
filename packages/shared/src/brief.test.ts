@@ -14,6 +14,17 @@ describe("briefSendSchema", () => {
       true,
     );
   });
+  it("accepts an optional UUID idempotency key and rejects malformed keys", () => {
+    expect(
+      briefSendSchema.safeParse({
+        recipient: "a@b.co",
+        idempotencyKey: "95acbb6a-9189-4614-9a6e-c732efcc5d1d",
+      }).success,
+    ).toBe(true);
+    expect(
+      briefSendSchema.safeParse({ recipient: "a@b.co", idempotencyKey: "not-a-uuid" }).success,
+    ).toBe(false);
+  });
   it("rejects invalid email", () => {
     expect(briefSendSchema.safeParse({ recipient: "not-an-email" }).success).toBe(false);
     expect(briefSendSchema.safeParse({ recipient: "" }).success).toBe(false);

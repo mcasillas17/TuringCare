@@ -16,6 +16,7 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:predeploy": "tsx src/db/migrate-predeploy.ts",
     "db:push": "drizzle-kit push",
     "telemetry:purge": "tsx src/telemetry/retention-cli.ts"
   },

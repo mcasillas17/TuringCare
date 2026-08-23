@@ -17,13 +17,16 @@ describe("sendEmail", () => {
   it("sends via the client when an api key is present", async () => {
     const send = vi.fn().mockResolvedValue({ data: { id: "e1" }, error: null });
     await sendEmail(ARGS, { client: { emails: { send } }, apiKey: "re_x", from: "F <f@x.com>" });
-    expect(send).toHaveBeenCalledWith({
-      from: "F <f@x.com>",
-      to: ARGS.to,
-      subject: ARGS.subject,
-      html: ARGS.html,
-      text: ARGS.text,
-    });
+    expect(send).toHaveBeenCalledWith(
+      {
+        from: "F <f@x.com>",
+        to: ARGS.to,
+        subject: ARGS.subject,
+        html: ARGS.html,
+        text: ARGS.text,
+      },
+      { signal: expect.any(AbortSignal) },
+    );
   });
 
   it("throws EmailSendError when the provider returns an error", async () => {
@@ -40,6 +43,27 @@ describe("sendEmail", () => {
     await expect(
       sendEmail(ARGS, { client: { emails: { send } }, apiKey: "re_x", from: "F <f@x.com>" }),
     ).rejects.toBeInstanceOf(EmailSendError);
+  });
+
+  it("aborts a provider request at the configured delivery deadline", async () => {
+    const send = vi.fn(
+      (_args: unknown, options?: { signal?: AbortSignal }) =>
+        new Promise<{ data: unknown; error: unknown }>((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () => reject(options.signal?.reason), {
+            once: true,
+          });
+        }),
+    );
+
+    await expect(
+      sendEmail(ARGS, {
+        client: { emails: { send } },
+        apiKey: "re_x",
+        from: "F <f@x.com>",
+        timeoutMs: 5,
+      }),
+    ).rejects.toBeInstanceOf(EmailSendError);
+    expect(send.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
   });
 
   it("throws EmailSendError on empty to/subject and never calls the client", async () => {

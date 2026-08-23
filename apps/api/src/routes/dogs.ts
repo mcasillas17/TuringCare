@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { Locale } from "@turingcare/i18n";
 import {
   VALIDATION_MESSAGE_CODES,
@@ -500,6 +500,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         .limit(1)
         .for("update");
       if (!brief) return { kind: "no_brief" } as const;
+      if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
       if (brief.shareToken) return { kind: "shared", token: brief.shareToken } as const;
 
       const token = randomBytes(18).toString("base64url");
@@ -513,6 +514,9 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     });
     if (result.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
     if (result.kind === "no_brief") return c.json({ error: "no_brief" } as const, 404);
+    if (result.kind === "not_finalized") {
+      return c.json({ error: "not_finalized" } as const, 409);
+    }
     await recordEvent("brief.shared", { userId: c.get("userId") });
     return c.json({ token: result.token, url: `${env.FRONTEND_URL}/b/${result.token}` });
   })
@@ -619,18 +623,29 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .put("/:id/brief", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const [latest] = await db
-      .select()
-      .from(briefs)
-      .where(eq(briefs.dogId, dog.id))
-      .orderBy(desc(briefs.version))
-      .limit(1);
-    if (!latest) return c.json({ error: "not_found" } as const, 404);
-    const [brief] = await db
-      .update(briefs)
-      .set({ status: "finalized" })
-      .where(eq(briefs.id, latest.id))
-      .returning();
+    const brief = await db.transaction(async (tx) => {
+      const [lockedDog] = await tx
+        .select({ id: dogs.id })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
+        .for("update");
+      if (!lockedDog) return null;
+      const [latest] = await tx
+        .select({ id: briefs.id })
+        .from(briefs)
+        .where(eq(briefs.dogId, lockedDog.id))
+        .orderBy(desc(briefs.version))
+        .limit(1)
+        .for("update");
+      if (!latest) return null;
+      const [updated] = await tx
+        .update(briefs)
+        .set({ status: "finalized" })
+        .where(and(eq(briefs.id, latest.id), eq(briefs.dogId, lockedDog.id)))
+        .returning();
+      return updated ?? null;
+    });
+    if (!brief) return c.json({ error: "not_found" } as const, 404);
     await recordEvent("brief.finalized", { userId: c.get("userId") });
     return c.json({ brief });
   })
@@ -639,70 +654,131 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     const dog = await findOwnedDog(userId, c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
 
-    // Per-user send-rate guard: max 10 brief emails per 24 hours to limit
-    // abuse of the app's verified sender domain.
     const windowStart = new Date(Date.now() - 86_400_000);
-    const [sendCount] = await db
-      .select({ value: count() })
-      .from(briefSends)
-      .where(and(eq(briefSends.sentByUserId, userId), gte(briefSends.sentAt, windowStart)));
-    if ((sendCount?.value ?? 0) >= 10) {
-      return c.json({ error: "send_rate_limited" } as const, 429);
-    }
+    const body = c.req.valid("json");
+    const result = await db.transaction(async (tx) => {
+      // Keep the same dog→Brief lock order as generation, finalization, and
+      // sharing. Dog deletion therefore cannot commit between provider
+      // delivery and the transaction that commits its audit.
+      const [lockedDog] = await tx
+        .select({ id: dogs.id, name: dogs.name })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, userId)))
+        .for("update");
+      if (!lockedDog) return { kind: "not_found" } as const;
 
-    const [brief] = await db
-      .select()
-      .from(briefs)
-      .where(eq(briefs.dogId, dog.id))
-      .orderBy(desc(briefs.version))
-      .limit(1);
-    if (!brief) return c.json({ error: "not_found" } as const, 404);
-    if (brief.status !== "finalized") {
+      const loadExistingSend = async () => {
+        if (!body.idempotencyKey) return undefined;
+        const [existing] = await tx
+          .select({
+            id: briefSends.id,
+            briefId: briefSends.briefId,
+            recipient: briefSends.recipient,
+            message: briefSends.message,
+            sentAt: briefSends.sentAt,
+            sentByUserId: briefSends.sentByUserId,
+          })
+          .from(briefSends)
+          .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
+          .where(
+            and(
+              eq(briefSends.id, body.idempotencyKey),
+              eq(briefSends.sentByUserId, userId),
+              eq(briefs.dogId, lockedDog.id),
+            ),
+          )
+          .limit(1);
+        return existing;
+      };
+      const existing = await loadExistingSend();
+      if (existing) {
+        return existing.recipient === body.recipient && existing.message === (body.message ?? null)
+          ? ({ kind: "sent", send: existing } as const)
+          : ({ kind: "idempotency_conflict" } as const);
+      }
+
+      // Replays return before this quota check; only new provider deliveries count.
+      const [sendCount] = await tx
+        .select({ value: count() })
+        .from(briefSends)
+        .where(and(eq(briefSends.sentByUserId, userId), gte(briefSends.sentAt, windowStart)));
+      if ((sendCount?.value ?? 0) >= 10) return { kind: "rate_limited" } as const;
+
+      const [brief] = await tx
+        .select()
+        .from(briefs)
+        .where(eq(briefs.dogId, lockedDog.id))
+        .orderBy(desc(briefs.version))
+        .limit(1)
+        .for("update");
+      if (!brief) return { kind: "not_found" } as const;
+      if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
+
+      const [owner] = await tx
+        .select({ email: user.email, name: user.name })
+        .from(user)
+        .where(eq(user.id, userId))
+        .limit(1);
+      if (!owner) return { kind: "not_found" } as const;
+      const email = renderBriefEmail(
+        {
+          dogName: lockedDog.name,
+          ownerName: owner.name ?? owner.email,
+          message: body.message ?? null,
+          summary: brief.summary,
+        },
+        brief.locale,
+      );
+      const sendId = body.idempotencyKey ?? randomUUID();
+      const [send] = await tx
+        .insert(briefSends)
+        .values({
+          id: sendId,
+          briefId: brief.id,
+          recipient: body.recipient,
+          message: body.message ?? null,
+          sentByUserId: userId,
+        })
+        .onConflictDoNothing({ target: briefSends.id })
+        .returning();
+      if (!send) {
+        const concurrentlyCommitted = await loadExistingSend();
+        if (
+          concurrentlyCommitted?.recipient === body.recipient &&
+          concurrentlyCommitted.message === (body.message ?? null)
+        ) {
+          return { kind: "sent", send: concurrentlyCommitted } as const;
+        }
+        return { kind: "idempotency_conflict" } as const;
+      }
+
+      try {
+        await sendEmail({
+          to: body.recipient,
+          replyTo: owner.email,
+          subject: email.subject,
+          html: email.html,
+          text: email.text,
+          idempotencyKey: sendId,
+        });
+      } catch (err) {
+        throw sendFailedException(c, err);
+      }
+      return { kind: "sent", send } as const;
+    });
+    if (result.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
+    if (result.kind === "not_finalized") {
       return c.json({ error: "not_finalized" } as const, 409);
     }
-
-    const [owner] = await db
-      .select({ email: user.email, name: user.name })
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1);
-    if (!owner) return c.json({ error: "not_found" } as const, 404);
-
-    const body = c.req.valid("json");
-    const email = renderBriefEmail(
-      {
-        dogName: dog.name,
-        ownerName: owner.name ?? owner.email,
-        message: body.message ?? null,
-        summary: brief.summary,
-      },
-      brief.locale,
-    );
-
-    try {
-      await sendEmail({
-        to: body.recipient,
-        replyTo: owner.email,
-        subject: email.subject,
-        html: email.html,
-        text: email.text,
-      });
-    } catch (err) {
-      throw sendFailedException(c, err);
+    if (result.kind === "rate_limited") {
+      return c.json({ error: "send_rate_limited" } as const, 429);
+    }
+    if (result.kind === "idempotency_conflict") {
+      return c.json({ error: "idempotency_conflict" } as const, 409);
     }
 
-    const [send] = await db
-      .insert(briefSends)
-      .values({
-        briefId: brief.id,
-        recipient: body.recipient,
-        message: body.message ?? null,
-        sentByUserId: userId,
-      })
-      .returning();
-
     await recordEvent("brief.emailed", { userId });
-    return c.json({ send }, 201);
+    return c.json({ send: result.send }, 201);
   })
   .get("/:id/brief/sends", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));

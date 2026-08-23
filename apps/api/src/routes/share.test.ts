@@ -15,7 +15,11 @@ async function signedUpCookie(email: string) {
   return res.headers.get("set-cookie") ?? "";
 }
 
-async function createDogWithBrief(cookie: string, briefHeaders: Record<string, string> = {}) {
+async function createDogWithBrief(
+  cookie: string,
+  briefHeaders: Record<string, string> = {},
+  finalize = true,
+) {
   const dogRes = await app.request("/api/dogs", {
     method: "POST",
     headers: { "Content-Type": "application/json", cookie },
@@ -32,6 +36,9 @@ async function createDogWithBrief(cookie: string, briefHeaders: Record<string, s
     method: "POST",
     headers: { cookie, ...briefHeaders },
   });
+  if (finalize) {
+    await app.request(`/api/dogs/${dog.id}/brief`, { method: "PUT", headers: { cookie } });
+  }
   return dog.id as string;
 }
 
@@ -207,6 +214,109 @@ describe("brief share mint/revoke", () => {
       headers: { cookie },
     });
     expect(res.status).toBe(404);
+  });
+
+  it("rejects direct publication of a draft Brief", async () => {
+    const email = `share_draft_${Date.now()}@example.com`;
+    emails.push(email);
+    const cookie = await signedUpCookie(email);
+    const dogId = await createDogWithBrief(cookie, {}, false);
+
+    const response = await app.request(`/api/dogs/${dogId}/brief/share`, {
+      method: "POST",
+      headers: { cookie },
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "not_finalized" });
+  });
+
+  it("does not publish a newer draft generated before queued share minting", async () => {
+    const email = `share_generate_race_${Date.now()}@example.com`;
+    emails.push(email);
+    const cookie = await signedUpCookie(email);
+    const dogId = await createDogWithBrief(cookie);
+    const blocker = await pool.connect();
+    let blockerOpen = false;
+
+    try {
+      await blocker.query("BEGIN");
+      blockerOpen = true;
+      await blocker.query(`SELECT "id" FROM "dogs" WHERE "id" = $1 FOR UPDATE`, [dogId]);
+      const pidResult = await blocker.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const blockerPid = Number(pidResult.rows[0]?.pid);
+
+      const generation = app.request(`/api/dogs/${dogId}/brief`, {
+        method: "POST",
+        headers: { cookie },
+      });
+      await waitForBlockingChain(pool, blockerPid, 1);
+      const mint = app.request(`/api/dogs/${dogId}/brief/share`, {
+        method: "POST",
+        headers: { cookie },
+      });
+      await waitForBlockingChain(pool, blockerPid, 2);
+      await blocker.query("COMMIT");
+      blockerOpen = false;
+
+      expect((await generation).status).toBe(201);
+      const mintResponse = await mint;
+      expect(mintResponse.status).toBe(409);
+      expect(await mintResponse.json()).toEqual({ error: "not_finalized" });
+      const latest = await db
+        .select({ status: briefs.status, shareToken: briefs.shareToken })
+        .from(briefs)
+        .where(eq(briefs.dogId, dogId))
+        .orderBy(desc(briefs.version))
+        .limit(1);
+      expect(latest).toEqual([{ status: "draft", shareToken: null }]);
+    } finally {
+      if (blockerOpen) await blocker.query("ROLLBACK");
+      blocker.release();
+    }
+  });
+
+  it("publishes the draft when finalization queued before share minting", async () => {
+    const email = `share_finalize_race_${Date.now()}@example.com`;
+    emails.push(email);
+    const cookie = await signedUpCookie(email);
+    const dogId = await createDogWithBrief(cookie, {}, false);
+    const blocker = await pool.connect();
+    let blockerOpen = false;
+
+    try {
+      await blocker.query("BEGIN");
+      blockerOpen = true;
+      await blocker.query(`SELECT "id" FROM "dogs" WHERE "id" = $1 FOR UPDATE`, [dogId]);
+      const pidResult = await blocker.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const blockerPid = Number(pidResult.rows[0]?.pid);
+
+      const finalization = app.request(`/api/dogs/${dogId}/brief`, {
+        method: "PUT",
+        headers: { cookie },
+      });
+      await waitForBlockingChain(pool, blockerPid, 1);
+      const mint = app.request(`/api/dogs/${dogId}/brief/share`, {
+        method: "POST",
+        headers: { cookie },
+      });
+      await waitForBlockingChain(pool, blockerPid, 2);
+      await blocker.query("COMMIT");
+      blockerOpen = false;
+
+      expect((await finalization).status).toBe(200);
+      const mintResponse = await mint;
+      expect(mintResponse.status).toBe(200);
+      const { token } = (await mintResponse.json()) as { token: string };
+      expect((await app.request(`/api/share/brief/${token}`)).status).toBe(200);
+    } finally {
+      if (blockerOpen) await blocker.query("ROLLBACK");
+      blocker.release();
+    }
   });
 });
 

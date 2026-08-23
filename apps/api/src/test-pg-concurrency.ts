@@ -41,3 +41,23 @@ export async function waitForBlockingChain(
     `timed out waiting for ${minimumBlocked} PostgreSQL sessions blocked by ${rootPid}; saw ${lastCount}`,
   );
 }
+
+/** Wait until the named PostgreSQL session is blocked by at least one other session. */
+export async function waitForSessionBlocked(
+  pool: Pool,
+  blockedPid: number,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const result = await pool.query<{ blocked: boolean }>(
+      "SELECT cardinality(pg_blocking_pids($1)) > 0 AS blocked",
+      [blockedPid],
+    );
+    if (result.rows[0]?.blocked) return;
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+
+  throw new Error(`timed out waiting for PostgreSQL session ${blockedPid} to become blocked`);
+}
