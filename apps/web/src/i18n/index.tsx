@@ -15,17 +15,11 @@ import {
   useMemo,
   useState,
 } from "react";
+import { I18nextProvider, useTranslation } from "react-i18next";
 import { setActiveLocale } from "./active-locale";
 
 const STORAGE_KEY = "tc-locale";
-const INSTANCES = {
-  en: createI18n("en"),
-  es: createI18n("es"),
-} as const;
-
-function getI18n(locale: Locale) {
-  return INSTANCES[locale];
-}
+const WEB_I18N = createI18n("en");
 
 export function detectInitialLocale(): Locale {
   try {
@@ -46,7 +40,7 @@ export function translate(
   key: MessageKey,
   vars?: Record<string, string | number>,
 ): string {
-  return translateMessage(getI18n(locale), key, vars);
+  return translateMessage({ t: WEB_I18N.getFixedT(locale) }, key, vars);
 }
 
 type I18n = {
@@ -61,6 +55,7 @@ const Ctx = createContext<I18n | null>(null);
 
 function activateLocale(locale: unknown): locale is Locale {
   if (!setActiveLocale(locale)) return false;
+  void WEB_I18N.changeLanguage(locale);
   if (typeof document !== "undefined") document.documentElement.lang = locale;
   return true;
 }
@@ -69,6 +64,28 @@ function initializeLocale() {
   const locale = detectInitialLocale();
   activateLocale(locale);
   return { explicitSelectionRevision: 0, locale };
+}
+
+type LocaleContextProviderProps = Omit<I18n, "t"> & { children: ReactNode };
+
+function LocaleContextProvider({
+  adoptLocale,
+  children,
+  explicitSelectionRevision,
+  locale,
+  selectLocale,
+}: LocaleContextProviderProps) {
+  const { t: reactTranslate } = useTranslation();
+  const t = useCallback<I18n["t"]>(
+    (key, vars) => translateMessage({ t: reactTranslate }, key, vars),
+    [reactTranslate],
+  );
+  const value = useMemo<I18n>(
+    () => ({ adoptLocale, explicitSelectionRevision, locale, selectLocale, t }),
+    [adoptLocale, explicitSelectionRevision, locale, selectLocale, t],
+  );
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
@@ -105,18 +122,18 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     [updateLocale],
   );
 
-  const value = useMemo<I18n>(
-    () => ({
-      adoptLocale,
-      explicitSelectionRevision,
-      locale,
-      selectLocale,
-      t: (key, vars) => translate(locale, key, vars),
-    }),
-    [adoptLocale, explicitSelectionRevision, locale, selectLocale],
+  return (
+    <I18nextProvider i18n={WEB_I18N}>
+      <LocaleContextProvider
+        adoptLocale={adoptLocale}
+        explicitSelectionRevision={explicitSelectionRevision}
+        locale={locale}
+        selectLocale={selectLocale}
+      >
+        {children}
+      </LocaleContextProvider>
+    </I18nextProvider>
   );
-
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useI18n(): I18n {

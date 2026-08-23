@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useValidationMessage } from "@/i18n/validation";
+import { useSession } from "@/lib/auth-client";
 import { useProfile, useUpdateProfile } from "@/lib/profile";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type ProfileUpdateInput, profileUpdateSchema } from "@turingcare/shared";
@@ -13,7 +14,10 @@ const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm te
 export function Profile() {
   const { t } = useI18n();
   const validationMessage = useValidationMessage();
-  const { data: me, isLoading, isError } = useProfile();
+  const { data: session, isPending: isSessionPending } = useSession();
+  const sessionUserId =
+    typeof session?.user?.id === "string" && session.user.id.length > 0 ? session.user.id : null;
+  const { data: me, isLoading, isError } = useProfile(sessionUserId);
   const update = useUpdateProfile();
   const {
     register,
@@ -28,8 +32,9 @@ export function Profile() {
     if (me) reset({ name: me.name });
   }, [me, reset]);
 
-  if (isLoading) return <p>{t("common.loading")}</p>;
-  if (isError || !me) return <p className="text-red-600">{t("profile.loadError")}</p>;
+  if (isSessionPending || isLoading) return <p>{t("common.loading")}</p>;
+  if (isError || !sessionUserId || !me)
+    return <p className="text-red-600">{t("profile.loadError")}</p>;
 
   const onSubmit = handleSubmit(async (v) => {
     try {

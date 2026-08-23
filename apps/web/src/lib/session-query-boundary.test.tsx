@@ -37,6 +37,15 @@ function PublicAndPrivateProbe() {
   );
 }
 
+function TrainerContactProbe() {
+  const identityReady = useSessionQueriesReady();
+  const queryClient = useQueryClient();
+  const trainer = queryClient.getQueryData<{ email: string; phone: string }>(["trainers", "t1"]);
+
+  if (!identityReady) return <p>sanitizing</p>;
+  return trainer ? <p>{`${trainer.email} ${trainer.phone}`}</p> : <p>trainer-cache-empty</p>;
+}
+
 beforeEach(() => {
   sessionState.pending = false;
   sessionState.userId = "u1";
@@ -103,5 +112,31 @@ describe("SessionQueryBoundary", () => {
       expect(queryClient.getQueryData(["overview"])).toBeUndefined();
     });
     expect(queryClient.getQueryData(["training-catalog", "en"])).toEqual({ marker: "public" });
+  });
+
+  it("removes cached authenticated trainer contact details before anonymous rendering on logout", async () => {
+    const queryClient = new QueryClient();
+    const tree = () => (
+      <BoundaryTree queryClient={queryClient}>
+        <TrainerContactProbe />
+      </BoundaryTree>
+    );
+    const view = render(tree());
+    await screen.findByText("trainer-cache-empty");
+
+    queryClient.setQueryData(["trainers", "t1"], {
+      email: "private@example.com",
+      phone: "+1-555-0100",
+    });
+    view.rerender(tree());
+    expect(screen.getByText("private@example.com +1-555-0100")).toBeInTheDocument();
+
+    sessionState.userId = null;
+    view.rerender(tree());
+
+    await screen.findByText("trainer-cache-empty");
+    expect(screen.queryByText(/private@example\.com/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/555-0100/)).not.toBeInTheDocument();
+    expect(queryClient.getQueryData(["trainers", "t1"])).toBeUndefined();
   });
 });

@@ -16,6 +16,7 @@ const SESSION_QUERY_ROOTS = new Set([
   "overview",
   "profile",
   "progress",
+  "trainers",
 ]);
 
 const UNRESOLVED_IDENTITY = Symbol("unresolved-session-identity");

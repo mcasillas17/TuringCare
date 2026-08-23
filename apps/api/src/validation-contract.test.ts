@@ -47,6 +47,28 @@ describe("stable API validation contract", () => {
     expect(issues[0]?.message).toBe("validation.nameRequired");
   });
 
+  it.each(["en", "es"] as const)(
+    "normalizes malformed JSON to a stable validation payload under %s",
+    async (locale) => {
+      const response = await app.request("/api/validate/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-TuringCare-Locale": locale },
+        body: "{",
+      });
+      const text = await response.text();
+
+      expect(response.status).toBe(400);
+      expect(response.headers.get("Content-Type")).toContain("application/json");
+      expect(text).not.toContain("Malformed JSON");
+      expect(JSON.parse(text)).toEqual({
+        success: false,
+        error: {
+          issues: [{ code: "custom", path: [], message: "validation.invalid" }],
+        },
+      });
+    },
+  );
+
   it.each([
     [
       "max length",

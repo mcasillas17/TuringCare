@@ -24,7 +24,9 @@ export function SharedBrief() {
         <p className="p-4 text-slate-soft">{t("brief.shareUnavailable")}</p>
       ) : (
         <>
-          <h1 className="text-2xl font-bold text-slate">{sharedBriefTitle(data.locale)}</h1>
+          <h1 lang={normalizeBriefLocale(data.locale)} className="text-2xl font-bold text-slate">
+            {sharedBriefTitle(data.locale)}
+          </h1>
           <div className="flex flex-wrap gap-2">
             <Suspense
               fallback={

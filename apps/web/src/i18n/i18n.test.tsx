@@ -1,6 +1,7 @@
 import { act, render, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { en, es } from "@turingcare/i18n";
+import { useTranslation } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetActiveLocale } from "./active-locale";
 import { LocaleProvider, detectInitialLocale, translate, useI18n } from "./index";
@@ -37,6 +38,21 @@ function LocaleProbe() {
       <p data-testid="locale">{locale}</p>
       <button type="button" onClick={() => selectLocale("es")}>
         switch
+      </button>
+    </>
+  );
+}
+
+function ReactI18nextProbe() {
+  const { i18n, t } = useTranslation();
+  const { selectLocale } = useI18n();
+
+  return (
+    <>
+      <p data-testid="react-i18next-message">{t("nav.getStarted")}</p>
+      <p data-testid="react-i18next-language">{i18n.language ?? "unset"}</p>
+      <button type="button" onClick={() => selectLocale("es")}>
+        switch react i18next
       </button>
     </>
   );
@@ -195,6 +211,24 @@ describe("useI18n + LocaleProvider", () => {
     await userEvent.click(screen.getByRole("button", { name: "switch" }));
     expect(screen.getByText("Empezar")).toBeInTheDocument();
     expect(screen.getByTestId("locale")).toHaveTextContent("es");
+  });
+
+  it("provides one active react-i18next runtime synchronized on initial render and locale switches", async () => {
+    localStorage.setItem("tc-locale", "en");
+
+    render(
+      <LocaleProvider>
+        <ReactI18nextProbe />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByTestId("react-i18next-message")).toHaveTextContent("Get started");
+    expect(screen.getByTestId("react-i18next-language")).toHaveTextContent("en");
+
+    await userEvent.click(screen.getByRole("button", { name: "switch react i18next" }));
+
+    expect(screen.getByTestId("react-i18next-message")).toHaveTextContent("Empezar");
+    expect(screen.getByTestId("react-i18next-language")).toHaveTextContent("es");
   });
 });
 

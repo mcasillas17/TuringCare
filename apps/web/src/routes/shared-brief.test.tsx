@@ -67,11 +67,10 @@ it("renders shared brief chrome and PDF handoff from stored Spanish locale under
   });
   setup();
 
-  await waitFor(() =>
-    expect(
-      screen.getByRole("heading", { name: "Resumen de conducta compartido" }),
-    ).toBeInTheDocument(),
-  );
+  const storedLocaleHeading = await screen.findByRole("heading", {
+    name: "Resumen de conducta compartido",
+  });
+  expect(storedLocaleHeading).toHaveAttribute("lang", "es");
   expect(screen.getByText("Versión 2")).toBeInTheDocument();
   expect(screen.getByTestId("download-locale")).toHaveTextContent("es");
   expect(screen.getByText("Resumen redactado por la familia").closest("article")).toHaveAttribute(

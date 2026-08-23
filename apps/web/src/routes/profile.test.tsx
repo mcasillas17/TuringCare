@@ -5,9 +5,21 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Profile } from "./profile";
 
+const { sessionState, useSessionMock } = vi.hoisted(() => ({
+  sessionState: { isPending: false, userId: "u1" as string | null },
+  useSessionMock: vi.fn(),
+}));
+
+vi.mock("@/lib/auth-client", () => ({
+  useSession: useSessionMock,
+}));
+
 afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
+  sessionState.isPending = false;
+  sessionState.userId = "u1";
+  useSessionMock.mockReset();
 });
 
 function stubProfile(user: {
@@ -31,7 +43,11 @@ function stubProfile(user: {
 
 function setup() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  useSessionMock.mockImplementation(() => ({
+    data: sessionState.userId ? { user: { id: sessionState.userId } } : null,
+    isPending: sessionState.isPending,
+  }));
+  const view = render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
         <MemoryRouter>
@@ -40,6 +56,7 @@ function setup() {
       </LocaleProvider>
     </QueryClientProvider>,
   );
+  return { qc, view };
 }
 
 describe("Profile", () => {
@@ -64,5 +81,17 @@ describe("Profile", () => {
 
     expect(await screen.findByText("Revisa este campo.")).toBeInTheDocument();
     expect(screen.queryByText(/String must contain/i)).not.toBeInTheDocument();
+  });
+
+  it("rejects a profile response for a different authenticated user without caching or rendering it", async () => {
+    sessionState.userId = "u1";
+    stubProfile({ id: "u2", name: "Other User", email: "other@example.com", locale: "es" });
+    const { qc } = setup();
+
+    expect(await screen.findByText(/couldn't load your profile/i)).toBeInTheDocument();
+    expect(screen.queryByText("Other User")).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("other@example.com")).not.toBeInTheDocument();
+    expect(qc.getQueryData(["profile", "u1"])).toBeUndefined();
+    expect(qc.getQueryData(["profile"])).toBeUndefined();
   });
 });
