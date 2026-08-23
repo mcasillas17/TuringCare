@@ -29,7 +29,14 @@ export function resolveBrowserLocale(
   const browserLanguages =
     typeof languages === "string" ? [languages] : Array.isArray(languages) ? languages : [];
 
-  return browserLanguages.some((language) => language.toLowerCase().startsWith("es")) ? "es" : "en";
+  for (const language of browserLanguages) {
+    const normalized = language.toLowerCase();
+
+    if (normalized.startsWith("en")) return "en";
+    if (normalized.startsWith("es")) return "es";
+  }
+
+  return "en";
 }
 
 export function createI18n(locale: Locale): I18n {
@@ -39,6 +46,7 @@ export function createI18n(locale: Locale): I18n {
     lng: locale,
     fallbackLng: "en",
     initImmediate: false,
+    showSupportNotice: false,
     interpolation: { escapeValue: false, prefix: "{", suffix: "}" },
     resources,
   });

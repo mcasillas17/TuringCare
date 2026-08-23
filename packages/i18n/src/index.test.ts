@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createI18n, en, es, isLocale, resolveBrowserLocale, translate } from "./index";
 
 function keyPaths(o: Record<string, unknown>, prefix = ""): string[] {
@@ -8,6 +8,11 @@ function keyPaths(o: Record<string, unknown>, prefix = ""): string[] {
       : [`${prefix}${key}`],
   );
 }
+
+afterEach(() => {
+  delete (globalThis as Record<string, unknown>).__i18next_supportNoticeShown;
+  vi.restoreAllMocks();
+});
 
 describe("@turingcare/i18n locale helpers", () => {
   it("allowlists only the supported locales", () => {
@@ -22,6 +27,10 @@ describe("@turingcare/i18n locale helpers", () => {
     expect(resolveBrowserLocale(["es-MX", "en-US"])).toBe("es");
   });
 
+  it("respects browser-language ordering when English appears before a later Spanish variant", () => {
+    expect(resolveBrowserLocale(["en-US", "es-MX"])).toBe("en");
+  });
+
   it("falls back to English when the browser languages are unsupported", () => {
     expect(resolveBrowserLocale(["fr-FR", "pt-BR"])).toBe("en");
     expect(resolveBrowserLocale([])).toBe("en");
@@ -29,6 +38,15 @@ describe("@turingcare/i18n locale helpers", () => {
 });
 
 describe("@turingcare/i18n runtime", () => {
+  it("initializes without emitting the i18next support banner", () => {
+    delete (globalThis as Record<string, unknown>).__i18next_supportNoticeShown;
+    const info = vi.spyOn(console, "info");
+
+    createI18n("en");
+
+    expect(info).not.toHaveBeenCalled();
+  });
+
   it("interpolates variables through the shared translator", () => {
     const i18n = createI18n("es");
 

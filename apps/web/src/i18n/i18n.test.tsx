@@ -62,6 +62,12 @@ describe("detectInitialLocale", () => {
     expect(detectInitialLocale()).toBe("es");
   });
 
+  it("respects browser-language ordering when English appears before a later Spanish variant", () => {
+    vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US", "es-MX"] });
+
+    expect(detectInitialLocale()).toBe("en");
+  });
+
   it("defaults to en otherwise", () => {
     vi.stubGlobal("navigator", { language: "fr-FR", languages: ["fr-FR"] });
 
