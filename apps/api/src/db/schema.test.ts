@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -167,6 +167,28 @@ describe("briefs schema", () => {
     expect(statementBreakpointIndex).toBeGreaterThan(nonNullShareTokenGuardIndex);
     expect(createUniqueIndex).toBeGreaterThan(statementBreakpointIndex);
     expect(partialUniqueIndexPredicateIndex).toBeGreaterThan(createUniqueIndex);
+  });
+});
+
+describe("telemetry schema", () => {
+  it("keeps the committed Brief share telemetry privacy cleanup migration", () => {
+    const migrationPath = new URL(
+      "../../drizzle/0021_brief_share_telemetry_privacy.sql",
+      import.meta.url,
+    );
+
+    expect(existsSync(migrationPath)).toBe(true);
+    if (!existsSync(migrationPath)) return;
+
+    const migrationSql = readFileSync(migrationPath, "utf8");
+
+    expect(migrationSql).toMatch(/UPDATE "events"/);
+    expect(migrationSql).toMatch(/"name" = 'page\.viewed'/);
+    expect(migrationSql).toMatch(/jsonb_typeof\("props"->'path'\) = 'string'/);
+    expect(migrationSql).toMatch(/"props"->>'path' ~ '\^\/b\/\[\^\/\]\+\/\?\$'/);
+    expect(migrationSql).toMatch(
+      /jsonb_set\("props", '\{path\}', to_jsonb\('\/b\/:token'::text\), false\)/,
+    );
   });
 });
 

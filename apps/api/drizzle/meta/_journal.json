@@ -148,6 +148,13 @@
       "when": 1787439342267,
       "tag": "0020_brief_share_privacy",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787469239197,
+      "tag": "0021_brief_share_telemetry_privacy",
+      "breakpoints": true
     }
   ]
 }

@@ -29,6 +29,30 @@ describe("telemetry events allowlist", () => {
     ).toBe(true);
   });
 
+  it("redacts a public Brief token from page-view props while preserving other props", () => {
+    expect(
+      eventIngestSchema.parse({
+        name: "page.viewed",
+        props: { path: "/b/super-secret", other: "kept" },
+      }),
+    ).toEqual({
+      name: "page.viewed",
+      props: { path: "/b/:token", other: "kept" },
+    });
+  });
+
+  it("preserves ordinary page-view paths", () => {
+    expect(
+      eventIngestSchema.parse({
+        name: "page.viewed",
+        props: { path: "/my", other: "kept" },
+      }),
+    ).toEqual({
+      name: "page.viewed",
+      props: { path: "/my", other: "kept" },
+    });
+  });
+
   it("still rejects server-only events from the client ingest", () => {
     expect(eventIngestSchema.safeParse({ name: "dog.created", props: {} }).success).toBe(false);
     expect(eventIngestSchema.safeParse({ name: "safety.signal_reported", props: {} }).success).toBe(
