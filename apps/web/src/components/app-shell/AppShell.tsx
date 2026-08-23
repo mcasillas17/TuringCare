@@ -140,7 +140,7 @@ export function AppShell() {
               <div className="absolute left-0 top-0 h-full">{rail}</div>
             </div>
           )}
-          <main className="flex-1 overflow-auto p-6">
+          <main className="flex-1 overflow-auto p-6 pb-44 md:pb-6">
             <Outlet />
           </main>
         </div>

@@ -210,7 +210,12 @@ test("full owner journey: register → guided setup → training → brief → s
   await expect(suggestionCard.getByText("If that looks like too much")).toBeVisible();
   await expect(suggestionCard.getByText(/give more help/i)).toBeVisible();
 
-  await page.getByRole("button", { name: /^Sit on .*: 1 sessions$/ }).click();
+  const calendarSession = page.getByRole("button", { name: /^Sit on .*: 1 sessions$/ });
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
+  await calendarSession.evaluate((element) => {
+    element.scrollIntoView({ block: "center", inline: "center" });
+  });
+  await calendarSession.click();
   await page.getByRole("button", { name: "Log another" }).click();
 
   const outcomeCapture = page.getByLabel("How did it go?");
