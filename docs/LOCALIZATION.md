@@ -88,7 +88,8 @@ the validated request locale alongside its composed summary. The stored localeâ€
 current UI or viewer localeâ€”controls:
 
 - Summary prose and check-in/training enum labels.
-- Generated date and status/version chrome in owned and public views.
+- Generated date and status/version chrome in the owned view; the public view uses the
+  stored locale for its title, version, summary, and PDF handoff.
 - The public-share artifact content's `lang` annotations.
 - Brief email subject, HTML/text chrome, and root `lang` attribute.
 - PDF labels, dates, and localized filename.

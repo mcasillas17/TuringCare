@@ -103,9 +103,11 @@ The approved design shipped with these review-driven hardening details:
   Migration `0014_third_madripoor` repairs legacy duplicate versions and enforces unique
   `(dog_id, version)` values after a rolling API replacement; ambiguous latest-version reads and
   draft shares fail closed during the compatibility window.
-- The production deploy is one non-canceling queue: compatible migrations through 0013, rolling
-  API deployment, post-deploy migrations 0014/0015, then web publication. The production image
-  includes both shared workspace packages and is boot-smoked in CI.
+- The production deploy prevents phase interleaving and preserves the running workflow:
+  compatible migrations through 0013, rolling API deployment, post-deploy migrations 0014/0015,
+  then web publication. GitHub Actions retains at most one pending run, replacing an older
+  pending push with a newer one. The production image includes both shared workspace packages
+  and is boot-smoked in CI.
 - Public Brief bearer paths are normalized to `/b/:token` before telemetry emission and ingest,
   again in admin aggregation, and historically by data-only migration
   `0015_brief_share_telemetry_privacy`, including route-equivalent `%62`/`%42` prefixes.

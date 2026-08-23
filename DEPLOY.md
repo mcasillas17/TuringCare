@@ -14,9 +14,10 @@ push main → ci → migrate-compatible (through 0013)
 - **Database** → Supabase Postgres
 
 Production runs share the `production-deploy` concurrency group with
-`cancel-in-progress: false`: pushes queue instead of canceling or interleaving a
-schema/API/web rollout. The locale-aware frontend publishes only after the compatible
-schema, rolling API replacement, and post-deploy migrations all succeed.
+`cancel-in-progress: false`: a running schema/API/web rollout is not canceled or
+interleaved. GitHub Actions retains at most one pending run per concurrency group, so a
+newer push replaces an older pending push. The locale-aware frontend publishes only after
+the compatible schema, rolling API replacement, and post-deploy migrations all succeed.
 
 > Nothing here is automated by the repo. Do every step below **once**, by hand,
 > before the first push to `main`. The workflows (`.github/workflows/ci.yml`,
@@ -270,7 +271,7 @@ Verify end-to-end: open `https://turingcare.dog`, register, confirm you land on
 ### API (Fly)
 
 ```bash
-fly releases --app turingcare-api          # list versions (vN) + image refs
+fly releases --app turingcare-api --image  # list versions (vN) + image refs
 fly deploy --app turingcare-api --image <previous-image-ref> --config apps/api/fly.toml
 ```
 

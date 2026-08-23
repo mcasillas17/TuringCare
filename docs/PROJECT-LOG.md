@@ -1027,12 +1027,13 @@ added idempotent send/replay behavior and localized stable error recovery, and i
 `0014_third_madripoor` to repair legacy duplicate versions and enforce unique
 `(dog_id, version)` values.
 
-The production rollout is now a non-canceling `production-deploy` queue:
-CI → compatible migrations through 0013 → serialized rolling Fly API replacement →
-post-deploy 0014/0015 → Cloudflare Pages. The predeploy selector fails closed if its known
-postdeploy suffix is no longer exact. `Dockerfile.api` includes both shared workspace
-packages and the workflow builds and health-smokes the production image. There are no new
-locale secrets or environment variables.
+The production rollout now preserves the running `production-deploy` workflow while
+preventing phase interleaving: CI → compatible migrations through 0013 → serialized rolling
+Fly API replacement → post-deploy 0014/0015 → Cloudflare Pages. GitHub Actions retains at
+most one pending run in the concurrency group, with a newer push replacing an older pending
+push. The predeploy selector fails closed if its known postdeploy suffix is no longer exact.
+`Dockerfile.api` includes both shared workspace packages and the workflow builds and
+health-smokes the production image. There are no new locale secrets or environment variables.
 
 Privacy hardening prevents public Brief bearer tokens from entering analytics: browser and
 API telemetry normalize `/b/<token>` (including route-equivalent `%62`/`%42` prefixes) to
@@ -1054,6 +1055,7 @@ advisory, API test diagnostics, and Docker's local legacy-builder advisory.
 - Current guide: `docs/LOCALIZATION.md`
 - Spec/plan: `docs/superpowers/specs/2026-08-23-end-to-end-localization-design.md`,
   `docs/superpowers/plans/2026-08-23-end-to-end-localization.md`
-- Commit range: `841d592de140b52b2595805fd9c1843be4988c54..documentation-head` on the
-  localization branch; final PR number/merge SHA will be recorded after the parent task opens
-  the PR.
+- Reviewer-clean code/release range:
+  `841d592de140b52b2595805fd9c1843be4988c54..bf300360ef3c4ed74ff357ff23a4f5541d866788`;
+  documentation follows on the same localization branch. The final PR number/merge SHA will
+  be recorded after publication and merge.
