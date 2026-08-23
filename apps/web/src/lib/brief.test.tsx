@@ -38,7 +38,7 @@ vi.mock("./api", () => ({
   },
 }));
 
-import { useGenerateBrief, useRevokeShare, useShareBrief } from "./brief";
+import { useFinalizeBrief, useGenerateBrief, useRevokeShare, useShareBrief } from "./brief";
 
 const briefKey = ["brief", "dog-1"] as const;
 
@@ -60,6 +60,11 @@ const privateBrief = {
   summary: "A newly generated private Brief.",
   version: 5,
   shareToken: null,
+};
+
+const finalizedBrief = {
+  ...privateBrief,
+  status: "finalized" as const,
 };
 
 function makeWrapper(queryClient: QueryClient) {
@@ -85,6 +90,26 @@ function expectBriefInvalidation(invalidateQueries: unknown) {
 afterEach(() => vi.clearAllMocks());
 
 describe("Brief mutation cache updates", () => {
+  it("replaces the cached draft Brief with the returned finalized Brief", async () => {
+    finalizeBrief.mockResolvedValue(ok({ brief: finalizedBrief }));
+    const queryClient = makeQueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+    queryClient.setQueryData(briefKey, privateBrief);
+    const { result } = renderHook(() => useFinalizeBrief("dog-1"), {
+      wrapper: makeWrapper(queryClient),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync();
+    });
+
+    expect(queryClient.getQueryData(briefKey)).toEqual(finalizedBrief);
+    expect(celebrate).toHaveBeenCalledWith(true, "turing.celebrateBrief");
+    expectBriefInvalidation(invalidateQueries);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["overview"] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["onboarding"] });
+  });
+
   it("replaces the cached shared Brief with the newly generated private Brief", async () => {
     generateBrief.mockResolvedValue(ok({ brief: privateBrief }));
     const queryClient = makeQueryClient();

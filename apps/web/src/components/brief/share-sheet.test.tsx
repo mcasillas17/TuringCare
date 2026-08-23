@@ -1,19 +1,28 @@
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BriefShareSheet } from "./share-sheet";
 
-const { getBrief, generateBrief, finalizeBrief, shareBrief, revokeShare, celebrate } = vi.hoisted(
-  () => ({
-    getBrief: vi.fn(),
-    generateBrief: vi.fn(),
-    finalizeBrief: vi.fn(),
-    shareBrief: vi.fn(),
-    revokeShare: vi.fn(),
-    celebrate: vi.fn(),
-  }),
-);
+const {
+  getBrief,
+  generateBrief,
+  finalizeBrief,
+  shareBrief,
+  revokeShare,
+  getBriefSends,
+  sendBrief,
+  celebrate,
+} = vi.hoisted(() => ({
+  getBrief: vi.fn(),
+  generateBrief: vi.fn(),
+  finalizeBrief: vi.fn(),
+  shareBrief: vi.fn(),
+  revokeShare: vi.fn(),
+  getBriefSends: vi.fn(),
+  sendBrief: vi.fn(),
+  celebrate: vi.fn(),
+}));
 
 vi.mock("@/components/turing/turing-context", () => ({
   useTuring: () => ({ celebrate }),
@@ -31,6 +40,12 @@ vi.mock("@/lib/api", () => ({
             share: {
               $post: shareBrief,
               $delete: revokeShare,
+            },
+            sends: {
+              $get: getBriefSends,
+            },
+            send: {
+              $post: sendBrief,
             },
           },
         },
@@ -85,6 +100,15 @@ function makeQueryClient() {
   });
 }
 
+const send = {
+  id: "send-1",
+  briefId: "brief-1",
+  recipient: "trainer@example.com",
+  message: null,
+  sentAt: "2026-08-22T18:05:00.000Z",
+  sentByUserId: "user-1",
+};
+
 function setup(over: BriefOverride = {}) {
   const queryClient = makeQueryClient();
   const sheet = (nextBrief: Brief) => (
@@ -111,6 +135,18 @@ function setup(over: BriefOverride = {}) {
 afterEach(() => vi.clearAllMocks());
 
 describe("BriefShareSheet", () => {
+  beforeEach(() => {
+    getBrief.mockResolvedValue(ok({ brief }));
+    generateBrief.mockResolvedValue(ok({ brief }));
+    finalizeBrief.mockResolvedValue(ok({ brief: { ...brief, status: "finalized" as const } }));
+    shareBrief.mockResolvedValue(
+      ok({ token: "tok123", url: "https://turingcare.example/b/tok123" }),
+    );
+    revokeShare.mockResolvedValue(ok({ ok: true }));
+    getBriefSends.mockResolvedValue(ok({ sends: [] }));
+    sendBrief.mockResolvedValue(ok({ send }));
+  });
+
   it("lists the three share options with explanations", async () => {
     setup();
     expect(screen.getByRole("button", { name: /send to your trainer/i })).toBeInTheDocument();
@@ -118,11 +154,23 @@ describe("BriefShareSheet", () => {
     await act(async () => {});
   });
 
-  it("finalizes a draft when opening the email option", async () => {
-    finalizeBrief.mockResolvedValue(ok({ brief: { ...brief, status: "finalized" as const } }));
+  it("finalizes a draft exactly once before rendering the email panel", async () => {
+    let resolveFinalize!: (response: ReturnType<typeof ok<{ brief: Brief }>>) => void;
+    finalizeBrief.mockReturnValue(
+      new Promise((resolve) => {
+        resolveFinalize = resolve;
+      }),
+    );
     setup({ status: "draft" });
     fireEvent.click(screen.getByRole("button", { name: /send to your trainer/i }));
+
+    await waitFor(() => expect(finalizeBrief).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("heading", { name: /send to a trainer/i })).not.toBeInTheDocument();
+
+    resolveFinalize(ok({ brief: { ...brief, status: "finalized" } }));
+
     expect(await screen.findByRole("heading", { name: /send to a trainer/i })).toBeInTheDocument();
+    expect(await screen.findByText("No sends yet.")).toBeInTheDocument();
   });
 
   it("shows the link after its parent rerenders with the complete shared Brief", async () => {

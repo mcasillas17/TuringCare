@@ -14,7 +14,7 @@ type BriefLike = {
   version: number;
   summary: string;
   generatedAt: string;
-  shareToken?: string | null;
+  shareToken: string | null;
 };
 
 type Props = {

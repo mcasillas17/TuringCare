@@ -46,7 +46,8 @@ export function useFinalizeBrief(dogId: string) {
       if (!res.ok) throw new Error("save_failed");
       return (await res.json()).brief;
     },
-    onSuccess: () => {
+    onSuccess: (brief) => {
+      qc.setQueryData<CachedBrief>(["brief", dogId], brief);
       celebrate(true, "turing.celebrateBrief");
       qc.invalidateQueries({ queryKey: ["brief", dogId] });
       qc.invalidateQueries({ queryKey: ["overview"] });
