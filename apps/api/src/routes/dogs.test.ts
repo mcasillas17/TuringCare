@@ -11,7 +11,7 @@ import {
   trainingGoals,
   trainingSkills,
 } from "../db/schema";
-import { withBriefLifecycleLock } from "../lib/brief-lifecycle";
+import { lockBriefLifecycle, withBriefLifecycleLock } from "../lib/brief-lifecycle";
 import { createMonitoringErrorHandler } from "../monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "../monitoring/request-id";
 import { type TestUser, createTestUser } from "../test-helpers";
@@ -1021,6 +1021,74 @@ describe("dogs: brief", () => {
       { id: seeded.older.id, status: "draft" },
       { id: seeded.newer.id, status: "finalized" },
     ]);
+  });
+
+  it("waits to finalize the Brief that committed while the lifecycle lock was held", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const seeded = await seedDuplicateVersionBriefs(dog.id);
+    const releaseHolder = createDeferred<void>();
+    const holderEntered = createDeferred<void>();
+
+    const holder = db.transaction(async (tx) => {
+      await lockBriefLifecycle(tx, dog.id);
+      holderEntered.resolve();
+      await releaseHolder.promise;
+    });
+
+    await holderEntered.promise;
+    const finalize = app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "PUT",
+      headers: u.authHeaders,
+    });
+
+    try {
+      await waitForBriefLifecycleLockWaiters(dog.id, 1);
+      const [newer] = await db
+        .insert(briefs)
+        .values({
+          dogId: dog.id,
+          summary: "Committed newest Brief while finalize waited",
+          version: 8,
+          status: "draft",
+          generatedAt: new Date("2026-02-01T10:00:00.000Z"),
+        })
+        .returning({ id: briefs.id, status: briefs.status, summary: briefs.summary });
+      if (!newer) throw new Error("expected committed newer Brief");
+
+      releaseHolder.resolve();
+      await holder;
+
+      const response = await finalize;
+      expect(response.status).toBe(200);
+      expect(
+        (
+          (await response.json()) as {
+            brief: { id: string; version: number; status: string; summary: string };
+          }
+        ).brief,
+      ).toMatchObject({
+        id: newer.id,
+        version: 8,
+        status: "finalized",
+        summary: newer.summary,
+      });
+
+      const rows = await db
+        .select({ id: briefs.id, version: briefs.version, status: briefs.status })
+        .from(briefs)
+        .where(eq(briefs.dogId, dog.id))
+        .orderBy(asc(briefs.generatedAt), asc(briefs.id));
+      expect(rows).toEqual([
+        { id: seeded.older.id, version: 7, status: "draft" },
+        { id: seeded.newer.id, version: 7, status: "draft" },
+        { id: newer.id, version: 8, status: "finalized" },
+      ]);
+    } finally {
+      releaseHolder.resolve();
+      await Promise.allSettled([holder, finalize]);
+    }
   });
 
   it("serializes simultaneous generation into sequential Brief versions", async () => {

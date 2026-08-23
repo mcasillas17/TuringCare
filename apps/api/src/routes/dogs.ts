@@ -1279,18 +1279,24 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   .put("/:id/brief", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const [latest] = await db
-      .select()
-      .from(briefs)
-      .where(eq(briefs.dogId, dog.id))
-      .orderBy(...latestBriefOrder)
-      .limit(1);
-    if (!latest) return c.json({ error: "not_found" } as const, 404);
-    const [brief] = await db
-      .update(briefs)
-      .set({ status: "finalized" })
-      .where(eq(briefs.id, latest.id))
-      .returning();
+    const brief = await withBriefLifecycleLock(dog.id, async (tx) => {
+      const [latest] = await tx
+        .select()
+        .from(briefs)
+        .where(eq(briefs.dogId, dog.id))
+        .orderBy(...latestBriefOrder)
+        .limit(1);
+      if (!latest) return null;
+
+      const [updated] = await tx
+        .update(briefs)
+        .set({ status: "finalized" })
+        .where(eq(briefs.id, latest.id))
+        .returning();
+      if (!updated) throw new Error("failed to finalize Brief");
+      return updated;
+    });
+    if (!brief) return c.json({ error: "not_found" } as const, 404);
     await recordEvent("brief.finalized", { userId: c.get("userId") });
     return c.json({ brief });
   })
