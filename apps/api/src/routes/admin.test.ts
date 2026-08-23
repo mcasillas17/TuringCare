@@ -49,6 +49,8 @@ describe("/api/admin", () => {
     const storedPaths = [
       ...Array.from({ length: 8 }, () => "/b/fixture-share-segment"),
       ...Array.from({ length: 8 }, () => "/B/fixture%2Fencoded-segment///"),
+      ...Array.from({ length: 8 }, () => "/%62/fixture-share-segment"),
+      ...Array.from({ length: 8 }, () => "/%42/fixture%2Fencoded-segment///"),
       ...Array.from({ length: 9 }, () => "/b/fixture-share-segment?source=fixture"),
     ];
     const inserted = await db
@@ -86,6 +88,12 @@ describe("/api/admin", () => {
       );
       expect(body.topPages).not.toContainEqual(
         expect.objectContaining({ path: "/b/fixture-share-segment?source=fixture" }),
+      );
+      expect(body.topPages).not.toContainEqual(
+        expect.objectContaining({ path: "/%62/fixture-share-segment" }),
+      );
+      expect(body.topPages).not.toContainEqual(
+        expect.objectContaining({ path: "/%42/fixture%2Fencoded-segment///" }),
       );
     } finally {
       await db.delete(events).where(

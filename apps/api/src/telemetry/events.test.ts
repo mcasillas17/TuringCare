@@ -23,9 +23,15 @@ describe("telemetry events allowlist", () => {
   it.each([
     "/b/fixture-share-segment",
     "/B/fixture-share-segment",
+    "/%62/fixture-share-segment",
+    "/%42/fixture-share-segment",
     "/b/fixture-share-segment/",
     "/B/fixture-share-segment///",
+    "/%62/fixture-share-segment///",
     "/b/fixture%2Fencoded-segment",
+    "/%42/fixture%2Fencoded-segment",
+    "/%62/fixture%",
+    "/%42/%ZZ",
     "/b/fixture-share-segment?source=fixture",
     "/B/fixture-share-segment///#fixture",
   ])("normalizes a public Brief path from an untrusted client for %s", (path) => {
@@ -48,6 +54,16 @@ describe("telemetry events allowlist", () => {
     "/b/fixture/child?source=fixture",
     "/billing",
     "//b/fixture",
+    "/%62",
+    "/%62/",
+    "/%62//",
+    "/%62/fixture/child",
+    "/%2562/fixture",
+    "/%61/fixture",
+    "/%6Z/fixture",
+    "/%2F%62/fixture",
+    "/%62%2Ffixture",
+    "//%62/fixture",
   ])("preserves unrelated path %s", (path) => {
     expect(
       eventIngestSchema.parse({
@@ -64,7 +80,7 @@ describe("telemetry events allowlist", () => {
     expect(
       eventIngestSchema.parse({
         name: "trainer.viewed",
-        props: { path: "/b/fixture-share-segment" },
+        props: { path: "/%62/fixture-share-segment" },
       }),
     ).toEqual({
       name: "trainer.viewed",

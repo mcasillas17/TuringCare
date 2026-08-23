@@ -34,8 +34,39 @@ describe("POST /api/events", () => {
     expect(row?.userId).toBeNull();
   });
 
+  it.each([
+    ["page.viewed", "/%62/fixture-share-segment"],
+    ["trainer.viewed", "/%42/fixture-share-segment"],
+    ["course.viewed", "/%62/fixture%"],
+  ] as const)(
+    "normalizes an encoded public Brief prefix before persistence for %s at %s",
+    async (name, path) => {
+      const fixture = `round-14-${Date.now()}-${name}`;
+      try {
+        const res = await app.request("/api/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            props: { path, fixture },
+          }),
+        });
+        expect(res.status).toBe(202);
+
+        const [row] = await db
+          .select()
+          .from(events)
+          .where(and(eq(events.name, name), sql`${events.props}->>'fixture' = ${fixture}`))
+          .limit(1);
+        expect(row?.props).toEqual({ path: "/b/:token", fixture });
+      } finally {
+        await db.delete(events).where(sql`${events.props}->>'fixture' = ${fixture}`);
+      }
+    },
+  );
+
   it("normalizes a literal public Brief segment before persistence", async () => {
-    const fixture = `round-13-${Date.now()}`;
+    const fixture = `round-14-literal-${Date.now()}`;
     try {
       const res = await app.request("/api/events", {
         method: "POST",

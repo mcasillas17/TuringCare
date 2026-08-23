@@ -107,7 +107,7 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       db
         .execute<{ path: string; count: number }>(
           sql`select case
-                       when coalesce(props->>'path', '') ~* '^/b/[^/?#]+/*([?#].*)?$'
+                       when coalesce(props->>'path', '') ~* '^/(b|%62|%42)/[^/?#]+/*([?#].*)?$'
                          then '/b/:token'
                        else coalesce(props->>'path', '(unknown)')
                      end as path,

@@ -32,7 +32,13 @@ describe("migration 0015 telemetry privacy cleanup", () => {
         ('page.viewed', '{"path":"/b/fixture-share-segment"}'),
         ('page.viewed', '{"path":"/B/fixture%2Fencoded///#fixture"}'),
         ('trainer.viewed', '{"path":"/b/fixture-share-segment?source=fixture"}'),
+        ('page.viewed', '{"path":"/%62/fixture-share-segment"}'),
+        ('trainer.viewed', '{"path":"/%42/fixture%2Fencoded///"}'),
+        ('page.viewed', '{"path":"/%62/fixture%"}'),
         ('page.viewed', '{"path":"/b/fixture/child"}'),
+        ('page.viewed', '{"path":"/%62/fixture/child"}'),
+        ('page.viewed', '{"path":"/%2562/fixture"}'),
+        ('page.viewed', '{"path":"/%6Z/fixture"}'),
         ('page.viewed', '{"path":"/billing"}'),
         ('page.viewed', '{"path":12}')`,
     );
@@ -57,13 +63,16 @@ describe("migration 0015 telemetry privacy cleanup", () => {
        GROUP BY 1
        ORDER BY 1`,
     );
-    expect(result.rows).toHaveLength(4);
+    expect(result.rows).toHaveLength(7);
     expect(result.rows).toEqual(
       expect.arrayContaining([
         { path: "12", count: 1 },
         { path: "/b/fixture/child", count: 1 },
+        { path: "/%62/fixture/child", count: 1 },
+        { path: "/%2562/fixture", count: 1 },
+        { path: "/%6Z/fixture", count: 1 },
         { path: "/billing", count: 1 },
-        { path: "/b/:token", count: 3 },
+        { path: "/b/:token", count: 6 },
       ]),
     );
   });
