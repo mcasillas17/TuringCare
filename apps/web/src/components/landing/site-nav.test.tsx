@@ -1,17 +1,25 @@
 import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { sessionState } = vi.hoisted(() => ({
+  sessionState: { userId: "u1" as unknown },
+}));
 
 vi.mock("@/lib/auth-client", () => ({
   useSession: () => ({
-    data: { user: { id: "u1", name: "Miguel", email: "m@example.com" } },
+    data: { user: { id: sessionState.userId, name: "Miguel", email: "m@example.com" } },
     isPending: false,
   }),
   signOut: vi.fn(),
 }));
 
 import { SiteNav } from "./site-nav";
+
+beforeEach(() => {
+  sessionState.userId = "u1";
+});
 
 afterEach(() => {
   localStorage.clear();
@@ -30,6 +38,28 @@ describe("SiteNav (logged in)", () => {
     expect(screen.queryByRole("link", { name: /log in/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /get started/i })).toBeNull();
   });
+
+  it.each(["", "   ", 42])(
+    "renders signed-out actions for the runtime-invalid session user id %j",
+    (userId) => {
+      sessionState.userId = userId;
+
+      render(
+        <LocaleProvider>
+          <MemoryRouter>
+            <SiteNav />
+          </MemoryRouter>
+        </LocaleProvider>,
+      );
+
+      expect(screen.getByRole("link", { name: /log in/i })).toHaveAttribute("href", "/login");
+      expect(screen.getByRole("link", { name: /get started/i })).toHaveAttribute(
+        "href",
+        "/register",
+      );
+      expect(screen.queryByRole("link", { name: /open app/i })).not.toBeInTheDocument();
+    },
+  );
 
   it("renders Trainers and Courses directory links", () => {
     render(

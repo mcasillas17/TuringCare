@@ -3,6 +3,7 @@ import { useI18n } from "@/i18n";
 import { useValidationMessage } from "@/i18n/validation";
 import { useSession } from "@/lib/auth-client";
 import { useProfile, useUpdateProfile } from "@/lib/profile";
+import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type ProfileUpdateInput, profileUpdateSchema } from "@turingcare/shared";
 import { useEffect } from "react";
@@ -15,8 +16,8 @@ export function Profile() {
   const { t } = useI18n();
   const validationMessage = useValidationMessage();
   const { data: session, isPending: isSessionPending } = useSession();
-  const sessionUserId =
-    typeof session?.user?.id === "string" && session.user.id.length > 0 ? session.user.id : null;
+  const rawUserId = session?.user?.id;
+  const sessionUserId = isNonemptySessionUserId(rawUserId) ? rawUserId : null;
   const { data: me, isLoading, isError } = useProfile(sessionUserId);
   const update = useUpdateProfile();
   const {

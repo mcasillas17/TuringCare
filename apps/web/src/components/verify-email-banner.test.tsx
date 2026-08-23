@@ -38,7 +38,7 @@ afterEach(() => {
 describe("VerifyEmailBanner", () => {
   it("shows banner and Resend button when session is unverified", () => {
     mockUseSession.mockReturnValue({
-      data: { user: { email: "test@example.com", emailVerified: false } },
+      data: { user: { id: "u1", email: "test@example.com", emailVerified: false } },
       isPending: false,
     });
     setup();
@@ -49,7 +49,7 @@ describe("VerifyEmailBanner", () => {
 
   it("renders nothing when session email is verified", () => {
     mockUseSession.mockReturnValue({
-      data: { user: { email: "test@example.com", emailVerified: true } },
+      data: { user: { id: "u1", email: "test@example.com", emailVerified: true } },
       isPending: false,
     });
     const { container } = setup();
@@ -62,10 +62,25 @@ describe("VerifyEmailBanner", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it.each(["", "   ", 42])(
+    "renders nothing for the runtime-invalid session user id %j",
+    (userId) => {
+      mockUseSession.mockReturnValue({
+        data: { user: { id: userId, email: "test@example.com", emailVerified: false } },
+        isPending: false,
+      });
+
+      const { container } = setup();
+
+      expect(container.firstChild).toBeNull();
+      expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+    },
+  );
+
   it("calls sendVerificationEmail with the user email on Resend click", async () => {
     mockSendVerificationEmail.mockResolvedValue({ data: {}, error: null });
     mockUseSession.mockReturnValue({
-      data: { user: { email: "user@test.com", emailVerified: false } },
+      data: { user: { id: "u1", email: "user@test.com", emailVerified: false } },
       isPending: false,
     });
     setup();
@@ -78,7 +93,7 @@ describe("VerifyEmailBanner", () => {
 
   it("hides the banner when dismiss button is clicked", async () => {
     mockUseSession.mockReturnValue({
-      data: { user: { email: "test@example.com", emailVerified: false } },
+      data: { user: { id: "u1", email: "test@example.com", emailVerified: false } },
       isPending: false,
     });
     setup();

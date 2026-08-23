@@ -1,4 +1,4 @@
-import { type Locale, en, es, isLocale } from "@turingcare/i18n";
+import { type Locale, en, es, formatDateInUtc, isLocale } from "@turingcare/i18n";
 
 const briefMessages = {
   en: en.brief,
@@ -35,13 +35,11 @@ export function briefStatusLabel(status: string, version: number, locale: unknow
 }
 
 function formatStoredBriefDate(generatedAt: string, locale: Locale) {
-  const date = new Date(generatedAt);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat(locale, {
+  return formatDateInUtc(locale, generatedAt, {
     year: "numeric",
     month: "long",
     day: "numeric",
-  }).format(date);
+  });
 }
 
 export function briefGeneratedLabel(generatedAt: string, locale: unknown) {

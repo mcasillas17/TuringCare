@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Profile } from "./profile";
 
 const { sessionState, useSessionMock } = vi.hoisted(() => ({
-  sessionState: { isPending: false, userId: "u1" as string | null },
+  sessionState: { isPending: false, userId: "u1" as unknown },
   useSessionMock: vi.fn(),
 }));
 
@@ -44,7 +44,7 @@ function stubProfile(user: {
 function setup() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   useSessionMock.mockImplementation(() => ({
-    data: sessionState.userId ? { user: { id: sessionState.userId } } : null,
+    data: sessionState.userId === null ? null : { user: { id: sessionState.userId } },
     isPending: sessionState.isPending,
   }));
   const view = render(
@@ -94,4 +94,18 @@ describe("Profile", () => {
     expect(qc.getQueryData(["profile", "u1"])).toBeUndefined();
     expect(qc.getQueryData(["profile"])).toBeUndefined();
   });
+
+  it.each(["", "   ", 42])(
+    "does not request profile data for the runtime-invalid session user id %j",
+    async (userId) => {
+      sessionState.userId = userId;
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      setup();
+
+      expect(await screen.findByText(/couldn't load your profile/i)).toBeInTheDocument();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 });

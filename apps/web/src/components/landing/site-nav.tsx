@@ -3,6 +3,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useSession } from "@/lib/auth-client";
+import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -10,6 +11,7 @@ import { Link } from "react-router-dom";
 export function SiteNav() {
   const { t } = useI18n();
   const { data: session } = useSession();
+  const isAuthenticated = isNonemptySessionUserId(session?.user?.id);
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -63,7 +65,7 @@ export function SiteNav() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          {session ? (
+          {isAuthenticated ? (
             <Button asChild className="bg-slate text-cream hover:bg-slate/90">
               <Link to="/my">{t("nav.openApp")}</Link>
             </Button>

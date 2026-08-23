@@ -6,7 +6,14 @@
  * @react-pdf imports so it is trivially unit-testable.
  */
 
-import { type Locale, type MessageKey, createI18n, isLocale, translate } from "@turingcare/i18n";
+import {
+  type Locale,
+  type MessageKey,
+  createI18n,
+  formatDateInUtc,
+  isLocale,
+  translate,
+} from "@turingcare/i18n";
 
 export type BriefForPdf = {
   generatedAt: string;
@@ -129,19 +136,12 @@ export function buildBriefPdfModel(input: {
     }
   }
 
-  let generatedAt = brief.generatedAt;
-  const gen = new Date(brief.generatedAt);
-  if (!Number.isNaN(gen.getTime())) {
-    try {
-      generatedAt = new Intl.DateTimeFormat(locale, {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }).format(gen);
-    } catch {
-      generatedAt = gen.toISOString().slice(0, 10);
-    }
-  }
+  const generatedAt =
+    formatDateInUtc(locale, brief.generatedAt, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }) ?? brief.generatedAt;
 
   return {
     brandName: "TuringCare",

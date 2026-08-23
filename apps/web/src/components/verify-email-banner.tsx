@@ -1,5 +1,6 @@
 import { useI18n } from "@/i18n";
 import { sendVerificationEmail, useSession } from "@/lib/auth-client";
+import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -8,15 +9,18 @@ export function VerifyEmailBanner() {
   const { data } = useSession();
   const [dismissed, setDismissed] = useState(false);
   const [sending, setSending] = useState(false);
+  const isAuthenticated = isNonemptySessionUserId(data?.user?.id);
 
-  const emailVerified = data ? (data.user as { emailVerified?: boolean }).emailVerified : undefined;
+  const emailVerified = isAuthenticated
+    ? (data.user as { emailVerified?: boolean }).emailVerified
+    : undefined;
 
-  if (!data || emailVerified === true || dismissed) {
+  if (!isAuthenticated || emailVerified === true || dismissed) {
     return null;
   }
 
   async function handleResend() {
-    if (!data) return;
+    if (!isAuthenticated || !data) return;
     setSending(true);
     try {
       const result = await sendVerificationEmail({

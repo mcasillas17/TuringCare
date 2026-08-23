@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Locale, isLocale } from "@turingcare/i18n";
 import type { ProfileLocaleUpdateInput, ProfileUpdateInput } from "@turingcare/shared";
 import { api } from "./api";
+import { isNonemptySessionUserId } from "./session-user-id";
 
 export type ProfileUser = {
   id: string;
@@ -70,12 +71,8 @@ async function decodeProfileLocaleResponse(response: {
   }
 }
 
-function validProfileUserId(userId: unknown): string | null {
-  return typeof userId === "string" && userId.trim().length > 0 ? userId : null;
-}
-
 export function useProfile(userId: string | null) {
-  const scopedUserId = validProfileUserId(userId);
+  const scopedUserId = isNonemptySessionUserId(userId) ? userId : null;
 
   return useQuery({
     queryKey: ["profile", scopedUserId] as const,

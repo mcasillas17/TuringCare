@@ -182,14 +182,16 @@ describe("LocaleAccountBoundary readiness", () => {
     const { requests } = setupSignedIn("error");
 
     expect(await screen.findByTestId("sensitive-readiness")).toHaveTextContent("local-fallback:es");
-    expect(
-      requests
-        .filter(
-          (request) =>
-            request.path === "/api/dogs/d1/brief" || request.path === "/api/training/templates",
-        )
-        .map((request) => request.locale),
-    ).toEqual(["es", "es"]);
+    await waitFor(() =>
+      expect(
+        requests
+          .filter(
+            (request) =>
+              request.path === "/api/dogs/d1/brief" || request.path === "/api/training/templates",
+          )
+          .map((request) => request.locale),
+      ).toEqual(["es", "es"]),
+    );
   });
 
   it("waits for the local preference to reconcile with an empty account profile", async () => {
@@ -204,14 +206,16 @@ describe("LocaleAccountBoundary readiness", () => {
     resolveLocalePatch();
 
     expect(await screen.findByTestId("sensitive-readiness")).toHaveTextContent("account:en");
-    expect(
-      requests
-        .filter(
-          (request) =>
-            request.path === "/api/dogs/d1/brief" || request.path === "/api/training/templates",
-        )
-        .map((request) => request.locale),
-    ).toEqual(["en", "en"]);
+    await waitFor(() =>
+      expect(
+        requests
+          .filter(
+            (request) =>
+              request.path === "/api/dogs/d1/brief" || request.path === "/api/training/templates",
+          )
+          .map((request) => request.locale),
+      ).toEqual(["en", "en"]),
+    );
   });
 
   it("renders signed-out public children without requesting a profile", () => {

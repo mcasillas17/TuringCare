@@ -1,6 +1,7 @@
 import { useSession } from "@/lib/auth-client";
 import { useProfile, useUpdateProfileLocale } from "@/lib/profile";
 import { useSessionQueryReady } from "@/lib/session-query-boundary";
+import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import type { Locale } from "@turingcare/i18n";
 import {
   type ReactNode,
@@ -153,10 +154,11 @@ function AuthenticatedLocaleAccountBridge({
 
 export function LocaleAccountBridge() {
   const { data: session, isPending } = useSession();
-  const userId = session?.user?.id;
-  const identityReady = useSessionQueryReady(typeof userId === "string" ? userId : null);
+  const rawUserId = session?.user?.id;
+  const userId = isNonemptySessionUserId(rawUserId) ? rawUserId : null;
+  const identityReady = useSessionQueryReady(userId);
 
-  if (isPending || !identityReady || typeof userId !== "string" || userId.length === 0) return null;
+  if (isPending || !identityReady || !userId) return null;
 
   return <AuthenticatedLocaleAccountBridge key={userId} userId={userId} />;
 }
@@ -187,7 +189,7 @@ export function LocaleAccountBoundary({ children }: { children: ReactNode }) {
   const { data: session, isPending } = useSession();
   const { t } = useI18n();
   const rawUserId = session?.user?.id;
-  const userId = typeof rawUserId === "string" && rawUserId.trim().length > 0 ? rawUserId : null;
+  const userId = isNonemptySessionUserId(rawUserId) ? rawUserId : null;
   const identityReady = useSessionQueryReady(userId);
 
   if (isPending) {

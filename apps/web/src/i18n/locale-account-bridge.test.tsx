@@ -290,6 +290,28 @@ describe("LocaleAccountBridge", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it.each(["", "   ", 42])(
+    "does not start profile requests for the runtime-invalid session user id %j",
+    async (userId) => {
+      useSessionMock.mockReturnValue({ data: { user: { id: userId } }, isPending: false });
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <LocaleProvider>
+            <LocaleAccountBridge />
+            <Probe />
+          </LocaleProvider>
+        </QueryClientProvider>,
+      );
+
+      await waitFor(() => expect(screen.getByTestId("locale")).toHaveTextContent("en"));
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
   it("adopts a saved account locale over the current local locale", async () => {
     localStorage.setItem("tc-locale", "en");
     const { patchLocales } = setup({ accountLocale: "es" });

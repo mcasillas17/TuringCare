@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildBriefPdfModel } from "./brief-pdf-model";
 
 const baseBrief = {
@@ -26,6 +26,10 @@ const baseDog = {
   size: "medium",
   sex: "female",
 };
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("buildBriefPdfModel", () => {
   it("maps brief + dog fields into the PDF model", () => {
@@ -75,6 +79,24 @@ describe("buildBriefPdfModel", () => {
     // Should not be the raw ISO timestamp
     expect(m.generatedAt).not.toBe(baseBrief.generatedAt);
   });
+
+  it.each([
+    ["en", "May 22, 2026"],
+    ["es", "22 de mayo de 2026"],
+  ] as const)(
+    "keeps a near-midnight UTC generated date stable in the %s PDF",
+    (locale, expected) => {
+      vi.stubEnv("TZ", "America/Los_Angeles");
+
+      const model = buildBriefPdfModel({
+        brief: { ...baseBrief, generatedAt: "2026-05-22T00:30:00.000Z", locale },
+        dog: baseDog,
+        now: "2026-05-22T12:00:00.000Z",
+      });
+
+      expect(model.generatedAt).toBe(expected);
+    },
+  );
 
   it("handles missing optional dog fields gracefully", () => {
     const m = buildBriefPdfModel({
