@@ -5,7 +5,7 @@ import { useI18n } from "@/i18n";
 import { useBrief, useGenerateBrief } from "@/lib/brief";
 import { useDogs } from "@/lib/dogs";
 import { type BriefWindow, briefWindows } from "@turingcare/shared";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -23,6 +23,7 @@ export function Brief() {
   const gen = useGenerateBrief(dogId);
   const [shareOpen, setShareOpen] = useState(false);
   const [confirmRegeneration, setConfirmRegeneration] = useState(false);
+  const previousDogIdRef = useRef<string | undefined>(undefined);
 
   // On the global brief route, default to the first dog so the screen lands on
   // the brief itself instead of an empty dog picker.
@@ -31,6 +32,13 @@ export function Brief() {
     const first = dogs?.[0];
     if (first) setPicked(first.id);
   }, [routeId, picked, dogs]);
+
+  useEffect(() => {
+    if (previousDogIdRef.current && previousDogIdRef.current !== dogId) {
+      setConfirmRegeneration(false);
+    }
+    previousDogIdRef.current = dogId;
+  }, [dogId]);
 
   const windowLabels: Record<BriefWindow, string> = {
     "7d": t("brief.window7d"),
@@ -75,6 +83,11 @@ export function Brief() {
     void generateSelectedBrief();
   };
 
+  const closeRegenerationConfirmation = () => {
+    if (gen.isPending) return;
+    setConfirmRegeneration(false);
+  };
+
   const continueRegeneration = async () => {
     if (await generateSelectedBrief()) {
       setConfirmRegeneration(false);
@@ -88,6 +101,7 @@ export function Brief() {
           <span className="text-sm font-medium text-slate">{t("brief.pickDog")}</span>
           <select
             className="w-full rounded border border-silver bg-white px-3 py-2 text-sm"
+            disabled={gen.isPending}
             value={picked}
             onChange={(e) => setPicked(e.target.value)}
           >
@@ -191,12 +205,16 @@ export function Brief() {
                 open={confirmRegeneration}
                 title={t("brief.regenerateShareTitle")}
                 closeLabel={t("journal.closeSheet")}
-                onClose={() => setConfirmRegeneration(false)}
+                onClose={closeRegenerationConfirmation}
               >
                 <div className="space-y-4">
                   <p className="text-sm text-slate-soft">{t("brief.regenerateShareBody")}</p>
                   <div className="flex flex-wrap justify-end gap-2">
-                    <Button variant="outline" onClick={() => setConfirmRegeneration(false)}>
+                    <Button
+                      variant="outline"
+                      disabled={gen.isPending}
+                      onClick={closeRegenerationConfirmation}
+                    >
                       {t("brief.regenerateShareCancel")}
                     </Button>
                     <Button
@@ -204,7 +222,7 @@ export function Brief() {
                       disabled={gen.isPending}
                       onClick={() => void continueRegeneration()}
                     >
-                      {t("brief.regenerateShareContinue")}
+                      {gen.isPending ? t("brief.generating") : t("brief.regenerateShareContinue")}
                     </Button>
                   </div>
                 </div>
