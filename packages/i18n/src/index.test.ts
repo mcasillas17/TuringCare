@@ -27,6 +27,11 @@ describe("@turingcare/i18n locale helpers", () => {
     expect(resolveBrowserLocale(["es-MX", "en-US"])).toBe("es");
   });
 
+  it("accepts valid regional variants case-insensitively", () => {
+    expect(resolveBrowserLocale(["EN-us", "es-419"])).toBe("en");
+    expect(resolveBrowserLocale(["eS-419", "en-US"])).toBe("es");
+  });
+
   it("respects browser-language ordering when English appears before a later Spanish variant", () => {
     expect(resolveBrowserLocale(["en-US", "es-MX"])).toBe("en");
   });
@@ -38,6 +43,21 @@ describe("@turingcare/i18n locale helpers", () => {
 
   it("does not treat an arbitrary language beginning with es as Spanish", () => {
     expect(resolveBrowserLocale(["esoteric"])).toBe("en");
+  });
+
+  it("rejects malformed one-character browser subtags", () => {
+    expect(resolveBrowserLocale(["es-x"])).toBe("en");
+    expect(resolveBrowserLocale(["es-1"])).toBe("en");
+  });
+
+  it("enforces a hard 64-character browser-language maximum", () => {
+    const atMaximum = "es-x-aaaaaaaa-bbbbbbbb-cccccccc-dddddddd-eeeeeee-fffffff-ggggggg";
+    const overMaximum = "es-x-aaaaaaaa-bbbbbbbb-cccccccc-dddddddd-eeeeeeee-fffffff-ggggggg";
+
+    expect(atMaximum).toHaveLength(64);
+    expect(overMaximum).toHaveLength(65);
+    expect(resolveBrowserLocale([atMaximum])).toBe("es");
+    expect(resolveBrowserLocale([overMaximum])).toBe("en");
   });
 });
 

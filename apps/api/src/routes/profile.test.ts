@@ -1,10 +1,23 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
+import { auth } from "../auth";
+import { db } from "../db";
+import { user } from "../db/schema";
 import { type TestUser, createTestUser } from "../test-helpers";
+
+async function deleteUserWhileKeepingItsAuthenticatedSession(u: TestUser) {
+  const session = await auth.api.getSession({ headers: new Headers(u.authHeaders) });
+  if (!session) throw new Error("expected the test user to have a valid session");
+
+  await db.delete(user).where(eq(user.id, u.userId));
+  return vi.spyOn(auth.api, "getSession").mockResolvedValue(session);
+}
 
 describe("profile", () => {
   const users: TestUser[] = [];
   afterEach(async () => {
+    vi.restoreAllMocks();
     for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
   });
   it("requires auth", async () => {
@@ -45,6 +58,22 @@ describe("profile", () => {
     expect(((await get.json()) as { user: { locale: string | null } }).user.locale).toBeNull();
   });
 
+  it("returns not_found when the authenticated user row is missing during a name update", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const getSession = await deleteUserWhileKeepingItsAuthenticatedSession(u);
+
+    const put = await app.request("/api/profile", {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ name: "Renamed" }),
+    });
+
+    expect(getSession).toHaveBeenCalled();
+    expect(put.status).toBe(404);
+    expect(await put.json()).toEqual({ error: "not_found" });
+  });
+
   it("updates the authenticated user's locale", async () => {
     const u = await createTestUser();
     users.push(u);
@@ -73,6 +102,22 @@ describe("profile", () => {
     });
 
     expect(patch.status).toBe(400);
+  });
+
+  it("returns not_found when the authenticated user row is missing during a locale update", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const getSession = await deleteUserWhileKeepingItsAuthenticatedSession(u);
+
+    const patch = await app.request("/api/profile/locale", {
+      method: "PATCH",
+      headers: u.authHeaders,
+      body: JSON.stringify({ locale: "es" }),
+    });
+
+    expect(getSession).toHaveBeenCalled();
+    expect(patch.status).toBe(404);
+    expect(await patch.json()).toEqual({ error: "not_found" });
   });
 
   it("requires auth to update locale", async () => {

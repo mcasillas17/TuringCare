@@ -2,13 +2,15 @@
 
 ## Outcome
 
-Task 6 found and corrected three witnessed gaps:
+Task 6 found and corrected four witnessed gaps:
 
-1. Browser locale detection accepted arbitrary strings beginning with `es` (for example,
-   `esoteric`) as Spanish.
+1. Browser locale detection accepted malformed or unbounded strings as Spanish, including
+   `esoteric`, incomplete one-character subtags, and overlong subtag chains.
 2. The PDF model input type advertised a current-UI `locale` fallback that the stable-artifact
    contract deliberately ignored.
 3. A Spanish PDF with unavailable dog data rendered the English fallback `Unknown`.
+4. Authenticated profile name and locale updates serialized an empty PostgreSQL `returning()`
+   result as a successful response when the session's user row was missing.
 
 The branch-owned repository lint findings were also corrected. All required Node 22 lint,
 typecheck, test, build, and migration gates pass. The implementation remains detached at the
@@ -75,7 +77,7 @@ pnpm --filter @turingcare/web exec vitest run \
   --coverage.include=<provider/bridge/request/Brief/PDF/admin source files>
 ```
 
-Final targeted results:
+Initial targeted results (before fix round 1):
 
 | Surface | Test files | Tests | Statements | Branches | Functions | Lines |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -90,7 +92,7 @@ High-signal file results:
 | API training catalog | 100% | 100% | 100% | Request-isolated fresh catalog structures covered. |
 | API Brief/auth email templates | 100% | 100% | 100% | Locale selection and HTML escaping covered. |
 | API locale middleware | 100% | 77.27% | 100% | Uncovered branches are additional rejected malformed forms/default operands. |
-| API profile route | 100% | 75% | 100% | Miss is the inconsistent session-without-user-row 404 guard. |
+| API profile route | 100% | 75% | 100% | The inconsistent session-without-user-row update guards were material and fixed in round 1. |
 | Web locale account bridge | 100% | 100% | 100% | Missing profile, adoption, failure, switch, and ordering logic inspected/covered. |
 | Web i18n provider | 98.21% | 82.6% | 87.5% | Misses are unavailable-global/default-provider defensive paths. |
 | Web request wrapper | 93.33% | 75% | 100% | Miss is storage-read denial, which returns distinguishable `null` and sends no locale header. |
@@ -122,12 +124,11 @@ Received: "es"
 Test Files 1 failed (1); Tests 1 failed | 7 passed (8)
 ```
 
-Fix: `resolveBrowserLocale` now accepts only complete `en`/`es` language tags with bounded
-hyphen-separated subtags. It still preserves browser ordering and case-insensitive regional
-variants. Compared with the API's `LANGUAGE_TAG_PATTERN` plus `isLocale` implementation: both
-validate the whole tag before reducing to the two-value allowlist; the browser helper embeds the
-supported primary allowlist directly because navigator values do not require HTTP whitespace/q
-parsing.
+Fix: `resolveBrowserLocale` first enforces a 64-character hard bound, then uses
+`Intl.getCanonicalLocales` to validate and canonicalize the complete BCP47 tag before reducing the
+primary language to the `en`/`es` allowlist. It preserves browser ordering and case-insensitive
+regional variants. The API parser remains separate because HTTP adds whitespace and q-value
+syntax.
 
 GREEN:
 
@@ -207,7 +208,8 @@ typed enum value; SQL is generated with bound values, not interpolation.
 - storage values pass `isLocale`; malformed values fall through and cannot become headers;
 - unavailable reads fall through to browser detection or produce no request locale header;
 - unavailable writes keep the in-memory locale and translated UI working;
-- navigator languages now require a complete supported tag;
+- navigator languages are rejected above 64 characters and require successful whole-tag BCP47
+  canonicalization before primary-language allowlisting;
 - `localeFetch` merges `Request` headers and caller `init.headers`, preserves caller precedence,
   and adds only an allowlisted stored locale.
 
@@ -219,8 +221,11 @@ typed enum value; SQL is generated with bound values, not interpolation.
   `userId` claims;
 - `requireUser` derives identity from `auth.api.getSession()` on every request;
 - the update predicate uses only that session-derived user id;
+- both name and locale updates return stable `{ error: "not_found" }` 404 responses if PostgreSQL
+  returns no updated row, rather than serializing `user: undefined` as a success;
 - the PostgreSQL enum independently constrains stored values;
-- tests prove unauthenticated rejection and cross-user isolation.
+- tests prove unauthenticated rejection, cross-user isolation, and a valid session whose user row
+  disappeared between authentication and update.
 
 The web bridge is idle without a current user/profile, adopts a stored account locale on sign-in or
 user switch, seeds an account with a valid local/browser locale when null, keeps explicit UI
@@ -264,7 +269,7 @@ No locale was added to telemetry or monitoring:
 | Storage read denial | Provider falls through; request wrapper omits locale header. |
 | Malformed/oversized locale header | Rejected; supported `Accept-Language` may win, otherwise English. |
 | Malformed/zero/weighted q-values | Invalid/zero candidate ignored; highest supported positive weight wins; ties preserve order. |
-| Missing user/profile | Profile API has 401/404 guards; bridge performs no adoption/save without loaded profile. |
+| Missing user/profile | Profile GET, name PUT, and locale PATCH have stable 404 guards after authentication; bridge performs no adoption/save without loaded profile. |
 | Profile save network failure | Local choice remains; localized error toast shown only for latest desired locale. |
 | Out-of-order saves | Latest desired locale is re-persisted until server response agrees. |
 | Missing translation | Catalog parity test prevents missing supported keys; runtime missing key returns its key string. |
@@ -275,8 +280,9 @@ No locale was added to telemetry or monitoring:
 
 ## Deferred-minor rulings
 
-1. Shared browser resolver prefix matching was material because it accepted malformed language
-   identifiers at a trust boundary. Fixed with witnessed RED/GREEN coverage.
+1. Shared browser resolver prefix/loose-subtag matching was material because it accepted malformed
+   or unbounded language identifiers at a trust boundary. Fixed with witnessed RED/GREEN coverage,
+   whole-tag canonicalization, and a hard 64-character limit.
 2. PDF current-UI fallback was behaviorally correct but contractually misleading. Fixed by removing
    the unused input/caller prop and adding a compile-time guard. Legacy/default behavior remains
    explicitly English, matching the migration and stable-artifact design.
@@ -312,8 +318,8 @@ All commands used Node `22.23.2`; API environment values are redacted.
 | `pnpm lint` | exit 0; `Checked 334 files ... No fixes applied.` |
 | `pnpm typecheck` | exit 0; i18n, shared, API, and web all `Done`. |
 | Shared full tests | exit 0; `7 passed` files, `49 passed` tests. |
-| i18n full tests | exit 0; `1 passed` file, `8 passed` tests. |
-| API full tests | exit 0; `47 passed` files, `328 passed` tests. |
+| i18n full tests | exit 0; `1 passed` file, `11 passed` tests after round 1. |
+| API full tests | exit 0; `47 passed` files, `330 passed` tests after round 1. |
 | Web full tests | exit 0; `73 passed` files, `321 passed` tests. |
 | `pnpm build` | exit 0; API TypeScript build and web Vite production build completed. |
 | `drizzle-kit check` | exit 0; `Everything's fine` for `apps/api/drizzle`. |
@@ -324,6 +330,8 @@ Behavior/tests/contracts:
 
 - `packages/i18n/src/index.ts`
 - `packages/i18n/src/index.test.ts`
+- `apps/api/src/routes/profile.ts`
+- `apps/api/src/routes/profile.test.ts`
 - `apps/web/src/lib/brief-pdf-model.ts`
 - `apps/web/src/lib/brief-pdf-model.test.ts`
 - `apps/web/src/components/brief-download-button.tsx`
@@ -348,6 +356,88 @@ Evidence:
 
 Commit message: `fix: close localization boundary gaps` (this report is included; final hash is in
 the handoff).
+
+## Fix round 1: Important findings
+
+### RED evidence
+
+Browser resolver regressions were added before changing production code:
+
+```text
+@turingcare/i18n src/index.test.ts
+rejects malformed one-character browser subtags:
+  resolveBrowserLocale(["es-x"]): Expected "en", Received "es"
+enforces a hard 64-character browser-language maximum:
+  resolveBrowserLocale([overMaximum]): Expected "en", Received "es"
+Test Files 1 failed (1); Tests 2 failed | 9 passed (11); exit 1
+```
+
+The same malformed-subtag test also permanently checks `es-1`. Positive boundary coverage checks
+`en-US`, `es-419`, case-insensitive `EN-us`/`eS-419`, first-supported preference ordering, and a
+valid tag at exactly 64 characters.
+
+Authenticated missing-row regressions were then run against the unchanged profile routes. Each
+test captures a real valid Better Auth session, deletes its user row, and mocks only the session
+lookup boundary so the request exercises the post-authentication update race:
+
+```text
+@turingcare/api src/routes/profile.test.ts
+name PUT missing row: Expected 404, Received 200
+locale PATCH missing row: Expected 404, Received 200
+Test Files 1 failed (1); Tests 2 failed | 8 passed (10); exit 1
+```
+
+### Smallest fixes and focused GREEN
+
+- Browser values over 64 characters return the English fallback without reaching the parser.
+  Remaining values must pass `Intl.getCanonicalLocales`; only canonical primary `en`/`es` values
+  are accepted, in original preference order.
+- Name PUT and locale PATCH now check the first `.returning()` row and return
+  `{ error: "not_found" }` with status 404 when absent.
+
+```text
+Focused i18n: Test Files 1 passed (1); Tests 11 passed (11); exit 0
+Focused profile: Test Files 1 passed (1); Tests 10 passed (10); exit 0
+```
+
+### Supplemental coverage after the fixes
+
+Coverage output was written only to `/tmp`; no coverage artifact was added to the repository.
+API environment values are redacted.
+
+```text
+PATH=<node22> pnpm --filter @turingcare/i18n exec vitest run src/index.test.ts \
+  --coverage.enabled --coverage.provider=v8 --coverage.reporter=text \
+  --coverage.reportsDirectory=/tmp/turingcare-task6-round1-i18n \
+  --coverage.include=src/index.ts
+
+DATABASE_URL=<local-test-db> BETTER_AUTH_SECRET=<test-only> PATH=<node22> \
+pnpm --filter @turingcare/api exec vitest run src/routes/profile.test.ts \
+  --coverage.enabled --coverage.provider=v8 --coverage.reporter=text \
+  --coverage.reportsDirectory=/tmp/turingcare-task6-round1-profile \
+  --coverage.include=src/routes/profile.ts
+```
+
+| Surface | Files | Tests | Statements | Branches | Functions | Lines | Inspected miss |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Shared i18n | 1 | 11 | 100% | 83.33% | 100% | 100% | Input-normalization/default translator branches; no material behavior gap. |
+| API profile | 1 | 10 | 100% | 85.71% | 100% | 100% | Already-correct GET missing-row guard; both update missing-row branches are covered. |
+
+### Round 1 gates
+
+All commands used Node `22.23.2`; API environment values are redacted.
+
+| Gate | Result/evidence |
+| --- | --- |
+| Focused i18n | exit 0; `1 passed` file, `11 passed` tests. |
+| Focused profile | exit 0; `1 passed` file, `10 passed` tests. |
+| Shared + i18n full tests | exit 0; shared `7/49`, i18n `1/11` files/tests passed. |
+| API full tests | exit 0; `47 passed` files, `330 passed` tests. |
+| `pnpm typecheck` | exit 0; i18n, shared, API, and web all `Done`. |
+| `pnpm lint` | exit 0; `Checked 334 files ... No fixes applied.` |
+| `git diff --check` | exit 0; no whitespace errors in round 1 changes. |
+
+Round 1 commit message: `fix: harden localization boundary edge cases` (hash is in the handoff).
 
 ## Concerns
 

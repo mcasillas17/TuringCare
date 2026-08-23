@@ -22,6 +22,7 @@ export const profileApp = new Hono<{ Variables: Vars }>()
       .set({ name: c.req.valid("json").name, updatedAt: new Date() })
       .where(eq(user.id, c.get("userId")))
       .returning({ id: user.id, name: user.name, email: user.email, locale: user.locale });
+    if (!u) return c.json({ error: "not_found" } as const, 404);
     return c.json({ user: u });
   })
   .patch("/locale", zValidator("json", profileLocaleUpdateSchema), async (c) => {
@@ -30,5 +31,6 @@ export const profileApp = new Hono<{ Variables: Vars }>()
       .set({ locale: c.req.valid("json").locale, updatedAt: new Date() })
       .where(eq(user.id, c.get("userId")))
       .returning({ locale: user.locale });
+    if (!u) return c.json({ error: "not_found" } as const, 404);
     return c.json({ user: u });
   });

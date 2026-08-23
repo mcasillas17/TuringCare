@@ -5,7 +5,7 @@ import { es } from "./es";
 export { en, es };
 
 export const LOCALES = ["en", "es"] as const;
-const SUPPORTED_BROWSER_LANGUAGE_PATTERN = /^(en|es)(?:-[a-z0-9]{1,8})*$/i;
+const MAX_BROWSER_LANGUAGE_TAG_LENGTH = 64;
 
 export type Locale = (typeof LOCALES)[number];
 export type Messages<T = En> = {
@@ -33,6 +33,18 @@ export function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && (LOCALES as readonly string[]).includes(value);
 }
 
+function supportedLocaleFromBrowserLanguage(language: string): Locale | null {
+  if (language.length === 0 || language.length > MAX_BROWSER_LANGUAGE_TAG_LENGTH) return null;
+
+  try {
+    const [canonicalLanguage] = Intl.getCanonicalLocales(language);
+    const primaryLanguage = canonicalLanguage?.split("-")[0]?.toLowerCase();
+    return isLocale(primaryLanguage) ? primaryLanguage : null;
+  } catch {
+    return null;
+  }
+}
+
 export function resolveBrowserLocale(
   languages: readonly string[] | string | null | undefined,
 ): Locale {
@@ -40,9 +52,8 @@ export function resolveBrowserLocale(
     typeof languages === "string" ? [languages] : Array.isArray(languages) ? languages : [];
 
   for (const language of browserLanguages) {
-    const primaryLanguage = SUPPORTED_BROWSER_LANGUAGE_PATTERN.exec(language)?.[1]?.toLowerCase();
-
-    if (isLocale(primaryLanguage)) return primaryLanguage;
+    const locale = supportedLocaleFromBrowserLanguage(language);
+    if (locale) return locale;
   }
 
   return "en";
