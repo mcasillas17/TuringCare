@@ -1211,6 +1211,8 @@ export const es = {
     sendFailed: "No se pudo enviar. Inténtalo de nuevo.",
     historyTitle: "Historial de envíos",
     historyEmpty: "Aún no hay envíos.",
+    historyLoading: "Revisando el historial de envíos…",
+    historyLoadFailed: "No se pudieron revisar los envíos anteriores. Reintenta antes de enviar.",
     deliveryPending: "Entrega pendiente",
     retry: "Reintentar",
     retrying: "Reintentando…",

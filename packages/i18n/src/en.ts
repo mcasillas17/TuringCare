@@ -1187,6 +1187,8 @@ export const en = {
     sendFailed: "Couldn't send. Try again.",
     historyTitle: "Send history",
     historyEmpty: "No sends yet.",
+    historyLoading: "Checking send history…",
+    historyLoadFailed: "Couldn't check previous sends. Retry before sending.",
     deliveryPending: "Delivery pending",
     retry: "Retry",
     retrying: "Retrying…",

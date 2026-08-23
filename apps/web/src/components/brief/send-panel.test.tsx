@@ -16,9 +16,10 @@ function setup(
   briefStatus: "draft" | "finalized" | null,
   initialRecipient?: string,
   locale: "en" | "es" = "en",
+  queryClient?: QueryClient,
 ) {
   localStorage.setItem("tc-locale", locale);
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const qc = queryClient ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
@@ -30,6 +31,20 @@ function setup(
 
 function stubFetch(handler: (url: string, init?: RequestInit) => Promise<Response> | Response) {
   vi.stubGlobal("fetch", vi.fn(handler));
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
+async function clickReadySend(name: RegExp = /^Send$/i) {
+  const button = screen.getByRole("button", { name });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
 }
 
 describe("SendPanel", () => {
@@ -59,7 +74,7 @@ describe("SendPanel", () => {
     fireEvent.change(screen.getByLabelText(/Recipient email/i), {
       target: { value: "not-an-email" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await clickReadySend();
     await waitFor(() => expect(screen.getByText(/valid email/i)).toBeInTheDocument());
   });
 
@@ -69,7 +84,7 @@ describe("SendPanel", () => {
     fireEvent.change(screen.getByLabelText(/Email del destinatario/i), {
       target: { value: "not-an-email" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^Enviar$/i }));
+    await clickReadySend(/^Enviar$/i);
 
     await waitFor(() =>
       expect(screen.getByText("Ingresa un correo electrónico válido")).toBeInTheDocument(),
@@ -100,7 +115,7 @@ describe("SendPanel", () => {
     fireEvent.change(await screen.findByLabelText(/Email del destinatario/i), {
       target: { value: "trainer@example.com" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^Enviar$/i }));
+    await clickReadySend(/^Enviar$/i);
 
     await waitFor(() => expect(errorToast).toHaveBeenCalledWith(message));
   });
@@ -127,7 +142,7 @@ describe("SendPanel", () => {
     setup("finalized");
     const input = (await screen.findByLabelText(/Recipient email/i)) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "sarah@example.com" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await clickReadySend();
     await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
     await waitFor(() => expect(input.value).toBe(""));
   });
@@ -151,10 +166,10 @@ describe("SendPanel", () => {
       target: { value: "retry@example.com" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await clickReadySend();
     await waitFor(() => expect(posted).toHaveLength(1));
     await waitFor(() => expect(screen.getByRole("button", { name: /^Send$/i })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await clickReadySend();
     await waitFor(() => expect(posted).toHaveLength(2));
 
     expect(posted[0]?.idempotencyKey).toMatch(
@@ -197,6 +212,75 @@ describe("SendPanel", () => {
     });
   });
 
+  it("blocks a new send until delayed history can recover its pending key", async () => {
+    const history = deferred<Response>();
+    const posted: BriefSendInput[] = [];
+    const pending = {
+      id: "85acbb6a-9189-4614-9a6e-c732efcc5d1d",
+      recipient: "recover@example.com",
+      message: null,
+      sentAt: "2026-05-20T10:00:00Z",
+      status: "pending",
+    };
+    stubFetch(async (_url, init) => {
+      if (init?.method === "POST") {
+        posted.push(JSON.parse(String(init.body)) as BriefSendInput);
+        return new Response(JSON.stringify({ send: { ...pending, status: "delivered" } }), {
+          status: 201,
+        });
+      }
+      return history.promise;
+    });
+    setup("finalized", pending.recipient);
+
+    const sendButton = screen.getByRole("button", { name: /^Send$/i });
+    expect(sendButton).toBeDisabled();
+    fireEvent.click(sendButton);
+    expect(posted).toHaveLength(0);
+
+    history.resolve(new Response(JSON.stringify({ sends: [pending] }), { status: 200 }));
+    await waitFor(() => expect(sendButton).toBeEnabled());
+    fireEvent.click(sendButton);
+    await waitFor(() => expect(posted).toHaveLength(1));
+
+    expect(posted[0]?.idempotencyKey).toBe(pending.id);
+  });
+
+  it("blocks while stale cached history refreshes and discovers a pending key", async () => {
+    const history = deferred<Response>();
+    const posted: BriefSendInput[] = [];
+    const pending = {
+      id: "75acbb6a-9189-4614-9a6e-c732efcc5d1d",
+      recipient: "cached@example.com",
+      message: null,
+      sentAt: "2026-05-20T10:00:00Z",
+      status: "pending",
+    };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(["brief-sends", "d1"], []);
+    stubFetch(async (_url, init) => {
+      if (init?.method === "POST") {
+        posted.push(JSON.parse(String(init.body)) as BriefSendInput);
+        return new Response(JSON.stringify({ send: { ...pending, status: "delivered" } }), {
+          status: 201,
+        });
+      }
+      return history.promise;
+    });
+    setup("finalized", pending.recipient, "en", queryClient);
+
+    const sendButton = screen.getByRole("button", { name: /^Send$/i });
+    await waitFor(() => expect(screen.getByText(/Checking send history/i)).toBeInTheDocument());
+    expect(sendButton).toBeDisabled();
+
+    history.resolve(new Response(JSON.stringify({ sends: [pending] }), { status: 200 }));
+    await waitFor(() => expect(sendButton).toBeEnabled());
+    fireEvent.click(sendButton);
+    await waitFor(() => expect(posted).toHaveLength(1));
+
+    expect(posted[0]?.idempotencyKey).toBe(pending.id);
+  });
+
   it("creates a new idempotency key when the submission intent changes after an error", async () => {
     const posted: BriefSendInput[] = [];
     stubFetch(async (_url, init) => {
@@ -209,12 +293,12 @@ describe("SendPanel", () => {
     setup("finalized");
     const recipient = await screen.findByLabelText(/Recipient email/i);
     fireEvent.change(recipient, { target: { value: "first@example.com" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await clickReadySend();
     await waitFor(() => expect(posted).toHaveLength(1));
     await waitFor(() => expect(screen.getByRole("button", { name: /^Send$/i })).toBeEnabled());
 
     fireEvent.change(recipient, { target: { value: "second@example.com" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await clickReadySend();
     await waitFor(() => expect(posted).toHaveLength(2));
 
     expect(posted[1]?.idempotencyKey).not.toBe(posted[0]?.idempotencyKey);
@@ -234,10 +318,10 @@ describe("SendPanel", () => {
       target: { value: "retry@example.com" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await clickReadySend();
     await waitFor(() => expect(posted).toHaveLength(1));
     await waitFor(() => expect(screen.getByRole("button", { name: /^Send$/i })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await clickReadySend();
     await waitFor(() => expect(posted).toHaveLength(2));
 
     expect(posted[1]?.idempotencyKey).not.toBe(posted[0]?.idempotencyKey);

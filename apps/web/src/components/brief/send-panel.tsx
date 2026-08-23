@@ -25,7 +25,14 @@ export function SendPanel({
   const validationMessage = useValidationMessage();
   const send = useSendBrief(dogId);
   const submission = useRef<{ intent: string; idempotencyKey: string } | undefined>(undefined);
-  const { data: sends } = useBriefSends(dogId);
+  const {
+    data: sends,
+    isError: sendsError,
+    isFetching: sendsFetching,
+    isLoading: sendsLoading,
+    refetch: refetchSends,
+  } = useBriefSends(dogId);
+  const sendHistoryReady = sends !== undefined && !sendsFetching && !sendsError;
   const {
     register,
     handleSubmit,
@@ -46,6 +53,9 @@ export function SendPanel({
   if (briefStatus === null) return null;
 
   const onSubmit = handleSubmit(async (v) => {
+    // The history is the durable source of pending idempotency keys. Never
+    // mint a replacement key until that recovery read has succeeded.
+    if (!sendHistoryReady) return;
     try {
       const intent = JSON.stringify([v.recipient, v.message ?? null]);
       if (submission.current?.intent !== intent) {
@@ -123,10 +133,29 @@ export function SendPanel({
           )}
         </label>
 
-        <Button type="submit" disabled={isSubmitting} className="w-full bg-slate text-cream">
+        <Button
+          type="submit"
+          disabled={isSubmitting || !sendHistoryReady}
+          className="w-full bg-slate text-cream"
+        >
           {isSubmitting ? t("briefSend.sending") : t("briefSend.send")}
         </Button>
       </form>
+
+      {(sendsLoading || (sendsFetching && !sendsError)) && (
+        <output className="text-sm text-slate-soft">{t("briefSend.historyLoading")}</output>
+      )}
+      {sendsError && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 text-sm text-slate-soft"
+        >
+          <span>{t("briefSend.historyLoadFailed")}</span>
+          <Button type="button" variant="outline" onClick={() => void refetchSends()}>
+            {t("briefSend.retry")}
+          </Button>
+        </div>
+      )}
 
       {sends && sends.length > 0 && (
         <div className="border-t border-silver pt-3">
