@@ -68,7 +68,7 @@ afterEach(() => {
 });
 
 describe("SessionQueryBoundary", () => {
-  it("clears private profile, dogs, and overview cache on user switch, logout, and login", async () => {
+  it("clears every cached query on user switch, logout, and login", async () => {
     const queryClient = new QueryClient();
     const tree = () => (
       <BoundaryTree queryClient={queryClient}>
@@ -81,6 +81,13 @@ describe("SessionQueryBoundary", () => {
     queryClient.setQueryData(["profile", "owner"], { marker: "profile-u1" });
     queryClient.setQueryData(["dogs-overview"], [{ marker: "dogs-u1" }]);
     queryClient.setQueryData(["overview"], { marker: "overview-u1" });
+    queryClient.setQueryData(["guided-setup"], { marker: "setup-u1" });
+    queryClient.setQueryData(["suggestion", "dog-u1", "2026-08-17", "en"], {
+      marker: "suggestion-u1",
+    });
+    queryClient.setQueryData(["contextual-progress", "dog-u1"], {
+      marker: "context-u1",
+    });
     queryClient.setQueryData(["training-catalog", "en"], { marker: "public" });
     view.rerender(tree());
     expect(screen.getByText("profile-u1")).toBeInTheDocument();
@@ -93,8 +100,13 @@ describe("SessionQueryBoundary", () => {
       expect(queryClient.getQueryData(["profile", "owner"])).toBeUndefined();
       expect(queryClient.getQueryData(["dogs-overview"])).toBeUndefined();
       expect(queryClient.getQueryData(["overview"])).toBeUndefined();
+      expect(queryClient.getQueryData(["guided-setup"])).toBeUndefined();
+      expect(
+        queryClient.getQueryData(["suggestion", "dog-u1", "2026-08-17", "en"]),
+      ).toBeUndefined();
+      expect(queryClient.getQueryData(["contextual-progress", "dog-u1"])).toBeUndefined();
+      expect(queryClient.getQueryData(["training-catalog", "en"])).toBeUndefined();
     });
-    expect(queryClient.getQueryData(["training-catalog", "en"])).toEqual({ marker: "public" });
 
     queryClient.setQueryData(["profile", "owner"], { marker: "profile-u2" });
     queryClient.setQueryData(["dogs-overview"], [{ marker: "dogs-u2" }]);
@@ -119,7 +131,7 @@ describe("SessionQueryBoundary", () => {
       expect(queryClient.getQueryData(["dogs-overview"])).toBeUndefined();
       expect(queryClient.getQueryData(["overview"])).toBeUndefined();
     });
-    expect(queryClient.getQueryData(["training-catalog", "en"])).toEqual({ marker: "public" });
+    expect(queryClient.getQueryData(["training-catalog", "en"])).toBeUndefined();
   });
 
   it("removes cached authenticated trainer contact details before anonymous rendering on logout", async () => {

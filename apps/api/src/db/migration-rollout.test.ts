@@ -21,6 +21,10 @@ describe("selectPredeployEntries", () => {
     ).toEqual([{ tag: "0021_existing" }, { tag: "0022_locale" }]);
   });
 
+  it("keeps the complete migration history when a drained deployment has no post-deploy tail", () => {
+    expect(selectPredeployEntries(entries, [])).toEqual(entries);
+  });
+
   it("fails closed if the explicit post-deploy sequence is missing, reordered, or no longer last", () => {
     expect(() =>
       selectPredeployEntries(entries, ["0023_brief_version_constraint", "0025_missing"]),

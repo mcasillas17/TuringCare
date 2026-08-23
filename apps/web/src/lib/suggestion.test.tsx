@@ -1,5 +1,6 @@
+import { LocaleProvider, useI18n } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -43,6 +44,20 @@ function makeQueryClient() {
   });
 }
 
+function SuggestionProbe({ weekKey }: { weekKey: string }) {
+  const { locale, selectLocale } = useI18n();
+  const { data } = useSuggestion("dog-1", weekKey, 420);
+
+  return (
+    <>
+      <p>{data?.primary?.exercise ?? "loading"}</p>
+      <button type="button" onClick={() => selectLocale(locale === "en" ? "es" : "en")}>
+        switch
+      </button>
+    </>
+  );
+}
+
 function expectPracticeDerivedInvalidations(invalidateQueries: unknown) {
   for (const queryKey of [
     ["progress", "dog-1"],
@@ -59,6 +74,35 @@ function expectPracticeDerivedInvalidations(invalidateQueries: unknown) {
 afterEach(() => vi.clearAllMocks());
 
 describe("suggestion hooks", () => {
+  it("loads fresh localized suggestion prose after a locale switch", async () => {
+    localStorage.setItem("tc-locale", "en");
+    getSuggestion
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ suggestion: { primary: { exercise: "English exercise" } } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ suggestion: { primary: { exercise: "Ejercicio en español" } } }),
+      });
+    const queryClient = makeQueryClient();
+    const weekKey = weekKeyAtOffset(new Date(), 420);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <LocaleProvider>
+          <SuggestionProbe weekKey={weekKey} />
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("English exercise")).toBeInTheDocument();
+    act(() => screen.getByRole("button", { name: "switch" }).click());
+
+    expect(await screen.findByText("Ejercicio en español")).toBeInTheDocument();
+    expect(getSuggestion).toHaveBeenCalledTimes(2);
+  });
+
   it("only loads the current week's suggestion with timezone offset", async () => {
     getSuggestion.mockResolvedValue({ ok: true, json: async () => ({ suggestion: {} }) });
     const queryClient = makeQueryClient();

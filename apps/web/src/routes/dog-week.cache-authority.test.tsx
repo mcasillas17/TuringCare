@@ -153,7 +153,7 @@ async function waitForSettledSuggestionData(queryClient: QueryClient) {
     }),
   );
   await waitFor(() =>
-    expect(queryClient.getQueryState(suggestionKey("dog-1", weekKey))).toMatchObject({
+    expect(queryClient.getQueryState(suggestionKey("dog-1", weekKey, "en"))).toMatchObject({
       fetchStatus: "idle",
       status: "success",
     }),
@@ -391,7 +391,7 @@ describe("DogWeek audited suggestion cache authority", () => {
       }),
     );
     await waitFor(() =>
-      expect(queryClient.getQueryState(suggestionKey("dog-1", weekKey))).toMatchObject({
+      expect(queryClient.getQueryState(suggestionKey("dog-1", weekKey, "en"))).toMatchObject({
         fetchStatus: "fetching",
         status: "success",
       }),
@@ -480,7 +480,7 @@ describe("DogWeek audited suggestion cache authority", () => {
     refreshedFocus.resolve(response({ focusSkills: [focusSkill] }));
     refreshedSuggestion.resolve({ ok: false, json: async () => ({ error: "load_failed" }) });
     await waitFor(() =>
-      expect(queryClient.getQueryState(suggestionKey("dog-1", weekKey))).toMatchObject({
+      expect(queryClient.getQueryState(suggestionKey("dog-1", weekKey, "en"))).toMatchObject({
         fetchStatus: "idle",
         status: "error",
       }),

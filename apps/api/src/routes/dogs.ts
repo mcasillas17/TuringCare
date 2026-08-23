@@ -27,6 +27,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { createTrainingCatalogLabelResolver } from "../data/training-catalog";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import { resolveLatestBriefRows } from "../db/latest-brief";
@@ -234,13 +235,13 @@ export function sendFailedException(c: Context, cause: unknown): HTTPException {
   return new HTTPException(502, { res: c.json({ error: "send_failed" } as const, 502), cause });
 }
 
-export function resolveBriefSendReplay<T extends { recipient: string; message: string | null }>(
+export function resolveBriefSendIntent<T extends { recipient: string; message: string | null }>(
   existing: T | undefined,
   intent: { recipient: string; message?: string | null },
 ) {
   if (!existing) return null;
   return existing.recipient === intent.recipient && existing.message === (intent.message ?? null)
-    ? ({ kind: "replayed", send: existing } as const)
+    ? ({ kind: "matched", send: existing } as const)
     : ({ kind: "idempotency_conflict" } as const);
 }
 
@@ -269,7 +270,15 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       db.select().from(behaviorConcerns).where(eq(behaviorConcerns.dogId, dog.id)),
       db.select().from(trainingGoals).where(eq(trainingGoals.dogId, dog.id)),
     ]);
-    return c.json({ dog, concerns, goals });
+    const labels = createTrainingCatalogLabelResolver(c.get("locale"));
+    return c.json({
+      dog,
+      concerns,
+      goals: goals.map((goal) => ({
+        ...goal,
+        goal: labels.resolveGoalName(goal.catalogGoalKey, goal.goal),
+      })),
+    });
   })
   .put("/:id", stableZValidator("json", dogProfileSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
@@ -393,7 +402,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .get("/:id/progress", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    return c.json(await loadProgress(dog.id));
+    return c.json(await loadProgress(dog.id, c.get("locale")));
   })
   .get("/:id/skills/:skillId/contextual-progress", async (c) => {
     const dogId = c.req.param("id");
@@ -485,7 +494,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     // by PUT .../level so milestone history can't be bypassed.
     const [updated] = await db
       .update(trainingSkills)
-      .set({ name: c.req.valid("json").name })
+      .set({ name: c.req.valid("json").name, catalogSkillKey: null })
       .where(eq(trainingSkills.id, skill.id))
       .returning();
     if (!updated) throw new Error("failed to update skill");
@@ -906,6 +915,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       week.weekKey,
       week.timezoneOffsetMinutes,
       week.weekEndTimezoneOffsetMinutes,
+      c.get("locale"),
     );
     return c.json(data);
   })
@@ -1292,18 +1302,17 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     const journalWhere = cutoff
       ? and(eq(journalEntries.dogId, dog.id), gte(journalEntries.occurredAt, cutoff))
       : eq(journalEntries.dogId, dog.id);
-    const [concerns, goals, entries, progress] = await Promise.all([
+    const [concerns, entries, progress] = await Promise.all([
       db.select().from(behaviorConcerns).where(eq(behaviorConcerns.dogId, dog.id)),
-      db.select().from(trainingGoals).where(eq(trainingGoals.dogId, dog.id)),
       db.select().from(journalEntries).where(journalWhere),
-      loadProgress(dog.id),
+      loadProgress(dog.id, c.get("locale")),
     ]);
     const locale = c.get("locale");
     const summary = composeBrief(
       {
         dog: { name: dog.name, breed: dog.breed, size: dog.size, sex: dog.sex },
         concerns: concerns.map((x) => ({ concern: x.concern, severity: x.severity })),
-        goals: goals.map((x) => ({ goal: x.goal })),
+        goals: progress.goals.map((goal) => ({ goal: goal.goal })),
         entries: entries.map((e) => ({
           note: e.note,
           kind: e.kind,
@@ -1397,7 +1406,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
 
     const windowStart = new Date(Date.now() - 86_400_000);
     const body = c.req.valid("json");
-    const result = await db.transaction(async (tx) => {
+    const prepared = await db.transaction(async (tx) => {
       const [owner] = await tx
         .select({ id: user.id, email: user.email, name: user.name })
         .from(user)
@@ -1419,7 +1428,10 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
             recipient: briefSends.recipient,
             message: briefSends.message,
             sentAt: briefSends.sentAt,
+            deliveredAt: briefSends.deliveredAt,
             sentByUserId: briefSends.sentByUserId,
+            briefSummary: briefs.summary,
+            briefLocale: briefs.locale,
           })
           .from(briefSends)
           .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
@@ -1433,8 +1445,33 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
           .limit(1);
         return existing;
       };
-      const existingResult = resolveBriefSendReplay(await loadExistingSend(), body);
-      if (existingResult) return existingResult;
+      const prepareMatchedIntent = (
+        existing: NonNullable<Awaited<ReturnType<typeof loadExistingSend>>>,
+      ) => {
+        const send = {
+          id: existing.id,
+          briefId: existing.briefId,
+          recipient: existing.recipient,
+          message: existing.message,
+          sentAt: existing.sentAt,
+          deliveredAt: existing.deliveredAt,
+          sentByUserId: existing.sentByUserId,
+        };
+        if (existing.deliveredAt) return { kind: "replayed", send } as const;
+        const email = renderBriefEmail(
+          {
+            dogName: lockedDog.name,
+            ownerName: owner.name ?? owner.email,
+            message: existing.message,
+            summary: existing.briefSummary,
+          },
+          existing.briefLocale,
+        );
+        return { kind: "pending", send, email, replyTo: owner.email } as const;
+      };
+      const existingResult = resolveBriefSendIntent(await loadExistingSend(), body);
+      if (existingResult?.kind === "idempotency_conflict") return existingResult;
+      if (existingResult?.kind === "matched") return prepareMatchedIntent(existingResult.send);
 
       const latest = resolveLatestBriefRows(
         await tx
@@ -1478,40 +1515,62 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         .onConflictDoNothing({ target: briefSends.id })
         .returning();
       if (!send) {
-        return (
-          resolveBriefSendReplay(await loadExistingSend(), body) ??
-          ({ kind: "idempotency_conflict" } as const)
-        );
+        const collision = resolveBriefSendIntent(await loadExistingSend(), body);
+        return collision?.kind === "matched"
+          ? prepareMatchedIntent(collision.send)
+          : ({ kind: "idempotency_conflict" } as const);
       }
+      return { kind: "pending", send, email, replyTo: owner.email } as const;
+    });
+    if (prepared.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
+    if (prepared.kind === "not_finalized") {
+      return c.json({ error: "not_finalized" } as const, 409);
+    }
+    if (prepared.kind === "conflict") {
+      return c.json({ error: "brief_version_conflict" } as const, 409);
+    }
+    if (prepared.kind === "rate_limited") {
+      return c.json({ error: "send_rate_limited" } as const, 429);
+    }
+    if (prepared.kind === "idempotency_conflict") {
+      return c.json({ error: "idempotency_conflict" } as const, 409);
+    }
+    if (prepared.kind === "replayed") return c.json({ send: prepared.send }, 201);
+
+    const delivery = await db.transaction(async (tx) => {
+      const [lockedSend] = await tx
+        .select()
+        .from(briefSends)
+        .where(and(eq(briefSends.id, prepared.send.id), eq(briefSends.sentByUserId, userId)))
+        .for("update")
+        .limit(1);
+      if (!lockedSend) return { kind: "not_found" } as const;
+      if (lockedSend.deliveredAt) return { kind: "replayed", send: lockedSend } as const;
+
       try {
         await sendEmail({
-          to: body.recipient,
-          replyTo: owner.email,
-          subject: email.subject,
-          html: email.html,
-          text: email.text,
-          idempotencyKey: sendId,
+          to: prepared.send.recipient,
+          replyTo: prepared.replyTo,
+          subject: prepared.email.subject,
+          html: prepared.email.html,
+          text: prepared.email.text,
+          idempotencyKey: prepared.send.id,
         });
       } catch (error) {
         throw sendFailedException(c, error);
       }
+
+      const [send] = await tx
+        .update(briefSends)
+        .set({ deliveredAt: new Date() })
+        .where(eq(briefSends.id, lockedSend.id))
+        .returning();
+      if (!send) throw new Error("failed to mark Brief send delivered");
       return { kind: "sent", send } as const;
     });
-    if (result.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
-    if (result.kind === "not_finalized") {
-      return c.json({ error: "not_finalized" } as const, 409);
-    }
-    if (result.kind === "conflict") {
-      return c.json({ error: "brief_version_conflict" } as const, 409);
-    }
-    if (result.kind === "rate_limited") {
-      return c.json({ error: "send_rate_limited" } as const, 429);
-    }
-    if (result.kind === "idempotency_conflict") {
-      return c.json({ error: "idempotency_conflict" } as const, 409);
-    }
-    if (result.kind === "sent") await recordEvent("brief.emailed", { userId });
-    return c.json({ send: result.send }, 201);
+    if (delivery.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
+    if (delivery.kind === "sent") await recordEvent("brief.emailed", { userId });
+    return c.json({ send: delivery.send }, 201);
   })
   .get("/:id/brief/sends", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
@@ -1527,7 +1586,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       })
       .from(briefSends)
       .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
-      .where(eq(briefs.dogId, dog.id))
+      .where(and(eq(briefs.dogId, dog.id), isNotNull(briefSends.deliveredAt)))
       .orderBy(desc(briefSends.sentAt));
 
     return c.json({ sends });

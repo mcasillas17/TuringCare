@@ -1,5 +1,7 @@
+import type { Locale } from "@turingcare/i18n";
 import type { ContextualProgressSummary, PracticeDimension } from "@turingcare/shared";
 import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { createTrainingCatalogLabelResolver } from "../data/training-catalog";
 import { skillDimensionMetadata } from "../data/training-curriculum";
 import { db } from "../db";
 import {
@@ -88,6 +90,7 @@ async function loadFocusSnapshot(
       name: trainingSkills.name,
       goalId: trainingSkills.goalId,
       goalName: trainingGoals.goal,
+      catalogGoalKey: trainingGoals.catalogGoalKey,
       confidence: trainingSkills.confidence,
       catalogSkillKey: trainingSkills.catalogSkillKey,
     })
@@ -129,7 +132,9 @@ export async function loadFocusWeek(
   weekKey: string,
   timezoneOffsetMinutes: number,
   weekEndTimezoneOffsetMinutes: number,
+  locale: Locale = "en",
 ): Promise<{ focusSkills: FocusSkill[] }> {
+  const labels = createTrainingCatalogLabelResolver(locale);
   const { startISO, endISO } = weekBoundsFromOffset(
     weekKey,
     timezoneOffsetMinutes,
@@ -182,9 +187,9 @@ export async function loadFocusWeek(
     return {
       focusSkills: focus.map((f) => ({
         skillId: f.skillId,
-        name: f.name,
+        name: labels.resolveSkillName(f.catalogSkillKey, f.name),
         goalId: f.goalId,
-        goalName: f.goalName,
+        goalName: labels.resolveGoalName(f.catalogGoalKey, f.goalName),
         position: f.position,
         sessions: bySkill.get(f.skillId) ?? [],
         currentLevel: f.confidence,

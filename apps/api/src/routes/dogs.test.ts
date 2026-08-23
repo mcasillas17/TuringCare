@@ -17,7 +17,7 @@ import { createMonitoringErrorHandler } from "../monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "../monitoring/request-id";
 import { type TestUser, createTestUser } from "../test-helpers";
 import { waitForBlockingChain, waitForSessionBlocked } from "../test-pg-concurrency";
-import { resolveBriefSendReplay, sendFailedException } from "./dogs";
+import { resolveBriefSendIntent, sendFailedException } from "./dogs";
 
 // Wraps the real `sendEmail` so its normal (log-mode, no RESEND_API_KEY)
 // behavior is unchanged for every other test in this file; only the
@@ -43,18 +43,18 @@ function briefSendBody(input: Record<string, unknown>) {
   return JSON.stringify({ idempotencyKey: randomUUID(), ...input });
 }
 
-describe("resolveBriefSendReplay", () => {
+describe("resolveBriefSendIntent", () => {
   const existing = { id: "send-1", recipient: "trainer@example.com", message: null };
 
   it("distinguishes a replay, a conflicting intent, and a missing recovery row", () => {
-    expect(resolveBriefSendReplay(existing, { recipient: "trainer@example.com" })).toEqual({
-      kind: "replayed",
+    expect(resolveBriefSendIntent(existing, { recipient: "trainer@example.com" })).toEqual({
+      kind: "matched",
       send: existing,
     });
-    expect(resolveBriefSendReplay(existing, { recipient: "other@example.com" })).toEqual({
+    expect(resolveBriefSendIntent(existing, { recipient: "other@example.com" })).toEqual({
       kind: "idempotency_conflict",
     });
-    expect(resolveBriefSendReplay(undefined, { recipient: "trainer@example.com" })).toBeNull();
+    expect(resolveBriefSendIntent(undefined, { recipient: "trainer@example.com" })).toBeNull();
   });
 });
 
@@ -1721,6 +1721,55 @@ describe("dogs: brief send", () => {
     expect(emailedEvents).toHaveLength(1);
   });
 
+  it("POST send: keeps a durable intent after provider failure and retries the same key", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    vi.mocked(sendEmail).mockRejectedValueOnce(new Error("provider unavailable"));
+    const idempotencyKey = "96acbb6a-9189-4614-9a6e-c732efcc5d1d";
+    const body = JSON.stringify({ recipient: "durable@example.com", idempotencyKey });
+
+    const failed = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+
+    expect(failed.status).toBe(502);
+    expect(
+      await db
+        .select({ id: briefSends.id })
+        .from(briefSends)
+        .where(eq(briefSends.id, idempotencyKey)),
+    ).toEqual([{ id: idempotencyKey }]);
+    const hiddenPending = await app.request(`/api/dogs/${dog.id}/brief/sends`, {
+      headers: u.authHeaders,
+    });
+    expect(await hiddenPending.json()).toEqual({ sends: [] });
+
+    const retried = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+
+    expect(retried.status).toBe(201);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(sendEmail).mock.calls.map(([request]) => request.idempotencyKey)).toEqual([
+      idempotencyKey,
+      idempotencyKey,
+    ]);
+    expect(
+      await db
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.userId, u.userId), eq(events.name, "brief.emailed"))),
+    ).toHaveLength(1);
+  });
+
   it("POST send: concurrent replay records one provider delivery, audit, and emailed event", async () => {
     const u = await createTestUser();
     users.push(u);
@@ -2050,7 +2099,7 @@ describe("dogs: brief send", () => {
     }
   });
 
-  it("POST send: rolls back its audit and releases deletion when the provider fails", async () => {
+  it("POST send: preserves the durable intent and releases deletion when the provider fails", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
@@ -2092,12 +2141,19 @@ describe("dogs: brief send", () => {
       expect(sendResponse.status).toBe(502);
       await deletion;
       const audits = await db
-        .select({ id: briefSends.id })
+        .select({ id: briefSends.id, deliveredAt: briefSends.deliveredAt })
         .from(briefSends)
         .where(eq(briefSends.recipient, "failed-race@example.com"));
-      expect(audits).toEqual([]);
+      expect(audits).toHaveLength(1);
+      expect(audits[0]?.deliveredAt).toBeNull();
       await deleter.query("COMMIT");
       deleterOpen = false;
+      expect(
+        await db
+          .select({ id: briefSends.id })
+          .from(briefSends)
+          .where(eq(briefSends.recipient, "failed-race@example.com")),
+      ).toEqual([]);
     } finally {
       rejectProvider?.(new Error("test cleanup"));
       if (deleterOpen) await deleter.query("ROLLBACK");
@@ -2351,7 +2407,7 @@ describe("dogs: POST /:id/goals/from-template", () => {
     expect(body.skills.map((s) => s.position)).toEqual([0, 1, 2, 3, 4]);
   });
 
-  it("persists template goal and skill display names in the request locale", async () => {
+  it("persists template labels but resolves catalog-backed reads in the request locale", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
@@ -2365,7 +2421,7 @@ describe("dogs: POST /:id/goals/from-template", () => {
     expect(r.headers.get("Content-Language")).toBe("es");
     const body = (await r.json()) as {
       goal: { id: string; goal: string; catalogGoalKey: string | null };
-      skills: Array<{ name: string; catalogSkillKey: string | null }>;
+      skills: Array<{ id: string; name: string; catalogSkillKey: string | null }>;
     };
     expect(body.goal.goal).toBe("Modales básicos");
     expect(body.goal.catalogGoalKey).toBe("basic-manners");
@@ -2380,9 +2436,49 @@ describe("dogs: POST /:id/goals/from-template", () => {
         skills: Array<{ name: string }>;
       }>;
     };
-    expect(progressBody.goals[0]?.goal).toBe("Modales básicos");
+    expect(progressBody.goals[0]?.goal).toBe("Basic Manners");
     expect(progressBody.goals[0]?.catalogGoalKey).toBe("basic-manners");
-    expect(progressBody.goals[0]?.skills[0]?.name).toBe("Sentado");
+    expect(progressBody.goals[0]?.skills[0]?.name).toBe("Sit");
+
+    const spanishProgress = await app.request(`/api/dogs/${dog.id}/progress`, {
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "es" },
+    });
+    const spanishProgressBody = (await spanishProgress.json()) as {
+      goals: Array<{ goal: string; skills: Array<{ name: string }> }>;
+    };
+    expect(spanishProgressBody.goals[0]?.goal).toBe("Modales básicos");
+    expect(spanishProgressBody.goals[0]?.skills[0]?.name).toBe("Sentado");
+
+    const briefResponse = await app.request(`/api/dogs/${dog.id}/brief?window=30d`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+    expect(briefResponse.status).toBe(201);
+    const briefBody = (await briefResponse.json()) as { brief: { summary: string } };
+    expect(briefBody.brief.summary).toContain("- Basic Manners");
+    expect(briefBody.brief.summary).toContain("Sit");
+    expect(briefBody.brief.summary).not.toContain("Modales básicos");
+    expect(briefBody.brief.summary).not.toContain("Sentado");
+
+    const catalogSkill = body.skills[0];
+    if (!catalogSkill) throw new Error("expected template skill");
+    const rename = await app.request(`/api/dogs/${dog.id}/skills/${catalogSkill.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ name: "My custom sit", confidence: 1 }),
+    });
+    const renamed = (await rename.json()) as {
+      skill: { name: string; catalogSkillKey: string | null };
+    };
+    expect(renamed.skill).toMatchObject({ name: "My custom sit", catalogSkillKey: null });
+
+    const renamedSpanishProgress = await app.request(`/api/dogs/${dog.id}/progress`, {
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "es" },
+    });
+    const renamedSpanishBody = (await renamedSpanishProgress.json()) as {
+      goals: Array<{ skills: Array<{ name: string }> }>;
+    };
+    expect(renamedSpanishBody.goals[0]?.skills[0]?.name).toBe("My custom sit");
   });
 
   it("returns 400 for an unknown templateKey, and does not create anything", async () => {

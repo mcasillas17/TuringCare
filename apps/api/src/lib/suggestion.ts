@@ -1,6 +1,7 @@
 import type { Locale } from "@turingcare/i18n";
 import type { SuggestionAction, SuggestionSafety, TrainingSuggestion } from "@turingcare/shared";
 import { and, eq } from "drizzle-orm";
+import { createTrainingCatalogLabelResolver } from "../data/training-catalog";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import {
@@ -63,6 +64,7 @@ async function loadPrimaryFocusSkill(dogId: string, weekKey: string) {
       level: trainingSkills.confidence,
       goalId: trainingSkills.goalId,
       goalName: trainingGoals.goal,
+      catalogGoalKey: trainingGoals.catalogGoalKey,
     })
     .from(weeklyFocus)
     .innerJoin(trainingSkills, eq(weeklyFocus.skillId, trainingSkills.id))
@@ -252,6 +254,7 @@ export async function loadSuggestion(input: {
     .toISOString()
     .slice(0, 10);
   await claimLegacyFocus(input.dogId, input.weekKey);
+  const labels = createTrainingCatalogLabelResolver(input.locale);
   const [focus, safety] = await Promise.all([
     loadPrimaryFocusSkill(input.dogId, input.weekKey),
     evaluateSafety(input.dogId, now),
@@ -259,11 +262,11 @@ export async function loadSuggestion(input: {
   const skill = focus
     ? {
         id: focus.id,
-        name: focus.name,
+        name: labels.resolveSkillName(focus.catalogSkillKey, focus.name),
         catalogSkillKey: focus.catalogSkillKey,
         level: focus.level,
         goalId: focus.goalId,
-        goalName: focus.goalName,
+        goalName: labels.resolveGoalName(focus.catalogGoalKey, focus.goalName),
       }
     : null;
   const base = {

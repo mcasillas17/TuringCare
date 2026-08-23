@@ -7,10 +7,9 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 import { preparePredeployMigrationFolder } from "./migration-rollout";
 
-const POSTDEPLOY_MIGRATIONS = [
-  "0023_third_madripoor",
-  "0024_brief_share_telemetry_privacy",
-] as const;
+// The workflow drains every legacy API machine before this command runs, so the
+// complete ordered history is the compatibility boundary for the new release.
+const POSTDEPLOY_MIGRATIONS: readonly string[] = [];
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 

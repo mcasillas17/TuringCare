@@ -1,24 +1,7 @@
 import { useSession } from "@/lib/auth-client";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
-import { type Query, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from "react";
-
-const SESSION_QUERY_ROOTS = new Set([
-  "admin",
-  "brief",
-  "brief-sends",
-  "dog-journal",
-  "dogs",
-  "dogs-overview",
-  "focus",
-  "journal",
-  "me",
-  "onboarding",
-  "overview",
-  "profile",
-  "progress",
-  "trainers",
-]);
 
 const UNRESOLVED_IDENTITY = Symbol("unresolved-session-identity");
 type ResolvedIdentity = string | null;
@@ -30,11 +13,6 @@ type SessionQueryState = {
 };
 
 const SessionQueryContext = createContext<SessionQueryState | null>(null);
-
-function isSessionQuery(query: Query): boolean {
-  const root = query.queryKey[0];
-  return typeof root === "string" && SESSION_QUERY_ROOTS.has(root);
-}
 
 function sessionUserIdFromSession(session: unknown): ResolvedIdentity {
   if (!session || typeof session !== "object" || !("user" in session)) return null;
@@ -54,8 +32,8 @@ export function SessionQueryBoundary({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (nextIdentity === UNRESOLVED_IDENTITY || nextIdentity === clearedIdentity) return;
 
-    void queryClient.cancelQueries({ predicate: isSessionQuery });
-    queryClient.removeQueries({ predicate: isSessionQuery });
+    void queryClient.cancelQueries();
+    queryClient.removeQueries();
     queryClient.getMutationCache().clear();
     setClearedIdentity(nextIdentity);
   }, [clearedIdentity, nextIdentity, queryClient]);

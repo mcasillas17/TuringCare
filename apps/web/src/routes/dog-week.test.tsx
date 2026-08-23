@@ -36,7 +36,8 @@ vi.mock("@/lib/progress", () => ({
   useSetSessionEvidence: vi.fn(),
 }));
 vi.mock("@/lib/suggestion", () => ({
-  suggestionKey: (dogId: string, weekKey: string) => ["suggestion", dogId, weekKey],
+  suggestionKey: (dogId: string, weekKey: string, locale?: string) =>
+    locale ? ["suggestion", dogId, weekKey, locale] : ["suggestion", dogId, weekKey],
   useSuggestion: vi.fn(),
   useSuggestionAction: vi.fn(),
   useAdvancementDecision: vi.fn(),
@@ -190,7 +191,7 @@ function renderWeek(locale: "en" | "es" = "en") {
 function seedAuditedSuggestion(queryClient: QueryClient) {
   const weekKey = weekKeyOf(new Date());
   queryClient.setQueryData(focusLib.focusKey("d1", weekKey), [sitFocus]);
-  queryClient.setQueryData(suggestionLib.suggestionKey("d1", weekKey), exerciseSuggestion);
+  queryClient.setQueryData(suggestionLib.suggestionKey("d1", weekKey, "en"), exerciseSuggestion);
 }
 
 const sitFocus: focusLib.FocusSkill = {
@@ -977,7 +978,7 @@ describe("DogWeek", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
     await screen.findByRole("button", { name: "Went well" });
-    qc.setQueryData(suggestionLib.suggestionKey("d1", weekKeyOf(new Date())), {
+    qc.setQueryData(suggestionLib.suggestionKey("d1", weekKeyOf(new Date()), "en"), {
       ...exerciseSuggestion,
       dismissed: true,
     });

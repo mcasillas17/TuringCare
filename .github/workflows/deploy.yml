@@ -55,10 +55,9 @@ jobs:
       - name: Smoke production API image
         run: scripts/smoke-api-image.sh turingcare-api:ci
 
-  # Drain the schema-incompatible legacy API, apply the main migration history
-  # plus additive locale migration 0022, then deploy and verify the new API.
-  # Brief version uniqueness remains post-deploy so no legacy read-max writer
-  # can resume after the constraint is installed.
+  # Drain the schema-incompatible legacy API, apply the complete ordered
+  # migration history, then deploy and verify the new API. No legacy writer can
+  # resume after migration begins.
   deploy-api:
     needs: ci
     runs-on: ubuntu-latest
@@ -128,9 +127,7 @@ jobs:
           curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/ready
           trap - EXIT INT TERM
 
-  # Apply the writer constraint and stronger historical telemetry cleanup only
-  # after the verified API rollout. The predeploy command fails closed unless
-  # 0023 and 0024 are the exact migration tail.
+  # Idempotently verify that the deployed release left no pending migrations.
   migrate:
     needs: deploy-api
     runs-on: ubuntu-latest

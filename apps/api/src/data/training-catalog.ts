@@ -95,4 +95,20 @@ export function getTrainingCatalog(locale: Locale | string = "en"): AuthoredCata
   return templateDefinitions.map((definition) => localizeTemplate(definition, messages));
 }
 
+export function createTrainingCatalogLabelResolver(locale: Locale | string = "en") {
+  const goalNames = new Map<string, string>();
+  const skillNames = new Map<string, string>();
+  for (const template of getTrainingCatalog(locale)) {
+    goalNames.set(template.key, template.name);
+    for (const skill of template.skills) skillNames.set(skill.key, skill.name);
+  }
+
+  return {
+    resolveGoalName: (catalogGoalKey: string | null, storedName: string) =>
+      (catalogGoalKey ? goalNames.get(catalogGoalKey) : undefined) ?? storedName,
+    resolveSkillName: (catalogSkillKey: string | null, storedName: string) =>
+      (catalogSkillKey ? skillNames.get(catalogSkillKey) : undefined) ?? storedName,
+  };
+}
+
 export const trainingCatalog: AuthoredCatalogTemplate[] = getTrainingCatalog("en");

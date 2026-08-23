@@ -11,7 +11,7 @@ export function selectPredeployEntries<T extends MigrationJournalEntry>(
   postdeployTags: readonly string[],
 ): T[] {
   const firstPostdeployTag = postdeployTags[0];
-  if (!firstPostdeployTag) throw new Error("at least one post-deploy migration is required");
+  if (!firstPostdeployTag) return [...entries];
 
   const postdeployIndex = entries.findIndex(({ tag }) => tag === firstPostdeployTag);
   if (postdeployIndex < 0) {

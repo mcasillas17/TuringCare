@@ -196,6 +196,7 @@ describe("GET /api/dogs/:id/suggestion", () => {
     expect(suggestion.fallback?.exercise).toBe(
       "Se guía hasta sentarse con comida en una habitación tranquila",
     );
+    expect(suggestion.skill?.name).toBe("Sentado");
   });
 
   it("marks a custom skill as unsupported", async () => {

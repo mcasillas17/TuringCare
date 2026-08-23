@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import type { Locale } from "@turingcare/i18n";
 import type { TrainingSuggestion } from "@turingcare/shared";
 import { suggestionKey } from "./suggestion-key";
 import { type FocusSkill, focusKey } from "./weekly-focus";
@@ -17,6 +18,7 @@ export type AuditedSuggestionTargetInput = {
   dogId: string;
   weekKey: string;
   currentWeekKey: string;
+  locale: Locale;
   skillId: string;
   suggestionId?: string;
 };
@@ -34,11 +36,11 @@ function isQueryUnsettled(query: ReturnType<QueryClient["getQueryState"]>) {
 
 export function getAuditedSuggestionTargetState(
   queryClient: QueryClient,
-  { dogId, weekKey, currentWeekKey, skillId, suggestionId }: AuditedSuggestionTargetInput,
+  { dogId, weekKey, currentWeekKey, locale, skillId, suggestionId }: AuditedSuggestionTargetInput,
 ): AuditedSuggestionTargetState {
   if (!dogId || weekKey !== currentWeekKey) return { status: "ineligible" };
 
-  const currentSuggestionKey = suggestionKey(dogId, weekKey);
+  const currentSuggestionKey = suggestionKey(dogId, weekKey, locale);
   const currentFocusKey = focusKey(dogId, weekKey);
   const suggestionQuery = queryClient.getQueryState<TrainingSuggestion>(currentSuggestionKey);
   const focusQuery = queryClient.getQueryState<FocusSkill[]>(currentFocusKey);

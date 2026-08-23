@@ -92,7 +92,7 @@ it("adopts a signed-in account locale while rendering the public landing route",
   expect(requestedPaths).toContain("/api/profile");
 });
 
-it("clears private cache before rendering a signed-in public landing route", async () => {
+it("clears all prior-identity cache before rendering a signed-in public landing route", async () => {
   window.history.replaceState({}, "", "/");
   useSessionMock.mockReturnValue({ data: { user: { id: "u1" } }, isPending: false });
   vi.stubGlobal(
@@ -139,9 +139,7 @@ it("clears private cache before rendering a signed-in public landing route", asy
     expect(queryClient.getQueryData(["dogs-overview"])).toBeUndefined();
     expect(queryClient.getQueryData(["overview"])).toBeUndefined();
   });
-  expect(queryClient.getQueryData(["training-catalog", "en"])).toEqual({
-    marker: "public-catalog",
-  });
+  expect(queryClient.getQueryData(["training-catalog", "en"])).toBeUndefined();
   await waitFor(() =>
     expect(
       screen.getByRole("heading", { name: /train with positive reinforcement/i }),

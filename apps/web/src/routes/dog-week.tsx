@@ -139,6 +139,7 @@ export function DogWeek() {
       dogId: id,
       weekKey,
       currentWeekKey,
+      locale,
       skillId: pendingOutcome.skillId,
       suggestionId: pendingOutcome.suggestionId ?? undefined,
     }).status;
@@ -207,6 +208,7 @@ export function DogWeek() {
       dogId: id,
       weekKey,
       currentWeekKey,
+      locale,
       skillId,
     });
     const latestFocusSkill =
@@ -249,6 +251,7 @@ export function DogWeek() {
             dogId: id,
             weekKey,
             currentWeekKey,
+            locale,
             skillId: target.skillId,
             suggestionId: originalAuditedSuggestionId,
           })
@@ -310,6 +313,7 @@ export function DogWeek() {
       dogId: id,
       weekKey,
       currentWeekKey,
+      locale,
       skillId: suggestion.skill.id,
       suggestionId: suggestion.suggestionId,
     });
