@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { db } from "../db";
-import { practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
+import { briefs, practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
 import { createMonitoringErrorHandler } from "../monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "../monitoring/request-id";
 import { type TestUser, createTestUser } from "../test-helpers";
@@ -838,6 +838,102 @@ describe("dogs: brief", () => {
     });
     expect(fin.status).toBe(200);
     expect(((await fin.json()) as { brief: { status: string } }).brief.status).toBe("finalized");
+  });
+
+  it("serializes concurrent generations and keeps every latest-brief consumer deterministic", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+
+    const responses = await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        app.request(`/api/dogs/${dog.id}/brief`, {
+          method: "POST",
+          headers: {
+            ...u.authHeaders,
+            "X-TuringCare-Locale": index % 2 === 0 ? "en" : "es",
+          },
+        }),
+      ),
+    );
+    expect(responses.map((response) => response.status)).toEqual(Array(8).fill(201));
+
+    const generated = await Promise.all(
+      responses.map(
+        async (response) =>
+          (await response.json()) as {
+            brief: { id: string; version: number; locale: "en" | "es"; summary: string };
+          },
+      ),
+    );
+    const briefsByVersion = generated
+      .map(({ brief }) => brief)
+      .sort((a, b) => a.version - b.version);
+    expect(briefsByVersion.map(({ version }) => version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(new Set(briefsByVersion.map(({ id }) => id))).toHaveLength(8);
+    const latest = briefsByVersion.at(-1);
+    if (!latest) throw new Error("expected a latest generated brief");
+
+    const fetched = await app.request(`/api/dogs/${dog.id}/brief`, { headers: u.authHeaders });
+    expect((await fetched.json()) as object).toMatchObject({ brief: latest });
+
+    const finalized = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "PUT",
+      headers: u.authHeaders,
+    });
+    expect((await finalized.json()) as object).toMatchObject({
+      brief: { id: latest.id, version: latest.version, locale: latest.locale, status: "finalized" },
+    });
+
+    const shared = await app.request(`/api/dogs/${dog.id}/brief/share`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+    const { token } = (await shared.json()) as { token: string };
+    const publicBrief = await app.request(`/api/share/brief/${token}`);
+    expect((await publicBrief.json()) as object).toMatchObject({
+      brief: {
+        version: latest.version,
+        locale: latest.locale,
+        summary: latest.summary,
+        status: "finalized",
+      },
+    });
+
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const sent = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: {
+        ...u.authHeaders,
+        "X-TuringCare-Locale": latest.locale === "en" ? "es" : "en",
+      },
+      body: JSON.stringify({ recipient: "trainer@example.com" }),
+    });
+    expect(sent.status).toBe(201);
+    const email = vi.mocked(sendEmail).mock.calls[0]?.[0];
+    expect(email?.subject).toBe(
+      latest.locale === "es" ? "Resumen de conducta: Biscuit" : "Behavior Brief: Biscuit",
+    );
+    expect(email?.html).toContain(`<html lang="${latest.locale}">`);
+  });
+
+  it("enforces unique Brief versions per dog at the database boundary", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await db.insert(briefs).values({ dogId: dog.id, summary: "version one", version: 1 });
+
+    let duplicateError: unknown;
+    try {
+      await db.insert(briefs).values({ dogId: dog.id, summary: "duplicate version", version: 1 });
+    } catch (error) {
+      duplicateError = error;
+    }
+    expect(duplicateError).toBeInstanceOf(Error);
+    expect((duplicateError as { cause?: { constraint?: string } }).cause?.constraint).toBe(
+      "briefs_dog_id_version_unique",
+    );
   });
 
   it("owner isolation: other user 404", async () => {

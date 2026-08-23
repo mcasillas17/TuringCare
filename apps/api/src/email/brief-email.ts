@@ -31,7 +31,7 @@ export function renderBriefEmail(args: BriefEmailInputs, locale: Locale = "en"):
     ? `<blockquote style="margin:0 0 20px;padding:12px 16px;border-left:3px solid #b45309;background:#fef9f0;font-size:14px;line-height:1.6;color:#0f172a;white-space:pre-wrap">${safeMessage}</blockquote>`
     : "";
 
-  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#f6f5f3;font-family:ui-sans-serif,system-ui,sans-serif;color:#1f2937">
+  const html = `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"></head><body style="margin:0;background:#f6f5f3;font-family:ui-sans-serif,system-ui,sans-serif;color:#1f2937">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:32px">
 <tr><td>

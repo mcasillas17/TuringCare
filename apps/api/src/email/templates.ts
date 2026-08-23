@@ -27,10 +27,11 @@ function layout(
   intro: string,
   cta: string,
   url: string,
+  locale: Locale,
   t: EmailTranslator,
 ): string {
   const safeUrl = escapeHtml(url);
-  return `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#f6f5f3;font-family:ui-sans-serif,system-ui,sans-serif;color:#1f2937">
+  return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"></head><body style="margin:0;background:#f6f5f3;font-family:ui-sans-serif,system-ui,sans-serif;color:#1f2937">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:32px">
 <tr><td>
@@ -52,6 +53,7 @@ export function verificationEmail(url: string, locale: Locale = "en"): EmailBody
       t("authEmail.verification.intro"),
       t("authEmail.verification.cta"),
       url,
+      locale,
       t,
     ),
     text: t("authEmail.verification.text", { url }),
@@ -67,6 +69,7 @@ export function passwordResetEmail(url: string, locale: Locale = "en"): EmailBod
       t("authEmail.reset.intro"),
       t("authEmail.reset.cta"),
       url,
+      locale,
       t,
     ),
     text: t("authEmail.reset.text", { url }),

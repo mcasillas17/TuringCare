@@ -48,9 +48,14 @@ describe("auth email wiring", () => {
     });
     expect(res.status).toBeLessThan(400);
     expect(sendEmailMock).toHaveBeenCalledOnce();
-    const firstArg = sendEmailMock.mock.calls[0]?.[0] as { to: string; subject: string };
+    const firstArg = sendEmailMock.mock.calls[0]?.[0] as {
+      to: string;
+      subject: string;
+      html: string;
+    };
     expect(firstArg.to).toBe(email);
     expect(firstArg.subject.length).toBeGreaterThan(0);
+    expect(firstArg.html).toContain('<html lang="en">');
   });
 
   it("localizes verification email from the validated Better Auth request locale", async () => {
@@ -66,9 +71,14 @@ describe("auth email wiring", () => {
     });
 
     expect(res.status).toBeLessThan(400);
-    const firstArg = sendEmailMock.mock.calls[0]?.[0] as { to: string; subject: string };
+    const firstArg = sendEmailMock.mock.calls[0]?.[0] as {
+      to: string;
+      subject: string;
+      html: string;
+    };
     expect(firstArg.to).toBe(spanishEmail);
     expect(firstArg.subject).toBe("Verifica tu correo de TuringCare");
+    expect(firstArg.html).toContain('<html lang="es">');
   });
 
   it("does not trust an invalid raw locale header in Better Auth callbacks", async () => {
@@ -122,9 +132,10 @@ describe("auth email wiring", () => {
     });
     expect(res.status).toBeLessThan(400);
     expect(sendEmailMock).toHaveBeenCalledOnce();
-    const arg = sendEmailMock.mock.calls[0]?.[0] as { to: string; subject: string };
+    const arg = sendEmailMock.mock.calls[0]?.[0] as { to: string; subject: string; html: string };
     expect(arg.to).toBe(resetEmail);
     expect(arg.subject.toLowerCase()).toContain("reset");
+    expect(arg.html).toContain('<html lang="en">');
   });
 
   it("localizes password-reset email from the validated Better Auth request locale", async () => {
@@ -150,9 +161,10 @@ describe("auth email wiring", () => {
     });
 
     expect(res.status).toBeLessThan(400);
-    const arg = sendEmailMock.mock.calls[0]?.[0] as { to: string; subject: string };
+    const arg = sendEmailMock.mock.calls[0]?.[0] as { to: string; subject: string; html: string };
     expect(arg.to).toBe(spanishResetEmail);
     expect(arg.subject).toBe("Restablece tu contraseña de TuringCare");
+    expect(arg.html).toContain('<html lang="es">');
   });
 
   it("a failing sendResetPassword does NOT break /request-password-reset", async () => {

@@ -24,6 +24,16 @@ describe("email templates", () => {
     expect(verificationEmail(VERIFY_URL).subject).not.toBe(passwordResetEmail(VERIFY_URL).subject);
   });
 
+  it("declares the validated language on English authentication email HTML", () => {
+    expect(verificationEmail(VERIFY_URL, "en").html).toContain('<html lang="en">');
+    expect(passwordResetEmail(VERIFY_URL, "en").html).toContain('<html lang="en">');
+  });
+
+  it("declares the validated language on Spanish authentication email HTML", () => {
+    expect(verificationEmail(VERIFY_URL, "es").html).toContain('<html lang="es">');
+    expect(passwordResetEmail(VERIFY_URL, "es").html).toContain('<html lang="es">');
+  });
+
   it("renders the verification email in Spanish", () => {
     const out = verificationEmail(VERIFY_URL, "es");
 

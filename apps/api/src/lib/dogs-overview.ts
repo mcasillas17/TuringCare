@@ -53,7 +53,7 @@ export async function loadDogsOverview(ownerId: string): Promise<DogOverview[]> 
       })
       .from(briefs)
       .where(inArray(briefs.dogId, ids))
-      .orderBy(desc(briefs.generatedAt)),
+      .orderBy(desc(briefs.version), desc(briefs.generatedAt), desc(briefs.id)),
   ]);
 
   const jMap = new Map(journalAgg.map((r) => [r.dogId, r]));

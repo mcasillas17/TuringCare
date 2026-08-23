@@ -26,7 +26,7 @@ export const overviewApp = new Hono<{ Variables: Vars }>()
         .select()
         .from(briefs)
         .where(inArray(briefs.dogId, ids))
-        .orderBy(desc(briefs.generatedAt))
+        .orderBy(desc(briefs.generatedAt), desc(briefs.version), desc(briefs.id))
         .limit(1),
     ]);
     const [latest] = briefRows;

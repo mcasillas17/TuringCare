@@ -521,17 +521,11 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     const journalWhere = cutoff
       ? and(eq(journalEntries.dogId, dog.id), gte(journalEntries.occurredAt, cutoff))
       : eq(journalEntries.dogId, dog.id);
-    const [concerns, goals, entries, progress, [last]] = await Promise.all([
+    const [concerns, goals, entries, progress] = await Promise.all([
       db.select().from(behaviorConcerns).where(eq(behaviorConcerns.dogId, dog.id)),
       db.select().from(trainingGoals).where(eq(trainingGoals.dogId, dog.id)),
       db.select().from(journalEntries).where(journalWhere),
       loadProgress(dog.id),
-      db
-        .select()
-        .from(briefs)
-        .where(eq(briefs.dogId, dog.id))
-        .orderBy(desc(briefs.version))
-        .limit(1),
     ]);
     const locale = c.get("locale");
     const summary = composeBrief(
@@ -554,16 +548,30 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       },
       locale,
     );
-    const [brief] = await db
-      .insert(briefs)
-      .values({
-        dogId: dog.id,
-        locale,
-        summary,
-        version: (last?.version ?? 0) + 1,
-        status: "draft",
-      })
-      .returning();
+    const brief = await db.transaction(async (tx) => {
+      // The parent dog row is the database-backed, per-dog serialization point.
+      // PostgreSQL holds this row lock until commit, so a concurrent generator
+      // cannot read the previous version until the earlier insert is visible.
+      await tx.select({ id: dogs.id }).from(dogs).where(eq(dogs.id, dog.id)).for("update");
+      const [last] = await tx
+        .select({ version: briefs.version })
+        .from(briefs)
+        .where(eq(briefs.dogId, dog.id))
+        .orderBy(desc(briefs.version))
+        .limit(1);
+      const [created] = await tx
+        .insert(briefs)
+        .values({
+          dogId: dog.id,
+          locale,
+          summary,
+          version: (last?.version ?? 0) + 1,
+          status: "draft",
+        })
+        .returning();
+      if (!created) throw new Error("failed to create brief");
+      return created;
+    });
     await recordEvent("brief.generated", { userId: c.get("userId"), props: { window } });
     return c.json({ brief }, 201);
   })

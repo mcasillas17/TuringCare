@@ -12,6 +12,10 @@ describe("renderBriefEmail", () => {
   it("subject contains the dog name", () => {
     expect(renderBriefEmail(base).subject).toBe("Behavior Brief: Biscuit");
   });
+  it("declares the stored language on English and Spanish HTML", () => {
+    expect(renderBriefEmail(base, "en").html).toContain('<html lang="en">');
+    expect(renderBriefEmail(base, "es").html).toContain('<html lang="es">');
+  });
   it("HTML contains owner name and brief summary", () => {
     const { html } = renderBriefEmail(base);
     expect(html).toContain("Miguel");
