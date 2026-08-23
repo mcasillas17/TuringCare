@@ -1185,8 +1185,11 @@ export const en = {
     rateLimited: "You've reached the daily send limit. Try again later.",
     sent: "Sent",
     sendFailed: "Couldn't send. Try again.",
-    historyTitle: "Sent",
+    historyTitle: "Send history",
     historyEmpty: "No sends yet.",
+    deliveryPending: "Delivery pending",
+    retry: "Retry",
+    retrying: "Retrying…",
   },
   trainersDir: {
     title: "Trainers",

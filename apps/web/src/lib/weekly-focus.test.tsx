@@ -1,5 +1,6 @@
+import { LocaleProvider, useI18n } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -40,9 +41,51 @@ function makeQueryClient() {
   });
 }
 
+function FocusProbe() {
+  const { locale, selectLocale } = useI18n();
+  const { data } = useFocusWeek("dog-1", "2026-08-10", 420, 480);
+
+  return (
+    <>
+      <p>{data?.[0]?.name ?? "loading"}</p>
+      <button type="button" onClick={() => selectLocale(locale === "en" ? "es" : "en")}>
+        switch
+      </button>
+    </>
+  );
+}
+
 afterEach(() => vi.clearAllMocks());
 
 describe("weekly focus hooks", () => {
+  it("loads fresh localized focus labels after a locale switch", async () => {
+    localStorage.setItem("tc-locale", "en");
+    getFocus
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ focusSkills: [{ name: "Sit" }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ focusSkills: [{ name: "Sentado" }] }),
+      });
+    const queryClient = makeQueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <LocaleProvider>
+          <FocusProbe />
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Sit")).toBeInTheDocument();
+    act(() => screen.getByRole("button", { name: "switch" }).click());
+
+    expect(await screen.findByText("Sentado")).toBeInTheDocument();
+    expect(getFocus).toHaveBeenCalledTimes(2);
+  });
+
   it("loads the focus for a week with local timezone offsets", async () => {
     getFocus.mockResolvedValue({ ok: true, json: async () => ({ focusSkills: [] }) });
     const queryClient = makeQueryClient();

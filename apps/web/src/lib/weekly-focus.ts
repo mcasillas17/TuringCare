@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ContextualProgressSummary, PracticeDimension } from "@turingcare/shared";
 import { api } from "./api";
@@ -25,8 +26,10 @@ export type FocusSkill = {
 
 const focusApi = api.api.dogs[":id"].focus;
 
-export function focusKey(dogId: string, weekKey: string) {
-  return ["focus", dogId, weekKey] as const;
+export function focusKey(dogId: string, weekKey: string, locale?: string) {
+  return locale
+    ? (["focus", dogId, weekKey, locale] as const)
+    : (["focus", dogId, weekKey] as const);
 }
 
 export function useFocusWeek(
@@ -35,8 +38,10 @@ export function useFocusWeek(
   timezoneOffsetMinutes: number,
   weekEndTimezoneOffsetMinutes: number,
 ) {
+  const { locale } = useI18n();
+
   return useQuery({
-    queryKey: focusKey(dogId, weekKey),
+    queryKey: focusKey(dogId, weekKey, locale),
     enabled: !!dogId,
     queryFn: async (): Promise<FocusSkill[]> => {
       const res = await focusApi.$get({

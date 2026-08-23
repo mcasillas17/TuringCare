@@ -214,7 +214,7 @@ export function DogWeek() {
     const latestFocusSkill =
       auditedTarget?.focusSkill ??
       queryClient
-        .getQueryData<FocusSkill[]>(focusKey(id, weekKey))
+        .getQueryData<FocusSkill[]>(focusKey(id, weekKey, locale))
         ?.find((focus) => focus.skillId === skillId) ??
       focusSkill;
     const matchingSuggestion = auditedTarget?.suggestion ?? null;

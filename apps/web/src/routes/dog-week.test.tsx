@@ -190,7 +190,7 @@ function renderWeek(locale: "en" | "es" = "en") {
 
 function seedAuditedSuggestion(queryClient: QueryClient) {
   const weekKey = weekKeyOf(new Date());
-  queryClient.setQueryData(focusLib.focusKey("d1", weekKey), [sitFocus]);
+  queryClient.setQueryData(focusLib.focusKey("d1", weekKey, "en"), [sitFocus]);
   queryClient.setQueryData(suggestionLib.suggestionKey("d1", weekKey, "en"), exerciseSuggestion);
 }
 

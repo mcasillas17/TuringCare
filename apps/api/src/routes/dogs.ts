@@ -1583,11 +1583,17 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         recipient: briefSends.recipient,
         message: briefSends.message,
         sentAt: briefSends.sentAt,
+        deliveredAt: briefSends.deliveredAt,
       })
       .from(briefSends)
       .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
-      .where(and(eq(briefs.dogId, dog.id), isNotNull(briefSends.deliveredAt)))
+      .where(eq(briefs.dogId, dog.id))
       .orderBy(desc(briefSends.sentAt));
 
-    return c.json({ sends });
+    return c.json({
+      sends: sends.map(({ deliveredAt, ...send }) => ({
+        ...send,
+        status: deliveredAt ? ("delivered" as const) : ("pending" as const),
+      })),
+    });
   });

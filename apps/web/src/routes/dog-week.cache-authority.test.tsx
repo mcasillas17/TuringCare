@@ -147,7 +147,7 @@ function createQueryClient() {
 
 async function waitForSettledSuggestionData(queryClient: QueryClient) {
   await waitFor(() =>
-    expect(queryClient.getQueryState(focusKey("dog-1", weekKey))).toMatchObject({
+    expect(queryClient.getQueryState(focusKey("dog-1", weekKey, "en"))).toMatchObject({
       fetchStatus: "idle",
       status: "success",
     }),
@@ -250,7 +250,7 @@ describe("DogWeek audited suggestion cache authority", () => {
 
     beginBackgroundRevalidation(queryClient);
     await waitFor(() =>
-      expect(queryClient.getQueryState(focusKey("dog-1", weekKey))).toMatchObject({
+      expect(queryClient.getQueryState(focusKey("dog-1", weekKey, "en"))).toMatchObject({
         fetchStatus: "fetching",
         status: "success",
       }),
@@ -345,7 +345,7 @@ describe("DogWeek audited suggestion cache authority", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
     await screen.findByRole("radio", { name: "Easier fallback" });
 
-    queryClient.setQueryData(focusKey("dog-1", weekKey), [focusSkillWithSafety]);
+    queryClient.setQueryData(focusKey("dog-1", weekKey, "en"), [focusSkillWithSafety]);
 
     fireEvent.click(screen.getByRole("button", { name: "Went well" }));
     const currentLevelConfirmation = await screen.findByRole("checkbox", {
@@ -385,7 +385,7 @@ describe("DogWeek audited suggestion cache authority", () => {
 
     beginBackgroundRevalidation(queryClient);
     await waitFor(() =>
-      expect(queryClient.getQueryState(focusKey("dog-1", weekKey))).toMatchObject({
+      expect(queryClient.getQueryState(focusKey("dog-1", weekKey, "en"))).toMatchObject({
         fetchStatus: "fetching",
         status: "success",
       }),

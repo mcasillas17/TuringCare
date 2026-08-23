@@ -49,7 +49,15 @@ export function SendPanel({
     try {
       const intent = JSON.stringify([v.recipient, v.message ?? null]);
       if (submission.current?.intent !== intent) {
-        submission.current = { intent, idempotencyKey: createBriefSendIdempotencyKey() };
+        const recoverable = sends?.find(
+          (candidate) =>
+            candidate.status === "pending" &&
+            JSON.stringify([candidate.recipient, candidate.message ?? null]) === intent,
+        );
+        submission.current = {
+          intent,
+          idempotencyKey: recoverable?.id ?? createBriefSendIdempotencyKey(),
+        };
       }
       await send.mutateAsync({ ...v, idempotencyKey: submission.current.idempotencyKey });
       submission.current = undefined;
@@ -62,6 +70,19 @@ export function SendPanel({
       toast.error(t(briefSendErrorMessageKey(error)));
     }
   });
+
+  const retryPendingSend = async (pending: NonNullable<typeof sends>[number]) => {
+    try {
+      await send.mutateAsync({
+        recipient: pending.recipient,
+        message: pending.message,
+        idempotencyKey: pending.id,
+      });
+      toast.success(t("briefSend.sent"));
+    } catch (error) {
+      toast.error(t(briefSendErrorMessageKey(error)));
+    }
+  };
 
   const fmt = new Intl.DateTimeFormat(locale, { dateStyle: "medium" });
 
@@ -112,8 +133,23 @@ export function SendPanel({
           <h3 className="mb-2 text-sm font-medium text-slate">{t("briefSend.historyTitle")}</h3>
           <ul className="space-y-1">
             {sends.map((s) => (
-              <li key={s.id} className="text-sm text-slate-soft">
-                {s.recipient} — {fmt.format(new Date(String(s.sentAt)))}
+              <li key={s.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-soft">
+                  {s.recipient} —{" "}
+                  {s.status === "pending"
+                    ? t("briefSend.deliveryPending")
+                    : fmt.format(new Date(String(s.sentAt)))}
+                </span>
+                {s.status === "pending" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={send.isPending}
+                    onClick={() => void retryPendingSend(s)}
+                  >
+                    {send.isPending ? t("briefSend.retrying") : t("briefSend.retry")}
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

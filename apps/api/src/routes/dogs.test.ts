@@ -1745,10 +1745,18 @@ describe("dogs: brief send", () => {
         .from(briefSends)
         .where(eq(briefSends.id, idempotencyKey)),
     ).toEqual([{ id: idempotencyKey }]);
-    const hiddenPending = await app.request(`/api/dogs/${dog.id}/brief/sends`, {
+    const recoverablePending = await app.request(`/api/dogs/${dog.id}/brief/sends`, {
       headers: u.authHeaders,
     });
-    expect(await hiddenPending.json()).toEqual({ sends: [] });
+    expect(await recoverablePending.json()).toEqual({
+      sends: [
+        expect.objectContaining({
+          id: idempotencyKey,
+          recipient: "durable@example.com",
+          status: "pending",
+        }),
+      ],
+    });
 
     const retried = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",

@@ -41,7 +41,7 @@ export function getAuditedSuggestionTargetState(
   if (!dogId || weekKey !== currentWeekKey) return { status: "ineligible" };
 
   const currentSuggestionKey = suggestionKey(dogId, weekKey, locale);
-  const currentFocusKey = focusKey(dogId, weekKey);
+  const currentFocusKey = focusKey(dogId, weekKey, locale);
   const suggestionQuery = queryClient.getQueryState<TrainingSuggestion>(currentSuggestionKey);
   const focusQuery = queryClient.getQueryState<FocusSkill[]>(currentFocusKey);
   if (isQueryUnsettled(suggestionQuery) || isQueryUnsettled(focusQuery)) {

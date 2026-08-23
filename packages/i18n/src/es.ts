@@ -1209,8 +1209,11 @@ export const es = {
     rateLimited: "Alcanzaste el límite diario de envíos. Inténtalo más tarde.",
     sent: "Enviado",
     sendFailed: "No se pudo enviar. Inténtalo de nuevo.",
-    historyTitle: "Enviados",
+    historyTitle: "Historial de envíos",
     historyEmpty: "Aún no hay envíos.",
+    deliveryPending: "Entrega pendiente",
+    retry: "Reintentar",
+    retrying: "Reintentando…",
   },
   trainersDir: {
     title: "Adiestradores",

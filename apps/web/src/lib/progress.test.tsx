@@ -1,11 +1,13 @@
+import { LocaleProvider, useI18n } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { postSession, patchEvidence } = vi.hoisted(() => ({
-  postSession: vi.fn(),
+const { getProgress, patchEvidence, postSession } = vi.hoisted(() => ({
+  getProgress: vi.fn(),
   patchEvidence: vi.fn(),
+  postSession: vi.fn(),
 }));
 
 vi.mock("@/components/turing/turing-context", () => ({
@@ -17,7 +19,7 @@ vi.mock("./api", () => ({
     api: {
       dogs: {
         ":id": {
-          progress: { $get: vi.fn() },
+          progress: { $get: getProgress },
           goals: { ":goalId": { skills: { $post: vi.fn() } } },
           skills: {
             ":skillId": {
@@ -36,7 +38,7 @@ vi.mock("./api", () => ({
   },
 }));
 
-import { useLogSession, useSetSessionEvidence } from "./progress";
+import { useLogSession, useProgress, useSetSessionEvidence } from "./progress";
 
 function makeWrapper(queryClient: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -50,9 +52,54 @@ function makeQueryClient() {
   });
 }
 
-afterEach(() => vi.clearAllMocks());
+function ProgressProbe() {
+  const { locale, selectLocale } = useI18n();
+  const { data } = useProgress("dog-1");
+
+  return (
+    <>
+      <p>{data?.[0]?.goal ?? "loading"}</p>
+      <button type="button" onClick={() => selectLocale(locale === "en" ? "es" : "en")}>
+        switch
+      </button>
+    </>
+  );
+}
+
+afterEach(() => {
+  localStorage.clear();
+  vi.clearAllMocks();
+});
 
 describe("progress hooks", () => {
+  it("loads fresh localized progress labels after a locale switch", async () => {
+    localStorage.setItem("tc-locale", "en");
+    getProgress
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ goals: [{ goal: "Basic manners" }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ goals: [{ goal: "Buenos modales" }] }),
+      });
+    const queryClient = makeQueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <LocaleProvider>
+          <ProgressProbe />
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Basic manners")).toBeInTheDocument();
+    act(() => screen.getByRole("button", { name: "switch" }).click());
+
+    expect(await screen.findByText("Buenos modales")).toBeInTheDocument();
+    expect(getProgress).toHaveBeenCalledTimes(2);
+  });
+
   it("returns the session and partial anchor rejection from session creation", async () => {
     postSession.mockResolvedValue({
       ok: true,

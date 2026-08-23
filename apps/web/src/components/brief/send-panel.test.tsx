@@ -163,6 +163,40 @@ describe("SendPanel", () => {
     expect(posted[1]?.idempotencyKey).toBe(posted[0]?.idempotencyKey);
   });
 
+  it("recovers and retries a durable pending send after the panel remounts", async () => {
+    const posted: BriefSendInput[] = [];
+    const pending = {
+      id: "95acbb6a-9189-4614-9a6e-c732efcc5d1d",
+      recipient: "recover@example.com",
+      message: "Please review",
+      sentAt: "2026-05-20T10:00:00Z",
+      status: "pending",
+    };
+    stubFetch(async (_url, init) => {
+      if (init?.method === "POST") {
+        posted.push(JSON.parse(String(init.body)) as BriefSendInput);
+        return new Response(JSON.stringify({ send: { ...pending, status: "delivered" } }), {
+          status: 201,
+        });
+      }
+      return new Response(JSON.stringify({ sends: [pending] }), { status: 200 });
+    });
+
+    const firstMount = setup("finalized");
+    expect(await screen.findByText(/Delivery pending/i)).toBeInTheDocument();
+    firstMount.unmount();
+
+    setup("finalized");
+    fireEvent.click(await screen.findByRole("button", { name: /^Retry$/i }));
+    await waitFor(() => expect(posted).toHaveLength(1));
+
+    expect(posted[0]).toEqual({
+      recipient: pending.recipient,
+      message: pending.message,
+      idempotencyKey: pending.id,
+    });
+  });
+
   it("creates a new idempotency key when the submission intent changes after an error", async () => {
     const posted: BriefSendInput[] = [];
     stubFetch(async (_url, init) => {
