@@ -2,10 +2,14 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SessionQueryBoundary, useSessionQueriesReady } from "./session-query-boundary";
+import {
+  SessionQueryBoundary,
+  useSessionQueriesReady,
+  useSessionQueryReady,
+} from "./session-query-boundary";
 
 const { sessionState, useSessionMock } = vi.hoisted(() => ({
-  sessionState: { pending: false, userId: "u1" as string | null },
+  sessionState: { pending: false, userId: "u1" as unknown },
   useSessionMock: vi.fn(),
 }));
 
@@ -46,11 +50,15 @@ function TrainerContactProbe() {
   return trainer ? <p>{`${trainer.email} ${trainer.phone}`}</p> : <p>trainer-cache-empty</p>;
 }
 
+function AnonymousIdentityProbe() {
+  return <p>{useSessionQueryReady(null) ? "anonymous-ready" : "anonymous-not-ready"}</p>;
+}
+
 beforeEach(() => {
   sessionState.pending = false;
   sessionState.userId = "u1";
   useSessionMock.mockImplementation(() => ({
-    data: sessionState.userId ? { user: { id: sessionState.userId } } : null,
+    data: sessionState.userId === null ? null : { user: { id: sessionState.userId } },
     isPending: sessionState.pending,
   }));
 });
@@ -139,4 +147,22 @@ describe("SessionQueryBoundary", () => {
     expect(screen.queryByText(/555-0100/)).not.toBeInTheDocument();
     expect(queryClient.getQueryData(["trainers", "t1"])).toBeUndefined();
   });
+
+  it.each(["", "   ", 42])(
+    "uses anonymous cache identity for the runtime-invalid session user id %j",
+    async (userId) => {
+      sessionState.userId = userId;
+      const queryClient = new QueryClient();
+      queryClient.setQueryData(["profile", "owner"], { marker: "private-profile" });
+
+      render(
+        <BoundaryTree queryClient={queryClient}>
+          <AnonymousIdentityProbe />
+        </BoundaryTree>,
+      );
+
+      await screen.findByText("anonymous-ready");
+      expect(queryClient.getQueryData(["profile", "owner"])).toBeUndefined();
+    },
+  );
 });

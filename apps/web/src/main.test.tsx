@@ -148,3 +148,39 @@ it("clears private cache before rendering a signed-in public landing route", asy
     ).toBeInTheDocument(),
   );
 });
+
+it.each(["", "   ", 42])(
+  "renders the login route without redirecting for runtime-invalid session user id %j",
+  async (userId) => {
+    window.history.replaceState({}, "", "/login");
+    useSessionMock.mockReturnValue({ data: { user: { id: userId } }, isPending: false });
+
+    await import("./main");
+    render(renderedRoot.node as ReactElement);
+
+    expect(await screen.findByLabelText("Email")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
+  },
+);
+
+it("renders public directory chrome for a runtime-invalid session user id", async () => {
+  window.history.replaceState({}, "", "/trainers");
+  useSessionMock.mockReturnValue({ data: { user: { id: "   " } }, isPending: false });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ trainers: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    ),
+  );
+
+  await import("./main");
+  render(renderedRoot.node as ReactElement);
+
+  expect(await screen.findByRole("heading", { name: "Trainers" })).toBeInTheDocument();
+  expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
+});

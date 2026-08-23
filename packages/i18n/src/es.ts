@@ -831,7 +831,8 @@ export const es = {
     addToFocus: "Agregar",
     inFocus: "En enfoque",
     cellLog: "Registrar {skill} el {day}",
-    cellFilled: "{skill} el {day}: {n} sesiones",
+    cellFilledOne: "{skill} el {day}: {n} sesión",
+    cellFilledOther: "{skill} el {day}: {n} sesiones",
   },
   brief: {
     title: "Resumen de conducta",

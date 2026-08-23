@@ -51,3 +51,15 @@ it("renders children for an unauthenticated visitor", () => {
   setup();
   expect(screen.getByText("login-form")).toBeInTheDocument();
 });
+
+it.each(["", "   ", 42])(
+  "renders children for the runtime-invalid session user id %j",
+  (userId) => {
+    useSessionMock.mockReturnValue({ data: { user: { id: userId } }, isPending: false });
+
+    setup();
+
+    expect(screen.getByText("login-form")).toBeInTheDocument();
+    expect(screen.queryByText("my-portal")).not.toBeInTheDocument();
+  },
+);

@@ -135,7 +135,7 @@ describe("DogWeek", () => {
 
     expect(screen.getByRole("button", { name: "18 may – 24 may" })).toBeInTheDocument();
     const filledCell = screen.getByRole("button", {
-      name: "Recall el lunes, 18 de mayo de 2026: 1 sesiones",
+      name: "Recall el lunes, 18 de mayo de 2026: 1 sesión",
     });
     fireEvent.click(filledCell);
     expect(screen.getByText(/12 minutos/)).toBeInTheDocument();

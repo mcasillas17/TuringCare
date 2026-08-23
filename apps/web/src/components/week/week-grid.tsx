@@ -72,7 +72,7 @@ export function WeekGrid({ focusSkills, days, today, onLog, onRemove }: Props) {
                       disabled={isFuture}
                       aria-label={
                         count > 0
-                          ? t("week.cellFilled", {
+                          ? t(count === 1 ? "week.cellFilledOne" : "week.cellFilledOther", {
                               skill: skill.name,
                               day: accessibleDay,
                               n: count,

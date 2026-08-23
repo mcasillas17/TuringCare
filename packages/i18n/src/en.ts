@@ -812,7 +812,8 @@ export const en = {
     addToFocus: "Add",
     inFocus: "In focus",
     cellLog: "Log {skill} on {day}",
-    cellFilled: "{skill} on {day}: {n} sessions",
+    cellFilledOne: "{skill} on {day}: {n} session",
+    cellFilledOther: "{skill} on {day}: {n} sessions",
   },
   brief: {
     title: "Behavior Brief",

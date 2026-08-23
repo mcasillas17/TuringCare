@@ -1,4 +1,5 @@
 import { useSession } from "@/lib/auth-client";
+import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { type Query, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from "react";
 
@@ -39,7 +40,7 @@ function sessionUserIdFromSession(session: unknown): ResolvedIdentity {
   if (!session || typeof session !== "object" || !("user" in session)) return null;
   const user = session.user;
   if (!user || typeof user !== "object" || !("id" in user)) return null;
-  return typeof user.id === "string" && user.id.length > 0 ? user.id : null;
+  return isNonemptySessionUserId(user.id) ? user.id : null;
 }
 
 export function SessionQueryBoundary({ children }: { children: ReactNode }) {
