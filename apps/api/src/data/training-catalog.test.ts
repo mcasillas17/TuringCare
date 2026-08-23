@@ -110,6 +110,11 @@ describe("trainingCatalog", () => {
     expect(getTrainingCatalog("fr" as "en")[0]?.name).toBe("Basic Manners");
   });
 
+  it("falls back to English for locale values inherited from Object.prototype", () => {
+    expect(getTrainingCatalog("toString")[0]?.name).toBe("Basic Manners");
+    expect(getTrainingCatalog("constructor")[0]?.name).toBe("Basic Manners");
+  });
+
   it("keeps the compatibility export as the English catalog", () => {
     expect(trainingCatalog).toEqual(englishCatalog);
   });

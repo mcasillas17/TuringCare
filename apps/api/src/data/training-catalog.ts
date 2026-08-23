@@ -56,7 +56,7 @@ const trainingCatalogMessagesByLocale = {
 const catalogLevelNumbers = [1, 2, 3, 4, 5] as const;
 
 function resolveTrainingCatalogMessages(locale: Locale | string): TrainingCatalogMessages {
-  return locale in trainingCatalogMessagesByLocale
+  return Object.prototype.hasOwnProperty.call(trainingCatalogMessagesByLocale, locale)
     ? trainingCatalogMessagesByLocale[locale as Locale]
     : trainingCatalogMessagesByLocale.en;
 }

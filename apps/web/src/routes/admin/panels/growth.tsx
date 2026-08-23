@@ -16,7 +16,7 @@ export function Growth({ signups }: { signups: Metrics["signups"] }) {
           <XAxis dataKey="day" fontSize={11} />
           <YAxis allowDecimals={false} fontSize={11} />
           <Tooltip />
-          <Bar dataKey="count" fill="#c8893b" />
+          <Bar dataKey="count" name={t("admin.signups")} fill="#c8893b" />
         </BarChart>
       </ResponsiveContainer>
     </section>

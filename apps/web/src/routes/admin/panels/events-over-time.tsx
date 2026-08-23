@@ -129,6 +129,7 @@ export function EventsOverTime({ eventsByDay }: { eventsByDay: Metrics["eventsBy
             <Area
               type="monotone"
               dataKey="total"
+              name={t("admin.totalEvents")}
               stroke="#c8893b"
               fill="#c8893b"
               fillOpacity={0.2}

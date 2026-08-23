@@ -172,3 +172,104 @@ Notes:
 ## Concerns
 
 No blocking concerns.
+
+## Fix round 1 — Terra Important findings
+
+### Scope
+
+- Fixed `getTrainingCatalog(locale)` fallback for prototype property names by replacing the prototype-inclusive `in` check with an own-property check.
+- Localized remaining admin metric/funnel labels in touched panels:
+  - funnel steps: `signup`, `first_dog`, `first_journal`.
+  - KPI labels: weekly active users and daily/monthly active ratio.
+  - active-usage DAU/WAU/MAU summary labels.
+  - chart tooltip/series names for `count` and `total`.
+- Kept API/chart data keys stable: `step`, `count`, `total`, `pageViews`, etc. remain unchanged.
+
+### RED
+
+- `DATABASE_URL='postgres://postgres:postgres@localhost:5432/turingcare' BETTER_AUTH_SECRET='test-only-insecure-secret-0123456789abcdef' pnpm --filter @turingcare/api test -- src/data/training-catalog.test.ts`
+  - exit 1.
+  - Expected failure:
+    - `❯ src/data/training-catalog.test.ts (11 tests | 1 failed)`
+    - `× trainingCatalog > falls back to English for locale values inherited from Object.prototype`
+    - `TypeError: Cannot read properties of undefined (reading 'basic-manners')`
+- `NODE_OPTIONS='--no-experimental-webstorage' pnpm --filter @turingcare/web test -- src/routes/admin/panels/panels.test.tsx src/routes/admin/panels/events-over-time.test.tsx`
+  - exit 1.
+  - Expected failures:
+    - `Test Files  2 failed | 71 passed (73)`
+    - `Tests  5 failed | 315 passed (320)`
+    - Spanish KPI labels absent; raw `WAU` and `DAU/MAU` rendered.
+    - Spanish funnel labels absent; raw `signup`, `first_dog`, `first_journal` rendered.
+    - `Growth`/`ActiveUsage` series names fell back to `count`.
+    - `EventsOverTime` total series name fell back to `total`.
+
+### GREEN / verification
+
+- `DATABASE_URL='postgres://postgres:postgres@localhost:5432/turingcare' BETTER_AUTH_SECRET='test-only-insecure-secret-0123456789abcdef' pnpm --filter @turingcare/api test`
+  - exit 0.
+  - `Test Files  47 passed (47)`
+  - `Tests  328 passed (328)`
+- `NODE_OPTIONS='--no-experimental-webstorage' pnpm --filter @turingcare/web test`
+  - exit 0.
+  - `Test Files  73 passed (73)`
+  - `Tests  320 passed (320)`
+  - Existing unrelated React `act(...)` warnings still appear in brief/share-sheet tests.
+- `pnpm --filter @turingcare/i18n test`
+  - exit 0.
+  - `Test Files  1 passed (1)`
+  - `Tests  7 passed (7)`
+- `pnpm -r typecheck`
+  - exit 0.
+  - `packages/i18n typecheck: Done`
+  - `packages/shared typecheck: Done`
+  - `apps/api typecheck: Done`
+  - `apps/web typecheck: Done`
+- `pnpm exec biome check apps/api/src/data/training-catalog.ts apps/api/src/data/training-catalog.test.ts apps/web/src/routes/admin/panels/active-usage.tsx apps/web/src/routes/admin/panels/events-over-time.tsx apps/web/src/routes/admin/panels/events-over-time.test.tsx apps/web/src/routes/admin/panels/funnel.tsx apps/web/src/routes/admin/panels/growth.tsx apps/web/src/routes/admin/panels/kpi-strip.tsx apps/web/src/routes/admin/panels/panels.test.tsx packages/i18n/src/en.ts packages/i18n/src/es.ts`
+  - exit 0.
+  - `Checked 11 files in 5ms. No fixes applied.`
+- `git diff --check`
+  - exit 0.
+
+### Targeted second sweep
+
+- Command:
+  - `rg -n '(signup|first_dog|first_journal|\bWAU\b|\bDAU\b|\bMAU\b|DAU/MAU|dataKey="count"|dataKey="total"|data-series-name|\bcount\b|\btotal\b)' apps/web/src/routes/admin/panels --glob '!*.test.*'`
+- Classification:
+  - No production raw `WAU`, `DAU/MAU`, or DAU/WAU/MAU summary labels remain.
+  - No production raw funnel step rendering remains; `signup`, `first_dog`, and `first_journal` appear only in the stable `FUNNEL_STEP_LABEL_KEYS` mapping.
+  - `count` and `total` remain as numeric object fields, aggregation fields, and Recharts `dataKey`s. Their chart tooltip-facing `name` props are localized (`admin.signups`, `admin.activeUsers`, `admin.totalEvents`).
+  - `events-series.ts` mentions `total`/`count` only in non-UI aggregation code and comments.
+
+### Files changed in fix round 1
+
+- `apps/api/src/data/training-catalog.ts`
+- `apps/api/src/data/training-catalog.test.ts`
+- `apps/web/src/routes/admin/panels/active-usage.tsx`
+- `apps/web/src/routes/admin/panels/events-over-time.tsx`
+- `apps/web/src/routes/admin/panels/events-over-time.test.tsx`
+- `apps/web/src/routes/admin/panels/funnel.tsx`
+- `apps/web/src/routes/admin/panels/growth.tsx`
+- `apps/web/src/routes/admin/panels/kpi-strip.tsx`
+- `apps/web/src/routes/admin/panels/panels.test.tsx`
+- `packages/i18n/src/en.ts`
+- `packages/i18n/src/es.ts`
+
+### Full lint note
+
+- `pnpm lint`
+  - exit 1.
+  - `Found 10 errors.`
+  - Remaining failures are outside this fix round’s touched files:
+    - `apps/api/src/app.ts` import sorting.
+    - `apps/api/src/monitoring/error-handler.ts` formatting.
+    - `packages/i18n/src/index.test.ts` existing `delete` lint.
+    - `apps/web/src/components/turing-companion.test.tsx` import sorting.
+    - `apps/web/src/i18n/index.tsx` import sorting/formatting.
+    - `apps/web/src/i18n/i18n.test.tsx` import sorting.
+    - `apps/web/src/lib/api.test.ts` import sorting/formatting.
+  - Scoped Biome over all fix-round touched files is clean.
+
+### Concerns
+
+- No blocking concerns for the fix-round changes.
+- Full repo lint is still red on unrelated existing files; this round left those untouched and verified the touched-file hygiene separately.
