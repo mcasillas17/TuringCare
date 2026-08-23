@@ -1,7 +1,7 @@
 import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/auth-client", () => ({
   useSession: () => ({
@@ -12,6 +12,10 @@ vi.mock("@/lib/auth-client", () => ({
 }));
 
 import { SiteNav } from "./site-nav";
+
+afterEach(() => {
+  localStorage.clear();
+});
 
 describe("SiteNav (logged in)", () => {
   it("renders 'Open app' and hides Log in / Get started when a session exists", () => {
@@ -50,5 +54,17 @@ describe("SiteNav (logged in)", () => {
     const openApp = screen.getByRole("link", { name: /open app/i });
     const chip = screen.getByRole("button", { name: "Language" });
     expect(openApp.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("localizes the public navigation landmark label", () => {
+    localStorage.setItem("tc-locale", "es");
+    render(
+      <LocaleProvider>
+        <MemoryRouter>
+          <SiteNav />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+    expect(screen.getByRole("navigation", { name: "Navegación principal" })).toBeInTheDocument();
   });
 });

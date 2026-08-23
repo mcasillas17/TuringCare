@@ -1,6 +1,7 @@
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./AppShell";
@@ -17,9 +18,13 @@ function mockMe(role: string | undefined) {
     ),
   );
 }
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  localStorage.clear();
+  vi.unstubAllGlobals();
+});
 
-function setup() {
+function setup(locale: "en" | "es" = "en") {
+  localStorage.setItem("tc-locale", locale);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -60,5 +65,12 @@ describe("AppShell", () => {
     const chip = screen.getByRole("button", { name: "Language" });
     // The chip must come AFTER the Sign out button in document order.
     expect(signOut.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+  it("localizes the mobile drawer close label", async () => {
+    const user = userEvent.setup();
+    mockMe("user");
+    setup("es");
+    await user.click(screen.getByRole("button", { name: "Menú" }));
+    expect(screen.getByRole("button", { name: "Cerrar menú" })).toBeInTheDocument();
   });
 });

@@ -20,7 +20,7 @@ import { and, count, desc, eq, gte, lt, max } from "drizzle-orm";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { trainingCatalog } from "../data/training-catalog";
+import { getTrainingCatalog } from "../data/training-catalog";
 import { db } from "../db";
 import { findOwnedDog } from "../db/owned-dog";
 import { findOwnedSkill } from "../db/owned-skill";
@@ -166,7 +166,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { templateKey } = c.req.valid("json");
-    const template = trainingCatalog.find((t) => t.key === templateKey);
+    const template = getTrainingCatalog(c.get("locale")).find((t) => t.key === templateKey);
     if (!template) return c.json({ error: "invalid_template" } as const, 400);
 
     const { goal, skills } = await db.transaction(async (tx) => {

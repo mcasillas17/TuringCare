@@ -15,10 +15,10 @@ describe("eventCategory", () => {
     expect(eventCategory("something.weird")).toBe("other");
   });
 
-  it("exposes every category with a label and color", () => {
+  it("exposes every category with a label key and color", () => {
     expect(CATEGORIES.map((c) => c.key)).toContain("pageViews");
     for (const c of CATEGORIES) {
-      expect(c.label.length).toBeGreaterThan(0);
+      expect(c.labelKey.startsWith("admin.")).toBe(true);
       expect(c.color).toMatch(/^#/);
     }
   });

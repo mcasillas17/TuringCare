@@ -9,7 +9,8 @@ afterEach(() => {
   localStorage.clear();
 });
 
-function setup() {
+function setup(locale: "en" | "es" = "en") {
+  localStorage.setItem("tc-locale", locale);
   return render(
     <LocaleProvider>
       <MemoryRouter>
@@ -57,4 +58,11 @@ it("expands an FAQ item on click", async () => {
   });
   await userEvent.click(trigger);
   expect(screen.getByText(/reward-based, science-supported/i)).toBeVisible();
+});
+
+it("localizes Turing image alt text in Spanish", () => {
+  setup("es");
+  expect(
+    screen.getAllByRole("img", { name: "Turing, un Mini American Shepherd azul mirlo" }).length,
+  ).toBeGreaterThan(0);
 });

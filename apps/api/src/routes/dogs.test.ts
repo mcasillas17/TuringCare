@@ -1546,6 +1546,40 @@ describe("dogs: POST /:id/goals/from-template", () => {
     expect(body.skills.map((s) => s.position)).toEqual([0, 1, 2, 3, 4]);
   });
 
+  it("persists template goal and skill display names in the request locale", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const r = await app.request(`/api/dogs/${dog.id}/goals/from-template`, {
+      method: "POST",
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "es" },
+      body: JSON.stringify({ templateKey: "basic-manners" }),
+    });
+
+    expect(r.status).toBe(201);
+    expect(r.headers.get("Content-Language")).toBe("es");
+    const body = (await r.json()) as {
+      goal: { id: string; goal: string; catalogGoalKey: string | null };
+      skills: Array<{ name: string; catalogSkillKey: string | null }>;
+    };
+    expect(body.goal.goal).toBe("Modales básicos");
+    expect(body.goal.catalogGoalKey).toBe("basic-manners");
+    expect(body.skills[0]?.name).toBe("Sentado");
+    expect(body.skills[0]?.catalogSkillKey).toBe("basic-manners.sit");
+
+    const progress = await app.request(`/api/dogs/${dog.id}/progress`, { headers: u.authHeaders });
+    const progressBody = (await progress.json()) as {
+      goals: Array<{
+        goal: string;
+        catalogGoalKey: string | null;
+        skills: Array<{ name: string }>;
+      }>;
+    };
+    expect(progressBody.goals[0]?.goal).toBe("Modales básicos");
+    expect(progressBody.goals[0]?.catalogGoalKey).toBe("basic-manners");
+    expect(progressBody.goals[0]?.skills[0]?.name).toBe("Sentado");
+  });
+
   it("returns 400 for an unknown templateKey, and does not create anything", async () => {
     const u = await createTestUser();
     users.push(u);

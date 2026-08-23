@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useI18n } from "@/i18n";
 import type { TrainerInput } from "@turingcare/shared";
 import { type FormEvent, useState } from "react";
 import {
@@ -82,6 +83,7 @@ function fromTrainer(t: Trainer): FormState {
 }
 
 export function AdminTrainers() {
+  const { t } = useI18n();
   const list = useTrainers();
   const create = useCreateTrainer();
   const update = useUpdateTrainer();
@@ -117,87 +119,118 @@ export function AdminTrainers() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <h1 className="text-2xl font-bold text-slate">Trainers</h1>
+      <h1 className="text-2xl font-bold text-slate">{t("admin.trainersTitle")}</h1>
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-lg border border-silver bg-white p-4">
-        <h2 className="font-semibold">{editingId ? "Edit trainer" : "Add a trainer"}</h2>
+        <h2 className="font-semibold">
+          {editingId ? t("admin.editTrainerTitle") : t("admin.addTrainerTitle")}
+        </h2>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field id="name" label="Name" value={form.name} onChange={set("name")} required />
+          <Field
+            id="name"
+            label={t("admin.name")}
+            value={form.name}
+            onChange={set("name")}
+            required
+          />
           <Field
             id="businessName"
-            label="Business name"
+            label={t("admin.businessName")}
             value={form.businessName}
             onChange={set("businessName")}
           />
-          <Field id="city" label="City" value={form.city} onChange={set("city")} required />
-          <Field id="state" label="State" value={form.state} onChange={set("state")} required />
+          <Field
+            id="city"
+            label={t("admin.city")}
+            value={form.city}
+            onChange={set("city")}
+            required
+          />
+          <Field
+            id="state"
+            label={t("admin.state")}
+            value={form.state}
+            onChange={set("state")}
+            required
+          />
           <Field
             id="methodologyTags"
-            label="Methodology tags (comma-separated)"
+            label={t("admin.methodologyTags")}
             value={form.methodologyTags}
             onChange={set("methodologyTags")}
           />
           <Field
             id="certifications"
-            label="Certifications (comma-separated)"
+            label={t("admin.certifications")}
             value={form.certifications}
             onChange={set("certifications")}
           />
           <Field
             id="specialties"
-            label="Specialties (comma-separated)"
+            label={t("admin.specialties")}
             value={form.specialties}
             onChange={set("specialties")}
           />
-          <Field id="website" label="Website" value={form.website} onChange={set("website")} />
-          <Field id="email" label="Email" type="email" value={form.email} onChange={set("email")} />
-          <Field id="phone" label="Phone" value={form.phone} onChange={set("phone")} />
+          <Field
+            id="website"
+            label={t("admin.website")}
+            value={form.website}
+            onChange={set("website")}
+          />
+          <Field
+            id="email"
+            label={t("admin.email")}
+            type="email"
+            value={form.email}
+            onChange={set("email")}
+          />
+          <Field id="phone" label={t("admin.phone")} value={form.phone} onChange={set("phone")} />
           <Field
             id="notesInternal"
-            label="Internal notes"
+            label={t("admin.internalNotes")}
             value={form.notesInternal}
             onChange={set("notesInternal")}
           />
         </div>
         <div className="flex gap-2">
           <Button type="submit" disabled={pending}>
-            {editingId ? "Save changes" : "Add trainer"}
+            {editingId ? t("admin.saveChanges") : t("admin.addTrainer")}
           </Button>
           {editingId ? (
             <Button type="button" variant="outline" onClick={resetForm}>
-              Cancel
+              {t("admin.cancel")}
             </Button>
           ) : null}
         </div>
         {create.isError || update.isError ? (
-          <p className="text-sm text-red-600">Could not save the trainer. Try again.</p>
+          <p className="text-sm text-red-600">{t("admin.couldNotSaveTrainer")}</p>
         ) : null}
       </form>
 
       <section className="space-y-2">
-        <h2 className="font-semibold text-slate">Trainers</h2>
+        <h2 className="font-semibold text-slate">{t("admin.trainersTitle")}</h2>
         {list.isPending ? (
-          <p className="text-slate-soft">Loading trainers…</p>
+          <p className="text-slate-soft">{t("admin.loadingTrainers")}</p>
         ) : list.isError ? (
-          <p className="text-red-600">Failed to load trainers.</p>
+          <p className="text-red-600">{t("admin.trainersLoadFailed")}</p>
         ) : list.data && list.data.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border border-silver bg-white">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-silver text-left text-xs uppercase tracking-wide text-slate-soft">
-                  <th className="px-3 py-2 font-medium">Name</th>
-                  <th className="px-3 py-2 font-medium">Organization</th>
-                  <th className="px-3 py-2 font-medium">Location</th>
-                  <th className="px-3 py-2 text-right font-medium">Actions</th>
+                  <th className="px-3 py-2 font-medium">{t("admin.name")}</th>
+                  <th className="px-3 py-2 font-medium">{t("admin.organization")}</th>
+                  <th className="px-3 py-2 font-medium">{t("admin.location")}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t("admin.actions")}</th>
                 </tr>
               </thead>
               <tbody>
-                {list.data.map((t) => (
-                  <tr key={t.id} className="border-b border-silver/60 last:border-0">
-                    <td className="px-3 py-2 font-medium text-slate">{t.name}</td>
-                    <td className="px-3 py-2 text-slate-soft">{t.businessName ?? "—"}</td>
+                {list.data.map((trainer) => (
+                  <tr key={trainer.id} className="border-b border-silver/60 last:border-0">
+                    <td className="px-3 py-2 font-medium text-slate">{trainer.name}</td>
+                    <td className="px-3 py-2 text-slate-soft">{trainer.businessName ?? "—"}</td>
                     <td className="px-3 py-2 text-slate-soft">
-                      {t.city}, {t.state}
+                      {trainer.city}, {trainer.state}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end gap-2">
@@ -205,18 +238,18 @@ export function AdminTrainers() {
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={() => startEdit(t)}
+                          onClick={() => startEdit(trainer)}
                         >
-                          Edit
+                          {t("admin.edit")}
                         </Button>
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           disabled={remove.isPending}
-                          onClick={() => remove.mutate(t.id)}
+                          onClick={() => remove.mutate(trainer.id)}
                         >
-                          Delete
+                          {t("admin.delete")}
                         </Button>
                       </div>
                     </td>
@@ -226,7 +259,7 @@ export function AdminTrainers() {
             </table>
           </div>
         ) : (
-          <p className="text-slate-soft">No trainers yet. Add one above.</p>
+          <p className="text-slate-soft">{t("admin.trainersEmpty")}</p>
         )}
       </section>
     </div>

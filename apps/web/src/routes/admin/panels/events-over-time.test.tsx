@@ -1,3 +1,4 @@
+import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
@@ -8,7 +9,10 @@ const eventsByDay = [
   { day: "2026-05-05", name: "dog.created", count: 2 },
 ];
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  localStorage.clear();
+  vi.clearAllMocks();
+});
 
 it("renders the heading and the three controls", () => {
   render(<EventsOverTime eventsByDay={eventsByDay} />);
@@ -39,4 +43,21 @@ it("toggles a category chip off", async () => {
   const chip = screen.getByRole("button", { name: "Page views" });
   await user.click(chip);
   expect(chip).toHaveAttribute("aria-pressed", "false");
+});
+
+it("renders controls and category labels in Spanish", () => {
+  localStorage.setItem("tc-locale", "es");
+  render(
+    <LocaleProvider>
+      <EventsOverTime eventsByDay={eventsByDay} />
+    </LocaleProvider>,
+  );
+
+  expect(screen.getByText("Eventos en el tiempo")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Por tipo" })).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByRole("button", { name: "Día" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "Vistas de página" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 });

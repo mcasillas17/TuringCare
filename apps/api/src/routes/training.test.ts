@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
-import { trainingCatalog } from "../data/training-catalog";
+import { type getTrainingCatalog, trainingCatalog } from "../data/training-catalog";
 import { type TestUser, createTestUser } from "../test-helpers";
 
 describe("training: GET /api/training/templates", () => {
@@ -23,5 +23,23 @@ describe("training: GET /api/training/templates", () => {
     expect(body.templates).toHaveLength(trainingCatalog.length);
     expect(body.templates[0]?.key).toBe(trainingCatalog[0]?.key);
     expect(body.templates[0]?.skills.length).toBe(trainingCatalog[0]?.skills.length);
+  });
+
+  it("returns catalog display text in the request locale", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const r = await app.request("/api/training/templates", {
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "es" },
+    });
+
+    expect(r.status).toBe(200);
+    expect(r.headers.get("Content-Language")).toBe("es");
+    const body = (await r.json()) as { templates: ReturnType<typeof getTrainingCatalog> };
+    expect(body.templates[0]?.key).toBe("basic-manners");
+    expect(body.templates[0]?.name).toBe("Modales básicos");
+    expect(body.templates[0]?.skills[0]?.name).toBe("Sentado");
+    expect(body.templates[0]?.skills[0]?.levels[0]?.description).toBe(
+      "Se guía hasta sentarse con comida en una habitación tranquila",
+    );
   });
 });

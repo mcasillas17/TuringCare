@@ -1,5 +1,5 @@
 import i18next, { type i18n as I18n } from "i18next";
-import { en, type En } from "./en";
+import { type En, en } from "./en";
 import { es } from "./es";
 
 export { en, es };
@@ -7,12 +7,21 @@ export { en, es };
 export const LOCALES = ["en", "es"] as const;
 
 export type Locale = (typeof LOCALES)[number];
-export type Messages = { [S in keyof En]: { [K in keyof En[S]]: string } };
-export type MessageKey = {
-  [S in keyof En]: En[S] extends Record<string, string>
-    ? `${S & string}.${keyof En[S] & string}`
-    : never;
-}[keyof En];
+export type Messages<T = En> = {
+  [K in keyof T]: T[K] extends string
+    ? string
+    : T[K] extends Record<string, unknown>
+      ? Messages<T[K]>
+      : never;
+};
+type LeafMessageKey<T> = {
+  [K in keyof T & string]: T[K] extends string
+    ? K
+    : T[K] extends Record<string, unknown>
+      ? `${K}.${LeafMessageKey<T[K]>}`
+      : never;
+}[keyof T & string];
+export type MessageKey = LeafMessageKey<En>;
 
 const resources = {
   en: { translation: en },

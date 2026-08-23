@@ -1,20 +1,28 @@
+import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { AdminShell } from "./AdminShell";
 
-function setup(path: string) {
+afterEach(() => {
+  localStorage.clear();
+});
+
+function setup(path: string, locale: "en" | "es" = "en") {
+  localStorage.setItem("tc-locale", locale);
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route element={<AdminShell />}>
-          <Route path="/admin" element={<div>DASH-CONTENT</div>} />
-          <Route path="/admin/trainers" element={<div>TRAINERS-CONTENT</div>} />
-          <Route path="/admin/courses" element={<div>COURSES-CONTENT</div>} />
-        </Route>
-        <Route path="/my" element={<div>APP-HOME</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <LocaleProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route element={<AdminShell />}>
+            <Route path="/admin" element={<div>DASH-CONTENT</div>} />
+            <Route path="/admin/trainers" element={<div>TRAINERS-CONTENT</div>} />
+            <Route path="/admin/courses" element={<div>COURSES-CONTENT</div>} />
+          </Route>
+          <Route path="/my" element={<div>APP-HOME</div>} />
+        </Routes>
+      </MemoryRouter>
+    </LocaleProvider>,
   );
 }
 
@@ -42,5 +50,19 @@ describe("AdminShell", () => {
     setup("/admin/trainers");
     expect(screen.getByRole("link", { name: /trainers/i })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: /dashboard/i })).not.toHaveAttribute("aria-current");
+  });
+
+  it("renders the admin shell system copy in Spanish", () => {
+    setup("/admin/courses", "es");
+    expect(screen.getAllByText("Administración").length).toBeGreaterThan(0);
+    expect(screen.getByRole("navigation", { name: "Menú de administración" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Panel" })).toHaveAttribute("href", "/admin");
+    expect(screen.getByRole("link", { name: "Adiestradores" })).toHaveAttribute(
+      "href",
+      "/admin/trainers",
+    );
+    expect(screen.getByRole("link", { name: "Cursos" })).toHaveAttribute("href", "/admin/courses");
+    expect(screen.getByRole("link", { name: /volver a la app/i })).toHaveAttribute("href", "/my");
+    expect(screen.getByRole("button", { name: "Cerrar sesión" })).toBeInTheDocument();
   });
 });

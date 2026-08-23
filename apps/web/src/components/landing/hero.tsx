@@ -39,7 +39,7 @@ export function Hero() {
           <div className="mt-8 flex flex-col items-center gap-4">
             <img
               src="/turing.jpg"
-              alt="Turing, a blue-merle Mini American Shepherd"
+              alt={t("hero.turingAlt")}
               width={160}
               height={160}
               loading="lazy"

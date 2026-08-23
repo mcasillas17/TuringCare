@@ -36,7 +36,7 @@ export function SiteNav() {
       )}
     >
       <nav
-        aria-label="Main"
+        aria-label={t("nav.mainLabel")}
         className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5"
       >
         <a href="#top" className="flex items-center gap-2 font-bold text-slate">

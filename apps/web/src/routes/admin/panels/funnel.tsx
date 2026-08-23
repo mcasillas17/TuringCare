@@ -1,10 +1,14 @@
+import { useI18n } from "@/i18n";
 import type { Metrics } from "../use-metrics";
 
 export function Funnel({ funnel }: { funnel: Metrics["funnel"] }) {
+  const { t } = useI18n();
   const top = funnel[0]?.users || 1;
   return (
     <section className="rounded-lg border border-silver bg-white p-4">
-      <h2 className="mb-3 text-sm font-semibold uppercase text-slate-soft">Activation funnel</h2>
+      <h2 className="mb-3 text-sm font-semibold uppercase text-slate-soft">
+        {t("admin.activationFunnel")}
+      </h2>
       <div className="space-y-2">
         {funnel.map((f) => (
           <div key={f.step} className="flex items-center gap-3">

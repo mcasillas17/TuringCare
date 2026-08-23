@@ -11,7 +11,7 @@ export function SiteFooter() {
           <p className="mt-1 text-sm">{t("footer.tagline")}</p>
         </div>
         <nav
-          aria-label="Footer"
+          aria-label={t("footer.navLabel")}
           className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm"
         >
           <a href="#how" className="hover:text-gold">
@@ -40,7 +40,7 @@ export function SiteFooter() {
       <p className="mx-auto mt-8 flex max-w-6xl items-center justify-center gap-2 border-t border-white/10 pt-6 text-center text-xs text-silver/70 md:justify-start md:text-left">
         <img
           src="/turing.jpg"
-          alt="Turing, a blue-merle Mini American Shepherd"
+          alt={t("hero.turingAlt")}
           width={20}
           height={20}
           loading="lazy"

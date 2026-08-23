@@ -1,3 +1,4 @@
+import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -33,10 +34,12 @@ vi.mock("@/lib/api", () => ({
 import { AdminCourses } from "./courses";
 
 afterEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
 });
 
-function setup() {
+function setup(locale: "en" | "es" = "en") {
+  localStorage.setItem("tc-locale", locale);
   listCourses.mockResolvedValue({ ok: true, json: async () => ({ courses: [] }) });
   createCourse.mockResolvedValue({
     ok: true,
@@ -45,9 +48,11 @@ function setup() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <AdminCourses />
-      </MemoryRouter>
+      <LocaleProvider>
+        <MemoryRouter>
+          <AdminCourses />
+        </MemoryRouter>
+      </LocaleProvider>
     </QueryClientProvider>,
   );
 }
@@ -106,12 +111,67 @@ it("renders courses as a table", async () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <AdminCourses />
-      </MemoryRouter>
+      <LocaleProvider>
+        <MemoryRouter>
+          <AdminCourses />
+        </MemoryRouter>
+      </LocaleProvider>
     </QueryClientProvider>,
   );
   expect(await screen.findByRole("table")).toBeInTheDocument();
-  expect(screen.getByRole("cell", { name: "Puppy Start Right" })).toBeInTheDocument();
+  expect(await screen.findByRole("cell", { name: "Puppy Start Right" })).toBeInTheDocument();
+  expect(screen.getByRole("cell", { name: "Seattle Humane" })).toBeInTheDocument();
+});
+
+it("renders course system copy in Spanish while preserving option values and records", async () => {
+  listCourses.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      courses: [
+        {
+          id: "c1",
+          organizationName: "Seattle Humane",
+          city: "Bellevue",
+          state: "WA",
+          name: "Puppy Start Right",
+          description: null,
+          format: "group",
+          ageGroup: "any",
+          ageRange: null,
+          durationWeeks: null,
+          sessionMinutes: null,
+          prerequisites: null,
+          skillsTaught: [],
+          isOnline: false,
+          coursePageUrl: null,
+        },
+      ],
+    }),
+  });
+  createCourse.mockResolvedValue({
+    ok: true,
+    json: async () => ({ course: { id: "c2", name: "Nuevo" } }),
+  });
+  localStorage.setItem("tc-locale", "es");
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <LocaleProvider>
+        <MemoryRouter>
+          <AdminCourses />
+        </MemoryRouter>
+      </LocaleProvider>
+    </QueryClientProvider>,
+  );
+
+  expect(await screen.findByRole("heading", { level: 1, name: "Cursos" })).toBeInTheDocument();
+  expect(screen.getByLabelText(/^organización$/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/^formato$/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/^edad$/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/habilidades enseñadas/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Agregar curso" })).toBeInTheDocument();
+  const groupOption = screen.getByRole("option", { name: "Clase grupal" });
+  expect(groupOption).toHaveAttribute("value", "group");
+  expect(await screen.findByRole("cell", { name: "Puppy Start Right" })).toBeInTheDocument();
   expect(screen.getByRole("cell", { name: "Seattle Humane" })).toBeInTheDocument();
 });
