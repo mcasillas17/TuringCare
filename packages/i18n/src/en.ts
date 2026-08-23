@@ -577,6 +577,7 @@ export const en = {
     saving: "Saving…",
     saved: "Profile saved",
     saveFailed: "Save failed",
+    localeSaveFailed: "Couldn't save language preference.",
     loadError: "Couldn't load your profile.",
   },
   settings: {

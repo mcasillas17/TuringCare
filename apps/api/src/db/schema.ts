@@ -21,6 +21,7 @@ import {
 // Declared before the `user` table because `const` bindings must precede any
 // table that references the enum (userRoleEnum is used in user.role below).
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
+export const localeEnum = pgEnum("locale", ["en", "es"]);
 
 /* ---------- Better Auth core tables (adapter defaults) ---------- */
 
@@ -31,6 +32,7 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
   role: userRoleEnum("role").notNull().default("user"),
+  locale: localeEnum("locale"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -228,6 +230,7 @@ export const briefs = pgTable("briefs", {
     .references(() => dogs.id, { onDelete: "cascade" }),
   generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
   status: briefStatusEnum("status").notNull().default("draft"),
+  locale: localeEnum("locale").notNull().default("en"),
   summary: text("summary").notNull(),
   version: integer("version").notNull().default(1),
   shareToken: text("share_token").unique(),

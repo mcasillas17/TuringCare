@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell/AppShell";
 import { DogLayout } from "@/components/dog-layout";
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/i18n";
+import { LocaleAccountBridge } from "@/i18n/locale-account-bridge";
 import { PageViewTracker } from "@/lib/track";
 import { RequireAdmin } from "@/routes/admin/require-admin";
 import { Brief } from "@/routes/brief";
@@ -89,7 +90,10 @@ createRoot(document.getElementById("root") as HTMLElement).render(
             <Route
               element={
                 <RequireAuth>
-                  <AppShell />
+                  <>
+                    <LocaleAccountBridge />
+                    <AppShell />
+                  </>
                 </RequireAuth>
               }
             >
@@ -113,7 +117,10 @@ createRoot(document.getElementById("root") as HTMLElement).render(
               path="/admin"
               element={
                 <RequireAdmin>
-                  <AdminShell />
+                  <>
+                    <LocaleAccountBridge />
+                    <AdminShell />
+                  </>
                 </RequireAdmin>
               }
             >

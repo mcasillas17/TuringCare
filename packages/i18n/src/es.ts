@@ -583,6 +583,7 @@ export const es = {
     saving: "Guardando…",
     saved: "Perfil guardado",
     saveFailed: "No se pudo guardar",
+    localeSaveFailed: "No se pudo guardar el idioma.",
     loadError: "No se pudo cargar tu perfil.",
   },
   settings: {

@@ -92,6 +92,13 @@
       "when": 1782068961870,
       "tag": "0012_absent_hercules",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787475073833,
+      "tag": "0013_panoramic_skullbuster",
+      "breakpoints": true
     }
   ]
 }
