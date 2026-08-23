@@ -1,4 +1,6 @@
-import type { Messages } from "./types";
+import type { En } from "./en";
+
+type Messages = { [S in keyof En]: { [K in keyof En[S]]: string } };
 
 export const es = {
   language: {

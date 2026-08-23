@@ -1,13 +1,21 @@
-import { type ReactNode, createContext, useCallback, useContext, useMemo, useState } from "react";
-import { en } from "./en";
-import { es } from "./es";
-import type { Locale, MessageKey, Messages } from "./types";
+import {
+  createI18n,
+  isLocale,
+  resolveBrowserLocale,
+  translate as translateMessage,
+  type Locale,
+  type MessageKey,
+} from "@turingcare/i18n";
+import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-const CATALOGS: Record<Locale, Messages> = { en, es };
 const STORAGE_KEY = "tc-locale";
+const INSTANCES = {
+  en: createI18n("en"),
+  es: createI18n("es"),
+} as const;
 
-function isLocale(v: unknown): v is Locale {
-  return v === "en" || v === "es";
+function getI18n(locale: Locale) {
+  return INSTANCES[locale];
 }
 
 export function detectInitialLocale(): Locale {
@@ -17,9 +25,11 @@ export function detectInitialLocale(): Locale {
   } catch {
     /* storage unavailable */
   }
+
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
-  const langs = nav?.languages?.length ? nav.languages : [nav?.language ?? ""];
-  return langs.some((l) => l?.toLowerCase().startsWith("es")) ? "es" : "en";
+  const languages = nav?.languages?.length ? nav.languages : [nav?.language ?? ""];
+
+  return resolveBrowserLocale(languages);
 }
 
 export function translate(
@@ -27,13 +37,7 @@ export function translate(
   key: MessageKey,
   vars?: Record<string, string | number>,
 ): string {
-  const [section, leaf] = key.split(".") as [string, string];
-  const cat = CATALOGS[locale] ?? en;
-  const raw =
-    (cat as Record<string, Record<string, string>>)[section]?.[leaf] ??
-    (en as unknown as Record<string, Record<string, string>>)[section]?.[leaf];
-  if (typeof raw !== "string") return key;
-  return vars ? raw.replace(/\{(\w+)\}/g, (_m, v) => String(vars[v] ?? `{${v}}`)) : raw;
+  return translateMessage(getI18n(locale), key, vars);
 }
 
 type I18n = {
@@ -47,14 +51,18 @@ const Ctx = createContext<I18n | null>(null);
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(detectInitialLocale);
 
-  const setLocale = useCallback((l: Locale) => {
-    setLocaleState(l);
+  useEffect(() => {
+    if (typeof document !== "undefined") document.documentElement.lang = locale;
+  }, [locale]);
+
+  const setLocale = useCallback((nextLocale: Locale) => {
+    setLocaleState(nextLocale);
+
     try {
-      localStorage.setItem(STORAGE_KEY, l);
+      localStorage.setItem(STORAGE_KEY, nextLocale);
     } catch {
       /* ignore */
     }
-    if (typeof document !== "undefined") document.documentElement.lang = l;
   }, []);
 
   const value = useMemo<I18n>(
@@ -67,6 +75,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 
 export function useI18n(): I18n {
   const ctx = useContext(Ctx);
+
   if (!ctx) {
     return {
       locale: "en",
@@ -74,5 +83,6 @@ export function useI18n(): I18n {
       t: (key, vars) => translate("en", key, vars),
     };
   }
+
   return ctx;
 }

@@ -17,6 +17,7 @@
     "@sentry/react": "^10.69.0",
     "@tanstack/react-query": "^5.62.0",
     "@turingcare/api": "workspace:*",
+    "@turingcare/i18n": "workspace:*",
     "@turingcare/shared": "workspace:*",
     "better-auth": "^1.6.11",
     "class-variance-authority": "^0.7.1",

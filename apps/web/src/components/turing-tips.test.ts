@@ -1,4 +1,4 @@
-import { en } from "@/i18n/en";
+import { en } from "@turingcare/i18n";
 import { describe, expect, it } from "vitest";
 import { TURING_TIP_BUCKETS, tipContextForPath } from "./turing-tips";
 

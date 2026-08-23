@@ -1,5 +1,4 @@
-import { en } from "@/i18n/en";
-import { es } from "@/i18n/es";
+import { en, es } from "@turingcare/i18n";
 import { LocaleProvider } from "@/i18n/index";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
