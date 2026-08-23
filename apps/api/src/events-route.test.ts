@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { app } from "./app";
 import { auth } from "./auth";
@@ -32,6 +32,30 @@ describe("POST /api/events", () => {
       .limit(1);
     expect(row?.props).toMatchObject({ path });
     expect(row?.userId).toBeNull();
+  });
+
+  it("normalizes a literal public Brief segment before persistence", async () => {
+    const fixture = `round-13-${Date.now()}`;
+    try {
+      const res = await app.request("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "page.viewed",
+          props: { path: "/B/fixture%2Fshare-segment///", fixture },
+        }),
+      });
+      expect(res.status).toBe(202);
+
+      const [row] = await db
+        .select()
+        .from(events)
+        .where(and(eq(events.name, "page.viewed"), sql`${events.props}->>'fixture' = ${fixture}`))
+        .limit(1);
+      expect(row?.props).toEqual({ path: "/b/:token", fixture });
+    } finally {
+      await db.delete(events).where(sql`${events.props}->>'fixture' = ${fixture}`);
+    }
   });
 
   it("attributes an authenticated page.viewed to the user + session", async () => {

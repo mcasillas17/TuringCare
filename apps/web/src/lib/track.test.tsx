@@ -30,6 +30,47 @@ it("posts a page.viewed event for the current path", async () => {
   expect(body).toEqual({ name: "page.viewed", props: { path: "/my" } });
 });
 
+it.each([
+  "/b/fixture-share-segment",
+  "/B/fixture-share-segment",
+  "/b/fixture-share-segment/",
+  "/B/fixture-share-segment///",
+  "/b/fixture%2Fencoded-segment",
+  "/b/fixture-share-segment?source=fixture",
+  "/B/fixture-share-segment///#fixture",
+])("normalizes the public Brief route before tracking %s", (pathname) => {
+  render(
+    <MemoryRouter initialEntries={[pathname]}>
+      <PageViewTracker />
+    </MemoryRouter>,
+  );
+
+  const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+  const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
+  expect(JSON.parse(firstCall[1].body as string)).toEqual({
+    name: "page.viewed",
+    props: { path: "/b/:token" },
+  });
+});
+
+it.each(["/b", "/b/", "/b//", "/b/fixture/child", "/billing", "//b/fixture"])(
+  "does not over-redact unrelated path %s",
+  (pathname) => {
+    render(
+      <MemoryRouter initialEntries={[pathname]}>
+        <PageViewTracker />
+      </MemoryRouter>,
+    );
+
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+    const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(firstCall[1].body as string)).toEqual({
+      name: "page.viewed",
+      props: { path: pathname },
+    });
+  },
+);
+
 it("fires a new page.viewed on route change", async () => {
   render(
     <MemoryRouter initialEntries={["/my"]}>

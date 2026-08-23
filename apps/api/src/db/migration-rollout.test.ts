@@ -9,20 +9,34 @@ describe("selectPredeployEntries", () => {
     { tag: "0012_existing" },
     { tag: "0013_locale" },
     { tag: "0014_brief_version_constraint" },
+    { tag: "0015_brief_share_telemetry_privacy" },
   ];
 
   it("keeps every schema-compatible migration before the named post-deploy migration", () => {
-    expect(selectPredeployEntries(entries, "0014_brief_version_constraint")).toEqual([
-      { tag: "0012_existing" },
-      { tag: "0013_locale" },
-    ]);
+    expect(
+      selectPredeployEntries(entries, [
+        "0014_brief_version_constraint",
+        "0015_brief_share_telemetry_privacy",
+      ]),
+    ).toEqual([{ tag: "0012_existing" }, { tag: "0013_locale" }]);
   });
 
-  it("fails closed if the named post-deploy migration is missing or no longer last", () => {
-    expect(() => selectPredeployEntries(entries, "0015_missing")).toThrow(/not found/);
+  it("fails closed if the explicit post-deploy sequence is missing, reordered, or no longer last", () => {
     expect(() =>
-      selectPredeployEntries([...entries, { tag: "0015_new" }], "0014_brief_version_constraint"),
-    ).toThrow(/must be the latest/);
+      selectPredeployEntries(entries, ["0014_brief_version_constraint", "0016_missing"]),
+    ).toThrow();
+    expect(() =>
+      selectPredeployEntries(entries, [
+        "0015_brief_share_telemetry_privacy",
+        "0014_brief_version_constraint",
+      ]),
+    ).toThrow();
+    expect(() =>
+      selectPredeployEntries(
+        [...entries, { tag: "0016_new" }],
+        ["0014_brief_version_constraint", "0015_brief_share_telemetry_privacy"],
+      ),
+    ).toThrow();
   });
 
   it("builds a temporary migration folder without the post-deploy SQL", async () => {
@@ -39,7 +53,10 @@ describe("selectPredeployEntries", () => {
         entries.map(({ tag }) => writeFile(join(source, `${tag}.sql`), `SELECT '${tag}';`)),
       );
 
-      await preparePredeployMigrationFolder(source, destination, "0014_brief_version_constraint");
+      await preparePredeployMigrationFolder(source, destination, [
+        "0014_brief_version_constraint",
+        "0015_brief_share_telemetry_privacy",
+      ]);
 
       const prepared = JSON.parse(
         await readFile(join(destination, "meta", "_journal.json"), "utf8"),
@@ -50,6 +67,9 @@ describe("selectPredeployEntries", () => {
       );
       await expect(
         readFile(join(destination, "0014_brief_version_constraint.sql"), "utf8"),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(
+        readFile(join(destination, "0015_brief_share_telemetry_privacy.sql"), "utf8"),
       ).rejects.toMatchObject({ code: "ENOENT" });
     } finally {
       await rm(root, { recursive: true, force: true });

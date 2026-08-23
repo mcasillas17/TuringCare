@@ -7,7 +7,10 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 import { preparePredeployMigrationFolder } from "./migration-rollout";
 
-const POSTDEPLOY_MIGRATION = "0014_third_madripoor";
+const POSTDEPLOY_MIGRATIONS = [
+  "0014_third_madripoor",
+  "0015_brief_share_telemetry_privacy",
+] as const;
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 
@@ -20,7 +23,7 @@ const pool = new Pool({
 });
 
 try {
-  await preparePredeployMigrationFolder(sourceFolder, migrationFolder, POSTDEPLOY_MIGRATION);
+  await preparePredeployMigrationFolder(sourceFolder, migrationFolder, POSTDEPLOY_MIGRATIONS);
   await migrate(drizzle(pool), { migrationsFolder: migrationFolder });
 } finally {
   try {

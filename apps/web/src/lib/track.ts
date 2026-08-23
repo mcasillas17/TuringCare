@@ -1,3 +1,4 @@
+import { normalizeTelemetryPagePath } from "@turingcare/shared";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
@@ -19,7 +20,7 @@ export function track(name: string, props: Record<string, unknown> = {}): void {
 export function PageViewTracker(): null {
   const { pathname } = useLocation();
   useEffect(() => {
-    track("page.viewed", { path: pathname });
+    track("page.viewed", { path: normalizeTelemetryPagePath(pathname) });
   }, [pathname]);
   return null;
 }

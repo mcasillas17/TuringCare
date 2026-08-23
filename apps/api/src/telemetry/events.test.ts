@@ -20,6 +20,58 @@ describe("telemetry events allowlist", () => {
     ).toBe(true);
   });
 
+  it.each([
+    "/b/fixture-share-segment",
+    "/B/fixture-share-segment",
+    "/b/fixture-share-segment/",
+    "/B/fixture-share-segment///",
+    "/b/fixture%2Fencoded-segment",
+    "/b/fixture-share-segment?source=fixture",
+    "/B/fixture-share-segment///#fixture",
+  ])("normalizes a public Brief path from an untrusted client for %s", (path) => {
+    expect(
+      eventIngestSchema.parse({
+        name: "page.viewed",
+        props: { path, source: "fixture" },
+      }),
+    ).toEqual({
+      name: "page.viewed",
+      props: { path: "/b/:token", source: "fixture" },
+    });
+  });
+
+  it.each([
+    "/b",
+    "/b/",
+    "/b//",
+    "/b/fixture/child",
+    "/b/fixture/child?source=fixture",
+    "/billing",
+    "//b/fixture",
+  ])("preserves unrelated path %s", (path) => {
+    expect(
+      eventIngestSchema.parse({
+        name: "page.viewed",
+        props: { path, source: "fixture" },
+      }),
+    ).toEqual({
+      name: "page.viewed",
+      props: { path, source: "fixture" },
+    });
+  });
+
+  it("normalizes a public Brief path even when a malicious client relabels the event", () => {
+    expect(
+      eventIngestSchema.parse({
+        name: "trainer.viewed",
+        props: { path: "/b/fixture-share-segment" },
+      }),
+    ).toEqual({
+      name: "trainer.viewed",
+      props: { path: "/b/:token" },
+    });
+  });
+
   it("still rejects server-only events from the client ingest", () => {
     expect(eventIngestSchema.safeParse({ name: "dog.created", props: {} }).success).toBe(false);
   });

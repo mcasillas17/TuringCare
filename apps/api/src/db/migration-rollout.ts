@@ -8,14 +8,23 @@ export interface MigrationJournalEntry {
 
 export function selectPredeployEntries<T extends MigrationJournalEntry>(
   entries: readonly T[],
-  postdeployTag: string,
+  postdeployTags: readonly string[],
 ): T[] {
-  const postdeployIndex = entries.findIndex(({ tag }) => tag === postdeployTag);
+  const firstPostdeployTag = postdeployTags[0];
+  if (!firstPostdeployTag) throw new Error("at least one post-deploy migration is required");
+
+  const postdeployIndex = entries.findIndex(({ tag }) => tag === firstPostdeployTag);
   if (postdeployIndex < 0) {
-    throw new Error(`post-deploy migration ${postdeployTag} not found`);
+    throw new Error(`post-deploy migration ${firstPostdeployTag} not found`);
   }
-  if (postdeployIndex !== entries.length - 1) {
-    throw new Error(`post-deploy migration ${postdeployTag} must be the latest migration`);
+  const actualPostdeployTags = entries.slice(postdeployIndex).map(({ tag }) => tag);
+  if (
+    actualPostdeployTags.length !== postdeployTags.length ||
+    actualPostdeployTags.some((tag, index) => tag !== postdeployTags[index])
+  ) {
+    throw new Error(
+      `post-deploy migrations must be the exact latest sequence: ${postdeployTags.join(", ")}`,
+    );
   }
   return entries.slice(0, postdeployIndex);
 }
@@ -23,7 +32,7 @@ export function selectPredeployEntries<T extends MigrationJournalEntry>(
 export async function preparePredeployMigrationFolder(
   sourceFolder: string,
   destinationFolder: string,
-  postdeployTag: string,
+  postdeployTags: readonly string[],
 ): Promise<void> {
   const journalPath = join(sourceFolder, "meta", "_journal.json");
   const journal = JSON.parse(await readFile(journalPath, "utf8")) as {
@@ -31,7 +40,7 @@ export async function preparePredeployMigrationFolder(
     [key: string]: unknown;
   };
   if (!Array.isArray(journal.entries)) throw new Error("migration journal entries are missing");
-  const entries = selectPredeployEntries(journal.entries, postdeployTag);
+  const entries = selectPredeployEntries(journal.entries, postdeployTags);
 
   await mkdir(join(destinationFolder, "meta"), { recursive: true });
   await writeFile(

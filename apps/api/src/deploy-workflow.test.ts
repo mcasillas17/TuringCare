@@ -14,7 +14,7 @@ describe("production deployment protocol", () => {
     expect(workflowConcurrency).toContain("cancel-in-progress: false");
   });
 
-  it("applies compatible migrations, deploys the API, then applies migration 0014", async () => {
+  it("applies compatible migrations, deploys the API, then applies post-deploy migrations", async () => {
     const workflow = await readFile(deployWorkflowUrl, "utf8");
     const migrateCompatible = workflow.match(
       /\n {2}migrate-compatible:\n(?<body>[\s\S]*?)(?=\n {2}[a-z][\w-]*:\n)/,

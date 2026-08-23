@@ -1,3 +1,4 @@
+import { normalizeTelemetryPagePath } from "@turingcare/shared";
 import { z } from "zod";
 
 /** Every event name the system may record (server- or client-emitted). */
@@ -32,12 +33,18 @@ export const CLIENT_EVENTS = ["page.viewed", "trainer.viewed", "course.viewed"] 
 const scalar = z.union([z.string(), z.number(), z.boolean()]);
 
 /** Validated, privacy-safe ingest payload: scalar-only props, size-capped. */
-export const eventIngestSchema = z.object({
-  name: z.enum(CLIENT_EVENTS),
-  props: z
-    .record(scalar)
-    .default({})
-    .refine((p) => Buffer.byteLength(JSON.stringify(p), "utf8") <= 1024, "props too large"),
-});
+export const eventIngestSchema = z
+  .object({
+    name: z.enum(CLIENT_EVENTS),
+    props: z
+      .record(scalar)
+      .default({})
+      .refine((p) => Buffer.byteLength(JSON.stringify(p), "utf8") <= 1024, "props too large"),
+  })
+  .transform(({ name, props }) => {
+    const path = props.path;
+    if (typeof path !== "string") return { name, props };
+    return { name, props: { ...props, path: normalizeTelemetryPagePath(path) } };
+  });
 
 export type EventIngest = z.infer<typeof eventIngestSchema>;

@@ -6,6 +6,7 @@ export * from "./focus";
 export * from "./journal";
 export * from "./progress";
 export * from "./profile";
+export * from "./telemetry";
 export * from "./trainer";
 export * from "./training-catalog";
 export * from "./validation";
