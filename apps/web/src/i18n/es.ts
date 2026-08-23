@@ -780,6 +780,11 @@ export const es = {
     version: "Versión",
     loadError: "No se pudo cargar el resumen.",
     genFailed: "No se pudo generar",
+    regenerateShareTitle: "¿Dejar de compartir este Resumen?",
+    regenerateShareBody:
+      "Al regenerarlo se crea una nueva versión privada. El enlace público actual dejará de funcionar.",
+    regenerateShareCancel: "Cancelar",
+    regenerateShareContinue: "Dejar de compartir y regenerar",
     windowLabel: "Periodo",
     window7d: "7 días",
     window30d: "30 días",

@@ -771,6 +771,11 @@ export const en = {
     version: "Version",
     loadError: "Couldn't load the Brief.",
     genFailed: "Generation failed",
+    regenerateShareTitle: "Stop sharing this Brief?",
+    regenerateShareBody:
+      "Regenerating creates a private new version. The current public link will stop working.",
+    regenerateShareCancel: "Cancel",
+    regenerateShareContinue: "Stop sharing and regenerate",
     windowLabel: "Time window",
     window7d: "7 days",
     window30d: "30 days",

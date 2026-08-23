@@ -1,5 +1,6 @@
 import { BriefShareSheet } from "@/components/brief/share-sheet";
 import { Button } from "@/components/ui/button";
+import { Sheet } from "@/components/ui/sheet";
 import { useI18n } from "@/i18n";
 import { useBrief, useGenerateBrief } from "@/lib/brief";
 import { useDogs } from "@/lib/dogs";
@@ -21,6 +22,7 @@ export function Brief() {
   const dog = dogs?.find((d) => d.id === dogId);
   const gen = useGenerateBrief(dogId);
   const [shareOpen, setShareOpen] = useState(false);
+  const [confirmRegeneration, setConfirmRegeneration] = useState(false);
 
   // On the global brief route, default to the first dog so the screen lands on
   // the brief itself instead of an empty dog picker.
@@ -55,12 +57,27 @@ export function Brief() {
       : t("brief.draftVersion", { version: brief.version })
     : "";
 
-  const regenerate = async (w: BriefWindow) => {
-    setWindowChoice(w);
+  const generateSelectedBrief = async () => {
     try {
-      await gen.mutateAsync(w);
+      await gen.mutateAsync(windowChoice);
+      return true;
     } catch {
       toast.error(t("brief.genFailed"));
+      return false;
+    }
+  };
+
+  const regenerate = () => {
+    if (brief?.shareToken != null) {
+      setConfirmRegeneration(true);
+      return;
+    }
+    void generateSelectedBrief();
+  };
+
+  const continueRegeneration = async () => {
+    if (await generateSelectedBrief()) {
+      setConfirmRegeneration(false);
     }
   };
 
@@ -95,7 +112,7 @@ export function Brief() {
                   type="button"
                   variant={windowChoice === w ? "default" : "outline"}
                   disabled={gen.isPending}
-                  onClick={() => regenerate(w)}
+                  onClick={() => setWindowChoice(w)}
                 >
                   {windowLabels[w]}
                 </Button>
@@ -106,7 +123,7 @@ export function Brief() {
           {!brief && (
             <Button
               disabled={gen.isPending}
-              onClick={() => regenerate(windowChoice)}
+              onClick={() => void generateSelectedBrief()}
               className="bg-slate text-cream"
             >
               {gen.isPending ? t("brief.generating") : t("brief.generate")}
@@ -155,11 +172,7 @@ export function Brief() {
                 <Button onClick={() => setShareOpen(true)} className="bg-slate text-cream">
                   {t("brief.shareThisBrief")} ▸
                 </Button>
-                <Button
-                  variant="outline"
-                  disabled={gen.isPending}
-                  onClick={() => regenerate(windowChoice)}
-                >
+                <Button variant="outline" disabled={gen.isPending} onClick={regenerate}>
                   {t("brief.regenerate")}
                 </Button>
               </div>
@@ -173,6 +186,29 @@ export function Brief() {
                 brief={brief}
                 initialRecipient={recipientParam}
               />
+
+              <Sheet
+                open={confirmRegeneration}
+                title={t("brief.regenerateShareTitle")}
+                closeLabel={t("journal.closeSheet")}
+                onClose={() => setConfirmRegeneration(false)}
+              >
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-soft">{t("brief.regenerateShareBody")}</p>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button variant="outline" onClick={() => setConfirmRegeneration(false)}>
+                      {t("brief.regenerateShareCancel")}
+                    </Button>
+                    <Button
+                      className="bg-slate text-cream"
+                      disabled={gen.isPending}
+                      onClick={() => void continueRegeneration()}
+                    >
+                      {t("brief.regenerateShareContinue")}
+                    </Button>
+                  </div>
+                </div>
+              </Sheet>
             </>
           )}
         </>
