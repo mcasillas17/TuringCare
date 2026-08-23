@@ -13,8 +13,8 @@
 **Progress (2026-08-23):** Tasks 1–6 are implemented. Luna and Terra independently
 returned no actionable feedback on the same commit
 `bf300360ef3c4ed74ff357ff23a4f5541d866788` in review round 15. Current documentation
-is complete and post-documentation repository gates are green; branch publication and PR
-creation remain with the parent task.
+is complete, post-documentation repository gates are green, and the branch is published in
+PR #70.
 
 ## Global Constraints
 
@@ -207,4 +207,4 @@ creation remain with the parent task.
 - [x] **Step 4: Repeat Steps 1–3 until both reviewers independently return no actionable feedback on the same latest commit.**
 - [x] **Step 5: Update README, deployment/config guidance, project log, and superseded localization docs** to match the final implementation and verification commands.
 - [x] **Step 6: Re-run the complete repository gates after the final documentation/code change** and inspect the complete diff, secrets, debug residue, and intended file list.
-- [ ] **Step 7: Commit the final state, publish detached HEAD as `codex/end-to-end-localization`, and open a PR against `main`** with scope, rationale, test evidence, reviewer-loop result, and known limitations.
+- [x] **Step 7: Commit the final state, publish detached HEAD as `codex/end-to-end-localization`, and open a PR against `main`** with scope, rationale, test evidence, reviewer-loop result, and known limitations.

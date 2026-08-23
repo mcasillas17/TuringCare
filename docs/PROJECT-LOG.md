@@ -1057,5 +1057,5 @@ advisory, API test diagnostics, and Docker's local legacy-builder advisory.
   `docs/superpowers/plans/2026-08-23-end-to-end-localization.md`
 - Reviewer-clean code/release range:
   `841d592de140b52b2595805fd9c1843be4988c54..bf300360ef3c4ed74ff357ff23a4f5541d866788`;
-  documentation follows on the same localization branch. The final PR number/merge SHA will
-  be recorded after publication and merge.
+  documentation follows on the same localization branch. Published for review as PR #70;
+  the merge SHA will be recorded after merge.
