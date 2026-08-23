@@ -1,10 +1,14 @@
 import { z } from "zod";
 import { VALIDATION_MESSAGE_CODES } from "./validation";
 
-export const briefSendSchema = z.object({
+export const briefSendIntentSchema = z.object({
   recipient: z.string().trim().email(VALIDATION_MESSAGE_CODES.emailInvalid),
   message: z.string().trim().max(500, VALIDATION_MESSAGE_CODES.noteTooLong).nullable().optional(),
-  idempotencyKey: z.string().uuid(VALIDATION_MESSAGE_CODES.invalid).optional(),
+});
+export type BriefSendIntent = z.infer<typeof briefSendIntentSchema>;
+
+export const briefSendSchema = briefSendIntentSchema.extend({
+  idempotencyKey: z.string().uuid(VALIDATION_MESSAGE_CODES.invalid),
 });
 export type BriefSendInput = z.infer<typeof briefSendSchema>;
 

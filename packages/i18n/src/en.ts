@@ -1303,6 +1303,7 @@ export const en = {
     dailyCheckInTrendOnly: "Trend is only available for daily check-ins",
     dailyCheckInTrendRequired: "Trend is required for daily check-ins",
     skillNameRequired: "Skill name is required",
+    safetyConfirmationRequired: "Safety confirmation is required",
     passwordMismatch: "Passwords don't match",
     passwordSameAsCurrent: "New password must differ from current",
   },

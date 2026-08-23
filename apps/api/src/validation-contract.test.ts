@@ -144,4 +144,30 @@ describe("stable API validation contract", () => {
       expect(englishCodes.every(isValidationMessageCode)).toBe(true);
     },
   );
+
+  it("returns a stable safety-confirmation code for Spanish guided setup validation", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const issues = await validationIssues(
+      await app.request("/api/guided-setup/action/behavior", {
+        method: "POST",
+        headers: { ...user.authHeaders, "X-TuringCare-Locale": "es" },
+        body: JSON.stringify({
+          setupId: "00000000-0000-4000-8000-000000000001",
+          concern: "Snapped when approached",
+          severity: "severe",
+          safetyConfirmed: false,
+        }),
+      }),
+    );
+
+    expect(issues).toEqual([
+      {
+        code: "custom",
+        path: ["safetyConfirmed"],
+        message: "validation.safetyConfirmationRequired",
+      },
+    ]);
+  });
 });

@@ -120,7 +120,10 @@ describe("onboarding: GET /api/onboarding", () => {
     await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "trainer@example.com" }),
+      body: JSON.stringify({
+        recipient: "trainer@example.com",
+        idempotencyKey: "95acbb6a-9189-4614-9a6e-c732efcc5d1d",
+      }),
     });
 
     const r = await app.request("/api/onboarding", { headers: u.authHeaders });

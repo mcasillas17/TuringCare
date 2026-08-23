@@ -17,6 +17,7 @@ export const VALIDATION_MESSAGE_CODES = {
   dailyCheckInTrendOnly: "validation.dailyCheckInTrendOnly",
   dailyCheckInTrendRequired: "validation.dailyCheckInTrendRequired",
   skillNameRequired: "validation.skillNameRequired",
+  safetyConfirmationRequired: "validation.safetyConfirmationRequired",
   passwordMismatch: "validation.passwordMismatch",
   passwordSameAsCurrent: "validation.passwordSameAsCurrent",
 } as const;

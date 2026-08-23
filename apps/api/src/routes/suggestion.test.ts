@@ -98,11 +98,11 @@ async function setup() {
     return (await res.json()) as { session: { id: string } };
   }
 
-  async function getSuggestion() {
+  async function getSuggestion(locale?: "en" | "es") {
     const res = await app.request(
       `/api/dogs/${dog.id}/suggestion?weekKey=${WEEK_KEY}&timezoneOffsetMinutes=0`,
       {
-        headers,
+        headers: locale ? { ...headers, "X-TuringCare-Locale": locale } : headers,
       },
     );
     expect(res.status).toBe(200);
@@ -181,6 +181,21 @@ describe("GET /api/dogs/:id/suggestion", () => {
     expect(suggestion.fallback?.reducedDimension).toBe("cue_support");
     expect(suggestion.requestedDimensions).toContain("environment");
     expect(suggestion.suggestionId).not.toBeNull();
+  });
+
+  it("localizes curriculum exercise prose for a Spanish request", async () => {
+    const ctx = await setup();
+    const skillId = await ctx.addCatalogSkill("basic-manners.sit");
+    await ctx.focus(skillId);
+
+    const suggestion = await ctx.getSuggestion("es");
+
+    expect(suggestion.primary?.exercise).toBe(
+      "Se guía hasta sentarse con comida en una habitación tranquila",
+    );
+    expect(suggestion.fallback?.exercise).toBe(
+      "Se guía hasta sentarse con comida en una habitación tranquila",
+    );
   });
 
   it("marks a custom skill as unsupported", async () => {

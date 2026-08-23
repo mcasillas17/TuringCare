@@ -1,3 +1,4 @@
+import type { Locale } from "@turingcare/i18n";
 import type { SuggestionAction, SuggestionSafety, TrainingSuggestion } from "@turingcare/shared";
 import { and, eq } from "drizzle-orm";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
@@ -243,6 +244,7 @@ export async function loadSuggestion(input: {
   dogId: string;
   weekKey: string;
   timezoneOffsetMinutes: number;
+  locale?: Locale;
   now?: Date;
 }): Promise<TrainingSuggestion> {
   const now = input.now ?? new Date();
@@ -324,7 +326,7 @@ export async function loadSuggestion(input: {
   const target =
     rule.effectiveLevel === null
       ? null
-      : resolveCurriculumTarget(focus?.catalogSkillKey ?? null, rule.effectiveLevel);
+      : resolveCurriculumTarget(focus?.catalogSkillKey ?? null, rule.effectiveLevel, input.locale);
 
   if (!target) {
     const unsupported: TrainingSuggestion = {

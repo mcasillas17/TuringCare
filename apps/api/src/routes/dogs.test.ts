@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, count, eq, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -37,6 +38,10 @@ const validDog = {
   vaccineStage: "in_progress",
   spayedNeutered: true,
 };
+
+function briefSendBody(input: Record<string, unknown>) {
+  return JSON.stringify({ idempotencyKey: randomUUID(), ...input });
+}
 
 describe("resolveBriefSendReplay", () => {
   const existing = { id: "send-1", recipient: "trainer@example.com", message: null };
@@ -982,7 +987,7 @@ describe("dogs: brief", () => {
         ...u.authHeaders,
         "X-TuringCare-Locale": latest.locale === "en" ? "es" : "en",
       },
-      body: JSON.stringify({ recipient: "trainer@example.com" }),
+      body: briefSendBody({ recipient: "trainer@example.com" }),
     });
     expect(sent.status).toBe(201);
     const email = vi.mocked(sendEmail).mock.calls[0]?.[0];
@@ -1179,7 +1184,7 @@ describe("dogs: brief", () => {
         app.request(`/api/dogs/${dog.id}/brief/send`, {
           method: "POST",
           headers: u.authHeaders,
-          body: JSON.stringify({ recipient: "legacy-conflict@example.com" }),
+          body: briefSendBody({ recipient: "legacy-conflict@example.com" }),
         }),
       ]);
 
@@ -1663,7 +1668,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "sarah@example.com", message: "Hi Sarah" }),
+      body: briefSendBody({ recipient: "sarah@example.com", message: "Hi Sarah" }),
     });
     expect(r.status).toBe(201);
     const { send } = (await r.json()) as {
@@ -1885,7 +1890,7 @@ describe("dogs: brief send", () => {
         app.request(`/api/dogs/${dog.id}/brief/send`, {
           method: "POST",
           headers: u.authHeaders,
-          body: JSON.stringify({ recipient: `concurrent-${index}@example.com` }),
+          body: briefSendBody({ recipient: `concurrent-${index}@example.com` }),
         }),
       );
       await waitForBlockingChain(pool, blockerPid, 2);
@@ -1927,7 +1932,7 @@ describe("dogs: brief send", () => {
       const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
         method: "POST",
         headers: u.authHeaders,
-        body: JSON.stringify({ recipient: "account-delete@example.com" }),
+        body: briefSendBody({ recipient: "account-delete@example.com" }),
       });
       await waitForBlockingChain(pool, deleterPid, 1);
 
@@ -1956,7 +1961,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: { ...u.authHeaders, "X-TuringCare-Locale": "en" },
-      body: JSON.stringify({ recipient: "sarah@example.com", message: "Hola Sarah" }),
+      body: briefSendBody({ recipient: "sarah@example.com", message: "Hola Sarah" }),
     });
 
     expect(r.status).toBe(201);
@@ -1983,7 +1988,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ recipient: "sarah@example.com" }),
     });
     expect(r.status).toBe(409);
     expect(await r.json()).toEqual({ error: "not_finalized" });
@@ -2014,7 +2019,7 @@ describe("dogs: brief send", () => {
       const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
         method: "POST",
         headers: u.authHeaders,
-        body: JSON.stringify({ recipient: "race@example.com" }),
+        body: briefSendBody({ recipient: "race@example.com" }),
       });
       await providerStarted;
 
@@ -2070,7 +2075,7 @@ describe("dogs: brief send", () => {
       const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
         method: "POST",
         headers: u.authHeaders,
-        body: JSON.stringify({ recipient: "failed-race@example.com" }),
+        body: briefSendBody({ recipient: "failed-race@example.com" }),
       });
       await providerStarted;
       await deleter.query("BEGIN");
@@ -2107,7 +2112,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ recipient: "sarah@example.com" }),
     });
     expect(r.status).toBe(404);
   });
@@ -2120,7 +2125,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "not-an-email" }),
+      body: briefSendBody({ recipient: "not-an-email" }),
     });
     expect(r.status).toBe(400);
   });
@@ -2133,7 +2138,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({
+      body: briefSendBody({
         recipient: "sarah@example.com",
         message: "x".repeat(501),
       }),
@@ -2150,7 +2155,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: b.authHeaders,
-      body: JSON.stringify({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ recipient: "sarah@example.com" }),
     });
     expect(r.status).toBe(404);
   });
@@ -2172,7 +2177,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ recipient: "sarah@example.com" }),
     });
     const text = await r.text();
 
@@ -2210,12 +2215,12 @@ describe("dogs: brief send", () => {
     await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "first@example.com" }),
+      body: briefSendBody({ recipient: "first@example.com" }),
     });
     await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "second@example.com" }),
+      body: briefSendBody({ recipient: "second@example.com" }),
     });
     const r = await app.request(`/api/dogs/${dog.id}/brief/sends`, {
       headers: u.authHeaders,

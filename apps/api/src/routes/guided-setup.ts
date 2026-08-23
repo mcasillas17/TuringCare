@@ -1,4 +1,3 @@
-import { zValidator } from "@hono/zod-validator";
 import type { Locale } from "@turingcare/i18n";
 import {
   type GuidedSetupActionType,
@@ -34,6 +33,7 @@ import type { TransactionType } from "../lib/safety-lock";
 import { currentWeekKey, loadSuggestion } from "../lib/suggestion";
 import { applyTrainingTemplate } from "../lib/training-template-writes";
 import { type Vars, requireUser } from "../middleware/require-user";
+import { stableZValidator as zValidator } from "../middleware/validation";
 import { recordEvent } from "../telemetry/record-event";
 
 const guidedSetupTrainingTemplateKeys = new Set<string>(guidedSetupTrainingTemplateKeyValues);
@@ -673,6 +673,7 @@ export const guidedSetupApp = new Hono<{ Variables: Vars & { locale: Locale } }>
           dogId: result.dogId,
           weekKey: input.weekKey,
           timezoneOffsetMinutes: input.timezoneOffsetMinutes,
+          locale: c.get("locale"),
         })
       : null;
     return c.json(

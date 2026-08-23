@@ -1327,6 +1327,7 @@ export const es = {
     dailyCheckInTrendOnly: "La tendencia solo está disponible en los registros diarios",
     dailyCheckInTrendRequired: "La tendencia es obligatoria en los registros diarios",
     skillNameRequired: "El nombre de la habilidad es obligatorio",
+    safetyConfirmationRequired: "La confirmación de seguridad es obligatoria",
     passwordMismatch: "Las contraseñas no coinciden",
     passwordSameAsCurrent: "La nueva contraseña debe ser diferente de la actual",
   },

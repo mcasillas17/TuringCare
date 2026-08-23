@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import type { Locale } from "@turingcare/i18n";
 import {
   VALIDATION_MESSAGE_CODES,
@@ -990,6 +990,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       dogId: dog.id,
       weekKey,
       timezoneOffsetMinutes,
+      locale: c.get("locale"),
     });
     return c.json({ suggestion });
   })
@@ -1411,7 +1412,6 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       if (!lockedDog) return { kind: "not_found" } as const;
 
       const loadExistingSend = async () => {
-        if (!body.idempotencyKey) return undefined;
         const [existing] = await tx
           .select({
             id: briefSends.id,
@@ -1465,7 +1465,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         },
         brief.locale,
       );
-      const sendId = body.idempotencyKey ?? randomUUID();
+      const sendId = body.idempotencyKey;
       const [send] = await tx
         .insert(briefSends)
         .values({

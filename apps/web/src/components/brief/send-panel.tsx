@@ -5,7 +5,7 @@ import { BriefRequestError, briefSendErrorMessageKey } from "@/lib/brief-errors"
 import { createBriefSendIdempotencyKey } from "@/lib/brief-idempotency";
 import { useBriefSends, useSendBrief } from "@/lib/brief-send";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type BriefSendInput, briefSendSchema } from "@turingcare/shared";
+import { type BriefSendIntent, briefSendIntentSchema } from "@turingcare/shared";
 import { useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -31,8 +31,8 @@ export function SendPanel({
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<BriefSendInput>({
-    resolver: zodResolver(briefSendSchema),
+  } = useForm<BriefSendIntent>({
+    resolver: zodResolver(briefSendIntentSchema),
     defaultValues: { recipient: initialRecipient ?? "" },
   });
 

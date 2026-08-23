@@ -264,11 +264,21 @@ export function getTrainingCurriculum(locale: Locale | string = "en"): CatalogTe
 /** Compatibility export used by server-side rules, which operate on stable keys. */
 export const trainingCurriculum: CatalogTemplate[] = getTrainingCurriculum("en");
 
-const curriculumByKey = new Map<string, CatalogSkill>(
-  trainingCurriculum.flatMap((template) => template.skills.map((skill) => [skill.key, skill])),
-);
+const curriculumByLocale = {
+  en: new Map<string, CatalogSkill>(
+    trainingCurriculum.flatMap((template) => template.skills.map((skill) => [skill.key, skill])),
+  ),
+  es: new Map<string, CatalogSkill>(
+    getTrainingCurriculum("es").flatMap((template) =>
+      template.skills.map((skill) => [skill.key, skill]),
+    ),
+  ),
+} satisfies Record<Locale, Map<string, CatalogSkill>>;
 
-export function findCurriculumSkill(key: string | null | undefined): CatalogSkill | undefined {
+export function findCurriculumSkill(
+  key: string | null | undefined,
+  locale: Locale | string = "en",
+): CatalogSkill | undefined {
   if (!key) return undefined;
-  return curriculumByKey.get(key);
+  return curriculumByLocale[locale === "es" ? "es" : "en"].get(key);
 }
