@@ -248,3 +248,215 @@ Repo-wide `pnpm lint` still fails on pre-existing unrelated files not touched in
 
 - Web full tests pass but emit existing React Suspense `act(...)` warnings in brief/share-sheet tests.
 - Repo-wide lint remains blocked by unrelated pre-existing hygiene issues above; Task 4 files pass scoped Biome.
+
+# Fix round 1 — Locale-stable shared/owned artifacts
+
+## Review findings addressed
+
+1. Public shared briefs now include the whitelisted `briefs.locale` field. No private `userId`, `dogId`, or `shareToken` fields were added to the public response.
+2. Owned Brief page chrome now formats the stored artifact title, generated date, and draft/final status from `brief.locale`, not the current UI locale.
+3. Spanish summary prose now localizes the daily check-in heading as `Registros diarios:`.
+4. Owned/shared web tests now use locale-bearing mocks and assert opposite-UI/source behavior, including PDF download locale handoff.
+
+## RED evidence
+
+API RED after test-first changes:
+
+```text
+$ DATABASE_URL='postgres://postgres:postgres@localhost:5432/turingcare' BETTER_AUTH_SECRET='test-only-insecure-secret-0123456789abcdef' pnpm --filter @turingcare/api exec vitest run src/lib/brief.test.ts src/routes/share.test.ts
+
+ RUN  v2.1.9 /Users/elopenmike/.codex/worktrees/f7ae/TuringCare/apps/api
+
+ ❯ src/lib/brief.test.ts (7 tests | 1 failed) 7ms
+   × composeBrief > renders Spanish fixed prose, enum labels, plural branches, and dates 4ms
+     → expected 'Biscuit es una perra mediana Aussie.\…' to contain 'Registros diarios: 1 mejor, 1 igual, …'
+ ❯ src/routes/share.test.ts (4 tests | 1 failed) 500ms
+   × public GET /api/share/brief/:token > returns whitelisted fields for a valid token and 404 after revoke/for unknown 142ms
+     → expected undefined to be 'es' // Object.is equality
+
+ FAIL  src/lib/brief.test.ts > composeBrief > renders Spanish fixed prose, enum labels, plural branches, and dates
+AssertionError: expected 'Biscuit es una perra mediana Aussie.\…' to contain 'Registros diarios: 1 mejor, 1 igual, …'
+
+- Expected
++ Received
+
+- Registros diarios: 1 mejor, 1 igual, 0 más difícil.
++ Biscuit es una perra mediana Aussie.
++ ...
++ Check-ins: 1 mejor, 1 igual, 0 más difícil.
+
+ FAIL  src/routes/share.test.ts > public GET /api/share/brief/:token > returns whitelisted fields for a valid token and 404 after revoke/for unknown
+AssertionError: expected undefined to be 'es' // Object.is equality
+
+- Expected:
+"es"
+
++ Received:
+undefined
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 9 passed (11)
+```
+
+Web RED after test-first changes:
+
+```text
+$ NODE_OPTIONS='--no-experimental-webstorage' pnpm --filter @turingcare/web exec vitest run src/routes/brief.test.tsx src/routes/shared-brief.test.tsx
+
+ RUN  v2.1.9 /Users/elopenmike/.codex/worktrees/f7ae/TuringCare/apps/web
+
+ ❯ src/routes/brief.test.tsx (5 tests | 2 failed) 117ms
+   × Brief review > renders owned brief chrome from the stored Spanish locale even when the UI is English 10ms
+     → Unable to find an element with the text: Resumen de conducta.
+   × Brief review > keeps owned brief chrome English from the stored locale even when the UI is Spanish 3ms
+     → Unable to find an element with the text: Behavior Brief.
+
+ FAIL  src/routes/shared-brief.test.tsx > renders shared brief chrome and PDF handoff from stored Spanish locale under English UI
+TestingLibraryElementError: Unable to find role="heading" and name "Resumen de conducta compartido"
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 5 passed (8)
+```
+
+## Implementation trace
+
+Stored-locale flow:
+
+- New brief generation was already storing `briefs.locale`; this round consumes it in the public route by selecting `locale: briefs.locale` in `apps/api/src/routes/share.ts`.
+- `apps/web/src/lib/shared-brief.ts` now models `locale: Locale` on `SharedBrief`.
+- `apps/web/src/routes/shared-brief.tsx` uses `data.locale` for shared page title (`sharedBriefTitle`), version label (`briefVersionLabel`), and passes `locale: data.locale` into `BriefDownloadButton`.
+- `apps/web/src/routes/brief.tsx` uses `brief.locale` for title (`briefTitle`), generated line (`briefGeneratedLabel`), and status/version (`briefStatusLabel`).
+- `apps/web/src/components/brief/share-sheet.tsx` now types `brief.locale?: Locale`, preserving the already-passed owned brief object through to PDF download.
+- `apps/web/src/lib/brief-chrome.ts` is framework-neutral and reads the shared `@turingcare/i18n` message catalogs directly; it does not create or duplicate an i18next runtime in React render paths.
+
+Auth raw-request validation:
+
+- No auth code changed in this fix round.
+- The public share test generates a Spanish brief through the real API with `X-TuringCare-Locale: es`; the middleware-validated stored locale is then observed through the public share endpoint under an unauthenticated request.
+- Existing `resolveRequestLocale(request)` remains the single strict raw-request resolver used by API middleware/auth email wiring.
+
+Escaping/security trace:
+
+- No new HTML interpolation sink was added.
+- Public whitelist gained only `locale`; tests still assert absence of `userId`, `dogId`, and `shareToken`.
+- User-authored content (`summary`, dog names, notes, concern/goal text) is still displayed/passed as data and is not translated.
+- The web helper only selects fixed catalog strings and interpolates numeric `version` / formatted date strings; it does not interpret user-authored content as HTML.
+- PDF handoff remains data-only through `BriefDownloadButton`/`buildBriefPdfModel`; the stored locale controls fixed PDF labels/chrome.
+
+## Files changed
+
+- `apps/api/src/lib/brief.ts`
+- `apps/api/src/lib/brief.test.ts`
+- `apps/api/src/routes/share.ts`
+- `apps/api/src/routes/share.test.ts`
+- `apps/web/src/lib/brief-chrome.ts` — new framework-neutral stored-locale chrome helper.
+- `apps/web/src/lib/shared-brief.ts`
+- `apps/web/src/routes/brief.tsx`
+- `apps/web/src/routes/brief.test.tsx`
+- `apps/web/src/routes/shared-brief.tsx`
+- `apps/web/src/routes/shared-brief.test.tsx`
+- `apps/web/src/components/brief/share-sheet.tsx`
+
+## GREEN evidence
+
+Focused post-fix runs:
+
+```text
+$ DATABASE_URL='postgres://postgres:postgres@localhost:5432/turingcare' BETTER_AUTH_SECRET='test-only-insecure-secret-0123456789abcdef' pnpm --filter @turingcare/api exec vitest run src/lib/brief.test.ts src/routes/share.test.ts
+
+ RUN  v2.1.9 /Users/elopenmike/.codex/worktrees/f7ae/TuringCare/apps/api
+
+ ✓ src/lib/brief.test.ts (7 tests) 4ms
+ ✓ src/routes/share.test.ts (4 tests) 507ms
+
+ Test Files  2 passed (2)
+      Tests  11 passed (11)
+   Start at  02:37:44
+   Duration  1.50s (transform 151ms, setup 17ms, collect 756ms, tests 511ms, environment 0ms, prepare 132ms)
+
+$ NODE_OPTIONS='--no-experimental-webstorage' pnpm --filter @turingcare/web exec vitest run src/routes/brief.test.tsx src/routes/shared-brief.test.tsx
+
+ RUN  v2.1.9 /Users/elopenmike/.codex/worktrees/f7ae/TuringCare/apps/web
+
+ ✓ src/routes/shared-brief.test.tsx (3 tests) 64ms
+ ✓ src/routes/brief.test.tsx (6 tests) 102ms
+
+ Test Files  2 passed (2)
+      Tests  9 passed (9)
+   Start at  02:37:44
+   Duration  775ms (transform 114ms, setup 57ms, collect 482ms, tests 165ms, environment 313ms, prepare 90ms)
+```
+
+Affected full package suites:
+
+```text
+$ DATABASE_URL='postgres://postgres:postgres@localhost:5432/turingcare' BETTER_AUTH_SECRET='test-only-insecure-secret-0123456789abcdef' pnpm --filter @turingcare/api test
+
+ Test Files  47 passed (47)
+      Tests  320 passed (320)
+   Start at  02:36:36
+   Duration  8.86s (transform 734ms, setup 218ms, collect 28.18s, tests 20.54s, environment 5ms, prepare 2.22s)
+
+$ NODE_OPTIONS='--no-experimental-webstorage' pnpm --filter @turingcare/web test
+
+ Test Files  73 passed (73)
+      Tests  305 passed (305)
+   Start at  02:36:49
+   Duration  6.90s (transform 1.38s, setup 2.77s, collect 15.51s, tests 10.92s, environment 18.05s, prepare 3.36s)
+
+$ pnpm --filter @turingcare/i18n test
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  02:36:59
+   Duration  187ms (transform 35ms, setup 0ms, collect 39ms, tests 4ms, environment 0ms, prepare 30ms)
+```
+
+Typechecks:
+
+```text
+$ DATABASE_URL='postgres://postgres:postgres@localhost:5432/turingcare' BETTER_AUTH_SECRET='test-only-insecure-secret-0123456789abcdef' pnpm --filter @turingcare/api typecheck
+$ tsc --noEmit
+
+$ NODE_OPTIONS='--no-experimental-webstorage' pnpm --filter @turingcare/web typecheck
+$ tsc --noEmit
+
+$ pnpm --filter @turingcare/i18n typecheck
+$ tsc --noEmit
+```
+
+Hygiene:
+
+```text
+$ pnpm exec biome check apps/api/src/lib/brief.ts apps/api/src/lib/brief.test.ts apps/api/src/routes/share.ts apps/api/src/routes/share.test.ts apps/web/src/lib/brief-chrome.ts apps/web/src/lib/shared-brief.ts apps/web/src/routes/brief.tsx apps/web/src/routes/brief.test.tsx apps/web/src/routes/shared-brief.tsx apps/web/src/routes/shared-brief.test.tsx apps/web/src/components/brief/share-sheet.tsx
+Checked 11 files in 5ms. No fixes applied.
+
+$ git diff --check
+
+$ rg -n "\.only\(|describe\.only|it\.only|test\.only|console\.log|debugger" apps/api/src apps/web/src packages/i18n/src
+apps/api/src/index.ts:13:    console.log(`api listening on http://0.0.0.0:${info.port}`);
+apps/api/src/telemetry/retention-cli.ts:9:    console.log(`[retention] deleted ${removed} events older than ${env.EVENT_RETENTION_DAYS}d`);
+```
+
+Repo-wide lint remains blocked by pre-existing unrelated files:
+
+```text
+$ pnpm -w lint
+Found 11 errors.
+```
+
+Remaining root-lint files reported by Biome:
+
+- `apps/api/src/app.ts` import ordering
+- `apps/api/src/monitoring/error-handler.ts` formatting
+- `packages/i18n/src/index.ts` import ordering
+- `packages/i18n/src/index.test.ts` `delete` lint
+- `apps/web/src/components/turing-companion.test.tsx` import ordering
+- `apps/web/src/i18n/index.tsx` import/format
+- `apps/web/src/i18n/i18n.test.tsx` import ordering
+- `apps/web/src/lib/api.test.ts` import/format
+
+## Concerns
+
+- Full web tests pass but continue to emit existing React Suspense `act(...)` warnings in `brief.test.tsx` / `share-sheet.test.tsx`.
+- Repo-wide lint is still blocked by the unrelated pre-existing Biome issues listed above; all files changed in this fix round pass scoped Biome.

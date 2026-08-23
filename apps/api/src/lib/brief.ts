@@ -135,7 +135,7 @@ const briefCatalog: Record<Locale, BriefCatalog> = {
     avgIntensity: (value) => `intensidad promedio ${value}`,
     avgIntensityMissing: "intensidad promedio no registrada",
     checkins: (better, same, harder) =>
-      `Check-ins: ${better} mejor, ${same} igual, ${harder} más difícil.`,
+      `Registros diarios: ${better} mejor, ${same} igual, ${harder} más difícil.`,
     entryDate: (iso) => stripSpanishDatePeriods(esDayMonthYear.format(new Date(iso))),
     intensity: (value) => ` (intensidad ${value})`,
     progressHeading: "Progreso de entrenamiento:",

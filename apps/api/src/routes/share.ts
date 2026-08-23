@@ -13,6 +13,7 @@ export const shareApp = new Hono().get("/brief/:token", async (c) => {
       status: briefs.status,
       version: briefs.version,
       generatedAt: briefs.generatedAt,
+      locale: briefs.locale,
     })
     .from(briefs)
     .innerJoin(dogs, eq(briefs.dogId, dogs.id))

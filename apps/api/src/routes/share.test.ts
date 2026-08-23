@@ -14,7 +14,7 @@ async function signedUpCookie(email: string) {
   return res.headers.get("set-cookie") ?? "";
 }
 
-async function createDogWithBrief(cookie: string) {
+async function createDogWithBrief(cookie: string, briefHeaders: Record<string, string> = {}) {
   const dogRes = await app.request("/api/dogs", {
     method: "POST",
     headers: { "Content-Type": "application/json", cookie },
@@ -27,7 +27,10 @@ async function createDogWithBrief(cookie: string) {
     }),
   });
   const { dog } = (await dogRes.json()) as { dog: { id: string } };
-  await app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: { cookie } });
+  await app.request(`/api/dogs/${dog.id}/brief`, {
+    method: "POST",
+    headers: { cookie, ...briefHeaders },
+  });
   return dog.id as string;
 }
 
@@ -100,7 +103,7 @@ describe("public GET /api/share/brief/:token", () => {
     const email = `pub_${Date.now()}@example.com`;
     emails.push(email);
     const cookie = await signedUpCookie(email);
-    const dogId = await createDogWithBrief(cookie);
+    const dogId = await createDogWithBrief(cookie, { "X-TuringCare-Locale": "es" });
     const mint = await app.request(`/api/dogs/${dogId}/brief/share`, {
       method: "POST",
       headers: { cookie },
@@ -113,6 +116,7 @@ describe("public GET /api/share/brief/:token", () => {
     expect(body.brief.dogName).toBe("Rex");
     expect(typeof body.brief.summary).toBe("string");
     expect(body.brief).toHaveProperty("version");
+    expect(body.brief.locale).toBe("es");
     expect(body.brief).not.toHaveProperty("userId");
     expect(body.brief).not.toHaveProperty("dogId");
     expect(body.brief).not.toHaveProperty("shareToken");

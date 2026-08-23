@@ -214,7 +214,8 @@ describe("composeBrief", () => {
     expect(out).toContain("Objetivos:");
     expect(out).toContain("Diario: 2 entradas en los últimos 7 días");
     expect(out).toContain("intensidad promedio no registrada");
-    expect(out).toContain("Check-ins: 1 mejor, 1 igual, 0 más difícil.");
+    expect(out).toContain("Registros diarios: 1 mejor, 1 igual, 0 más difícil.");
+    expect(out).not.toContain("Check-ins:");
     expect(out).toContain("- 18 may 2026: Ladró al repartidor");
     expect(out).toContain("Progreso de entrenamiento:");
     expect(out).toContain("Aprendiendo (2.0/5)");

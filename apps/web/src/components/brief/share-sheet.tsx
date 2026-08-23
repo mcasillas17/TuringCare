@@ -4,6 +4,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { useI18n } from "@/i18n";
 import { useFinalizeBrief, useRevokeShare, useShareBrief } from "@/lib/brief";
 import type { DogForPdf } from "@/lib/brief-pdf-model";
+import type { Locale } from "@turingcare/i18n";
 import { Suspense, lazy, useState } from "react";
 import { toast } from "sonner";
 
@@ -14,6 +15,7 @@ type BriefLike = {
   version: number;
   summary: string;
   generatedAt: string;
+  locale?: Locale;
   shareToken?: string | null;
 };
 

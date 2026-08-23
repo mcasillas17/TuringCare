@@ -2,6 +2,7 @@ import { BriefShareSheet } from "@/components/brief/share-sheet";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useBrief, useGenerateBrief } from "@/lib/brief";
+import { briefGeneratedLabel, briefStatusLabel, briefTitle } from "@/lib/brief-chrome";
 import { useDogs } from "@/lib/dogs";
 import { type BriefWindow, briefWindows } from "@turingcare/shared";
 import { useEffect, useState } from "react";
@@ -9,7 +10,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 export function Brief() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { id: routeId } = useParams();
   const [params] = useSearchParams();
   const recipientParam = params.get("recipient") ?? undefined;
@@ -37,23 +38,8 @@ export function Brief() {
     all: t("brief.windowAll"),
   };
 
-  const generatedOn = brief
-    ? (() => {
-        const d = new Date(brief.generatedAt);
-        if (Number.isNaN(d.getTime())) return "";
-        return new Intl.DateTimeFormat(locale, {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        }).format(d);
-      })()
-    : "";
-
-  const statusLabel = brief
-    ? brief.status === "finalized"
-      ? t("brief.finalVersion", { version: brief.version })
-      : t("brief.draftVersion", { version: brief.version })
-    : "";
+  const generatedOn = brief ? briefGeneratedLabel(brief.generatedAt, brief.locale) : "";
+  const statusLabel = brief ? briefStatusLabel(brief.status, brief.version, brief.locale) : "";
 
   const regenerate = async (w: BriefWindow) => {
     setWindowChoice(w);
@@ -130,7 +116,7 @@ export function Brief() {
                     Turing<span className="text-copper">Care</span>
                   </span>
                   <span className="text-xs uppercase tracking-wide text-slate-soft">
-                    {t("brief.title")}
+                    {briefTitle(brief.locale)}
                   </span>
                 </header>
                 <div className="space-y-3 p-5">
@@ -145,7 +131,7 @@ export function Brief() {
                   <p className="whitespace-pre-wrap leading-relaxed text-slate">{brief.summary}</p>
                   {generatedOn && (
                     <p className="border-t border-silver pt-3 text-xs text-slate-soft">
-                      {t("brief.generatedOn", { date: generatedOn })}
+                      {generatedOn}
                     </p>
                   )}
                 </div>

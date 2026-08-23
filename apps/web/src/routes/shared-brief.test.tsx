@@ -4,11 +4,23 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+vi.mock("@/components/brief-download-button", () => ({
+  default: ({ brief }: { brief: { locale?: string } }) => (
+    <div data-testid="download-locale">{brief.locale ?? "missing"}</div>
+  ),
+}));
+
 function mockFetch(status: number, body: unknown) {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status })));
 }
-beforeEach(() => vi.unstubAllGlobals());
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
 
 const { SharedBrief } = await import("./shared-brief");
 
@@ -34,10 +46,36 @@ it("renders the shared brief from the public endpoint", async () => {
       status: "finalized",
       version: 2,
       generatedAt: "2026-05-22T00:00:00Z",
+      locale: "en",
     },
   });
   setup();
   await waitFor(() => expect(screen.getByText(/Behavior Brief — Rex/)).toBeInTheDocument());
+});
+
+it("renders shared brief chrome and PDF handoff from stored Spanish locale under English UI", async () => {
+  localStorage.setItem("tc-locale", "en");
+  mockFetch(200, {
+    brief: {
+      dogName: "Rex",
+      summary: "Resumen redactado por la familia",
+      status: "finalized",
+      version: 2,
+      generatedAt: "2026-05-22T00:00:00Z",
+      locale: "es",
+    },
+  });
+  setup();
+
+  await waitFor(() =>
+    expect(
+      screen.getByRole("heading", { name: "Resumen de conducta compartido" }),
+    ).toBeInTheDocument(),
+  );
+  expect(screen.getByText("Versión 2")).toBeInTheDocument();
+  expect(screen.getByTestId("download-locale")).toHaveTextContent("es");
+  expect(screen.queryByRole("heading", { name: "Shared Behavior Brief" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Version 2")).not.toBeInTheDocument();
 });
 
 it("shows a not-available view on 404", async () => {
