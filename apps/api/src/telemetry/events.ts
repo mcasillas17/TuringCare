@@ -49,7 +49,7 @@ const scalar = z.union([z.string(), z.number(), z.boolean()]);
 type EventProp = z.infer<typeof scalar>;
 type EventProps = Record<string, EventProp>;
 
-const publicBriefPath = /^\/b\/[^/]+\/?$/i;
+const publicBriefPath = /^\/b\/[^/]+\/*$/i;
 
 export function normalizeEventProps(
   name: (typeof CLIENT_EVENTS)[number],

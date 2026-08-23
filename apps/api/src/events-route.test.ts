@@ -82,6 +82,32 @@ describe("POST /api/events", () => {
     expect(serializedProps).not.toContain(secret);
   });
 
+  it.each(["/b/repeated-secret//", "/B/repeated-secret///"])(
+    "redacts repeated trailing slash Brief tokens before persisting page-view props for %s",
+    async (path) => {
+      const res = await app.request("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "page.viewed",
+          props: { path, source: "shared_brief" },
+        }),
+      });
+      expect(res.status).toBe(202);
+
+      const [row] = await db
+        .select()
+        .from(events)
+        .where(eq(events.name, "page.viewed"))
+        .orderBy(desc(events.createdAt))
+        .limit(1);
+      const serializedProps = JSON.stringify(row?.props);
+
+      expect(row?.props).toMatchObject({ path: "/b/:token", source: "shared_brief" });
+      expect(serializedProps).not.toContain("repeated-secret");
+    },
+  );
+
   it("attributes an authenticated page.viewed to the user + session", async () => {
     const email = `evtr_${Date.now()}@example.com`;
     await auth.api.signUpEmail({ body: { name: "EvtR", email, password: "password-123" } });
@@ -122,4 +148,28 @@ describe("POST /api/events", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it.each(["/b", "/b//x", "/b/x/y", "/billing"])(
+    "preserves non-Brief path %s at the endpoint",
+    async (path) => {
+      const res = await app.request("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "page.viewed",
+          props: { path, source: "ordinary" },
+        }),
+      });
+      expect(res.status).toBe(202);
+
+      const [row] = await db
+        .select()
+        .from(events)
+        .where(eq(events.name, "page.viewed"))
+        .orderBy(desc(events.createdAt))
+        .limit(1);
+
+      expect(row?.props).toMatchObject({ path, source: "ordinary" });
+    },
+  );
 });

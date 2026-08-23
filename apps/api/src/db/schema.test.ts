@@ -185,7 +185,7 @@ describe("telemetry schema", () => {
     expect(migrationSql).toMatch(/UPDATE "events"/);
     expect(migrationSql).toMatch(/"name" = 'page\.viewed'/);
     expect(migrationSql).toMatch(/jsonb_typeof\("props"->'path'\) = 'string'/);
-    expect(migrationSql).toMatch(/"props"->>'path' ~\* '\^\/b\/\[\^\/\]\+\/\?\$'/);
+    expect(migrationSql).toMatch(/"props"->>'path' ~\* '\^\/b\/\[\^\/\]\+\/\*\$'/);
     expect(migrationSql).toMatch(
       /jsonb_set\("props", '\{path\}', to_jsonb\('\/b\/:token'::text\), false\)/,
     );

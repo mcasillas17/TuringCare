@@ -62,6 +62,21 @@ describe("telemetry events allowlist", () => {
     });
   });
 
+  it.each(["/b/repeated-secret//", "/B/repeated-secret///"])(
+    "redacts repeated trailing slash Brief paths while preserving other props for %s",
+    (path) => {
+      expect(
+        eventIngestSchema.parse({
+          name: "page.viewed",
+          props: { path, other: "kept" },
+        }),
+      ).toEqual({
+        name: "page.viewed",
+        props: { path: "/b/:token", other: "kept" },
+      });
+    },
+  );
+
   it("preserves ordinary page-view paths", () => {
     expect(
       eventIngestSchema.parse({
@@ -71,6 +86,18 @@ describe("telemetry events allowlist", () => {
     ).toEqual({
       name: "page.viewed",
       props: { path: "/my", other: "kept" },
+    });
+  });
+
+  it.each(["/b", "/b//x", "/b/x/y", "/billing"])("preserves non-Brief path %s", (path) => {
+    expect(
+      eventIngestSchema.parse({
+        name: "page.viewed",
+        props: { path, other: "kept" },
+      }),
+    ).toEqual({
+      name: "page.viewed",
+      props: { path, other: "kept" },
     });
   });
 
