@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { pool } from ".";
 
 const migrationUrl = new URL(
-  "../../drizzle/0015_brief_share_telemetry_privacy.sql",
+  "../../drizzle/0024_brief_share_telemetry_privacy.sql",
   import.meta.url,
 );
 const schemasToDrop: string[] = [];
@@ -15,9 +15,9 @@ afterEach(async () => {
   }
 });
 
-describe("migration 0015 telemetry privacy cleanup", () => {
+describe("migration 0024 telemetry privacy cleanup", () => {
   it("canonicalizes historical public Brief paths without changing unrelated aggregates", async () => {
-    const schema = `migration_0015_${randomUUID().replaceAll("-", "")}`;
+    const schema = `migration_0024_${randomUUID().replaceAll("-", "")}`;
     schemasToDrop.push(schema);
     await pool.query(`CREATE SCHEMA "${schema}"`);
     await pool.query(`

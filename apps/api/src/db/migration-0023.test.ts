@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { pool } from ".";
 import { waitForBlockingChain } from "../test-pg-concurrency";
 
-const migrationUrl = new URL("../../drizzle/0014_third_madripoor.sql", import.meta.url);
+const migrationUrl = new URL("../../drizzle/0023_third_madripoor.sql", import.meta.url);
 const schemasToDrop: string[] = [];
 
 afterEach(async () => {
@@ -13,9 +13,9 @@ afterEach(async () => {
   }
 });
 
-describe("migration 0014 concurrency", () => {
+describe("migration 0023 concurrency", () => {
   it("waits behind a route dog lock before taking its Brief table lock", async () => {
-    const schema = `migration_0014_${randomUUID().replaceAll("-", "")}`;
+    const schema = `migration_0023_${randomUUID().replaceAll("-", "")}`;
     schemasToDrop.push(schema);
     await pool.query(`CREATE SCHEMA "${schema}"`);
     await pool.query(`
@@ -47,7 +47,7 @@ describe("migration 0014 concurrency", () => {
       .filter(Boolean);
     const [dogLockStatement, briefLockStatement, ...remainingStatements] = statements;
     if (!dogLockStatement || !briefLockStatement) {
-      throw new Error("migration 0014 must lock dogs before briefs");
+      throw new Error("migration 0023 must lock dogs before briefs");
     }
     const migration = await pool.connect();
     const route = await pool.connect();

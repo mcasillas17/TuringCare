@@ -83,9 +83,6 @@ In-house typed i18n (en/es catalogs with compile-time parity), LocaleProvider +
 useI18n + t(), browser-locale detection + localStorage persistence, EN|ES
 LanguageToggle in the nav and on auth/app pages, all landing + auth/app copy
 localized. No backend, no deps; meta/OG stay English (<html lang> flips).
-- Historical scope note: the frontend-only runtime and localStorage-only persistence were
-  superseded by the 2026-08-23 end-to-end localization phase below; this entry preserves what
-  shipped in May rather than describing current architecture.
 - Spec/plan: `specs/2026-05-17-i18n-spanish-design.md`, `plans/2026-05-17-i18n-spanish.md`
 - Commits: this cycle (see `git log`).
 
@@ -996,7 +993,159 @@ no new findings on changed files (pre-existing/adjudicated only).
   `docs/superpowers/plans/2026-06-21-turing-quiet-setting.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-quiet-setting`.
 
-## 2026-08-23 — End-to-end English/Spanish localization — IMPLEMENTED, PR PENDING
+## 2026-08-12 — Weekly focus week-start versioning — MIGRATION VERIFICATION
+Gate 1 Task 7 versions `weekly_focus` by owner-local Monday `week_start`, adds
+compatibility/claim tables, and preserves legacy rows as `week_start = NULL` so
+Task 8 can claim at most one preserved row per dog into the owner's real local
+week without guessing from the database timezone. The current push-created
+local `turingcare` database had **0** `weekly_focus` rows when inventoried and
+was not used for `db:migrate` because its Drizzle migration journal is empty.
+Migration `0013` was instead applied with `db:migrate` to a dedicated throwaway
+database seeded with a legacy focus row after migrations `0000`–`0012`; the row
+was preserved with `week_start = NULL`, and the constraints, RLS, direct-delete
+guard, authorized deletion, and FK cascade behavior were verified there.
+
+## 2026-08-13 — Personalized training Gate 1 — launch evidence
+Weekly focus is versioned by local week; practice sessions now retain structured
+outcome/context and the curriculum level. A bounded per-skill dimension metadata
+table turns the authored catalog into deterministic targets. Rule-based weekly
+suggestions offer one primary exercise plus one easier fallback, while advancement
+is proposed and then requires the owner's confirmation. Structured safety inputs
+suppress exercises and refer owners out. Suggestion/advancement audit rows and
+eight new telemetry names cover focus, practice outcome, suggestion,
+advancement, and safety decisions, including legacy focus compatibility use.
+- The owner confirmation is intentionally two-step (a proposal followed by an
+  explicit decision); `operations/safety-signal-correction.md` records the
+  support-confirmed input-mistake correction runbook and its exact two-key
+  transaction.
+- Launch follow-up: after rollout telemetry confirms `focus.legacy_compat_used`
+  is unused, remove the legacy focus and legacy `datetime-local` session
+  compatibility branches.
+- Out of scope for Gate 1: Gate 2 dashboards, custom-skill suggestions, and
+  Behavior Brief integration.
+- Spec/plan: `specs/2026-08-11-personalized-training-progress-design.md`,
+  `plans/2026-08-11-personalized-training-gate-1.md`.
+- Commits: `9095ed4..HEAD` on `feat/personalized-training-gate-1`.
+
+## 2026-08-15 — First-run guided setup — IMPLEMENTED
+A resumable three-step first-run flow now creates a dog, captures the owner's
+immediate intent, and completes one real platform action: record a behavior
+concern, log a progress check-in, or apply a starter training plan with a
+personalized weekly suggestion. Setup state persists across reloads and tabs,
+reconciles stale retries by owner-scoped setup ID, and hands owners into the
+normal journal or weekly workspace without duplicating domain logic.
+
+The API performs each first action and setup completion atomically, preserves
+privacy-safe deletion tombstones and idempotent replays, serializes concurrent
+submissions, and records scalar telemetry without owner prose or identifiers.
+Safety signals suppress training exercises through the normal policy path.
+Historical training replays remain idempotent without generating suggestion
+audits, telemetry, or stale exercise previews, and starter-template choices are
+enforced server-side.
+The localized English/Spanish UI includes keyboard/focus/reduced-motion
+coverage, active-dog deletion recovery, checklist suppression, and additional-
+dog entry. Status reads are bounded to one active setup, one latest setup, and
+one dog-existence row, backed by `dogs_owner_idx`.
+
+Playwright covers the complete owner journey at Desktop Chrome and Pixel 7
+viewports, plus a phone reload/resume training journey. Browser API traffic is
+verified through isolated same-origin Vite proxy servers on ports 3310/3311.
+- Spec/plan: `docs/superpowers/specs/2026-08-15-first-run-guided-setup-design.md`,
+  `docs/superpowers/plans/2026-08-15-first-run-guided-setup.md`
+- Commits: `d52d82b..34b25de` on `feat/first-run-guided-setup`.
+
+## 2026-08-21 — Personalized training Gate 2 — contextual progress
+Exact-context, current-level reliability is derived from recent practice evidence.
+Owners can manually confirm current-level practice; one evidence-derived adjacent
+next context is offered for the next attempt. This Week presents a decision-first
+summary, while expanded skill detail shows the supporting evidence. There is no
+universal completion score and no automatic advancement. Round-two hardening
+coordinates one safety referral alert across weekly surfaces, keeps safety
+headings semantically nested, and removes action-derived synthetic
+`not_observed` rows while preserving observed evidence. Final safety-cache
+hardening centralizes the three dog-scoped suggestion/focus/contextual-progress
+prefix invalidations across safety-producing web mutations, awaits their
+refetches, and conservatively suppresses stale recommendations during
+`isFetching` revalidation or relevant query errors while preserving practice
+logging. Awaited weekly session creation now re-checks the latest suggestion
+eligibility and fails closed to manual capture when safety or another settled
+cache-authority check fails. Skill detail preserves cached evidence while failing closed on
+revalidation/error actions, and both new contextual routes reject malformed
+UUIDs with privacy-safe `404` responses before database access.
+
+Follow-up timing hardening makes that session and evidence decision
+cache-authoritative: `DogWeek` reads the settled QueryClient suggestion/focus
+state and data through stable keys instead of render-written fetch flags and
+re-checks before evidence save. Round-three web hardening separates action
+suppression from insight readiness: settled safety records one accurate weekly
+view (`hasNextAction: false`) without exposing actions, while fetching/error
+state defers view telemetry until it settles. The weekly suggestion shell is
+busy only while fetching, uses neutral retry copy after a cached error, and
+defers safety rendering to the page-level notice. An open audited capture stays
+pending through a transient refetch and preserves its anchor after a same-safe
+result; a settled safety decision, error, or changed suggestion downgrades to
+manual capture, and evidence save remains fail-closed while cache authority is
+unsettled.
+
+Round-three API hardening moves the authoritative contextual-detail skill
+snapshot under dog safety, then the existing skill advisory lock and a shared
+skill-row lock, so level changes serialize with current-level evidence. Focus
+now reads its weekly-focus/skill snapshot under the same dog safety transaction,
+then the focus-week advisory lock and shared row locks; a focus replacement
+committed while the request waits is reflected coherently. The evidence loader
+remains one batched query and degrades only contextual summaries to unavailable.
+View telemetry now accepts only `reliable`, `developing`, or `null` for
+`strongestStatus`, matching the observable-evidence contract.
+
+Final launch-minor hardening gives a successful evidence save explicit partial
+feedback when client cache authority omits an originally audited suggestion
+target; server anchor-rejection copy remains reserved for actual server
+rejections. Training progress now coordinates one page-level referral alert
+from expanded contextual details while retaining each detail's evidence and
+controls. Telemetry documentation distinguishes weekly recommendation
+intent/navigation from skill-detail application of a recommended context.
+
+Round-four launch hardening replaces the exclusive dog-safety lock on
+contextual detail, focus, and suggestion safety derivation with a PostgreSQL
+shared transaction advisory lock, so compatible readers proceed concurrently
+while safety writers remain exclusive. The locked clock and dog-safety-to-skill
+or-focus lock ordering remain authoritative; critical sections stay bounded to
+keyed safety/ownership work and indexed evidence reads rather than introducing
+a lock timeout. Action-use telemetry remains exclusive and records its event in
+the same safety transaction. Partial server anchor rejections and
+client-detected audited-anchor omissions now use warning feedback, while an
+enabled suggestion action with no valid audited target shows localized retry
+feedback without a mutation. View telemetry explicitly treats
+`strongestStatus` and `hasNextAction` as validated bounded client assertions,
+not server recomputation; dashboards segment weekly settled-mount views from
+distinct settled skill-detail results and never compare their raw counts.
+Final feedback aligns documented evidence ordering with the occurrence-time and
+stable-row-ID implementation, specifies `safety.ruleId` in detail-result
+deduplication, adds its mounted regression, and removes redundant action-return
+and pre-lock-clock plumbing.
+- Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
+  `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
+- Code commits: `59c26a2..6b9d1b2` on `feat/contextual-progress-insights`.
+- Pull request: [#68](https://github.com/mcasillas17/TuringCare/pull/68).
+
+## 2026-08-22 — Brief share privacy hardening
+Behavior Brief sharing now guarantees at most one active public link per dog
+via a PostgreSQL partial unique index over non-null share tokens, while
+preserving multi-version Brief history. Generating a new Brief version now
+atomically revokes any existing public link, so new versions are private by
+default and owners must explicitly re-share them; public reads remain limited
+to the strict whitelist only.
+
+The web separates time-window selection from version creation and warns that
+regenerating a Brief revokes any active public link. Coverage spans
+multi-version lifecycle rules, queued share/generate/revoke concurrency,
+QueryClient cache-authority after share-state mutations, localized English and
+Spanish UX copy, and public-route whitelist/privacy assertions.
+- Spec/plan: `docs/superpowers/specs/2026-08-22-brief-share-privacy-design.md`,
+  `docs/superpowers/plans/2026-08-22-brief-share-privacy.md`
+- Commits: this branch (see `git log`).
+
+## 2026-08-23 — End-to-end English/Spanish localization — IMPLEMENTED, PR #70
 
 Replaced the frontend-only custom translation store with a shared, typed
 `@turingcare/i18n` workspace package backed by i18next. The React adapter uses
@@ -1018,29 +1167,24 @@ chrome follows the initiating validated request locale. Trainer/course records a
 user-authored names, journals, goals, messages, descriptions, and contact data remain
 authored content and are not machine-translated.
 
-Migration `0013_panoramic_skullbuster` added nullable `user.locale` and non-null,
-default-English `briefs.locale`. New Behavior Briefs store the validated generation locale;
-their prose, UTC-stable generated date, enum/status chrome, owned/public views, email, and
-PDF remain in that stored language after UI changes. Review hardening serialized per-dog
-generation and lifecycle transitions, made ambiguous latest versions and drafts fail closed,
-added idempotent send/replay behavior and localized stable error recovery, and introduced
-`0014_third_madripoor` to repair legacy duplicate versions and enforce unique
-`(dog_id, version)` values.
+Behavior Briefs store the validated generation locale; their prose, UTC-stable generated
+date, enum/status chrome, owned/public views, email, and PDF remain in that language after
+UI changes. Review hardening serialized per-dog generation and lifecycle transitions,
+made ambiguous latest versions and drafts fail closed, added idempotent send/replay
+behavior and localized stable error recovery, and repaired legacy duplicate versions
+before enforcing unique `(dog_id, version)` values.
 
-The production rollout now preserves the running `production-deploy` workflow while
-preventing phase interleaving: CI → compatible migrations through 0013 → serialized rolling
-Fly API replacement → post-deploy 0014/0015 → Cloudflare Pages. GitHub Actions retains at
-most one pending run in the concurrency group, with a newer push replacing an older pending
-push. The predeploy selector fails closed if its known postdeploy suffix is no longer exact.
-`Dockerfile.api` includes both shared workspace packages and the workflow builds and
-health-smokes the production image. There are no new locale secrets or environment variables.
+The production rollout preserves the running `production-deploy` workflow while preventing
+phase interleaving: CI → compatible migrations → serialized rolling Fly API replacement →
+post-deploy migrations → Cloudflare Pages. `Dockerfile.api` includes both shared workspace
+packages and the workflow builds and health-smokes the production image. There are no new
+locale secrets or environment variables.
 
 Privacy hardening prevents public Brief bearer tokens from entering analytics: browser and
 API telemetry normalize `/b/<token>` (including route-equivalent `%62`/`%42` prefixes) to
-`/b/:token`, admin aggregation canonicalizes historical rows, and data-only migration
-`0015_brief_share_telemetry_privacy` cleans stored paths. Locale itself is not collected as
-telemetry. Public shares remain a strict finalized-Brief projection with no user ID, dog ID,
-or token in the response.
+`/b/:token`, admin aggregation canonicalizes historical rows, and a data-only migration
+cleans stored paths. Locale itself is not collected as telemetry. Public shares remain a
+strict finalized-Brief projection with no user ID, dog ID, or token in the response.
 
 GPT-5.6 Luna and GPT-5.6 Terra independently reviewed correctness, security/privacy,
 improvements, gaps, and coverage. Verified findings were fixed test-first through 14 waves;
@@ -1056,6 +1200,5 @@ advisory, API test diagnostics, and Docker's local legacy-builder advisory.
 - Spec/plan: `docs/superpowers/specs/2026-08-23-end-to-end-localization-design.md`,
   `docs/superpowers/plans/2026-08-23-end-to-end-localization.md`
 - Reviewer-clean code/release range:
-  `841d592de140b52b2595805fd9c1843be4988c54..bf300360ef3c4ed74ff357ff23a4f5541d866788`;
-  documentation follows on the same localization branch. Published for review as PR #70;
-  the merge SHA will be recorded after merge.
+  `841d592de140b52b2595805fd9c1843be4988c54..bf300360ef3c4ed74ff357ff23a4f5541d866788`.
+- Published for review as PR #70; the merge SHA will be recorded after merge.

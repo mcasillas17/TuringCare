@@ -1,6 +1,6 @@
 {
-  "id": "620f1a07-f116-4649-b85a-7415d0e52c8b",
-  "prevId": "927bd2b7-3723-4974-9a13-55f34480e77d",
+  "id": "66ff9e08-1e8b-477d-bcdc-9c55ba7fca3b",
+  "prevId": "67f3e550-fbe4-4640-a8c3-b54b1d04c9ce",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -281,14 +281,6 @@
           "notNull": true,
           "default": "'draft'"
         },
-        "locale": {
-          "name": "locale",
-          "type": "locale",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'en'"
-        },
         "summary": {
           "name": "summary",
           "type": "text",
@@ -332,14 +324,6 @@
           "nullsNotDistinct": false,
           "columns": [
             "share_token"
-          ]
-        },
-        "briefs_dog_id_version_unique": {
-          "name": "briefs_dog_id_version_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "dog_id",
-            "version"
           ]
         }
       },
@@ -468,6 +452,96 @@
       },
       "indexes": {},
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.dog_safety_signals": {
+      "name": "dog_safety_signals",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "dog_id": {
+          "name": "dog_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "safety_signal_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "safety_signal_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reported_at": {
+          "name": "reported_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "dog_safety_signals_dog_reported_idx": {
+          "name": "dog_safety_signals_dog_reported_idx",
+          "columns": [
+            {
+              "expression": "dog_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reported_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "dog_safety_signals_dog_id_dogs_id_fk": {
+          "name": "dog_safety_signals_dog_id_dogs_id_fk",
+          "tableFrom": "dog_safety_signals",
+          "tableTo": "dogs",
+          "columnsFrom": [
+            "dog_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -715,6 +789,73 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.focus_compatibility_weeks": {
+      "name": "focus_compatibility_weeks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "dog_id": {
+          "name": "dog_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "week_start": {
+          "name": "week_start",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "focus_compatibility_weeks_dog_id_dogs_id_fk": {
+          "name": "focus_compatibility_weeks_dog_id_dogs_id_fk",
+          "tableFrom": "focus_compatibility_weeks",
+          "tableTo": "dogs",
+          "columnsFrom": [
+            "dog_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "focus_compatibility_dog_session": {
+          "name": "focus_compatibility_dog_session",
+          "nullsNotDistinct": false,
+          "columns": [
+            "dog_id",
+            "session_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.journal_entries": {
       "name": "journal_entries",
       "schema": "",
@@ -862,6 +1003,45 @@
       },
       "isRLSEnabled": false
     },
+    "public.legacy_focus_claims": {
+      "name": "legacy_focus_claims",
+      "schema": "",
+      "columns": {
+        "dog_id": {
+          "name": "dog_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "legacy_focus_claims_dog_id_dogs_id_fk": {
+          "name": "legacy_focus_claims_dog_id_dogs_id_fk",
+          "tableFrom": "legacy_focus_claims",
+          "tableTo": "dogs",
+          "columnsFrom": [
+            "dog_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.practice_sessions": {
       "name": "practice_sessions",
       "schema": "",
@@ -897,6 +1077,79 @@
           "primaryKey": false,
           "notNull": false
         },
+        "outcome": {
+          "name": "outcome",
+          "type": "practice_outcome",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cue_support": {
+          "name": "cue_support",
+          "type": "practice_cue_support",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "environment": {
+          "name": "environment",
+          "type": "practice_environment",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "distance": {
+          "name": "distance",
+          "type": "practice_distance",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_band": {
+          "name": "duration_band",
+          "type": "practice_duration_band",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "distraction": {
+          "name": "distraction",
+          "type": "practice_distraction",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "curriculum_level": {
+          "name": "curriculum_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "curriculum_version": {
+          "name": "curriculum_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "practice_variant": {
+          "name": "practice_variant",
+          "type": "practice_variant",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suggestion_id": {
+          "name": "suggestion_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "practice_day": {
+          "name": "practice_day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -905,7 +1158,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "practice_sessions_skill_occurred_idx": {
+          "name": "practice_sessions_skill_occurred_idx",
+          "columns": [
+            {
+              "expression": "skill_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "practice_sessions_skill_id_training_skills_id_fk": {
           "name": "practice_sessions_skill_id_training_skills_id_fk",
@@ -924,7 +1199,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "practice_curriculum_level_range": {
+          "name": "practice_curriculum_level_range",
+          "value": "\"practice_sessions\".\"curriculum_level\" IS NULL OR \"practice_sessions\".\"curriculum_level\" BETWEEN 1 AND 5"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.rate_limit": {
@@ -1406,13 +1686,6 @@
           "notNull": true,
           "default": "'user'"
         },
-        "locale": {
-          "name": "locale",
-          "type": "locale",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1518,6 +1791,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "week_start": {
+          "name": "week_start",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
         "position": {
           "name": "position",
           "type": "integer",
@@ -1564,17 +1843,22 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "weekly_focus_dog_skill": {
-          "name": "weekly_focus_dog_skill",
+        "weekly_focus_dog_week": {
+          "name": "weekly_focus_dog_week",
           "nullsNotDistinct": false,
           "columns": [
             "dog_id",
-            "skill_id"
+            "week_start"
           ]
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "weekly_focus_week_start_monday": {
+          "name": "weekly_focus_week_start_monday",
+          "value": "\"weekly_focus\".\"week_start\" is null or extract(isodow from \"weekly_focus\".\"week_start\") = 1"
+        }
+      },
       "isRLSEnabled": false
     }
   },
@@ -1641,12 +1925,106 @@
         "harder"
       ]
     },
-    "public.locale": {
-      "name": "locale",
+    "public.practice_cue_support": {
+      "name": "practice_cue_support",
       "schema": "public",
       "values": [
-        "en",
-        "es"
+        "food_lure",
+        "hand_signal",
+        "verbal_cue",
+        "no_extra_help"
+      ]
+    },
+    "public.practice_dimension": {
+      "name": "practice_dimension",
+      "schema": "public",
+      "values": [
+        "cue_support",
+        "environment",
+        "distance",
+        "duration",
+        "distraction"
+      ]
+    },
+    "public.practice_distance": {
+      "name": "practice_distance",
+      "schema": "public",
+      "values": [
+        "at_side",
+        "few_steps",
+        "across_room",
+        "across_yard",
+        "far_away"
+      ]
+    },
+    "public.practice_distraction": {
+      "name": "practice_distraction",
+      "schema": "public",
+      "values": [
+        "none",
+        "mild",
+        "moderate",
+        "strong"
+      ]
+    },
+    "public.practice_duration_band": {
+      "name": "practice_duration_band",
+      "schema": "public",
+      "values": [
+        "under_5_seconds",
+        "about_15_seconds",
+        "about_30_seconds",
+        "one_to_two_minutes",
+        "five_to_fifteen_minutes",
+        "about_30_minutes",
+        "one_to_two_hours",
+        "half_day_or_more"
+      ]
+    },
+    "public.practice_environment": {
+      "name": "practice_environment",
+      "schema": "public",
+      "values": [
+        "home_quiet",
+        "home_busy",
+        "yard",
+        "quiet_outdoor",
+        "busy_outdoor"
+      ]
+    },
+    "public.practice_outcome": {
+      "name": "practice_outcome",
+      "schema": "public",
+      "values": [
+        "went_well",
+        "mixed",
+        "too_hard"
+      ]
+    },
+    "public.practice_variant": {
+      "name": "practice_variant",
+      "schema": "public",
+      "values": [
+        "primary",
+        "fallback"
+      ]
+    },
+    "public.safety_signal_source": {
+      "name": "safety_signal_source",
+      "schema": "public",
+      "values": [
+        "practice_session",
+        "behavior_concern"
+      ]
+    },
+    "public.safety_signal_type": {
+      "name": "safety_signal_type",
+      "schema": "public",
+      "values": [
+        "aggression_or_bite_risk",
+        "injury_or_pain",
+        "severe_fear_or_panic",
+        "severe_behavior_concern"
       ]
     },
     "public.user_role": {

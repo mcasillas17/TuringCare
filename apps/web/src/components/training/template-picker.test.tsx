@@ -22,6 +22,15 @@ const sampleCatalog: CatalogTemplate[] = [
         key: "basic-manners.sit",
         name: "Sit",
         description: "Dog reliably sits on cue",
+        dimensions: ["cue_support", "environment", "distraction"],
+        levelSteps: ["cue_support", "distraction", "environment", "environment"],
+        levelStepStrategies: [
+          "add_cue_help",
+          "reduce_distractions",
+          "use_quieter_environment",
+          "use_quieter_environment",
+        ],
+        baseEase: { dimension: "cue_support", strategy: "add_cue_help" },
         levels: [
           { level: 1, description: "Lures into a sit with food in a quiet room" },
           { level: 2, description: "x" },
@@ -34,6 +43,15 @@ const sampleCatalog: CatalogTemplate[] = [
         key: "basic-manners.down",
         name: "Down",
         description: "Dog lies down on cue",
+        dimensions: ["cue_support", "environment", "duration", "distraction"],
+        levelSteps: ["cue_support", "distraction", "duration", "environment"],
+        levelStepStrategies: [
+          "add_cue_help",
+          "reduce_distractions",
+          "shorten_duration",
+          "use_quieter_environment",
+        ],
+        baseEase: { dimension: "cue_support", strategy: "add_cue_help" },
         levels: [
           { level: 1, description: "x" },
           { level: 2, description: "x" },
@@ -56,6 +74,15 @@ const spanishCatalog: CatalogTemplate[] = [
         key: "basic-manners.sit",
         name: "Sentado",
         description: "El perro se sienta de forma confiable con una señal",
+        dimensions: ["cue_support", "environment", "distraction"],
+        levelSteps: ["cue_support", "distraction", "environment", "environment"],
+        levelStepStrategies: [
+          "add_cue_help",
+          "reduce_distractions",
+          "use_quieter_environment",
+          "use_quieter_environment",
+        ],
+        baseEase: { dimension: "cue_support", strategy: "add_cue_help" },
         levels: [
           { level: 1, description: "Se guía hasta sentarse con comida" },
           { level: 2, description: "x" },

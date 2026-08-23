@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { safetySignalValues } from "./practice-evidence";
 import { VALIDATION_MESSAGE_CODES } from "./validation";
 
 export const dogSize = z.enum(["small", "medium", "large", "giant"]);
@@ -27,6 +28,7 @@ export const concernSeverity = z.enum(["mild", "moderate", "severe"]);
 export const behaviorConcernSchema = z.object({
   concern: z.string().min(1, VALIDATION_MESSAGE_CODES.concernRequired).max(500),
   severity: concernSeverity,
+  safetySignal: z.enum(safetySignalValues).nullable().optional(),
 });
 export type BehaviorConcernInput = z.infer<typeof behaviorConcernSchema>;
 

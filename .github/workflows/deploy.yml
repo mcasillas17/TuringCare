@@ -5,9 +5,6 @@ on:
   push:
     branches: [main]
 
-# A production rollout is one indivisible queue item. Never cancel an older
-# migration/API/web sequence in favor of a newer commit, and never interleave
-# two schema rollouts.
 concurrency:
   group: production-deploy
   cancel-in-progress: false
@@ -58,14 +55,17 @@ jobs:
       - name: Smoke production API image
         run: scripts/smoke-api-image.sh turingcare-api:ci
 
-  # Apply every pending migration through 0013. The locale-aware API requires
-  # 0013, while the version constraint in 0014 must wait until legacy read-max
-  # Brief generators have drained.
-  migrate-compatible:
+  # Drain the schema-incompatible legacy API, apply the main migration history
+  # plus additive locale migration 0022, then deploy and verify the new API.
+  # Brief version uniqueness remains post-deploy so no legacy read-max writer
+  # can resume after the constraint is installed.
+  deploy-api:
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -73,28 +73,64 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Migrate production database through the compatible schema
-        run: pnpm --filter @turingcare/api db:migrate:predeploy
-
-  # `flyctl deploy` does not return successfully until the rolling replacement
-  # completes. After this job, every serving machine uses the dog-locking Brief
-  # generator and no legacy writer can resume after 0014 is installed.
-  deploy-api:
-    needs: migrate-compatible
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy to Fly
-        run: flyctl deploy --remote-only --strategy rolling --config apps/api/fly.toml
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - run: pnpm install --frozen-lockfile
+      - name: Drain, migrate, deploy, and verify API
+        run: |
+          set -Eeuo pipefail
+          original_count=$(flyctl machine list --json --app turingcare-api | jq 'length')
+          target_count=$original_count
+          if [ "$target_count" -lt 1 ]; then
+            target_count=1
+          fi
+          migration_attempted=0
+          restore_old_release() {
+            if [ "$original_count" -lt 1 ]; then
+              return
+            fi
+            flyctl scale count "$original_count" --yes --app turingcare-api
+            curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/health
+          }
+          recover_on_exit() {
+            status=$?
+            trap - EXIT INT TERM
+            if [ "$migration_attempted" -eq 0 ]; then
+              restore_old_release
+            else
+              flyctl scale count 0 --yes --app turingcare-api
+            fi
+            exit "$status"
+          }
+          trap recover_on_exit EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          if [ "$original_count" -gt 0 ]; then
+            flyctl scale count 0 --yes --app turingcare-api
+            for attempt in $(seq 1 12); do
+              count=$(flyctl machine list --json --app turingcare-api | jq 'length')
+              if [ "$count" -eq 0 ]; then
+                break
+              fi
+              sleep 5
+            done
+            remaining=$(flyctl machine list --json --app turingcare-api | jq 'length')
+            if [ "$remaining" -ne 0 ]; then
+              echo "API machines did not drain" >&2
+              exit 1
+            fi
+          fi
+          # Once migration starts, fail closed: a later migration can fail
+          # after earlier entries committed, so the legacy API is never restored.
+          migration_attempted=1
+          pnpm --filter @turingcare/api db:migrate:predeploy
+          flyctl deploy --remote-only --config apps/api/fly.toml
+          flyctl scale count "$target_count" --yes --app turingcare-api
+          curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/ready
+          trap - EXIT INT TERM
 
-  # Apply 0014 and the data-only telemetry cleanup in 0015 after all production
-  # API machines use the dog-locking Brief generator. The predeploy command
-  # fails closed unless these are the exact final migration sequence, forcing
-  # future releases to choose and test their own migration phase.
+  # Apply the writer constraint and stronger historical telemetry cleanup only
+  # after the verified API rollout. The predeploy command fails closed unless
+  # 0023 and 0024 are the exact migration tail.
   migrate:
     needs: deploy-api
     runs-on: ubuntu-latest
@@ -108,11 +144,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Migrate production database
+      - name: Apply post-deploy migrations
         run: pnpm --filter @turingcare/api db:migrate
 
-  # The locale-aware frontend requires the compatible API and schema. Publish
-  # it only after the API rollout and every migration complete successfully.
+  # The web uses the expanded focus/session and locale contracts, so publish it
+  # only after the verified API and final migrations are healthy.
   deploy-web:
     needs: migrate
     runs-on: ubuntu-latest

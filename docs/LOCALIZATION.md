@@ -82,7 +82,7 @@ by React or the fixed email/PDF renderers; they are never executable translation
 
 ## Locale-stable Behavior Briefs
 
-Migration `0013_panoramic_skullbuster` adds nullable `user.locale` and non-null
+Migration `0022_panoramic_skullbuster` adds nullable `user.locale` and non-null
 `briefs.locale` with an English default for legacy rows. Every newly generated Brief stores
 the validated request locale alongside its composed summary. The stored locale—not the
 current UI or viewer locale—controls:
@@ -100,7 +100,7 @@ viewer timezone. A malformed or absent legacy locale fails closed to English.
 Brief lifecycle routes also fail closed when the latest version is ambiguous during the
 phased migration window. Per-dog generation and share/finalize/send transitions are
 serialized at database-backed ownership rows, `(dog_id, version)` is unique after migration
-`0014_third_madripoor`, draft Briefs cannot be shared, and stable machine error codes drive
+`0023_third_madripoor`, draft Briefs cannot be shared, and stable machine error codes drive
 localized recovery feedback.
 
 ## Privacy and telemetry
@@ -108,7 +108,7 @@ localized recovery feedback.
 A locale is a two-value display preference, is not used as an identity signal, and is not
 recorded in first-party telemetry. Public Brief share URLs contain bearer tokens, so page
 paths are normalized to `/b/:token` before browser emission, again during API validation,
-and in admin aggregation. Migration `0015_brief_share_telemetry_privacy` cleans historical
+and in admin aggregation. Migration `0024_brief_share_telemetry_privacy` cleans historical
 literal and route-equivalent once-encoded share paths. Public share responses expose a strict
 Brief whitelist and never return a user ID, dog ID, or token.
 

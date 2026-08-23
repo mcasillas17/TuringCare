@@ -53,6 +53,11 @@ describe("DogsList", () => {
   it("renders a card per dog", () => {
     setup(dogs);
     expect(screen.getByText("card:Turing")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /guided setup/i })).toHaveAttribute(
+      "href",
+      "/my/setup/new",
+    );
+    expect(screen.getByRole("button", { name: "Add dog" })).toBeInTheDocument();
   });
   it("shows the empty state when there are no dogs", () => {
     setup([]);

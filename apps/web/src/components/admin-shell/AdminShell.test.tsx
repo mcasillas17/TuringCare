@@ -1,4 +1,5 @@
 import { LocaleProvider } from "@/i18n";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -12,18 +13,20 @@ afterEach(() => {
 function setup(path: string, locale: "en" | "es" = "en") {
   localStorage.setItem("tc-locale", locale);
   return render(
-    <LocaleProvider>
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route element={<AdminShell />}>
-            <Route path="/admin" element={<div>DASH-CONTENT</div>} />
-            <Route path="/admin/trainers" element={<div>TRAINERS-CONTENT</div>} />
-            <Route path="/admin/courses" element={<div>COURSES-CONTENT</div>} />
-          </Route>
-          <Route path="/my" element={<div>APP-HOME</div>} />
-        </Routes>
-      </MemoryRouter>
-    </LocaleProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <LocaleProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route element={<AdminShell />}>
+              <Route path="/admin" element={<div>DASH-CONTENT</div>} />
+              <Route path="/admin/trainers" element={<div>TRAINERS-CONTENT</div>} />
+              <Route path="/admin/courses" element={<div>COURSES-CONTENT</div>} />
+            </Route>
+            <Route path="/my" element={<div>APP-HOME</div>} />
+          </Routes>
+        </MemoryRouter>
+      </LocaleProvider>
+    </QueryClientProvider>,
   );
 }
 

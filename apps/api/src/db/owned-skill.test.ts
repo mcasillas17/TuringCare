@@ -45,6 +45,7 @@ describe("findOwnedSkill", () => {
     await expect(findOwnedSkill(u.userId, dog.id, skill.id)).resolves.toMatchObject({
       id: skill.id,
       goalId: goal.id,
+      catalogSkillKey: null,
     });
   });
 

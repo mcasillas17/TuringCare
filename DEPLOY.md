@@ -3,21 +3,26 @@
 End-to-end deploy on every push to `main`:
 
 ```
-push main → ci → migrate-compatible (through 0013)
-                    → deploy-api (Fly rolling)
-                    → migrate (0014 + 0015)
-                    → deploy-web (Pages)
+push main → ci → deploy-api (drain+migrate through 0022+deploy+ready)
+                    → migrate (0023+0024) → deploy-web
 ```
 
 - **Frontend** → Cloudflare Pages (`turingcare.dog`, `www.turingcare.dog`)
 - **Backend** → Fly.io (`api.turingcare.dog`)
 - **Database** → Supabase Postgres
 
-Production runs share the `production-deploy` concurrency group with
-`cancel-in-progress: false`: a running schema/API/web rollout is not canceled or
-interleaved. GitHub Actions retains at most one pending run per concurrency group, so a
-newer push replaces an older pending push. The locale-aware frontend publishes only after
-the compatible schema, rolling API replacement, and post-deploy migrations all succeed.
+Production deploys are serialized. For schema-incompatible migrations, one
+bounded API job drains the old machines, applies migrations through `0022`,
+deploys, restores the prior machine count, and verifies readiness without a
+runner gap between phases. Before migration begins, a failure restores the old
+release. Once migration is attempted, any failure leaves the API drained for
+operator intervention because an earlier migration may already have committed;
+the workflow never guesses that the legacy schema is still safe. A separate job
+then applies the explicit post-deploy `0023–0024` tail.
+The first deploy bootstraps one API machine when no prior machine exists. Health
+checks use the stable `turingcare-api.fly.dev` hostname, so custom-domain
+provisioning cannot block recovery. The web deploys only after the migrated API
+is healthy and the migration tail has succeeded.
 
 > Nothing here is automated by the repo. Do every step below **once**, by hand,
 > before the first push to `main`. The workflows (`.github/workflows/ci.yml`,
@@ -51,11 +56,11 @@ The API package is `@turingcare/api` (pnpm filter name used everywhere below —
    - **URL-encode** the password if it contains `@ : / ? # [ ] %` (e.g.
      `@`→`%40`). Reset it at Settings → Database → Database password if unknown.
 3. This single value is used as `DATABASE_URL` in **both** the GitHub Actions
-   secret (for both production migration jobs) and the Fly secret (for the running API).
+   secret (for both production migration phases) and the Fly secret (for the running API).
    It is **not** committed anywhere — secrets only.
 
-No tables yet — the `migrate-compatible` and `migrate` jobs create them in the
-phases documented below from `apps/api/drizzle/` on the first deploy.
+No tables yet — the `deploy-api` and `migrate` jobs create them from
+`apps/api/drizzle/` in the phases documented below on the first deploy.
 
 ---
 
@@ -86,12 +91,11 @@ by hand — just confirm them:
 - **`Dockerfile.api`** (repo root, build context = repo root) — runs the API
   with **`tsx`**, not `tsc` + `node dist`. This is deliberate and required: the
   project uses `moduleResolution: "Bundler"` (extensionless relative imports)
-  and the `@turingcare/shared` / `@turingcare/i18n` workspace packages are consumed
-  as TypeScript source — Node's native ESM loader can run neither, so
-  `node dist/index.js` crashes with `ERR_MODULE_NOT_FOUND`. The image copies both
-  workspace package manifests before installation and both source packages into the
-  runtime layer. `tsx` transpiles + resolves them exactly like local dev. CI builds the
-  production image and boot-smokes `/health` against Postgres.
+  and `@turingcare/shared` is consumed as TypeScript source — Node's native ESM
+  loader can run neither, so `node dist/index.js` crashes with
+  `ERR_MODULE_NOT_FOUND`. `tsx` transpiles + resolves both, exactly like local
+  dev. Verified: the image builds, boots, and serves `/health` + register +
+  `/me` against Postgres.
 
 `flyctl deploy --remote-only` builds the image on Fly's builders from
 `Dockerfile.api`; `internal_port` (3001) matches the `PORT` the app binds via
@@ -99,9 +103,8 @@ by hand — just confirm them:
 
 > If you ever want a leaner `node dist` image instead of `tsx`, that's a real
 > change: switch the API tsconfig to `NodeNext`, add `.js` extensions to all
-> relative imports, and add build steps to `@turingcare/shared` and
-> `@turingcare/i18n` (emit JS + types, point their `exports` at `dist`). Out of
-> scope for this deploy setup.
+> relative imports, and add a build step to `@turingcare/shared` (emit JS +
+> types, point its `exports` at `dist`). Out of scope for this deploy setup.
 
 ### 2c. Set Fly secrets
 
@@ -189,7 +192,7 @@ Repo → Settings → Secrets and variables → Actions → New repository secre
 
 | Secret | Value |
 |---|---|
-| `DATABASE_URL` | Supabase Session-pooler URL (used by both migration jobs) |
+| `DATABASE_URL` | Supabase Session-pooler URL (used by both production migration phases) |
 | `FLY_API_TOKEN` | from `fly tokens create deploy` |
 | `CLOUDFLARE_API_TOKEN` | Pages-edit token |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
@@ -207,31 +210,36 @@ gh secret set CLOUDFLARE_ACCOUNT_ID
 
 ## 6. Database rollout contract
 
-The current migration tail has an explicit phased boundary:
+`main` owns the immutable `0013–0021` migration history. Localization and Brief
+concurrency migrations append to that history; never restore the old colliding
+`0013–0015` filenames or rewrite an already-applied migration.
 
 | Phase | Migration / action | Compatibility rule |
 |---|---|---|
-| Pre-deploy | Apply through `0013_panoramic_skullbuster` | Adds the `locale` enum, nullable `user.locale`, and non-null/default-English `briefs.locale`. Both the old and new API can run on this additive schema. |
-| API | `flyctl deploy --strategy rolling` | Waits for every serving machine to use the database-serialized Brief generator before continuing. |
-| Post-deploy | Apply `0014_third_madripoor` | Repairs any duplicate per-dog Brief versions under a writer-blocking lock, then adds the `(dog_id, version)` unique constraint. Do not install while a legacy Brief writer can resume. |
-| Post-deploy | Apply `0015_brief_share_telemetry_privacy` | Data-only cleanup that normalizes public Brief bearer paths in historical telemetry. |
+| Drained pre-deploy | Apply `0013–0021` | Personalized training, guided setup, contextual progress, and initial Brief-share privacy changes are schema-incompatible with the legacy API, so all old Fly machines stay drained. |
+| Drained pre-deploy | Apply `0022_panoramic_skullbuster` | Adds the `locale` enum, nullable `user.locale`, and non-null/default-English `briefs.locale`. |
+| API | Deploy and verify `/ready` | Starts only the locale-aware, dog-row-serializing API; readiness verifies both the expanded main schema and locale columns. |
+| Post-deploy | Apply `0023_third_madripoor` | Repairs duplicate per-dog Brief versions under writer-blocking locks, then adds the `(dog_id, version)` unique constraint. No legacy writer can resume at this point. |
+| Post-deploy | Apply `0024_brief_share_telemetry_privacy` | Broadens `0021`'s data cleanup to encoded/case-variant public Brief bearer paths and paths attached to a mislabeled client event. It does not replace or modify `0021`. |
 | Web | Publish Cloudflare Pages | Requires the locale-aware API and completed migration sequence. |
 
 `pnpm --filter @turingcare/api db:migrate:predeploy` builds a temporary migration
-set ending at 0013. It deliberately fails closed unless 0014 and 0015 are the exact
-latest journal suffix. When adding migration 0016 or later, choose and test its rollout
-phase and update `apps/api/src/db/migrate-predeploy.ts` plus the workflow contract tests;
-do not append a migration and assume the current split remains safe.
+set ending at `0022`. It deliberately fails closed unless `0023` and `0024` are
+the exact journal tail. When adding a later migration, explicitly classify its
+phase and update `apps/api/src/db/migrate-predeploy.ts` plus the rollout contract
+tests; do not assume the current split remains safe.
 
-This release adds no locale environment variable or secret. Locale is a validated request,
-account, and artifact value; keep `.env.example`, GitHub secrets, and Fly secrets unchanged.
+This release adds no locale environment variable or secret. Locale is a
+validated request, account, and artifact value; keep `.env.example`, GitHub
+secrets, and Fly secrets unchanged.
 
 ## 7. First deploy
 
-Push to `main`. Watch the single serialized sequence through `ci`,
-`migrate-compatible`, `deploy-api`, `migrate`, and `deploy-web`. Do not manually
-start a second rollout while it is running. On success: API at the Fly app's
-`*.fly.dev`, frontend at the Pages `*.pages.dev`. Attach the real domains next.
+Push to `main`. Watch the single serialized sequence through `ci`, `deploy-api`
+(drain, predeploy migrations, deploy, readiness), `migrate`, and `deploy-web`.
+Do not manually start a second rollout while it is running. On success: API at
+the Fly app's `*.fly.dev`, frontend at the Pages `*.pages.dev`. Attach the real
+domains next.
 
 ---
 
@@ -261,7 +269,7 @@ Pages manages these DNS records automatically (apex + `www`, proxied/orange is
 fine for Pages).
 
 Verify end-to-end: open `https://turingcare.dog`, register, confirm you land on
-`/my` (session cookie set on `.turingcare.dog`, accepted cross-subdomain by
+`/app` (session cookie set on `.turingcare.dog`, accepted cross-subdomain by
 `api.turingcare.dog`).
 
 ---
@@ -271,7 +279,7 @@ Verify end-to-end: open `https://turingcare.dog`, register, confirm you land on
 ### API (Fly)
 
 ```bash
-fly releases --app turingcare-api --image  # list versions (vN) + image refs
+fly releases --app turingcare-api          # list versions (vN) + image refs
 fly deploy --app turingcare-api --image <previous-image-ref> --config apps/api/fly.toml
 ```
 
@@ -279,53 +287,15 @@ Or Fly Dashboard → `turingcare-api` → **Monitoring → Releases →** select
 previous release → **Rollback**. (Schema rollbacks are separate: write a new
 down migration; don't roll the API back past a schema change without it.)
 
-For the locale/Brief rollout, do **not** roll the API back to a pre-serialization
-writer after 0014 is installed. The unique constraint protects data, but an old writer
-can surface version-conflict failures under concurrency. Roll forward with a corrected
-image, or design and test a separate compatible migration. Do not drop the locale columns,
-enum, Brief uniqueness constraint, or reverse the 0015 privacy cleanup during an application
-rollback; schema reversal requires a new reviewed migration and may discard preference or
-privacy state.
+Do not restore an API that can write Brief versions by an unlocked read-max
+after `0023` is installed. Prefer a forward fix. A schema rollback must be a
+new, reviewed migration; do not drop the locale enum, either Brief uniqueness
+index, or attempt to reverse the historical telemetry cleanup in `0021`/`0024`.
 
 ### Frontend (Cloudflare Pages)
 
 Dashboard → Workers & Pages → `turingcare-web` → **Deployments** → pick the last
 known-good deployment → **⋯ → Rollback to this deployment**. Instant; no rebuild.
-
-Only select a web build compatible with the currently serving API. A locale-aware web build
-expects profile locale reads/updates and the locale request contract; a pre-locale web build
-can run against the additive schema/current API, but rolling the API back past the web's
-contract is unsafe.
-
----
-
-## 10. Post-deploy smoke checks
-
-Start with read-only protocol checks:
-
-```bash
-curl -i https://api.turingcare.dog/health
-curl -i -H 'X-TuringCare-Locale: es' https://api.turingcare.dog/health
-curl -i -H 'Accept-Language: es-MX, en;q=0.8' https://api.turingcare.dog/health
-```
-
-All must return `200`; the latter two must include `Content-Language: es`. Then use a
-dedicated non-admin test account to verify:
-
-1. A Spanish-browser first visit selects Spanish; an explicit switch survives refresh and
-   another signed-in session through the account preference.
-2. API calls accept `X-TuringCare-Locale` cross-origin without a CORS failure.
-3. A Spanish training template returns and persists Spanish display text while authored
-   trainer/course and journal content remains unchanged.
-4. A Spanish Behavior Brief remains Spanish in the owned view, public share, email, and PDF
-   after switching the UI back to English. Confirm a draft cannot be shared.
-5. Verification and password-reset emails initiated from Spanish UI have Spanish chrome.
-6. Admin top-pages data shows public Brief routes only as `/b/:token`, never a bearer
-   segment.
-
-Use only synthetic data and revoke the test Brief share link after the check. The automated
-production Playwright smoke remains read-only; these write-path checks are a deliberate
-release validation, not part of its scheduled run.
 
 ---
 

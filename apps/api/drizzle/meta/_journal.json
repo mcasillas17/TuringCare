@@ -96,22 +96,85 @@
     {
       "idx": 13,
       "version": "7",
-      "when": 1787475073833,
-      "tag": "0013_panoramic_skullbuster",
+      "when": 1786598549064,
+      "tag": "0013_weekly_focus_week_start",
       "breakpoints": true
     },
     {
       "idx": 14,
       "version": "7",
-      "when": 1787502156461,
-      "tag": "0014_third_madripoor",
+      "when": 1786604056494,
+      "tag": "0014_practice_evidence",
       "breakpoints": true
     },
     {
       "idx": 15,
       "version": "7",
+      "when": 1786604923686,
+      "tag": "0015_training_suggestions",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786613173739,
+      "tag": "0016_journal_observation_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786614513769,
+      "tag": "0017_advancement_open_index_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786872387085,
+      "tag": "0018_guided_setup",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787037353486,
+      "tag": "0019_lovely_dormammu",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787439342267,
+      "tag": "0020_brief_share_privacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787469239197,
+      "tag": "0021_brief_share_telemetry_privacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1787475073833,
+      "tag": "0022_panoramic_skullbuster",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787502156461,
+      "tag": "0023_third_madripoor",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
       "when": 1787518154649,
-      "tag": "0015_brief_share_telemetry_privacy",
+      "tag": "0024_brief_share_telemetry_privacy",
       "breakpoints": true
     }
   ]

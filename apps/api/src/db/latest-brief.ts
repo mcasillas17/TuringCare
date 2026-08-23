@@ -1,6 +1,6 @@
 /**
  * Resolve a query containing at most the two greatest Brief versions.
- * During the pre-0014 rollout window an old writer can leave two equal maxima;
+ * During the pre-0023 rollout window an old writer can leave two equal maxima;
  * no timestamp or status can prove which artifact was intended to be latest.
  */
 export type LatestBriefResolution<T> =

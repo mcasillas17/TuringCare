@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { practiceSessionSchema, skillLevelSchema, trainingSkillSchema } from "./progress";
+import {
+  practiceSessionApiSchema,
+  practiceSessionSchema,
+  skillLevelSchema,
+  trainingSkillSchema,
+} from "./progress";
 
 describe("trainingSkillSchema", () => {
   it("accepts a valid skill with confidence", () => {
@@ -54,5 +59,70 @@ describe("practiceSessionSchema", () => {
     expect(
       practiceSessionSchema.safeParse({ occurredAt: "2026-05-22T10:00", notes: 7 }).success,
     ).toBe(false);
+  });
+
+  it.each([-840, 840])("accepts timezone offsets at the practiceDay boundary: %i", (offset) => {
+    expect(
+      practiceSessionSchema.safeParse({
+        occurredAt: "2026-05-22T10:00",
+        timezoneOffsetMinutes: offset,
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([-841, 841])("rejects timezone offsets beyond the practiceDay boundary: %i", (offset) => {
+    expect(
+      practiceSessionSchema.safeParse({
+        occurredAt: "2026-05-22T10:00",
+        timezoneOffsetMinutes: offset,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts structured manual confirmation and rejects combined anchors", () => {
+    expect(
+      practiceSessionSchema.parse({
+        occurredAt: "2026-05-22T10:00",
+        outcome: "went_well",
+        cueSupport: "verbal_cue",
+        confirmCurrentLevel: true,
+      }),
+    ).toEqual({
+      occurredAt: "2026-05-22T10:00",
+      outcome: "went_well",
+      cueSupport: "verbal_cue",
+      confirmCurrentLevel: true,
+    });
+
+    expect(
+      practiceSessionSchema.safeParse({
+        occurredAt: "2026-05-22T10:00",
+        confirmCurrentLevel: true,
+        practicedTarget: {
+          suggestionId: "00000000-0000-4000-8000-000000000001",
+          variant: "primary",
+        },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("practiceSessionApiSchema", () => {
+  it("still accepts the existing ISO and legacy timestamp formats", () => {
+    expect(
+      practiceSessionApiSchema.safeParse({
+        occurredAt: "2026-05-22T10:00:00.000Z",
+      }).success,
+    ).toBe(true);
+    expect(
+      practiceSessionApiSchema.safeParse({
+        occurredAt: "2026-05-22T10:00",
+      }).success,
+    ).toBe(true);
+    expect(
+      practiceSessionApiSchema.safeParse({
+        occurredAt: "2026-05-22T10:00:00-04:00",
+      }).success,
+    ).toBe(true);
   });
 });

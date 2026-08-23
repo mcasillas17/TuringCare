@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS "advancement_proposals_open_skill_idx";
+CREATE UNIQUE INDEX "advancement_proposals_open_skill_idx" ON "advancement_proposals" USING btree ("skill_id") WHERE "advancement_proposals"."status" = 'proposed';

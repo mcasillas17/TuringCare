@@ -1,9 +1,11 @@
-import { desc, eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { auth } from "../auth";
 import { db, pool } from "../db";
 import { briefs, user } from "../db/schema";
+import { withBriefLifecycleLock } from "../lib/brief-lifecycle";
 import { waitForBlockingChain } from "../test-pg-concurrency";
 
 async function signedUpCookie(email: string) {
@@ -40,6 +42,21 @@ async function createDogWithBrief(
     await app.request(`/api/dogs/${dog.id}/brief`, { method: "PUT", headers: { cookie } });
   }
   return dog.id as string;
+}
+
+async function createDog(cookie: string, name: string) {
+  const dogRes = await app.request("/api/dogs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", cookie },
+    body: JSON.stringify({
+      name,
+      size: "medium",
+      sex: "male",
+      source: "shelter",
+      vaccineStage: "unknown",
+    }),
+  });
+  return ((await dogRes.json()) as { dog: { id: string } }).dog.id;
 }
 
 const emails: string[] = [];
@@ -318,6 +335,118 @@ describe("brief share mint/revoke", () => {
       blocker.release();
     }
   });
+
+  it("returns 404 for another user's share and revoke requests", async () => {
+    const ownerEmail = `share-owner_${Date.now()}@example.com`;
+    const otherEmail = `share-other_${Date.now()}@example.com`;
+    emails.push(ownerEmail, otherEmail);
+    const ownerCookie = await signedUpCookie(ownerEmail);
+    const otherCookie = await signedUpCookie(otherEmail);
+    const dogId = await createDogWithBrief(ownerCookie);
+
+    const share = await app.request(`/api/dogs/${dogId}/brief/share`, {
+      method: "POST",
+      headers: { cookie: otherCookie },
+    });
+    const revoke = await app.request(`/api/dogs/${dogId}/brief/share`, {
+      method: "DELETE",
+      headers: { cookie: otherCookie },
+    });
+
+    expect(share.status).toBe(404);
+    expect(await share.json()).toEqual({ error: "not_found" });
+    expect(revoke.status).toBe(404);
+    expect(await revoke.json()).toEqual({ error: "not_found" });
+  });
+
+  it("rejects a second active token for one dog while allowing one per dog", async () => {
+    const email = `share-index_${Date.now()}@example.com`;
+    emails.push(email);
+    const cookie = await signedUpCookie(email);
+    const firstDogId = await createDog(cookie, "First");
+    const secondDogId = await createDog(cookie, "Second");
+    const firstToken = `first-${randomUUID()}`;
+    const secondToken = `second-${randomUUID()}`;
+    const thirdToken = `third-${randomUUID()}`;
+
+    await db.insert(briefs).values([
+      { dogId: firstDogId, summary: "First shared Brief", version: 1, shareToken: firstToken },
+      {
+        dogId: secondDogId,
+        summary: "Second shared Brief",
+        version: 1,
+        shareToken: secondToken,
+      },
+    ]);
+
+    await expect(
+      db.insert(briefs).values({
+        dogId: firstDogId,
+        summary: "Invalid second active Brief",
+        version: 2,
+        shareToken: thirdToken,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rolls back a token clear when Brief insertion violates the summary constraint", async () => {
+    const email = `share-rollback_${Date.now()}@example.com`;
+    emails.push(email);
+    const cookie = await signedUpCookie(email);
+    const dogId = await createDogWithBrief(cookie);
+    const mint = await app.request(`/api/dogs/${dogId}/brief/share`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    const { token } = (await mint.json()) as { token: string };
+
+    await expect(
+      withBriefLifecycleLock(dogId, async (tx) => {
+        await tx
+          .update(briefs)
+          .set({ shareToken: null })
+          .where(and(eq(briefs.dogId, dogId), isNotNull(briefs.shareToken)));
+        await tx.insert(briefs).values({
+          dogId,
+          summary: null as never,
+          version: 2,
+          status: "draft",
+        });
+      }),
+    ).rejects.toThrow();
+
+    expect((await app.request(`/api/share/brief/${token}`)).status).toBe(200);
+  });
+
+  it("clears every historical token when revoking a newer private Brief", async () => {
+    const email = `revoke-history_${Date.now()}@example.com`;
+    emails.push(email);
+    const cookie = await signedUpCookie(email);
+    const dogId = await createDogWithBrief(cookie);
+    const mint = await app.request(`/api/dogs/${dogId}/brief/share`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    const { token } = (await mint.json()) as { token: string };
+    await db.insert(briefs).values({
+      dogId,
+      summary: "Newer private Brief",
+      version: 2,
+      status: "draft",
+    });
+
+    const revoke = await app.request(`/api/dogs/${dogId}/brief/share`, {
+      method: "DELETE",
+      headers: { cookie },
+    });
+    expect(revoke.status).toBe(200);
+    const rows = await db
+      .select({ shareToken: briefs.shareToken })
+      .from(briefs)
+      .where(eq(briefs.dogId, dogId));
+    expect(rows.map((row) => row.shareToken)).toEqual([null, null]);
+    expect((await app.request(`/api/share/brief/${token}`)).status).toBe(404);
+  });
 });
 
 describe("public GET /api/share/brief/:token", () => {
@@ -359,6 +488,14 @@ describe("public GET /api/share/brief/:token", () => {
     const pub = await app.request(`/api/share/brief/${token}`);
     expect(pub.status).toBe(200);
     const body = (await pub.json()) as { brief: Record<string, unknown> };
+    expect(Object.keys(body.brief).sort()).toEqual([
+      "dogName",
+      "generatedAt",
+      "locale",
+      "status",
+      "summary",
+      "version",
+    ]);
     expect(body.brief.dogName).toBe("Rex");
     expect(typeof body.brief.summary).toBe("string");
     expect(body.brief).toHaveProperty("version");
@@ -367,9 +504,47 @@ describe("public GET /api/share/brief/:token", () => {
     expect(body.brief).not.toHaveProperty("dogId");
     expect(body.brief).not.toHaveProperty("shareToken");
 
-    expect((await app.request("/api/share/brief/does-not-exist")).status).toBe(404);
+    const unknown = await app.request("/api/share/brief/does-not-exist");
+    expect(unknown.status).toBe(404);
+    const unknownBody = await unknown.json();
 
     await app.request(`/api/dogs/${dogId}/brief/share`, { method: "DELETE", headers: { cookie } });
-    expect((await app.request(`/api/share/brief/${token}`)).status).toBe(404);
+    const revoked = await app.request(`/api/share/brief/${token}`);
+    expect(revoked.status).toBe(404);
+    expect(await revoked.json()).toEqual(unknownBody);
+  });
+
+  it("revokes an old public token when an explicit new version is generated", async () => {
+    const email = `new-version_${Date.now()}@example.com`;
+    emails.push(email);
+    const cookie = await signedUpCookie(email);
+    const dogId = await createDogWithBrief(cookie);
+    const shared = await app.request(`/api/dogs/${dogId}/brief/share`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    const { token } = (await shared.json()) as { token: string };
+
+    const generated = await app.request(`/api/dogs/${dogId}/brief`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    expect(generated.status).toBe(201);
+    expect(
+      ((await generated.json()) as { brief: { version: number; shareToken: string | null } }).brief,
+    ).toMatchObject({
+      version: 2,
+      shareToken: null,
+    });
+
+    const unknown = await app.request("/api/share/brief/does-not-exist");
+    const old = await app.request(`/api/share/brief/${token}`);
+    expect(old.status).toBe(404);
+    expect(await old.json()).toEqual(await unknown.json());
+    const rows = await db
+      .select({ shareToken: briefs.shareToken })
+      .from(briefs)
+      .where(eq(briefs.dogId, dogId));
+    expect(rows.map((row) => row.shareToken)).toEqual([null, null]);
   });
 });

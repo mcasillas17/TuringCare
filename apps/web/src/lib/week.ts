@@ -31,6 +31,19 @@ export function dayKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Local Monday YYYY-MM-DD key for a date's week. */
+export function weekKeyOf(date: Date): string {
+  return dayKey(mondayOf(date));
+}
+
+/** Monday YYYY-MM-DD for the week containing an instant in a supplied timezone. */
+export function weekKeyAtOffset(date: Date, timezoneOffsetMinutes: number): string {
+  const local = new Date(date.getTime() - timezoneOffsetMinutes * 60_000);
+  const daysSinceMonday = (local.getUTCDay() + 6) % 7;
+  local.setUTCDate(local.getUTCDate() - daysSinceMonday);
+  return local.toISOString().slice(0, 10);
+}
+
 /** True if both dates fall in the same local Mon–Sun week. */
 export function sameWeek(a: Date, b: Date): boolean {
   return mondayOf(a).getTime() === mondayOf(b).getTime();

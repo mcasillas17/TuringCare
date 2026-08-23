@@ -1,0 +1,1 @@
+CREATE INDEX "journal_entries_dog_kind_occurred_idx" ON "journal_entries" USING btree ("dog_id","kind","occurred_at","id");

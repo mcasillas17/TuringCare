@@ -10,13 +10,21 @@ type Props = {
   today: Date;
   onLog: (skillId: string, day: Date) => void;
   onRemove: (skillId: string, sessionId: string) => void;
+  logDisabled?: boolean;
 };
 
 function sessionsForCell(skill: FocusSkill, key: string): FocusSession[] {
   return skill.sessions.filter((s) => dayKey(new Date(s.occurredAt)) === key);
 }
 
-export function WeekGrid({ focusSkills, days, today, onLog, onRemove }: Props) {
+export function WeekGrid({
+  focusSkills,
+  days,
+  today,
+  onLog,
+  onRemove,
+  logDisabled = false,
+}: Props) {
   const { locale, t } = useI18n();
   const [open, setOpen] = useState<{ skillId: string; key: string } | null>(null);
   const todayKey = dayKey(today);
@@ -65,11 +73,12 @@ export function WeekGrid({ focusSkills, days, today, onLog, onRemove }: Props) {
                     weekday: "long",
                     year: "numeric",
                   }) ?? "";
+                const isLogDisabled = isFuture || (count === 0 && logDisabled);
                 return (
                   <td key={key} className="relative p-1 text-center align-middle">
                     <button
                       type="button"
-                      disabled={isFuture}
+                      disabled={isLogDisabled}
                       aria-label={
                         count > 0
                           ? t(count === 1 ? "week.cellFilledOne" : "week.cellFilledOther", {
@@ -85,7 +94,7 @@ export function WeekGrid({ focusSkills, days, today, onLog, onRemove }: Props) {
                           : onLog(skill.skillId, d)
                       }
                       className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full text-base ${
-                        isFuture
+                        isLogDisabled
                           ? "cursor-not-allowed text-silver"
                           : count > 0
                             ? "bg-copper/15 text-copper hover:bg-copper/25"
@@ -127,6 +136,7 @@ export function WeekGrid({ focusSkills, days, today, onLog, onRemove }: Props) {
                         ))}
                         <button
                           type="button"
+                          disabled={logDisabled}
                           className="w-full rounded bg-slate px-2 py-1 text-xs text-cream"
                           onClick={() => onLog(skill.skillId, d)}
                         >

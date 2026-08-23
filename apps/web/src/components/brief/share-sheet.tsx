@@ -17,7 +17,7 @@ type BriefLike = {
   summary: string;
   generatedAt: string;
   locale?: Locale;
-  shareToken?: string | null;
+  shareToken: string | null;
 };
 
 type Props = {
@@ -46,10 +46,7 @@ export function BriefShareSheet({
   const share = useShareBrief(dogId);
   const revoke = useRevokeShare(dogId);
   const [panel, setPanel] = useState<Panel>("menu");
-  // The brief prop only gains a shareToken after an async refetch; hold the
-  // token returned by the share mutation so the link shows immediately.
-  const [createdToken, setCreatedToken] = useState<string | null>(null);
-  const token = brief.shareToken ?? createdToken;
+  const token = brief.shareToken;
   const shareUrl = token ? `${window.location.origin}/b/${token}` : null;
 
   const ensureFinalized = async () => {
@@ -75,8 +72,7 @@ export function BriefShareSheet({
     try {
       await ensureFinalized();
       if (!shareUrl) {
-        const res = await share.mutateAsync();
-        setCreatedToken(res.token);
+        await share.mutateAsync();
       }
       setPanel("link");
     } catch (error) {
@@ -193,7 +189,6 @@ export function BriefShareSheet({
                   onClick={async () => {
                     try {
                       await revoke.mutateAsync();
-                      setCreatedToken(null);
                       setPanel("menu");
                     } catch (error) {
                       toast.error(

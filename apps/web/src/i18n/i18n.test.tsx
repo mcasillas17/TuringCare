@@ -58,11 +58,206 @@ function ReactI18nextProbe() {
   );
 }
 
+const task18Sections = ["suggestion", "practice", "safety"] as const;
+
+function placeholders(value: string): string[] {
+  return [...value.matchAll(/\{([^}]+)\}/g)]
+    .flatMap((match) => (match[1] ? [match[1]] : []))
+    .sort();
+}
+
 afterEach(() => {
   resetActiveLocale();
   vi.unstubAllGlobals();
   document.documentElement.lang = "";
   localStorage.clear();
+});
+
+describe("i18n catalogs", () => {
+  it("es has exactly the same keys as en", () => {
+    expect(keyPaths(es).sort()).toEqual(keyPaths(en).sort());
+  });
+  it("includes all Task 18 suggestion, practice, and safety keys", () => {
+    const task18Keys = {
+      suggestion: [
+        "title",
+        "forSkill",
+        "levelLabel",
+        "primaryLabel",
+        "fallbackLabel",
+        "fallbackSameLevel",
+        "reasonColdStart",
+        "reasonStepBack",
+        "reasonEase",
+        "reasonContext",
+        "reasonHold",
+        "reasonMaintain",
+        "evidence",
+        "noEvidence",
+        "needsFocusTitle",
+        "needsFocusBody",
+        "needsFocusCta",
+        "customTitle",
+        "customBody",
+        "actionStarted",
+        "actionSkipped",
+        "changeFocus",
+        "skippedTitle",
+        "skippedBody",
+        "rateUseful",
+        "rateNotUseful",
+        "actionThanks",
+        "actionFailed",
+        "loadError",
+        "advTitle",
+        "advBody",
+        "advEvidence",
+        "advConfirm",
+        "advStayed",
+        "advRejected",
+        "advRegressed",
+        "advInsufficient",
+        "advSaved",
+        "advFailed",
+      ],
+      practice: [
+        "outcomeQuestion",
+        "outcomeWentWell",
+        "outcomeMixed",
+        "outcomeTooHard",
+        "outcomeSkip",
+        "saveEvidence",
+        "practicedVersion",
+        "practicedPrimary",
+        "practicedFallback",
+        "outcomeSaved",
+        "outcomeFailed",
+        "anchorRejectedPracticeDay",
+        "anchorRejectedTargetLocked",
+        "anchorRejectedGeneric",
+        "auditedAnchorOmitted",
+        "contextTitle",
+        "contextOptional",
+        "dimCueSupport",
+        "dimEnvironment",
+        "dimDistance",
+        "dimDuration",
+        "dimDistraction",
+        "easeAddCueHelp",
+        "easeQuieterEnvironment",
+        "easeIncreaseTriggerDistance",
+        "easeDecreaseOwnerDistance",
+        "easeShortenDuration",
+        "easeReduceDistractions",
+        "cueSupportLabel",
+        "cueFoodLure",
+        "cueHandSignal",
+        "cueVerbalCue",
+        "cueNoExtraHelp",
+        "environmentLabel",
+        "envHomeQuiet",
+        "envHomeBusy",
+        "envYard",
+        "envQuietOutdoor",
+        "envBusyOutdoor",
+        "distanceLabel",
+        "distAtSide",
+        "distFewSteps",
+        "distAcrossRoom",
+        "distAcrossYard",
+        "distFarAway",
+        "durationLabel",
+        "durUnder5",
+        "durAbout15",
+        "durAbout30",
+        "durOneToTwo",
+        "durFiveToFifteen",
+        "durAboutThirtyMinutes",
+        "durOneToTwoHours",
+        "durHalfDayPlus",
+        "distractionLabel",
+        "distractionNone",
+        "distractionMild",
+        "distractionModerate",
+        "distractionStrong",
+        "safetyLabel",
+        "safetyNone",
+        "safetyConfirm",
+        "futureSession",
+        "safetyAggression",
+        "safetyInjury",
+        "safetyFear",
+      ],
+      safety: [
+        "title",
+        "bodyInjury",
+        "bodyAggression",
+        "bodyFear",
+        "bodySevereConcern",
+        "bodyWorsening",
+        "referralVeterinarian",
+        "referralBehaviorist",
+        "referralTrainer",
+        "directoryTitle",
+        "directoryDacvb",
+        "directoryCcpdt",
+        "directoryIaabc",
+        "directoryFearFree",
+        "keepLogging",
+      ],
+    };
+    const catalog = en as unknown as Record<string, Record<string, string>>;
+
+    for (const [section, keys] of Object.entries(task18Keys)) {
+      expect(Object.keys(catalog[section] ?? {}).sort()).toEqual(keys.sort());
+    }
+  });
+  it("has non-empty Task 18 translations with matching placeholders", () => {
+    const enCatalog = en as unknown as Record<string, Record<string, string>>;
+    const esCatalog = es as unknown as Record<string, Record<string, string>>;
+
+    for (const section of task18Sections) {
+      for (const key of Object.keys(enCatalog[section] ?? {})) {
+        const english = enCatalog[section]?.[key] ?? "";
+        const spanish = esCatalog[section]?.[key] ?? "";
+
+        expect(english.trim(), `en.${section}.${key}`).not.toBe("");
+        expect(spanish.trim(), `es.${section}.${key}`).not.toBe("");
+        expect(placeholders(spanish), `es.${section}.${key}`).toEqual(placeholders(english));
+      }
+    }
+  });
+  it("no es value is left equal to its en value (untranslated)", () => {
+    const flat = (o: Record<string, unknown>, p = ""): [string, unknown][] =>
+      Object.entries(o).flatMap(([k, v]) =>
+        v && typeof v === "object"
+          ? flat(v as Record<string, unknown>, `${p}${k}.`)
+          : [[`${p}${k}`, v]],
+      );
+    const enF = Object.fromEntries(flat(en));
+    const untranslated = flat(es)
+      .filter(([k, v]) => v === enF[k])
+      .map(([k]) => k)
+      .filter(
+        (k) =>
+          // Brand name and locale codes are identical by design. "Total" is
+          // the same word in both languages, and goalProgress is a formatting-
+          // only template whose localized content arrives through placeholders.
+          // The delete-account confirm word is kept as "delete" in both locales
+          // as deliberate friction — it's the literal the user must type.
+          ![
+            "admin.total",
+            "footer.brand",
+            "generatedBrief.goalProgress",
+            "language.en",
+            "language.es",
+            "language.nameEn",
+            "language.nameEs",
+            "settings.deleteConfirmWord",
+          ].includes(k),
+      );
+    expect(untranslated).toEqual([]);
+  });
 });
 
 describe("detectInitialLocale", () => {

@@ -8,8 +8,8 @@ import { Pool } from "pg";
 import { preparePredeployMigrationFolder } from "./migration-rollout";
 
 const POSTDEPLOY_MIGRATIONS = [
-  "0014_third_madripoor",
-  "0015_brief_share_telemetry_privacy",
+  "0023_third_madripoor",
+  "0024_brief_share_telemetry_privacy",
 ] as const;
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");

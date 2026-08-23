@@ -4,6 +4,10 @@ import { useLocation } from "react-router-dom";
 
 const base = import.meta.env.VITE_API_URL || "";
 
+export function pageViewPath(pathname: string): string {
+  return normalizeTelemetryPagePath(pathname);
+}
+
 /** Fire-and-forget telemetry. Network/HTTP failures are swallowed. */
 export function track(name: string, props: Record<string, unknown> = {}): void {
   void fetch(`${base}/api/events`, {
@@ -20,7 +24,7 @@ export function track(name: string, props: Record<string, unknown> = {}): void {
 export function PageViewTracker(): null {
   const { pathname } = useLocation();
   useEffect(() => {
-    track("page.viewed", { path: normalizeTelemetryPagePath(pathname) });
+    track("page.viewed", { path: pageViewPath(pathname) });
   }, [pathname]);
   return null;
 }

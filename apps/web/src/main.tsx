@@ -2,6 +2,7 @@ import { DirectoryLayout } from "@/components/DirectoryLayout";
 import { AdminShell } from "@/components/admin-shell/AdminShell";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { DogLayout } from "@/components/dog-layout";
+import { GuidedSetupLayout } from "@/components/guided-setup/guided-setup-layout";
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/i18n";
 import { LocaleAccountBoundary } from "@/i18n/locale-account-bridge";
@@ -17,6 +18,7 @@ import { DogTraining } from "@/routes/dog-training";
 import { DogWeek } from "@/routes/dog-week";
 import { DogsList } from "@/routes/dogs-list";
 import { ForgotPassword } from "@/routes/forgot-password";
+import { GuidedSetup } from "@/routes/guided-setup";
 import { Journal } from "@/routes/journal";
 import { Landing } from "@/routes/landing";
 import { Login } from "@/routes/login";
@@ -89,6 +91,16 @@ createRoot(document.getElementById("root") as HTMLElement).render(
                   <Route path="/trainers/:id" element={<TrainerDetail />} />
                   <Route path="/courses" element={<Courses />} />
                   <Route path="/courses/:id" element={<CourseDetail />} />
+                </Route>
+                <Route
+                  element={
+                    <RequireAuth>
+                      <GuidedSetupLayout />
+                    </RequireAuth>
+                  }
+                >
+                  <Route path="/my/setup" element={<GuidedSetup />} />
+                  <Route path="/my/setup/new" element={<GuidedSetup allowNewDog />} />
                 </Route>
                 <Route
                   element={

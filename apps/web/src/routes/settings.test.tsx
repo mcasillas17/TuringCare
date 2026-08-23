@@ -1,5 +1,6 @@
 import * as turingCtx from "@/components/turing/turing-context";
 import { LocaleProvider } from "@/i18n";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
@@ -19,11 +20,13 @@ afterEach(() => vi.restoreAllMocks());
 
 function setup() {
   return render(
-    <LocaleProvider>
-      <MemoryRouter>
-        <Settings />
-      </MemoryRouter>
-    </LocaleProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <LocaleProvider>
+        <MemoryRouter>
+          <Settings />
+        </MemoryRouter>
+      </LocaleProvider>
+    </QueryClientProvider>,
   );
 }
 

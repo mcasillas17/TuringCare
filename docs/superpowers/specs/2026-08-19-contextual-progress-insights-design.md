@@ -106,7 +106,10 @@ list of every possible context combination.
 
 If the latest attempt in a Developing context is `too_hard`, owner-facing copy
 says the context needs more support. The next-practice action must reduce
-difficulty rather than suggest progression.
+difficulty rather than suggest progression. If the reviewed easier context is
+already Reliable, the API emits no support-oriented next action: the original
+failed context may still show its accurate support note, but a known-successful
+context is never relabeled as Developing.
 
 ## Owner Experience
 
@@ -122,6 +125,13 @@ existing weekly practice controls:
 The weekly summary does not list Not observed contexts and does not replace the
 existing week grid. It helps the owner decide how to practice the selected
 skill.
+
+When the server-owned active safety decision blocks exercises, the summary
+preserves its strongest evidence but returns no practice action and includes
+the existing safety/referral decision for accessible guidance. This is distinct
+from a genuine sparse response with no safety decision. Action-derived synthetic
+`not_observed` rows are removed under suppression, while observed Reliable and
+Developing evidence remains available for guidance.
 
 If no structured evidence exists, the summary uses neutral copy such as:
 
@@ -201,10 +211,21 @@ an observed exact context by changing one controlled value.
 
 The policy applies these rules in order:
 
-1. If the latest relevant result is `too_hard`, choose the nearest recorded or
-   curriculum-supported context that reduces exactly one difficulty dimension.
+1. If the latest relevant result is `too_hard`, an unobserved reviewed adjacent
+   context may reduce exactly one difficulty dimension. If that adjacent target
+   is already non-Reliable or contains any recent `too_hard`, do not recommend
+   it. Instead, repeat only another recorded Developing context proven no
+   harder than the original failed context on every controlled dimension,
+   excluding both the original failed key and the rejected adjacent key. It may
+   be equal or easier across multiple dimensions, but a changed null/unknown
+   value or an unreviewed or ambiguous distance direction is not proven safe.
+   If no such Developing context exists, return no action. An already Reliable
+   adjacent target also returns no action rather than being recast with
+   support-oriented copy.
 2. Otherwise, if a Reliable context has a reviewed adjacent harder context,
-   recommend that single-step progression.
+   recommend that single-step progression only when the exact harder target is
+   not already observed as non-Reliable or with a `too_hard` result. A failed
+   harder target is excluded from fallback repeats.
 3. Otherwise, recommend another attempt in the strongest Developing context.
 4. If evidence is too sparse, ask the owner to record an outcome and context
    rather than inventing a progression.
@@ -248,6 +269,8 @@ curriculum version, the explicit window, and policy version.
 The shared package exposes:
 
 - the existing practice outcome, context, and practice-session schemas;
+- the existing `SuggestionSafety`/referral contract for server-owned exercise
+  suppression;
 - a request-only `confirmCurrentLevel: true` option for session creation and
   evidence updates, mutually exclusive with `practicedTarget`;
 - contextual status;
@@ -268,6 +291,7 @@ type ContextualProgress = {
   policyVersion: string;
   strongestContext: ExactContextEvidence | null;
   nextPracticeAction: NextPracticeAction | null;
+  safety: SuggestionSafety | null;
   exactContexts: ExactContextEvidence[];
 };
 
@@ -324,7 +348,7 @@ The data-access layer:
 - selects only columns required by the derivation;
 - filters to the current owner-confirmed level and current curriculum version;
 - requires persisted `practiceDay` for distinct-day claims;
-- orders deterministically by occurrence and creation time;
+- orders deterministically by occurrence time descending, then stable row ID/UUID descending for ties—not creation time;
 - keeps owner authorization outside the pure policy.
 
 Manual level anchoring reuses the transaction and skill row lock already used
@@ -335,12 +359,57 @@ is trusted. No database migration is required for this anchor.
 Expose `GET /api/dogs/:id/skills/:skillId/contextual-progress` beneath the
 existing owned dog and skill hierarchy. It returns the full contract and must
 call `findOwnedDog` and `findOwnedSkill`, returning `404` for cross-owner or
-missing resources.
+missing resources. Validate both route parameters with the repository UUID
+schema before either ownership query; malformed IDs use the same
+`{ error: "not_found" }` `404` response and must not reach Drizzle. The route
+uses `evaluateSafetyWithSharedLock` to derive the safety decision and full
+contextual evidence/action through the lock-held transaction executor. The
+Postgres shared advisory lock lets same-dog safety readers proceed concurrently,
+while every safety-input writer continues to take the conflicting exclusive
+lock, so a safety write cannot commit between the decision and the returned
+action or synthetic row. The helper samples one authoritative `lockedNow`
+immediately after acquiring the lock, passes it to both `loadSafetyInputs` and
+the callback, and the contextual loader uses that same instance for its
+evidence bounds. Callers must not capture a pre-lock clock. Detail preserves
+the established lock order: dog safety, skill advisory lock, then the shared
+skill-row lock.
+
+Focus follows the same shared safety-read rule, preserving dog safety before
+the focus-week advisory locks and shared focus/skill row locks. Suggestion GET
+finalization likewise uses the shared evaluator for its governing safety
+decision and audit; it may write that audit while holding the shared lock
+because the audit never changes a safety input. Action-use telemetry is
+different: it keeps the exclusive evaluator, and its safety decision plus event
+insert occur in the same transaction.
+
+No advisory-lock timeout is introduced. The locked sections contain only
+bounded, keyed safety and ownership reads plus the existing 21-day evidence
+read, backed by `dog_safety_signals_dog_reported_idx` and
+`practice_sessions_skill_occurred_idx`; the journal aggregate is bounded to
+14 days. Turning ordinary contention into a ready response through a timeout
+would weaken the safety guarantee.
+
+Expose `POST /api/dogs/:id/contextual-progress/events` beneath the same owned
+dog route. Its UUID guard runs before JSON validation, the ownership query, and
+telemetry recording, so a malformed dog ID plus an invalid body still returns
+the same privacy-safe `{ error: "not_found" }` `404` and records no event.
+`training.context_next_action_used` re-evaluates safety under the exclusive dog
+safety lock and inserts its event in that same transaction; when exercises are
+suppressed, it returns the normal `202 { ok: true }` acknowledgment without a
+telemetry record. `training.context_insight_viewed` remains recordable while
+safety is active.
 
 The existing focus response adds one compact `contextualProgressSummary` per
 returned focus skill. The loader derives all returned summaries from one
-bounded evidence query rather than issuing one query per skill. The expanded
-skill card fetches the full skill-scoped route only when opened.
+bounded evidence query rather than issuing one query per skill. Focus evaluates
+the dog's active safety decision once per request under the dog safety lock and
+passes the same post-lock `lockedNow` plus transaction executor to the one
+batched evidence read, sharing the result across all returned summaries. A
+contextual evidence-read failure
+returns the explicit `unavailable` summary state; failures acquiring,
+evaluating, or committing the safety transaction propagate instead of yielding
+an unsafe ready result. The expanded skill card fetches the full skill-scoped
+route only when opened.
 
 ## Web Architecture
 
@@ -349,12 +418,28 @@ Add TanStack Query hooks and stable keys for:
 - dog/focus contextual summaries;
 - skill contextual detail.
 
-Logging or deleting a practice session invalidates:
+Safety-derived training caches use one shared web invalidation boundary:
+`invalidateTrainingSafetyData(queryClient, dogId)` invalidates the dog-scoped
+prefixes `["suggestion", dogId]`, `["focus", dogId]`, and
+`["contextual-progress", dogId]`. The helper is independent of the query hooks
+that consume those keys, and every mutation callback returns or awaits its
+promise so `mutateAsync` cannot resolve before invalidation scheduling and
+active refetches complete.
 
-- dog progress;
-- skill contextual detail;
-- focus/week contextual summaries;
-- overview caches affected by existing practice behavior.
+Apply that boundary after every web mutation that can add, change, or remove
+an active safety input:
+
+- practice session creation, evidence updates, and session deletion;
+- behavior-concern add/remove;
+- journal entry add/update/delete;
+- guided setup behavior and progress actions;
+- dog deletion, which removes the dog and its safety inputs.
+
+The profile update hook is not included because the current
+`evaluateSafety` policy reads persisted safety signals and bounded journal
+fields, not dog profile fields. Practice-derived invalidation reuses the
+focused helper and adds progress and overview caches without creating an
+import cycle.
 
 UI responsibilities remain separated:
 
@@ -377,8 +462,69 @@ catalogs.
   without mutating the session. Attempting to replace an existing curriculum
   anchor returns the existing explicit anchor-rejection result and leaves that
   anchor unchanged; other valid evidence fields may still be saved.
+- A server `anchorRejected` result and a client-detected
+  `auditedAnchorOmitted` result are partial saves: the UI uses localized warning
+  feedback. A complete save remains success feedback, and a mutation failure
+  remains error feedback. If an enabled suggestion action no longer has an
+  eligible audited target, the UI reports localized retry feedback and sends no
+  mutation or telemetry event.
 - Insight query failures show a retryable, localized inline state while
   existing practice controls remain usable.
+- An initial weekly-focus failure is a distinct retry/edit state and must not
+  render the genuine empty-focus state. Cached focus data remains usable during
+  a background error. An unavailable per-skill contextual summary exposes an
+  inline retry without disabling the week grid.
+- Weekly recommendation suppression is fail-closed for a relevant focus query
+  error or a current-week suggestion query error, including when cached data is
+  still present. Cached evidence, the week grid, and practice logging remain
+  usable; Retry remains available, but suggestion/context action CTAs and
+  telemetry stay suppressed until a successful response settles. A cold focus
+  load shows loading only, not the pick-focus empty state. Action suppression
+  and insight telemetry readiness remain separate: query uncertainty defers a
+  weekly view event, while settled safety records one view with
+  `hasNextAction: false`.
+- Active safety suppression removes `nextPracticeAction` and action-derived
+  synthetic `not_observed` rows, preserves observed evidence/status rows,
+  renders the existing localized safety/referral guidance, and records no
+  next-action-use telemetry. It does not suppress
+  `training.context_insight_viewed`: after focus and suggestion state settle,
+  each mounted weekly summary records its strongest status once with
+  `hasNextAction: false`. Server action-use ingestion independently repeats
+  this safety check under the dog lock and returns its unchanged acknowledgment
+  without recording when suppressed.
+- `DogWeek` derives one `activeSafety` from the current-week suggestion or any
+  ready contextual summary. It renders exactly one page-level referral notice,
+  hides stale exercise suggestions, and passes page-owned notice/action
+  ownership to each summary card.
+- During background revalidation, `isFetching` on either suggestion or focus
+  query conservatively suppresses cached suggestion exercise/action controls
+  and all contextual next-action CTAs and telemetry. A cached weekly
+  suggestion retains a busy, neutral card shell while fetching, but never
+  exposes stale primary/fallback exercise text or interactive controls. A
+  cached error instead uses neutral retry copy without `aria-busy`; the
+  page-level safety notice owns safety rendering and stale suggestion controls
+  disappear. The week grid and practice logging controls remain available.
+  Skill detail receives its own `isFetching` state: cached evidence and session
+  controls remain visible while its next-practice CTA and action telemetry are
+  suppressed, then restore after a settled safe result. A detail query error
+  with cached data preserves that evidence and Retry but fails closed on actions
+  until a successful retry.
+- After weekly session creation awaits, `DogWeek` reads authoritative
+  QueryClient snapshots through `suggestionKey(id, weekKey)` and
+  `focusKey(id, weekKey)`, rather than using render-written recommendation
+  refs. Both query states must be `status: "success"`, `fetchStatus: "idle"`,
+  and error-free; their current cached data must still describe the current
+  dog, week, skill, non-dismissed exercise, suggestion ID, and active-safety
+  calculation. Otherwise the capture is manual with `suggestionId: null` and
+  `usesAuditedSuggestion: false`, allowing explicit current-level
+  confirmation and never submitting `practicedTarget`. Once an audited capture
+  is open, a transient `fetchStatus: "fetching"` state is pending rather than
+  permanently invalid: a same-safe settled response preserves its
+  primary/fallback anchor. A settled safety decision, query error, dismissal or
+  changed suggestion, wrong scope, or any other failed eligibility check
+  permanently downgrades it to manual. Evidence save repeats the same scoped
+  cache-authority check before attaching `practicedTarget`, so saving while a
+  query remains unsettled or invalid still fails closed to manual capture.
 - Sparse evidence shows a neutral capture prompt.
 - A Developing context whose latest result is `too_hard` shows support-oriented
   language and never a harder next step.
@@ -397,11 +543,29 @@ Server-side telemetry records scalar, privacy-safe events:
 - `training.context_next_action_used`, with rule identifier and whether it
   repeated, increased, or reduced one difficulty dimension.
 
+`training.context_next_action_used` intentionally has surface-specific
+semantics. On `week`, it records recommendation intent/navigation to the
+supporting detail. On `skill_detail`, it records that the owner applied the
+recommended context to a practice capture. Dashboard queries must segment by
+`surface`; they must not sum these events as the same conversion. This is
+approved product behavior, not a telemetry inconsistency.
+
 Telemetry never copies notes, context labels derived from free text, dog names,
 or client-supplied identity. View and action events are accepted through an
 authenticated server route that supplies the user identity and validates the
-small enum payload. The web records at most one view event per mounted insight
-surface. Existing route telemetry tests are updated for the changed
+small enum payload. In particular, view-event `strongestStatus` and
+`hasNextAction` are validated, bounded client assertions; the server does not
+recompute them. Action-use telemetry is server-side safety-gated under the
+exclusive lock, while view telemetry remains recordable during active safety.
+
+View counts have intentionally different surface semantics: This Week records
+one view per settled mount, while skill detail records one view per distinct
+settled result, keyed by policy version, curriculum level, strongest context
+and status, action availability, and `safety.ruleId`. Fetching or error state records no view;
+settled safety records the strongest status with `hasNextAction: false`, and a
+settled safe result records action availability accurately. Dashboards must
+segment by `surface` and must not compare raw weekly and detail view counts as
+equivalent. Existing route telemetry tests are updated for the changed
 `training.practice_logged` properties.
 
 ## Testing
@@ -417,8 +581,13 @@ Cover:
 - at most one Not observed adjacent context derived from observed evidence;
 - no Not observed row when adjacency is missing or ambiguous;
 - any recent `too_hard` blocking Reliable in that exact context;
-- latest-`too_hard` selection reducing one difficulty dimension;
+- latest-`too_hard` selection reducing one difficulty dimension only to an
+  unobserved target, rejecting a failed adjacent target in favor of a proven
+  safe Developing fallback, returning null when none exists, and omitting a
+  support action for an already Reliable adjacent target;
 - Reliable progression increasing only one reviewed dimension;
+- an observed non-Reliable or `too_hard` harder target never being recommended,
+  with safe Developing fallback selection;
 - sparse evidence producing no fabricated status or action;
 - deterministic ordering when timestamps tie;
 - custom skills without adjacency using conservative behavior.
@@ -439,6 +608,15 @@ Cover:
 - owner isolation for dog, skill, context detail, and nested session IDs;
 - bounded query behavior using the existing relevant index;
 - batched focus summaries without N+1 queries;
+- injury, aggression/bite, severe-fear, severe-concern, and sustained-worsening
+  safety suppression on detail and batched focus responses, including removal
+  of synthetic `not_observed` rows, preservation of observed evidence, and no
+  action telemetry; deterministic advisory-lock interleavings prove concurrent
+  safety readers do not queue, exclusive writers and shared readers block each
+  other, and a response completing after a safety write cannot expose an action
+  or synthetic row;
+- action-use telemetry is inserted while its exclusive safety decision remains
+  locked;
 - practice save succeeding independently from later insight loading;
 - server-side telemetry identity and scalar properties.
 
@@ -449,12 +627,42 @@ Cover:
 - decision-first summary with Reliable evidence;
 - Developing-only and sparse-evidence states;
 - `too_hard` support-oriented copy;
+- safety/referral guidance with no practice CTA for every exercise-suppressing
+  safety class;
 - full exact-context rows in skill detail;
+- Reliable rows label `lastSuccessfulAt` as the supporting practice date,
+  while Developing rows use `lastObservedAt`;
+- compact weekly labels omit null context values, while full detail retains all
+  five labels; hash expansion scrolls without moving focus or adding a tab stop;
 - Not observed never presented as failure;
 - inline insight errors preserving practice controls;
+- weekly cold-error Retry/Edit focus state and per-skill unavailable Retry;
+- cached skill-detail evidence with `isFetching` or an error suppressing its
+  next-practice CTA and action telemetry, then restoring the CTA after a safe
+  retry;
 - session form structured-field submission and optional omission;
 - current-level confirmation copy, submission, and conflict handling;
-- all affected query-key invalidations;
+- warning feedback for server anchor rejections and client audited-anchor
+  omissions, plus retry feedback without a mutation for an invalidated
+  suggestion action;
+- all safety-producing mutation families invalidate the three dog-scoped
+  suggestion/focus/contextual-progress prefixes and await completion;
+- stale exercise suggestion plus contextual safety renders one alert, no
+  exercise/CTA, no next-action telemetry, and one accurate settled view event;
+- either recommendation query's `isFetching` suppresses cached CTAs and view
+  telemetry, while settled safe data restores them and records one view;
+- suggestion/focus errors suppress cached CTAs and view/action telemetry while
+  preserving cached evidence, Retry, and practice logging; settled retry
+  restores one view with the correct `hasNextAction` value;
+- an open audited capture survives transient revalidation, preserves its
+  primary/fallback target after a same-safe settled response, and still fails
+  closed when evidence is saved before settlement;
+- a settled safety decision, error, dismissal, changed suggestion, or scope
+  mismatch downgrades that audited capture to manual evidence without
+  `practicedTarget`;
+- malformed dog/skill UUIDs on the two contextual routes return privacy-safe
+  `404` responses before database access and record no telemetry; the event
+  route returns that `404` before JSON-body validation;
 - English and Spanish catalog parity;
 - keyboard, screen-reader, contrast, and mobile layout behavior.
 

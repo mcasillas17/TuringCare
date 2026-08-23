@@ -35,7 +35,7 @@ pnpm dev                                   # api :3001, web :3000
 > like `direnv` to automate it). Alternative one-offs:
 > `DATABASE_URL=... pnpm --filter @turingcare/api db:push`.
 
-Open http://localhost:3000, register an account, and you land on `/my`.
+Open http://localhost:3000, register an account, and you land on `/app`.
 
 ## Architecture
 
@@ -82,8 +82,10 @@ owned and public views, email, and PDF therefore stay in that language even if t
 viewer later changes UI language. Course/trainer records and user-authored journal, message,
 name, and contact fields are authored data and are never machine-translated.
 
-See [`docs/LOCALIZATION.md`](docs/LOCALIZATION.md) for the precedence and request contracts,
-content boundaries, failure/privacy behavior, and instructions for adding copy.
+This end-to-end localization work was implemented for
+[PR #70](https://github.com/mcasillas17/TuringCare/pull/70). See
+[`docs/LOCALIZATION.md`](docs/LOCALIZATION.md) for the current precedence and request
+contracts, content boundaries, failure/privacy behavior, and instructions for adding copy.
 
 ## What's built
 
@@ -112,8 +114,12 @@ Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highligh
   on this week and see a Mon–Sun grid of which days you practiced each one, with
   tap-to-log. Page back through prior weeks; the grid is computed from your dated
   practice sessions.
+- **Weekly personalized suggestions** — one primary exercise and an easier
+  fallback are based on the focused skill and structured practice evidence;
+  safety signals pause exercises and refer owners to appropriate support.
 - **i18n** — shared i18next-backed en/es catalogs with compile-time/runtime parity,
-  browser detection, account sync, request propagation, and locale-stable artifacts.
+  browser detection, account sync, request propagation, localized training content,
+  and locale-stable artifacts.
 - **Telemetry + admin dashboard** with rate-limited event ingestion.
 
 ## Developer verification

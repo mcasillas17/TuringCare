@@ -7,6 +7,7 @@ import {
   events,
   briefSends,
   briefs,
+  guidedSetups,
   practiceSessions,
   trainingGoals,
   trainingSkills,
@@ -174,6 +175,55 @@ describe("dogs: get/update/delete", () => {
     expect(del.status).toBe(200);
     const after = await app.request(`/api/dogs/${dog.id}`, { headers: u.authHeaders });
     expect(after.status).toBe(404);
+  });
+
+  it("DELETE returns 409 when an active guided setup still references the dog", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await db.insert(guidedSetups).values({ userId: u.userId, dogId: dog.id });
+
+    const del = await app.request(`/api/dogs/${dog.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+
+    expect(del.status).toBe(409);
+    expect(await del.json()).toEqual({ error: "active_guided_setup" });
+    expect((await app.request(`/api/dogs/${dog.id}`, { headers: u.authHeaders })).status).toBe(200);
+  });
+
+  it("DELETE preserves completed guided setup history with dogId null", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await db.insert(guidedSetups).values({
+      userId: u.userId,
+      dogId: dog.id,
+      currentStep: "action",
+      intent: "train_skill",
+      completedAt: new Date(),
+      completionReason: "skipped",
+    });
+
+    const del = await app.request(`/api/dogs/${dog.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+
+    expect(del.status).toBe(200);
+    const [historical] = await db
+      .select()
+      .from(guidedSetups)
+      .where(eq(guidedSetups.userId, u.userId));
+    expect(historical).toMatchObject({
+      userId: u.userId,
+      dogId: null,
+      currentStep: "action",
+      intent: "train_skill",
+      completionReason: "skipped",
+    });
+    expect(historical?.completedAt).toBeInstanceOf(Date);
   });
 
   it("owner isolation: another user gets 404 on get/put/delete", async () => {
@@ -1183,7 +1233,7 @@ describe("dogs: brief", () => {
           .where(eq(briefs.dogId, dog.id)),
       ).toEqual(
         expect.arrayContaining([
-          { status: "finalized", shareToken: legacyToken },
+          { status: "finalized", shareToken: null },
           { status: "draft", shareToken: null },
         ]),
       );

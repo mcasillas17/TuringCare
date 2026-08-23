@@ -66,6 +66,8 @@ pnpm exec biome check apps packages
 - `apps/api/src/lib/practice-evidence.ts` — level-anchored evidence loader + summariser.
 - `apps/api/src/lib/practice-evidence.test.ts`
 - `apps/api/src/lib/observations.ts` — recent structured daily check-in observation.
+- `apps/api/src/lib/safety-lock.ts` — `TransactionType`, `lockDogSafety`, `withDogSafetyLock`.
+- `apps/api/src/lib/safety-lock.test.ts`
 - `apps/api/src/lib/safety-policy.ts` — pure `decideSafety` + DB `evaluateSafety`.
 - `apps/api/src/lib/safety-policy.test.ts`
 - `apps/api/src/lib/suggestion-rules.ts` — pure deterministic rule selection.
@@ -73,8 +75,10 @@ pnpm exec biome check apps packages
 - `apps/api/src/lib/advancement.ts` — pure `evaluateAdvancement` + proposal persistence/decision.
 - `apps/api/src/lib/advancement.test.ts`
 - `apps/api/src/lib/suggestion.ts` — orchestrator: reads, rules, persistence, telemetry.
+- `apps/api/src/lib/suggestion.test.ts` — DB-backed orchestrator persistence and locking tests.
 - `apps/api/src/routes/suggestion.test.ts` — route-level integration tests.
 - `apps/api/src/routes/practice-evidence.test.ts` — practice evidence + safety-signal capture tests.
+- `apps/api/src/routes/journal-safety-lock.test.ts` — journal writes serialize through the dog safety lock.
 
 **Create (web):**
 - `apps/web/src/lib/practice-options.ts` — enum → i18n key maps for dimensions/outcomes/rules/safety.
@@ -88,7 +92,7 @@ pnpm exec biome check apps packages
 
 **Modify:**
 - `packages/shared/src/progress.ts` (practice session schema gains evidence), `packages/shared/src/focus.ts` (week key), `packages/shared/src/training-catalog.ts` (catalog skill gains dimension metadata), `packages/shared/src/index.ts`.
-- `apps/api/src/db/schema.ts`, `apps/api/drizzle/*` (three migrations), `apps/api/src/data/training-catalog.ts` (type annotation only), `apps/api/src/lib/focus.ts`, `apps/api/src/routes/dogs.ts`, `apps/api/src/routes/training.ts`, `apps/api/src/telemetry/events.ts`, `apps/api/src/routes/focus.test.ts`, `apps/api/src/routes/telemetry.test.ts`.
+- `apps/api/src/db/schema.ts`, `apps/api/src/db/schema.test.ts`, `apps/api/drizzle/*` (four migrations, through `0016_journal_observation_index`), `apps/api/src/data/training-catalog.ts` (type annotation only), `apps/api/src/lib/focus.ts`, `apps/api/src/routes/dogs.ts`, `apps/api/src/routes/training.ts`, `apps/api/src/telemetry/events.ts`, `apps/api/src/routes/focus.test.ts`, `apps/api/src/routes/telemetry.test.ts`.
 - `apps/web/src/lib/weekly-focus.ts`, `apps/web/src/lib/progress.ts`, `apps/web/src/components/week/focus-picker.tsx`, `apps/web/src/components/progress/session-form.tsx`, `apps/web/src/components/progress/progress-panel.tsx`, `apps/web/src/routes/dog-week.tsx`, `apps/web/src/routes/dog-week.test.tsx`, `apps/web/src/i18n/en.ts`, `apps/web/src/i18n/es.ts`.
 - `docs/PROJECT-LOG.md`, `README.md`.
 
@@ -3216,7 +3220,9 @@ git commit -m "feat(api): structured practice evidence columns and safety signal
 - Modify: `apps/api/src/routes/dogs.ts`
 - Create: `apps/api/src/lib/practice-anchor.ts`
 - Create: `apps/api/src/lib/safety-lock.ts`
+- Create: `apps/api/src/lib/safety-lock.test.ts`
 - Create: `apps/api/src/routes/practice-evidence.test.ts`
+- Create: `apps/api/src/routes/journal-safety-lock.test.ts`
 - Modify: `apps/web/src/components/progress/session-form.tsx`
 - Modify: `apps/web/src/components/progress/session-form.test.tsx`
 
@@ -3855,18 +3861,44 @@ Create `apps/api/src/lib/safety-lock.ts`:
 import { sql } from "drizzle-orm";
 import { db } from "../db";
 
-export async function lockDogSafety(
-  tx: Pick<typeof db, "execute">,
+/** The Drizzle executor handed to a callback running inside a database transaction. */
+export type TransactionType = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Serializes safety writes before any more granular training locks are acquired. */
+export async function lockDogSafety(tx: Pick<typeof db, "execute">, dogId: string): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`dog-safety:${dogId}`}))`);
+}
+
+/**
+ * Runs `callback` inside a transaction that holds the dog-scoped safety lock
+ * for its entire duration, so every writer of a safety input (signals, journal
+ * entries) is serialized against every safety decision for the same dog.
+ */
+export async function withDogSafetyLock<T>(
   dogId: string,
-): Promise<void> {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${`dog-safety:${dogId}`}))`,
-  );
+  callback: (tx: TransactionType) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await lockDogSafety(tx, dogId);
+    return await callback(tx);
+  });
 }
 ```
 
 Every safety writer and advancement decision acquires this dog-scoped lock
-before any skill lock.
+before any skill lock. Writers that mutate a safety *input* for a whole
+transaction (journal entry create/update/delete, safety signals) use
+`withDogSafetyLock` so the read, the decision and the write share one
+linearization point.
+
+Cover the helper with `apps/api/src/lib/safety-lock.test.ts` — 3 tests, each
+proving the lock state from an independent `pool.connect()` probe that runs
+`select pg_try_advisory_xact_lock(hashtext($1))` with `dog-safety:<dogId>` (a
+`false` result proves another transaction holds it, so no sleeps are needed):
+
+1. the lock is held for the whole callback and released on commit;
+2. a different dog id is never blocked;
+3. a throwing callback rolls the guarded write back and still releases the lock.
 
 ```ts
   .post("/:id/concerns", zValidator("json", behaviorConcernSchema), async (c) => {
@@ -3911,7 +3943,61 @@ internal `severe_behavior_concern` safety row remains active indefinitely. Gate
 1 deliberately has no owner-controlled resolution path; restoring exercises
 requires a future reviewed professional-resolution workflow.
 
-- [ ] **Step 5: Write the session routes** — in `apps/api/src/routes/dogs.ts`, replace the `POST /:id/skills/:skillId/sessions` handler and add the evidence route directly after it:
+- [ ] **Step 5: Serialize journal writes through the dog safety lock** — journal
+  entries are a safety input (`daily_checkin` trend and `moment` intensity feed
+  `loadSafetyInputs`), so every journal mutation must linearize against safety
+  decisions for the same dog. In `apps/api/src/routes/dogs.ts`, import
+  `withDogSafetyLock` from `../lib/safety-lock` and rewrite the three journal
+  mutation handlers without changing any status code or response body:
+
+  - `POST /:id/journal` — keep `findOwnedDog` (404) and the `occurredAt`
+    `Number.isNaN` check returning `invalidJournalField("occurredAt", "Invalid
+    date")` with 400 *before* the lock. Then change only the executor of the
+    existing insert: replace `db` with the locked `tx` by wrapping the current
+    `.insert(journalEntries).values(…).returning()` chain unchanged in
+    `const [entry] = await withDogSafetyLock(dog.id, (tx) => …);`. The value
+    mapping and telemetry (`journal.entry_created`, emitted after the lock is
+    released) are untouched, and the route still returns `{ entry }` with 201.
+  - `PUT /:id/journal/:entryId` — wrap the whole read-modify-write in
+    `const result = await withDogSafetyLock(dog.id, async (tx) => …);`. Inside
+    the lock, re-read the exact row with
+    `and(eq(journalEntries.id, entryId), eq(journalEntries.dogId, dog.id))`
+    plus `.limit(1).for("update")`, so the row the changes are computed from is
+    the row that is written. Compute `changes` from that fresh row (kind
+    switching, `occurredAt` validity, `daily_checkin` trend requirement,
+    moment-field clearing) exactly as today, but return a discriminated result —
+    `{ kind: "not_found" }`, `{ kind: "invalid_occurred_at" }`,
+    `{ kind: "missing_trend" }` or `{ kind: "updated", entry: updated }` —
+    instead of building the response inside the callback, because a response
+    must never be produced while the lock is held by an aborted branch. Map the
+    result outside the lock to the unchanged behavior: 400
+    `invalidJournalField("occurredAt", "Invalid date")`, 400
+    `invalidJournalField("trend", "Trend is required for daily check-ins")`,
+    404 `{ error: "not_found" }`, and 200 `{ entry: result.entry }`.
+  - `DELETE /:id/journal/:entryId` — wrap the existing delete, with its current
+    `and(eq(journalEntries.id, entryId), eq(journalEntries.dogId, dog.id))`
+    predicate, in `await withDogSafetyLock(dog.id, (tx) => …);` and keep the
+    unconditional 200 `{ ok: true }`.
+
+  `GET /:id/journal` and the read-only brief/export queries stay on `db` and
+  take no lock.
+
+  Create `apps/api/src/routes/journal-safety-lock.test.ts` — 4 tests. It
+  `vi.mock`s `../lib/safety-lock` with `importOriginal`, keeping the real
+  `withDogSafetyLock` but recording, for each call, whether the lock was already
+  held when the callback started (same independent `pool.connect()` +
+  `pg_try_advisory_xact_lock` probe as the unit test). The tests assert:
+
+  1. create, update and delete each run their write with the lock held for that
+     dog (`guardedWrites` has one entry per mutation, all `lockHeldDuringWrite`);
+  2. an invalid create date is rejected with 400 *before* the lock is taken (no
+     recorded guarded write);
+  3. update validation and ownership semantics are unchanged under the lock —
+     the 400 paths leave the stored row untouched and a valid update persists;
+  4. a mutation for a dog the caller does not own returns 404 and never takes
+     the lock.
+
+- [ ] **Step 6: Write the session routes** — in `apps/api/src/routes/dogs.ts`, replace the `POST /:id/skills/:skillId/sessions` handler and add the evidence route directly after it:
 
 Create `apps/api/src/lib/practice-anchor.ts` first:
 
@@ -4391,7 +4477,7 @@ import block, and `resolvePracticeTargetAudit` from
 Replace the route's old
 `practiceSessionSchema` import with `practiceSessionApiSchema`.
 
-- [ ] **Step 6: Cut the web timestamp payload over in the same checkpoint**
+- [ ] **Step 7: Cut the web timestamp payload over in the same checkpoint**
 
 In `apps/web/src/components/progress/session-form.tsx`, convert the
 `datetime-local` wall clock before calling the mutation:
@@ -4423,24 +4509,33 @@ ISO-round-trippable `occurredAt` plus a numeric `timezoneOffsetMinutes`. This
 keeps UI practice logging compatible in the same commit that makes the API
 offset-strict.
 
-- [ ] **Step 7: Run it, expect PASS**
+- [ ] **Step 8: Run it, expect PASS**
 
-Run: `pnpm --filter @turingcare/api exec vitest run src/routes/practice-evidence.test.ts`
-Expected: PASS — 19 tests.
+Run:
+```bash
+pnpm --filter @turingcare/api exec vitest run src/routes/practice-evidence.test.ts
+pnpm --filter @turingcare/api exec vitest run src/lib/safety-lock.test.ts
+pnpm --filter @turingcare/api exec vitest run src/routes/journal-safety-lock.test.ts
+```
+Expected: PASS — 19 practice-evidence tests, 3 safety-lock tests, 4 journal
+safety-lock tests.
 
-- [ ] **Step 8: Keep the telemetry test honest**
+- [ ] **Step 9: Keep the telemetry test honest**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/routes/telemetry.test.ts`
 Expected: PASS — the new names are server-only, so the client ingest allowlist assertions are unaffected.
 
-- [ ] **Step 9: Commit**
+Also re-run `pnpm --filter @turingcare/api exec vitest run src/routes/journal.test.ts`
+to prove the journal 400/404/200 contract is unchanged by the lock.
+
+- [ ] **Step 10: Commit**
 
 ```bash
-pnpm exec biome check --write apps/api/src/telemetry/events.ts apps/api/src/lib/practice-anchor.ts apps/api/src/lib/safety-lock.ts apps/api/src/routes/dogs.ts apps/api/src/routes/practice-evidence.test.ts apps/web/src/components/progress/session-form.tsx apps/web/src/components/progress/session-form.test.tsx
+pnpm exec biome check --write apps/api/src/telemetry/events.ts apps/api/src/lib/practice-anchor.ts apps/api/src/lib/safety-lock.ts apps/api/src/lib/safety-lock.test.ts apps/api/src/routes/dogs.ts apps/api/src/routes/practice-evidence.test.ts apps/api/src/routes/journal-safety-lock.test.ts apps/web/src/components/progress/session-form.tsx apps/web/src/components/progress/session-form.test.tsx
 pnpm --filter @turingcare/api exec tsc --noEmit
 pnpm --filter @turingcare/web exec vitest run src/components/progress/session-form.test.tsx
 pnpm --filter @turingcare/web exec tsc --noEmit
-git add apps/api/src/telemetry/events.ts apps/api/src/lib/practice-anchor.ts apps/api/src/lib/safety-lock.ts apps/api/src/routes/dogs.ts apps/api/src/routes/practice-evidence.test.ts apps/web/src/components/progress/session-form.tsx apps/web/src/components/progress/session-form.test.tsx
+git add apps/api/src/telemetry/events.ts apps/api/src/lib/practice-anchor.ts apps/api/src/lib/safety-lock.ts apps/api/src/lib/safety-lock.test.ts apps/api/src/routes/dogs.ts apps/api/src/routes/practice-evidence.test.ts apps/api/src/routes/journal-safety-lock.test.ts apps/web/src/components/progress/session-form.tsx apps/web/src/components/progress/session-form.test.tsx
 git commit -m "feat(api): capture structured practice evidence and safety signals"
 ```
 
@@ -4601,9 +4696,8 @@ Set the `"idx": 15` entry's `tag` in `apps/api/drizzle/meta/_journal.json` to `"
 
 ```sql
 --> statement-breakpoint
--- At most one open proposal per skill. Expressed as a partial index in raw SQL
--- because it is enforced only for `proposed` rows; the drizzle schema keeps the
--- plain index and this migration adds the constraint.
+-- At most one open proposal per skill. This is the historical raw index; the
+-- schema-declared Drizzle index and its 0017 reconciliation follow Task 14.
 CREATE UNIQUE INDEX "advancement_proposals_open_skill_idx" ON "advancement_proposals" USING btree ("skill_id") WHERE "status" = 'proposed';--> statement-breakpoint
 ALTER TABLE "training_suggestions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "training_suggestion_actions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -4655,8 +4749,9 @@ git commit -m "feat(api): suggestion and advancement audit tables"
 - [ ] **Step 1: Write the failing test** — create `apps/api/src/lib/safety-policy.test.ts`:
 
 ```ts
+import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { type SafetyInputs, decideSafety } from "./safety-policy";
+import { type SafetyInputs, decideSafety, evaluateSafetyWithLock } from "./safety-policy";
 
 const NOW = new Date("2026-08-13T12:00:00.000Z");
 
@@ -4713,9 +4808,7 @@ describe("decideSafety", () => {
     expect(
       decideSafety({
         ...empty,
-        signals: [
-          { type: "injury_or_pain", reportedAt: new Date("2026-01-01T09:00:00.000Z") },
-        ],
+        signals: [{ type: "injury_or_pain", reportedAt: new Date("2026-01-01T09:00:00.000Z") }],
       }),
     ).toBeNull();
   });
@@ -4773,18 +4866,36 @@ describe("decideSafety", () => {
   });
 
   it("suppresses on sustained worsening and refers to a credentialed trainer", () => {
-    expect(
-      decideSafety({ ...empty, highIntensityEntryCount: 2, harderCheckinCount: 2 }),
-    ).toEqual({
+    expect(decideSafety({ ...empty, highIntensityEntryCount: 2, harderCheckinCount: 2 })).toEqual({
       suppressed: true,
       ruleId: "sustained_worsening_intensity",
       referral: "credentialed_trainer",
     });
   });
 
+  describe("evaluateSafetyWithLock", () => {
+    it("runs the guarded callback with an empty decision and propagates its value", async () => {
+      const result = await evaluateSafetyWithLock(
+        crypto.randomUUID(),
+        NOW,
+        async (decision, tx) => {
+          expect(decision).toBeNull();
+          await tx.execute(sql`select 1`);
+          return "guarded-write-complete";
+        },
+      );
+
+      expect(result).toBe("guarded-write-complete");
+    });
+  });
+
   it("does not suppress on partial worsening evidence", () => {
-    expect(decideSafety({ ...empty, highIntensityEntryCount: 2, harderCheckinCount: 1 })).toBeNull();
-    expect(decideSafety({ ...empty, highIntensityEntryCount: 1, harderCheckinCount: 3 })).toBeNull();
+    expect(
+      decideSafety({ ...empty, highIntensityEntryCount: 2, harderCheckinCount: 1 }),
+    ).toBeNull();
+    expect(
+      decideSafety({ ...empty, highIntensityEntryCount: 1, harderCheckinCount: 3 }),
+    ).toBeNull();
   });
 });
 ```
@@ -4801,7 +4912,7 @@ import type { SafetySignalType, SuggestionSafety } from "@turingcare/shared";
 import { and, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { dogSafetySignals, journalEntries } from "../db/schema";
-import { lockDogSafety } from "./safety-lock";
+import { type TransactionType, withDogSafetyLock } from "./safety-lock";
 
 /** Time-bounded medical reports stay in policy for this long. */
 export const SAFETY_SIGNAL_WINDOW_DAYS = 90;
@@ -4812,6 +4923,8 @@ export const WORSENING_MIN_HIGH_INTENSITY_ENTRIES = 2;
 export const WORSENING_MIN_HARDER_CHECKINS = 2;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+export type { TransactionType };
 
 export type SafetyInputs = {
   now: Date;
@@ -4932,22 +5045,29 @@ export async function evaluateSafety(dogId: string, now: Date): Promise<Suggesti
   return decideSafety(await loadSafetyInputs(dogId, now));
 }
 
-/** Linearization point shared with every safety writer. */
-export async function evaluateSafetyWithLock(
+/**
+ * Holds the shared safety lock through the guarded write, making this decision
+ * and action a single linearization point.
+ */
+export async function evaluateSafetyWithLock<T>(
   dogId: string,
   now: Date,
-): Promise<SuggestionSafety | null> {
-  return db.transaction(async (tx) => {
-    await lockDogSafety(tx, dogId);
-    return decideSafety(await loadSafetyInputs(dogId, now, tx));
+  callback: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<T>,
+): Promise<T> {
+  return withDogSafetyLock(dogId, async (tx) => {
+    const decision = decideSafety(await loadSafetyInputs(dogId, now, tx));
+    return await callback(decision, tx);
   });
 }
 ```
 
+Callers get the decision *and* the same `tx` that holds the lock, so every
+write conditioned on that decision must go through this `tx` — never `db`.
+
 - [ ] **Step 4: Run it, expect PASS**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/safety-policy.test.ts`
-Expected: PASS — 11 tests.
+Expected: PASS — 12 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -4977,6 +5097,21 @@ columns as equivalent difficulty scales across all 21 skills.
 - Create: `apps/api/src/lib/observations.ts`
 - Create: `apps/api/src/lib/suggestion-rules.ts`
 - Create: `apps/api/src/lib/suggestion-rules.test.ts`
+- Create: `apps/api/drizzle/0016_journal_observation_index.sql`
+- Modify: `apps/api/drizzle/meta/_journal.json`
+- Create: `apps/api/drizzle/meta/0016_snapshot.json`
+- Modify: `apps/api/src/db/schema.ts`
+- Modify: `apps/api/src/db/schema.test.ts`
+
+`loadRecentObservation` filters `journal_entries` by `dog_id` and
+`kind`, restricts `occurred_at` to its observation window, and requests the
+latest row ordered by `occurred_at DESC, id DESC`. Add
+`journal_entries_dog_kind_occurred_idx` on `(dog_id, kind, occurred_at, id)`
+so PostgreSQL can use the equality prefix and backward-scan the standard ASC
+B-tree for that descending order without a sort. It follows
+`0015_training_suggestions`, so this generated migration is `0016`; rename
+the generated SQL and journal tag, but do not regenerate or renumber earlier
+migrations.
 
 - [ ] **Step 1: Write the failing evidence test** — create `apps/api/src/lib/practice-evidence.test.ts`:
 
@@ -5238,7 +5373,30 @@ export async function loadSkillEvidence(
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/practice-evidence.test.ts`
 Expected: PASS — 6 tests.
 
-- [ ] **Step 5: Create `apps/api/src/lib/observations.ts`** (no separate test — it is one query, covered by the route tests in Task 17):
+- [ ] **Step 5: Add and test the recent-observation index** — in
+  `apps/api/src/db/schema.ts`, add this table extra-config entry:
+
+```ts
+index("journal_entries_dog_kind_occurred_idx").on(t.dogId, t.kind, t.occurredAt, t.id),
+```
+
+In `apps/api/src/db/schema.test.ts`, use `getTableConfig(journalEntries)` to
+assert that the named index's columns are `dog_id`, `kind`, `occurred_at`, and
+`id`. Generate the migration, rename the generated file, and update only the
+new journal entry tag:
+
+```bash
+pnpm --filter @turingcare/api db:generate
+mv apps/api/drizzle/0016_*.sql apps/api/drizzle/0016_journal_observation_index.sql
+# Set only idx 16's tag to 0016_journal_observation_index in _journal.json.
+pnpm --filter @turingcare/api exec vitest run src/db/schema.test.ts
+```
+
+The default ASC B-tree supports `ORDER BY occurred_at DESC, id DESC` by a
+backward scan after the `dog_id` and `kind` equality prefixes; explicit DESC
+storage is unnecessary.
+
+- [ ] **Step 6: Create `apps/api/src/lib/observations.ts`** (no separate test — it is one query, covered by the route tests in Task 17):
 
 ```ts
 import { and, desc, eq, gte, lte } from "drizzle-orm";
@@ -5276,7 +5434,7 @@ export async function loadRecentObservation(dogId: string, now: Date): Promise<R
 }
 ```
 
-- [ ] **Step 6: Write the failing rules test** — create `apps/api/src/lib/suggestion-rules.test.ts`:
+- [ ] **Step 7: Write the failing rules test** — create `apps/api/src/lib/suggestion-rules.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -5404,12 +5562,12 @@ describe("selectSuggestionRule", () => {
 });
 ```
 
-- [ ] **Step 7: Run it, expect FAIL**
+- [ ] **Step 8: Run it, expect FAIL**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/suggestion-rules.test.ts`
 Expected: FAIL — `Failed to resolve import "./suggestion-rules"`.
 
-- [ ] **Step 8: Create `apps/api/src/lib/suggestion-rules.ts`**
+- [ ] **Step 9: Create `apps/api/src/lib/suggestion-rules.ts`**
 
 ```ts
 import type {
@@ -5529,12 +5687,12 @@ export function selectSuggestionRule(inputs: RuleInputs): RuleResult {
 }
 ```
 
-- [ ] **Step 9: Run both, expect PASS**
+- [ ] **Step 10: Run both, expect PASS**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/suggestion-rules.test.ts src/lib/practice-evidence.test.ts`
 Expected: PASS — 18 tests total.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 pnpm exec biome check --write apps/api/src/lib/practice-evidence.ts apps/api/src/lib/practice-evidence.test.ts apps/api/src/lib/observations.ts apps/api/src/lib/suggestion-rules.ts apps/api/src/lib/suggestion-rules.test.ts
@@ -5542,6 +5700,43 @@ pnpm --filter @turingcare/api exec tsc --noEmit
 git add apps/api/src/lib/practice-evidence.ts apps/api/src/lib/practice-evidence.test.ts apps/api/src/lib/observations.ts apps/api/src/lib/suggestion-rules.ts apps/api/src/lib/suggestion-rules.test.ts
 git commit -m "feat(api): deterministic suggestion rules over structured evidence"
 ```
+
+- [ ] **Step 12: Commit recent-observation index**
+
+```bash
+pnpm exec biome check --write apps/api/src/db/schema.ts apps/api/src/db/schema.test.ts
+pnpm --filter @turingcare/api exec tsc --noEmit
+git add apps/api/src/db/schema.ts apps/api/src/db/schema.test.ts apps/api/drizzle/0016_journal_observation_index.sql apps/api/drizzle/meta/_journal.json apps/api/drizzle/meta/0016_snapshot.json docs/superpowers/plans/2026-08-11-personalized-training-gate-1.md
+git commit -m "perf(api): index recent journal observations"
+```
+
+### Follow-up to Tasks 12 and 14: Reconcile the open-proposal schema index
+
+After Task 14's `0016` commit, preserve the existing commit sequence and add
+`0017_advancement_open_index_schema`. Drizzle expresses the unique partial
+index directly, so schema generation and `db:push` use the same declaration:
+
+```ts
+uniqueIndex("advancement_proposals_open_skill_idx")
+  .on(t.skillId)
+  .where(sql`${t.status} = 'proposed'`);
+```
+
+Generate the migration from that schema, rename its SQL file and journal tag,
+and prepend this reconciliation before the generated `CREATE UNIQUE INDEX`:
+
+```sql
+DROP INDEX IF EXISTS "advancement_proposals_open_skill_idx";
+CREATE UNIQUE INDEX "advancement_proposals_open_skill_idx" ON "advancement_proposals" USING btree ("skill_id") WHERE "advancement_proposals"."status" = 'proposed';
+```
+
+The drop and create remain in the same migration transaction. Do not rewrite
+`0015`: a fresh `0000`–`0017` migration first receives its historical index
+then replaces it with the schema-declared form, while an upgraded database
+reconciles the old index idempotently. Validate `db:migrate` on a fresh
+database and `db:push` against an upgraded database; both must leave the exact
+unique partial index, rejecting duplicate `proposed` rows while allowing
+multiple non-proposed rows for one skill.
 
 ---
 
@@ -5553,15 +5748,31 @@ git commit -m "feat(api): deterministic suggestion rules over structured evidenc
 - Modify: `apps/api/src/lib/skill-level.ts`
 - Modify: `apps/api/src/routes/dogs.ts`
 
-- [ ] **Step 1: Write the failing test** — create `apps/api/src/lib/advancement.test.ts`:
+- [ ] **Step 1: Write the failing tests** — create
+  `apps/api/src/lib/advancement.test.ts` with the following nine tests: the
+  advancement threshold; practice-day/UTC-day counting; same-day, newest-failure,
+  insufficient-session, rule, and maximum-level (including `level: 99`) guards;
+  evidence `lastSessionId`; and the DB-backed tied-terminal-decision regression.
 
 ```ts
-import { describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { afterEach, describe, expect, it } from "vitest";
+import { db } from "../db";
+import {
+  advancementProposals,
+  dogs,
+  practiceSessions,
+  trainingGoals,
+  trainingSkills,
+} from "../db/schema";
+import { type TestUser, createTestUser } from "../test-helpers";
 import {
   ADVANCEMENT_MIN_DAYS,
   ADVANCEMENT_MIN_SESSIONS,
   type AdvancementInputs,
   evaluateAdvancement,
+  syncAdvancementProposal,
 } from "./advancement";
 
 const day = (iso: string) => new Date(iso);
@@ -5572,19 +5783,48 @@ const base: AdvancementInputs = {
   outcomes: [],
 };
 
+async function createSkill(user: TestUser) {
+  const [dog] = await db
+    .insert(dogs)
+    .values({
+      ownerId: user.userId,
+      name: "Biscuit",
+      size: "medium",
+      sex: "female",
+      source: "rescue",
+      vaccineStage: "in_progress",
+      spayedNeutered: true,
+    })
+    .returning();
+  if (!dog) throw new Error("expected dog");
+  const [goal] = await db
+    .insert(trainingGoals)
+    .values({ dogId: dog.id, goal: "Recall" })
+    .returning();
+  if (!goal) throw new Error("expected goal");
+  const [skill] = await db
+    .insert(trainingSkills)
+    .values({ goalId: goal.id, name: "Sit", confidence: 2 })
+    .returning();
+  if (!skill) throw new Error("expected skill");
+  return skill;
+}
+
 describe("evaluateAdvancement", () => {
   it("requires three consecutive good sessions across two days", () => {
     expect(ADVANCEMENT_MIN_SESSIONS).toBe(3);
     expect(ADVANCEMENT_MIN_DAYS).toBe(2);
-    const result = evaluateAdvancement({
-      ...base,
-      outcomes: [
-        { outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
-        { outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
-        { outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
-      ],
-    });
-    expect(result).toEqual({
+
+    expect(
+      evaluateAdvancement({
+        ...base,
+        outcomes: [
+          { outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
+          { outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
+          { outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
+        ],
+      }),
+    ).toEqual({
       fromLevel: 3,
       toLevel: 4,
       sessionCount: 3,
@@ -5592,6 +5832,132 @@ describe("evaluateAdvancement", () => {
       lastSessionAt: day("2026-08-13T09:00:00.000Z"),
       lastSessionId: null,
     });
+  });
+
+  describe("syncAdvancementProposal", () => {
+    const users: TestUser[] = [];
+    afterEach(async () => {
+      for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
+    });
+
+    it("suppresses a reproposal when an older tied terminal decision covers current evidence", async () => {
+      const user = await createTestUser();
+      users.push(user);
+      const skill = await createSkill(user);
+      const newestAt = day("2026-08-13T09:00:00.000Z");
+      const evidenceRows = [
+        {
+          id: randomUUID(),
+          outcome: "went_well" as const,
+          occurredAt: newestAt,
+          practiceDay: "2026-08-13",
+        },
+        {
+          id: randomUUID(),
+          outcome: "went_well" as const,
+          occurredAt: day("2026-08-12T09:00:00.000Z"),
+          practiceDay: "2026-08-12",
+        },
+        {
+          id: randomUUID(),
+          outcome: "went_well" as const,
+          occurredAt: day("2026-08-11T09:00:00.000Z"),
+          practiceDay: "2026-08-11",
+        },
+      ];
+      const [newestEvidence, middleEvidence, oldestEvidence] = evidenceRows;
+      if (!newestEvidence || !middleEvidence || !oldestEvidence) {
+        throw new Error("expected qualifying evidence");
+      }
+      const tiedEvidenceId = randomUUID();
+      await db.insert(practiceSessions).values([
+        ...evidenceRows.map((row) => ({
+          ...row,
+          skillId: skill.id,
+          curriculumLevel: 2,
+          practiceVariant: "primary" as const,
+        })),
+        {
+          id: tiedEvidenceId,
+          skillId: skill.id,
+          outcome: "went_well",
+          occurredAt: newestAt,
+          practiceDay: "2026-08-13",
+          curriculumLevel: 2,
+          practiceVariant: "primary",
+        },
+      ]);
+
+      const decision = {
+        skillId: skill.id,
+        fromLevel: 2,
+        toLevel: 3,
+        ruleId: "maintain_current_level",
+        evidenceSessionCount: 3,
+        evidenceDayCount: 3,
+        evidenceWindowDays: 14,
+        evidenceOccurredAt: evidenceRows.map((row) => row.occurredAt),
+        evidencePracticeDays: evidenceRows.map((row) => row.practiceDay),
+        evidenceOutcomes: evidenceRows.map((row) => row.outcome),
+        evidenceLastSessionAt: newestAt,
+      };
+      await db.insert(advancementProposals).values([
+        {
+          ...decision,
+          evidenceSessionIds: evidenceRows.map((row) => row.id),
+          status: "rejected",
+          createdAt: day("2026-08-13T10:00:00.000Z"),
+        },
+        {
+          ...decision,
+          evidenceSessionIds: [tiedEvidenceId, middleEvidence.id, oldestEvidence.id],
+          status: "stayed",
+          createdAt: day("2026-08-13T11:00:00.000Z"),
+        },
+      ]);
+
+      const result = await syncAdvancementProposal(
+        skill.id,
+        {
+          fromLevel: 2,
+          toLevel: 3,
+          sessionCount: 3,
+          dayCount: 3,
+          lastSessionAt: newestAt,
+          lastSessionId: newestEvidence.id,
+        },
+        evidenceRows,
+      );
+
+      expect(result).toEqual({ proposal: null, created: false });
+      expect(
+        await db
+          .select()
+          .from(advancementProposals)
+          .where(eq(advancementProposals.skillId, skill.id)),
+      ).toHaveLength(2);
+    });
+  });
+
+  it("uses practice days or UTC dates to count distinct days", () => {
+    const result = evaluateAdvancement({
+      ...base,
+      outcomes: [
+        {
+          outcome: "went_well",
+          occurredAt: day("2026-08-13T01:00:00.000Z"),
+          practiceDay: "2026-08-12",
+        },
+        {
+          outcome: "went_well",
+          occurredAt: day("2026-08-13T02:00:00.000Z"),
+          practiceDay: "2026-08-13",
+        },
+        { outcome: "went_well", occurredAt: day("2026-08-11T23:00:00.000Z") },
+      ],
+    });
+
+    expect(result?.dayCount).toBe(3);
   });
 
   it("does not propose when the good sessions all happened on one day", () => {
@@ -5607,7 +5973,7 @@ describe("evaluateAdvancement", () => {
     ).toBeNull();
   });
 
-  it("does not propose when a recent session was not a success", () => {
+  it("does not propose when a newest session was not a success", () => {
     expect(
       evaluateAdvancement({
         ...base,
@@ -5632,21 +5998,12 @@ describe("evaluateAdvancement", () => {
     ).toBeNull();
   });
 
-  it("does not propose past level 5", () => {
-    expect(
-      evaluateAdvancement({
-        ...base,
-        level: 5,
-        outcomes: [
-          { outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
-          { outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
-          { outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
-        ],
-      }),
-    ).toBeNull();
-  });
-
   it("does not propose unless the rule is maintain_current_level", () => {
+    const outcomes = [
+      { outcome: "went_well" as const, occurredAt: day("2026-08-13T09:00:00.000Z") },
+      { outcome: "went_well" as const, occurredAt: day("2026-08-12T09:00:00.000Z") },
+      { outcome: "went_well" as const, occurredAt: day("2026-08-11T09:00:00.000Z") },
+    ];
     for (const ruleId of [
       "hold_after_mixed",
       "step_back_after_too_hard",
@@ -5654,32 +6011,36 @@ describe("evaluateAdvancement", () => {
       "ease_after_hard_context",
       "cold_start_curriculum_level",
     ] as const) {
-      expect(
-        evaluateAdvancement({
-          ...base,
-          ruleId,
-          outcomes: [
-            { outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
-            { outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
-            { outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
-          ],
-        }),
-      ).toBeNull();
+      expect(evaluateAdvancement({ ...base, ruleId, outcomes })).toBeNull();
     }
   });
 
-  it("reports only the three qualifying recent successes as proposal evidence", () => {
+  it("does not propose past level five", () => {
+    const outcomes = [
+      { outcome: "went_well" as const, occurredAt: day("2026-08-13T09:00:00.000Z") },
+      { outcome: "went_well" as const, occurredAt: day("2026-08-12T09:00:00.000Z") },
+      { outcome: "went_well" as const, occurredAt: day("2026-08-11T09:00:00.000Z") },
+    ];
+    expect(evaluateAdvancement({ ...base, level: 5, outcomes })).toBeNull();
+    expect(evaluateAdvancement({ ...base, level: 99, outcomes })).toBeNull();
+  });
+
+  it("reports only the three newest qualifying successes as proposal evidence", () => {
     const result = evaluateAdvancement({
       ...base,
       outcomes: [
-        { outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
-        { outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
-        { outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
-        { outcome: "mixed", occurredAt: day("2026-08-10T09:00:00.000Z") },
+        { id: "newest", outcome: "went_well", occurredAt: day("2026-08-13T09:00:00.000Z") },
+        { id: "middle", outcome: "went_well", occurredAt: day("2026-08-12T09:00:00.000Z") },
+        { id: "oldest", outcome: "went_well", occurredAt: day("2026-08-11T09:00:00.000Z") },
+        { id: "ignored", outcome: "mixed", occurredAt: day("2026-08-10T09:00:00.000Z") },
       ],
     });
-    expect(result?.sessionCount).toBe(3);
-    expect(result?.dayCount).toBe(3);
+
+    expect(result).toMatchObject({
+      sessionCount: 3,
+      dayCount: 3,
+      lastSessionId: "newest",
+    });
   });
 });
 ```
@@ -5689,14 +6050,23 @@ describe("evaluateAdvancement", () => {
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/advancement.test.ts`
 Expected: FAIL — `Failed to resolve import "./advancement"`.
 
-- [ ] **Step 3: Allow skill-level updates to participate in a transaction** — in
-  `apps/api/src/lib/skill-level.ts`, import `type DB` alongside `db`, add this
-  database interface, add the optional parameter, and replace the three direct
-  `db` calls inside the function with `database`:
+- [ ] **Step 3: Allow skill-level updates to participate in a transaction** —
+  update `apps/api/src/lib/skill-level.ts` so callers may provide the current
+  transaction, then take the matching skill advisory lock in the manual-level
+  route before delegating to it.
 
 ```ts
+import { eq } from "drizzle-orm";
+import { type DB, db } from "../db";
+import { skillMilestones, trainingSkills } from "../db/schema";
+
 type SkillLevelDatabase = Pick<DB, "update" | "select" | "insert">;
 
+/**
+ * Set a skill's current level (1–5) and record `reachedAt` for any newly-reached
+ * levels (2..level). Lowering the level records/deletes nothing — earned dates
+ * are kept. Returns the updated skill row.
+ */
 export async function setSkillLevel(
   skillId: string,
   level: number,
@@ -5716,19 +6086,19 @@ export async function setSkillLevel(
       .where(eq(skillMilestones.skillId, skillId));
     const have = new Set(existing.map((row) => row.level));
     const toInsert = [];
-    for (let next = 2; next <= level; next++) {
-      if (!have.has(next)) toInsert.push({ skillId, level: next });
+    for (let lvl = 2; lvl <= level; lvl++) {
+      if (!have.has(lvl)) toInsert.push({ skillId, level: lvl });
     }
-    if (toInsert.length > 0) {
+    // onConflictDoNothing guards against a concurrent double-tap inserting the
+    // same (skillId, level) and tripping the unique constraint.
+    if (toInsert.length > 0)
       await database.insert(skillMilestones).values(toInsert).onConflictDoNothing();
-    }
   }
   return updated;
 }
 ```
 
-In `apps/api/src/routes/dogs.ts`, make the existing manual level endpoint share
-the same skill advisory lock as advancement decisions:
+In `apps/api/src/routes/dogs.ts`, use this level endpoint implementation:
 
 ```ts
   .put("/:id/skills/:skillId/level", zValidator("json", skillLevelSchema), async (c) => {
@@ -5747,13 +6117,25 @@ the same skill advisory lock as advancement decisions:
     });
     return c.json({ skill: updated });
   })
+  .delete("/:id/skills/:skillId", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+    if (!skill) return c.json({ error: "not_found" } as const, 404);
+    const [deleted] = await db
+      .delete(trainingSkills)
 ```
 
 Task 17 adds the route-level lock regression after it creates
 `apps/api/src/routes/suggestion.test.ts`. The existing stale-proposal test there
 proves a decision cannot overwrite a manual change that linearizes first.
 
-- [ ] **Step 4: Create `apps/api/src/lib/advancement.ts`**
+- [ ] **Step 4: Create `apps/api/src/lib/advancement.ts`** — use a three-row
+  `EvidenceRow` snapshot. Require exactly three qualifying persisted rows,
+  validate that each remains `went_well`, and compare IDs, outcomes,
+  `occurredAt`, and `practiceDay` both while reusing a proposal and while making
+  a decision. The terminal-decision query must consider every matching decision,
+  so an older tied decision covering `lastSessionId` also suppresses a reproposal.
 
 ```ts
 import type {
@@ -5763,14 +6145,14 @@ import type {
   SuggestionRule,
 } from "@turingcare/shared";
 import { advancementRuleId } from "@turingcare/shared";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import { advancementProposals, practiceSessions, trainingSkills } from "../db/schema";
-import { clampLevel, MAX_LEVEL } from "./curriculum";
+import { MAX_LEVEL, clampLevel } from "./curriculum";
 import { EVIDENCE_WINDOW_DAYS } from "./practice-evidence";
+import { type TransactionType, lockDogSafety } from "./safety-lock";
 import { decideSafety, loadSafetyInputs } from "./safety-policy";
-import { lockDogSafety } from "./safety-lock";
 import { setSkillLevel } from "./skill-level";
 
 export const ADVANCEMENT_MIN_SESSIONS = 3;
@@ -5797,15 +6179,10 @@ export type AdvancementEvidence = {
   lastSessionId: string | null;
 };
 
-/**
- * Pure check for "ready to try the next step". Advancement is only ever a
- * proposal the owner confirms; nothing here changes a skill level.
- */
 export function evaluateAdvancement(inputs: AdvancementInputs): AdvancementEvidence | null {
   if (inputs.ruleId !== "maintain_current_level") return null;
   const level = clampLevel(inputs.level);
-  if (level >= MAX_LEVEL) return null;
-  if (inputs.outcomes.length < ADVANCEMENT_MIN_SESSIONS) return null;
+  if (level >= MAX_LEVEL || inputs.outcomes.length < ADVANCEMENT_MIN_SESSIONS) return null;
 
   const recent = inputs.outcomes.slice(0, ADVANCEMENT_MIN_SESSIONS);
   if (!recent.every((row) => row.outcome === "went_well")) return null;
@@ -5815,9 +6192,7 @@ export function evaluateAdvancement(inputs: AdvancementInputs): AdvancementEvide
   const days = new Set(
     recent.map((row) => row.practiceDay ?? row.occurredAt.toISOString().slice(0, 10)),
   );
-  if (days.size < ADVANCEMENT_MIN_DAYS) {
-    return null;
-  }
+  if (days.size < ADVANCEMENT_MIN_DAYS) return null;
 
   return {
     fromLevel: level,
@@ -5830,13 +6205,16 @@ export function evaluateAdvancement(inputs: AdvancementInputs): AdvancementEvide
 }
 
 function toDto(row: typeof advancementProposals.$inferSelect): AdvancementProposalDto {
-  if (
-    row.evidenceSessionIds.length !== row.evidenceOccurredAt.length ||
-    row.evidenceSessionIds.length !== row.evidencePracticeDays.length ||
-    row.evidenceSessionIds.length !== row.evidenceOutcomes.length
-  ) {
+  const arrays = [
+    row.evidenceSessionIds,
+    row.evidenceOccurredAt,
+    row.evidencePracticeDays,
+    row.evidenceOutcomes,
+  ];
+  if (!arrays.every((array) => array.length === row.evidenceSessionIds.length)) {
     throw new Error("advancement proposal evidence snapshot is inconsistent");
   }
+
   const supportingSessions: AdvancementProposalDto["supportingSessions"] = [];
   for (let index = 0; index < row.evidenceSessionIds.length; index++) {
     const id = row.evidenceSessionIds[index];
@@ -5846,13 +6224,9 @@ function toDto(row: typeof advancementProposals.$inferSelect): AdvancementPropos
     if (!id || !occurredAt || !practiceDay || !outcome) {
       throw new Error("advancement proposal evidence snapshot is incomplete");
     }
-    supportingSessions.push({
-      id,
-      occurredAt: occurredAt.toISOString(),
-      practiceDay,
-      outcome,
-    });
+    supportingSessions.push({ id, occurredAt: occurredAt.toISOString(), practiceDay, outcome });
   }
+
   return {
     id: row.id,
     skillId: row.skillId,
@@ -5865,80 +6239,89 @@ function toDto(row: typeof advancementProposals.$inferSelect): AdvancementPropos
     windowDays: row.evidenceWindowDays,
     supportingSessions,
     createdAt: row.createdAt.toISOString(),
-    decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
+    decidedAt: row.decidedAt?.toISOString() ?? null,
   };
 }
 
+type EvidenceRow = {
+  id: string;
+  outcome: PracticeOutcome;
+  occurredAt: Date;
+  practiceDay: string;
+};
+
+async function withdrawOpenProposal(
+  tx: TransactionType,
+  open: typeof advancementProposals.$inferSelect | undefined,
+): Promise<void> {
+  if (!open) return;
+  await tx
+    .update(advancementProposals)
+    .set({ status: "withdrawn", decidedAt: new Date() })
+    .where(eq(advancementProposals.id, open.id));
+}
+
 /**
- * Keeps at most one open proposal per skill in step with the evidence:
- * creates one when earned, leaves a matching one untouched, and withdraws a
- * stale one when the evidence no longer supports it.
+ * Keeps at most one open proposal per skill in step with the evidence.
+ * Callers that already hold a transaction use this to avoid a nested
+ * transaction taking a second pooled connection while holding the first.
  */
-export async function syncAdvancementProposal(
+export async function syncAdvancementProposalInTx(
+  tx: TransactionType,
   skillId: string,
   evidence: AdvancementEvidence | null,
-  evidenceRows: Array<{
-    id: string;
-    outcome: PracticeOutcome;
-    occurredAt: Date;
-    practiceDay: string;
-  }>,
+  evidenceRows: EvidenceRow[],
 ): Promise<{ proposal: AdvancementProposalDto | null; created: boolean }> {
-  return db.transaction(async (tx) => {
-    // Every proposal sync and owner decision takes this lock first. The shared
-    // lock order is advisory lock -> skill row -> proposal/evidence rows.
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skillId}))`);
-    const [currentSkill] = await tx
-      .select({ confidence: trainingSkills.confidence })
-      .from(trainingSkills)
-      .where(eq(trainingSkills.id, skillId))
-      .for("update")
-      .limit(1);
-    if (!currentSkill) return { proposal: null, created: false };
-    const [open] = await tx
-      .select()
-      .from(advancementProposals)
-      .where(
-        and(eq(advancementProposals.skillId, skillId), eq(advancementProposals.status, "proposed")),
-      )
-      .limit(1);
+  // Shared lock order: advisory skill lock -> skill row -> proposal/evidence rows.
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skillId}))`);
+  const [skill] = await tx
+    .select({ confidence: trainingSkills.confidence })
+    .from(trainingSkills)
+    .where(eq(trainingSkills.id, skillId))
+    .for("update")
+    .limit(1);
+  if (!skill) return { proposal: null, created: false };
 
-    if (!evidence) {
-      if (open) {
-        await tx
-          .update(advancementProposals)
-          .set({ status: "withdrawn", decidedAt: new Date() })
-          .where(eq(advancementProposals.id, open.id));
-      }
-      return { proposal: null, created: false };
-    }
-    if (currentSkill.confidence !== evidence.fromLevel) {
-      if (open) {
-        await tx
-          .update(advancementProposals)
-          .set({ status: "withdrawn", decidedAt: new Date() })
-          .where(eq(advancementProposals.id, open.id));
-      }
-      return { proposal: null, created: false };
-    }
+  const [open] = await tx
+    .select()
+    .from(advancementProposals)
+    .where(
+      and(eq(advancementProposals.skillId, skillId), eq(advancementProposals.status, "proposed")),
+    )
+    .limit(1);
 
-    const qualifying = evidenceRows.slice(0, ADVANCEMENT_MIN_SESSIONS);
-    const persisted = await tx
-      .select({
-        id: practiceSessions.id,
-        outcome: practiceSessions.outcome,
-        occurredAt: practiceSessions.occurredAt,
-        practiceDay: practiceSessions.practiceDay,
-        curriculumLevel: practiceSessions.curriculumLevel,
-        practiceVariant: practiceSessions.practiceVariant,
-      })
-      .from(practiceSessions)
-      .where(inArray(practiceSessions.id, qualifying.map((row) => row.id)));
-    const persistedById = new Map(persisted.map((row) => [row.id, row]));
-    const snapshotStillValid = qualifying.every((row) => {
+  if (!evidence || skill.confidence !== evidence.fromLevel) {
+    await withdrawOpenProposal(tx, open);
+    return { proposal: null, created: false };
+  }
+
+  const qualifying = evidenceRows.slice(0, ADVANCEMENT_MIN_SESSIONS);
+  const persisted =
+    qualifying.length === ADVANCEMENT_MIN_SESSIONS
+      ? await tx
+          .select({
+            id: practiceSessions.id,
+            outcome: practiceSessions.outcome,
+            occurredAt: practiceSessions.occurredAt,
+            practiceDay: practiceSessions.practiceDay,
+            curriculumLevel: practiceSessions.curriculumLevel,
+            practiceVariant: practiceSessions.practiceVariant,
+          })
+          .from(practiceSessions)
+          .where(
+            inArray(
+              practiceSessions.id,
+              qualifying.map((row) => row.id),
+            ),
+          )
+      : [];
+  const persistedById = new Map(persisted.map((row) => [row.id, row]));
+  const snapshotStillValid =
+    qualifying.length === ADVANCEMENT_MIN_SESSIONS &&
+    qualifying.every((row) => {
       const saved = persistedById.get(row.id);
-      if (!saved) return false;
       return (
+        saved?.outcome === "went_well" &&
         saved.outcome === row.outcome &&
         saved.occurredAt.getTime() === row.occurredAt.getTime() &&
         saved.practiceDay === row.practiceDay &&
@@ -5946,108 +6329,92 @@ export async function syncAdvancementProposal(
         saved.practiceVariant === "primary"
       );
     });
-    if (!snapshotStillValid) {
-      if (open) {
-        await tx
-          .update(advancementProposals)
-          .set({ status: "withdrawn", decidedAt: new Date() })
-          .where(eq(advancementProposals.id, open.id));
-      }
-      return { proposal: null, created: false };
-    }
-    const sameSnapshot =
-      open &&
-      open.evidenceSessionIds.length === qualifying.length &&
-      open.evidenceSessionIds.every((id, index) => id === qualifying[index]?.id) &&
-      open.evidenceOutcomes.every(
-        (outcome, index) => outcome === qualifying[index]?.outcome,
-      );
-    if (
-      open &&
-      open.fromLevel === evidence.fromLevel &&
-      open.toLevel === evidence.toLevel &&
-      sameSnapshot
-    ) {
-      return { proposal: toDto(open), created: false };
-    }
+  if (!snapshotStillValid) {
+    await withdrawOpenProposal(tx, open);
+    return { proposal: null, created: false };
+  }
 
-    if (open) {
-      await tx
-        .update(advancementProposals)
-        .set({ status: "withdrawn", decidedAt: new Date() })
-        .where(eq(advancementProposals.id, open.id));
-    }
+  const sameSnapshot =
+    open &&
+    open.evidenceSessionIds.length === qualifying.length &&
+    open.evidenceSessionIds.every((id, index) => id === qualifying[index]?.id) &&
+    open.evidenceOccurredAt.every(
+      (occurredAt, index) => occurredAt.getTime() === qualifying[index]?.occurredAt.getTime(),
+    ) &&
+    open.evidencePracticeDays.every(
+      (practiceDay, index) => practiceDay === qualifying[index]?.practiceDay,
+    ) &&
+    open.evidenceOutcomes.every((outcome, index) => outcome === qualifying[index]?.outcome);
+  if (
+    open &&
+    open.fromLevel === evidence.fromLevel &&
+    open.toLevel === evidence.toLevel &&
+    sameSnapshot
+  ) {
+    return { proposal: toDto(open), created: false };
+  }
 
-    const [latestDecision] = await tx
-      .select()
-      .from(advancementProposals)
-      .where(
-        and(
-          eq(advancementProposals.skillId, skillId),
-          eq(advancementProposals.fromLevel, evidence.fromLevel),
-          eq(advancementProposals.toLevel, evidence.toLevel),
-          inArray(advancementProposals.status, [
-            "stayed",
-            "rejected",
-            "regressed",
-            "insufficient_evidence",
-          ]),
-        ),
-      )
-      .orderBy(
-        desc(advancementProposals.evidenceLastSessionAt),
-        desc(advancementProposals.createdAt),
-      )
-      .limit(1);
-    const latestDecisionCoversEvidence =
-      latestDecision &&
-      (latestDecision.evidenceLastSessionAt.getTime() > evidence.lastSessionAt.getTime() ||
-        (latestDecision.evidenceLastSessionAt.getTime() ===
-          evidence.lastSessionAt.getTime() &&
-          (evidence.lastSessionId === null ||
-            latestDecision.evidenceSessionIds.includes(evidence.lastSessionId))));
-    if (
-      latestDecision &&
-      latestDecision.status !== "proposed" &&
-      latestDecisionCoversEvidence
-    ) {
-      return { proposal: null, created: false };
-    }
+  await withdrawOpenProposal(tx, open);
 
-    const [created] = await tx
-      .insert(advancementProposals)
-      .values({
-        skillId,
-        fromLevel: evidence.fromLevel,
-        toLevel: evidence.toLevel,
-        ruleId: advancementRuleId,
-        evidenceSessionCount: evidence.sessionCount,
-        evidenceDayCount: evidence.dayCount,
-        evidenceWindowDays: EVIDENCE_WINDOW_DAYS,
-        evidenceLastSessionAt: evidence.lastSessionAt,
-        evidenceSessionIds: evidenceRows
-          .slice(0, ADVANCEMENT_MIN_SESSIONS)
-          .map((row) => row.id),
-        evidenceOccurredAt: evidenceRows
-          .slice(0, ADVANCEMENT_MIN_SESSIONS)
-          .map((row) => row.occurredAt),
-        evidencePracticeDays: evidenceRows
-          .slice(0, ADVANCEMENT_MIN_SESSIONS)
-          .map((row) => row.practiceDay),
-        evidenceOutcomes: evidenceRows
-          .slice(0, ADVANCEMENT_MIN_SESSIONS)
-          .map((row) => row.outcome),
-      })
-      .returning();
-    if (!created) return { proposal: null, created: false };
-    return { proposal: toDto(created), created: true };
-  });
+  const terminalDecisions = await tx
+    .select()
+    .from(advancementProposals)
+    .where(
+      and(
+        eq(advancementProposals.skillId, skillId),
+        eq(advancementProposals.fromLevel, evidence.fromLevel),
+        eq(advancementProposals.toLevel, evidence.toLevel),
+        gte(advancementProposals.evidenceLastSessionAt, evidence.lastSessionAt),
+        inArray(advancementProposals.status, [
+          "stayed",
+          "rejected",
+          "regressed",
+          "insufficient_evidence",
+        ]),
+      ),
+    )
+    .orderBy(
+      desc(advancementProposals.evidenceLastSessionAt),
+      desc(advancementProposals.createdAt),
+    );
+  const terminalDecisionCoversEvidence = terminalDecisions.some(
+    (decision) =>
+      decision.evidenceLastSessionAt.getTime() > evidence.lastSessionAt.getTime() ||
+      (decision.evidenceLastSessionAt.getTime() === evidence.lastSessionAt.getTime() &&
+        (evidence.lastSessionId === null ||
+          decision.evidenceSessionIds.includes(evidence.lastSessionId))),
+  );
+  if (terminalDecisionCoversEvidence) return { proposal: null, created: false };
+
+  const [created] = await tx
+    .insert(advancementProposals)
+    .values({
+      skillId,
+      fromLevel: evidence.fromLevel,
+      toLevel: evidence.toLevel,
+      ruleId: advancementRuleId,
+      evidenceSessionCount: evidence.sessionCount,
+      evidenceDayCount: evidence.dayCount,
+      evidenceWindowDays: EVIDENCE_WINDOW_DAYS,
+      evidenceSessionIds: qualifying.map((row) => row.id),
+      evidenceOccurredAt: qualifying.map((row) => row.occurredAt),
+      evidencePracticeDays: qualifying.map((row) => row.practiceDay),
+      evidenceOutcomes: qualifying.map((row) => row.outcome),
+      evidenceLastSessionAt: evidence.lastSessionAt,
+    })
+    .returning();
+  return created ? { proposal: toDto(created), created: true } : { proposal: null, created: false };
 }
 
-/**
- * Applies an owner's decision. Only `confirmed` and `regressed` change the
- * skill level, and only because the owner asked for it.
- */
+export async function syncAdvancementProposal(
+  skillId: string,
+  evidence: AdvancementEvidence | null,
+  evidenceRows: EvidenceRow[],
+): Promise<{ proposal: AdvancementProposalDto | null; created: boolean }> {
+  return db.transaction((tx) => syncAdvancementProposalInTx(tx, skillId, evidence, evidenceRows));
+}
+
+/** Only owner decisions `confirmed` and `regressed` change the skill level. */
 export async function decideAdvancementProposal(
   dogId: string,
   proposalId: string,
@@ -6064,6 +6431,7 @@ export async function decideAdvancementProposal(
     if (decideSafety(await loadSafetyInputs(dogId, new Date(), tx))) {
       return { status: "safety_suppressed" as const };
     }
+
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${skillId}))`);
     const [skill] = await tx
       .select({ confidence: trainingSkills.confidence })
@@ -6077,10 +6445,7 @@ export async function decideAdvancementProposal(
       .select()
       .from(advancementProposals)
       .where(
-        and(
-          eq(advancementProposals.id, proposalId),
-          eq(advancementProposals.skillId, skillId),
-        ),
+        and(eq(advancementProposals.id, proposalId), eq(advancementProposals.skillId, skillId)),
       )
       .for("update")
       .limit(1);
@@ -6088,10 +6453,7 @@ export async function decideAdvancementProposal(
     if (proposal.status === "withdrawn") return { status: "stale" as const };
     if (proposal.status !== "proposed") return { status: "not_found" as const };
     if (skill.confidence !== proposal.fromLevel) {
-      await tx
-        .update(advancementProposals)
-        .set({ status: "withdrawn", decidedAt: new Date() })
-        .where(eq(advancementProposals.id, proposal.id));
+      await withdrawOpenProposal(tx, proposal);
       return { status: "stale" as const };
     }
 
@@ -6099,6 +6461,7 @@ export async function decideAdvancementProposal(
       .select({
         id: practiceSessions.id,
         outcome: practiceSessions.outcome,
+        occurredAt: practiceSessions.occurredAt,
         practiceDay: practiceSessions.practiceDay,
         curriculumLevel: practiceSessions.curriculumLevel,
         curriculumVersion: practiceSessions.curriculumVersion,
@@ -6108,22 +6471,19 @@ export async function decideAdvancementProposal(
       .where(inArray(practiceSessions.id, proposal.evidenceSessionIds));
     const byId = new Map(supporting.map((row) => [row.id, row]));
     const evidenceStillValid = proposal.evidenceSessionIds.every((id, index) => {
-      const row = byId.get(id);
-      if (!row) return false;
+      const session = byId.get(id);
       return (
-        row.outcome === proposal.evidenceOutcomes[index] &&
-        row.outcome === "went_well" &&
-        row.practiceDay === proposal.evidencePracticeDays[index] &&
-        row.curriculumLevel === proposal.fromLevel &&
-        row.curriculumVersion === CURRICULUM_VERSION &&
-        row.practiceVariant === "primary"
+        session?.outcome === "went_well" &&
+        session.outcome === proposal.evidenceOutcomes[index] &&
+        session.occurredAt.getTime() === proposal.evidenceOccurredAt[index]?.getTime() &&
+        session.practiceDay === proposal.evidencePracticeDays[index] &&
+        session.curriculumLevel === proposal.fromLevel &&
+        session.curriculumVersion === CURRICULUM_VERSION &&
+        session.practiceVariant === "primary"
       );
     });
     if (!evidenceStillValid) {
-      await tx
-        .update(advancementProposals)
-        .set({ status: "withdrawn", decidedAt: new Date() })
-        .where(eq(advancementProposals.id, proposal.id));
+      await withdrawOpenProposal(tx, proposal);
       return { status: "stale" as const };
     }
 
@@ -6147,7 +6507,8 @@ export async function decideAdvancementProposal(
 - [ ] **Step 5: Run it, expect PASS**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/lib/advancement.test.ts`
-Expected: PASS — 7 tests.
+Expected: PASS — 9 tests, including practice-day/UTC, `level: 99`,
+`lastSessionId`, and the DB-backed tied-terminal-decision regression.
 
 - [ ] **Step 6: Commit**
 
@@ -6164,17 +6525,72 @@ git commit -m "feat(api): owner-confirmed advancement proposals"
 
 **Files:**
 - Create: `apps/api/src/lib/suggestion.ts`
+- Create: `apps/api/src/lib/suggestion.test.ts`
 
-This task has no unit test of its own — it is pure I/O composition over modules that are already unit-tested, and it is covered end-to-end by the route tests in Task 17.
+The orchestrator has seven DB-backed tests of its own: owner-local Monday
+calculation; no-focus audit deduplication; reviewed exercise/fallback audit;
+persisted-safety suppression and proposal withdrawal; idempotent concurrent
+skip/dismissal behavior under the suggestion lock; owner isolation; and
+fail-open audit persistence with a console-error spy. Trigger the final case
+with a valid UUID for a dog that does not exist: safety and evidence reads stay
+natural, while the audit insert's dog foreign key fails. Do not mutate shared
+schema state in this test.
 
-- [ ] **Step 1: Create `apps/api/src/lib/suggestion.ts`**
+Every path that produces a returned suggestion — the initial already-suppressed
+path, the target-missing path and the exercise path — finishes inside
+`evaluateSafetyWithLock(dogId, now, callback)` and persists its audit rows on
+that callback's `tx`, so the final safety decision and the audit write share one
+transaction and one advisory lock. `recordSuggestion` therefore takes an
+executor instead of reaching for `db`.
+
+Three rules follow from writing audit rows inside a live transaction:
+
+1. **Never swallow a failed statement inside the transaction.** A failed
+   statement has already aborted it, so a `catch` that continued would issue
+   the next statement against a dead transaction. Audit statements are wrapped
+   only to re-throw a recognizable `SuggestionAuditWriteError`.
+2. **Keep the audit best-effort from outside.** The whole locked call is
+   wrapped; on a `SuggestionAuditWriteError` the transaction rolls back and the
+   already-built suggestion is returned with `suggestionId: null`. Everything
+   else re-throws — a safety-input load failure must surface, because a
+   suggestion is never shown when the safety decision is unknown.
+3. **Telemetry runs after a successful commit** and can never abort the
+   transaction; `emitAfterCommit` swallows its own failures.
+
+Nothing inside the locked callback may open a second transaction or reach for
+the global `db`: the pool connection is already checked out by the safety lock,
+so a nested `db.transaction` would wait for a connection it can never get while
+also writing outside the lock. Every decision-conditioned write therefore runs
+on the callback's `tx` — which is why `build` receives `tx` and
+`buildSuppressed(decision, tx)` calls `syncAdvancementProposalInTx(tx, focus.id, null, [])`
+rather than the default `syncAdvancementProposal` wrapper.
+
+Lock ordering is preserved: on the exercise path the default
+`syncAdvancementProposal` wrapper takes the skill lock and commits its own
+transaction *before* the safety lock is taken, and any suppression-driven
+withdrawal runs *inside* the safety-locked callback on that callback's `tx`, so
+the order is always dog safety → skill, never the reverse. Because the
+withdrawal now shares the audit transaction, an audit-write rollback also rolls
+the withdrawal back: the proposal stays open and the next request re-evaluates
+it under the same lock, and no suppressed request can ever leave a proposal
+confirmable, because confirmation itself re-checks safety under the same lock.
+
+- [ ] **Step 1: Write `apps/api/src/lib/suggestion.test.ts`**
+
+Cover the seven DB-backed behaviors listed above using `createTestUser()` and
+real Postgres rows. Run
+`pnpm --filter @turingcare/api exec vitest run src/lib/suggestion.test.ts`
+and observe the import fail before creating the orchestrator.
+
+- [ ] **Step 2: Create `apps/api/src/lib/suggestion.ts`**
 
 ```ts
-import type { SuggestionAction, TrainingSuggestion } from "@turingcare/shared";
-import { and, eq, sql } from "drizzle-orm";
+import type { SuggestionAction, SuggestionSafety, TrainingSuggestion } from "@turingcare/shared";
+import { and, eq } from "drizzle-orm";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import {
+  dogs,
   trainingGoals,
   trainingSkills,
   trainingSuggestionActions,
@@ -6182,11 +6598,17 @@ import {
   weeklyFocus,
 } from "../db/schema";
 import { recordEvent } from "../telemetry/record-event";
-import { evaluateAdvancement, syncAdvancementProposal } from "./advancement";
+import {
+  evaluateAdvancement,
+  syncAdvancementProposal,
+  syncAdvancementProposalInTx,
+} from "./advancement";
 import { resolveCurriculumTarget } from "./curriculum";
 import { claimLegacyFocus } from "./focus";
 import { loadRecentObservation } from "./observations";
+import { isSuggestionSkipped, lockSuggestionAnchor } from "./practice-anchor";
 import { EVIDENCE_WINDOW_DAYS, loadSkillEvidence } from "./practice-evidence";
+import type { TransactionType } from "./safety-lock";
 import { evaluateSafety, evaluateSafetyWithLock } from "./safety-policy";
 import { selectSuggestionRule } from "./suggestion-rules";
 
@@ -6199,6 +6621,17 @@ const EMPTY_EVIDENCE = {
   distinctDayCount: 0,
   lastPracticeAt: null,
 };
+
+/**
+ * Raised only for audit-table statements, so the fail-open wrapper can tell an
+ * audit write failure apart from a safety-input load failure, which must surface.
+ */
+class SuggestionAuditWriteError extends Error {
+  constructor(cause: unknown) {
+    super("suggestion audit write failed", { cause });
+    this.name = "SuggestionAuditWriteError";
+  }
+}
 
 export function currentWeekKey(now: Date, timezoneOffsetMinutes: number): string {
   const local = new Date(now.getTime() - timezoneOffsetMinutes * 60_000);
@@ -6230,32 +6663,35 @@ async function loadPrimaryFocusSkill(dogId: string, weekKey: string) {
 /**
  * Persists the suggestion for review and cohort analysis. Deduped to one row
  * per dog/skill/rule/level/type per owner-local day so repeated page loads do not
- * inflate the audit trail. Persistence is fail-open: if it throws, the owner
- * still sees the suggestion and `suggestionId` is null.
+ * inflate the audit trail. Runs on the caller's executor — the transaction that
+ * holds the safety lock — and never swallows a failed statement: a failure has
+ * already aborted that transaction, so it is re-thrown for the caller to roll back.
  */
-async function recordSuggestion(input: {
-  userId: string;
-  dogId: string;
-  weekKey: string;
-  auditDay: string;
-  suggestion: TrainingSuggestion;
-}): Promise<string | null> {
+async function recordSuggestion(
+  tx: TransactionType,
+  input: {
+    dogId: string;
+    weekKey: string;
+    auditDay: string;
+    suggestion: TrainingSuggestion;
+  },
+): Promise<{ suggestionId: string | null; inserted: boolean }> {
   const { suggestion } = input;
-  try {
-    const dedupeKey = [
-      input.dogId,
-      input.weekKey,
-      suggestion.skill?.id ?? "none",
-      suggestion.type,
-      suggestion.ruleId ?? "none",
-      suggestion.primary?.level ?? 0,
-      suggestion.safety?.ruleId ?? "no-safety-rule",
-      suggestion.safety?.referral ?? "no-referral",
-      CURRICULUM_VERSION,
-      input.auditDay,
-    ].join(":");
+  const dedupeKey = [
+    input.dogId,
+    input.weekKey,
+    suggestion.skill?.id ?? "none",
+    suggestion.type,
+    suggestion.ruleId ?? "none",
+    suggestion.primary?.level ?? 0,
+    suggestion.safety?.ruleId ?? "no-safety-rule",
+    suggestion.safety?.referral ?? "no-referral",
+    CURRICULUM_VERSION,
+    input.auditDay,
+  ].join(":");
 
-    const [row] = await db
+  try {
+    const [row] = await tx
       .insert(trainingSuggestions)
       .values({
         dogId: input.dogId,
@@ -6276,17 +6712,46 @@ async function recordSuggestion(input: {
       })
       .onConflictDoNothing({ target: trainingSuggestions.dedupeKey })
       .returning({ id: trainingSuggestions.id });
-    if (!row) {
-      const [existing] = await db
-        .select({ id: trainingSuggestions.id })
-        .from(trainingSuggestions)
-        .where(eq(trainingSuggestions.dedupeKey, dedupeKey))
-        .limit(1);
-      return existing?.id ?? null;
-    }
+    if (row) return { suggestionId: row.id, inserted: true };
 
+    const [existing] = await tx
+      .select({ id: trainingSuggestions.id })
+      .from(trainingSuggestions)
+      .where(eq(trainingSuggestions.dedupeKey, dedupeKey))
+      .limit(1);
+    return { suggestionId: existing?.id ?? null, inserted: false };
+  } catch (error) {
+    throw new SuggestionAuditWriteError(error);
+  }
+}
+
+/** Audit write plus the dismissal read, both on the locked transaction. */
+async function persistSuggestionAudit(
+  tx: TransactionType,
+  input: {
+    dogId: string;
+    weekKey: string;
+    auditDay: string;
+    suggestion: TrainingSuggestion;
+  },
+): Promise<{ suggestionId: string | null; inserted: boolean; dismissed: boolean }> {
+  const { suggestionId, inserted } = await recordSuggestion(tx, input);
+  try {
+    return {
+      suggestionId,
+      inserted,
+      dismissed: suggestionId ? await isSuggestionSkipped(tx, suggestionId) : false,
+    };
+  } catch (error) {
+    throw new SuggestionAuditWriteError(error);
+  }
+}
+
+/** Side channel only: runs after the audit transaction commits and never throws. */
+async function emitAfterCommit(userId: string, suggestion: TrainingSuggestion): Promise<void> {
+  try {
     await recordEvent("training.suggestion_shown", {
-      userId: input.userId,
+      userId,
       props: {
         suggestionType: suggestion.type,
         ruleId: suggestion.ruleId ?? "none",
@@ -6297,41 +6762,73 @@ async function recordSuggestion(input: {
     });
     if (suggestion.safety) {
       await recordEvent("safety.suppression_shown", {
-        userId: input.userId,
+        userId,
         props: {
           safetyRuleId: suggestion.safety.ruleId,
           referral: suggestion.safety.referral,
         },
       });
     }
-    return row.id;
-  } catch {
-    // Audit is best-effort: never block the owner's suggestion on a write.
-    console.error("[suggestion] audit_write_failed", {
-      suggestionType: suggestion.type,
-      suppressed: suggestion.safety !== null,
-    });
-    return null;
+  } catch (error) {
+    console.error("[suggestion] telemetry_failed", { error });
   }
 }
 
-async function wasSuggestionSkipped(suggestionId: string | null): Promise<boolean> {
-  if (!suggestionId) return false;
+/**
+ * Takes the final safety decision and writes the audit rows in one transaction
+ * holding the dog safety lock. Audit persistence is fail-open from the outside:
+ * a recognized audit-write failure rolls the transaction back and the owner
+ * still gets the built suggestion with `suggestionId: null`. Every other error —
+ * including a safety-input load failure — surfaces.
+ */
+async function finalizeUnderSafetyLock(input: {
+  userId: string;
+  dogId: string;
+  weekKey: string;
+  auditDay: string;
+  now: Date;
+  build: (decision: SuggestionSafety | null, tx: TransactionType) => Promise<TrainingSuggestion>;
+}): Promise<TrainingSuggestion> {
+  // A plain `let` would be narrowed to `null` by control flow; the holder keeps
+  // the value assigned inside the callback readable from `catch`.
+  const state: { built: TrainingSuggestion | null } = { built: null };
   try {
-    const [actionRow] = await db
-      .select({ id: trainingSuggestionActions.id })
-      .from(trainingSuggestionActions)
-      .where(
-        and(
-          eq(trainingSuggestionActions.suggestionId, suggestionId),
-          eq(trainingSuggestionActions.action, "skipped"),
-        ),
-      )
-      .limit(1);
-    return actionRow !== undefined;
-  } catch {
-    console.error("[suggestion] action_read_failed", { suggestionId });
-    return false;
+    const { suggestion, inserted } = await evaluateSafetyWithLock(
+      input.dogId,
+      input.now,
+      async (decision, tx) => {
+        const built = await input.build(decision, tx);
+        state.built = built;
+        const audit = await persistSuggestionAudit(tx, {
+          dogId: input.dogId,
+          weekKey: input.weekKey,
+          auditDay: input.auditDay,
+          suggestion: built,
+        });
+        return {
+          suggestion: {
+            ...built,
+            suggestionId: audit.suggestionId,
+            dismissed: audit.dismissed,
+          },
+          inserted: audit.inserted,
+        };
+      },
+    );
+    // Committed: telemetry is safe here and `emitAfterCommit` never throws.
+    if (inserted) await emitAfterCommit(input.userId, suggestion);
+    return suggestion;
+  } catch (error) {
+    const built = state.built;
+    if (!(error instanceof SuggestionAuditWriteError) || !built) throw error;
+    // Audit is best-effort: never block the owner's suggestion on a write.
+    console.error("[suggestion] audit_write_failed", {
+      dogId: input.dogId,
+      suggestionType: built.type,
+      suppressed: built.safety !== null,
+      error,
+    });
+    return { ...built, suggestionId: null, dismissed: false };
   }
 }
 
@@ -6379,31 +6876,33 @@ export async function loadSuggestion(input: {
     advancementProposal: null,
   } satisfies Omit<TrainingSuggestion, "type" | "ruleId">;
 
-  const finishSuppressed = async (
+  /**
+   * Called from inside the safety-locked callback and runs on that callback's
+   * transaction, so withdrawing an open proposal takes the skill lock *after*
+   * the dog safety lock — never the reverse — and never opens a nested
+   * transaction against the already-checked-out connection.
+   */
+  const buildSuppressed = async (
     decision: NonNullable<TrainingSuggestion["safety"]>,
+    tx: TransactionType,
   ): Promise<TrainingSuggestion> => {
-    if (focus) await syncAdvancementProposal(focus.id, null, []);
-    const suppressed: TrainingSuggestion = {
-      ...base,
-      type: "safety_suppressed",
-      ruleId: null,
-      safety: decision,
-    };
-    const suggestionId = await recordSuggestion({
-      ...input,
-      auditDay,
-      suggestion: suppressed,
-    });
-    return {
-      ...suppressed,
-      suggestionId,
-      dismissed: await wasSuggestionSkipped(suggestionId),
-    };
+    if (focus) await syncAdvancementProposalInTx(tx, focus.id, null, []);
+    return { ...base, type: "safety_suppressed", ruleId: null, safety: decision };
   };
 
   // Safety supersedes every suggestion: no exercise is returned at all.
   if (safety) {
-    return finishSuppressed(safety);
+    return finalizeUnderSafetyLock({
+      userId: input.userId,
+      dogId: input.dogId,
+      weekKey: input.weekKey,
+      auditDay,
+      now,
+      // Suppression is never downgraded inside one request: if the locked
+      // re-read comes back clear, the unlocked decision still stands and the
+      // next request produces an exercise.
+      build: (decision, tx) => buildSuppressed(decision ?? safety, tx),
+    });
   }
 
   const evidence = focus
@@ -6435,8 +6934,6 @@ export async function loadSuggestion(input: {
       : resolveCurriculumTarget(focus?.catalogSkillKey ?? null, rule.effectiveLevel);
 
   if (!target) {
-    const finalSafety = await evaluateSafetyWithLock(input.dogId, now);
-    if (finalSafety) return finishSuppressed(finalSafety);
     const unsupported: TrainingSuggestion = {
       ...base,
       type: rule.type === "exercise" ? "custom_skill_unsupported" : rule.type,
@@ -6451,18 +6948,19 @@ export async function loadSuggestion(input: {
         lastPracticeAt: evidence.summary.lastPracticeAt,
       },
     };
-    const suggestionId = await recordSuggestion({
-      ...input,
+    return finalizeUnderSafetyLock({
+      userId: input.userId,
+      dogId: input.dogId,
+      weekKey: input.weekKey,
       auditDay,
-      suggestion: unsupported,
+      now,
+      build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : unsupported),
     });
-    return {
-      ...unsupported,
-      suggestionId,
-      dismissed: await wasSuggestionSkipped(suggestionId),
-    };
   }
 
+  // Uses the default wrapper on purpose: it runs before the safety lock is
+  // taken and commits its own transaction, so the skill lock is never held
+  // while waiting on the dog safety lock.
   const advancement = focus
     ? await syncAdvancementProposal(
         focus.id,
@@ -6508,14 +7006,14 @@ export async function loadSuggestion(input: {
     advancementProposal: proposal,
   };
 
-  const finalSafety = await evaluateSafetyWithLock(input.dogId, now);
-  if (finalSafety) return finishSuppressed(finalSafety);
-  const suggestionId = await recordSuggestion({ ...input, auditDay, suggestion });
-  return {
-    ...suggestion,
-    suggestionId,
-    dismissed: await wasSuggestionSkipped(suggestionId),
-  };
+  return finalizeUnderSafetyLock({
+    userId: input.userId,
+    dogId: input.dogId,
+    weekKey: input.weekKey,
+    auditDay,
+    now,
+    build: async (decision, tx) => (decision ? buildSuppressed(decision, tx) : suggestion),
+  });
 }
 
 export async function recordSuggestionAction(input: {
@@ -6529,10 +7027,12 @@ export async function recordSuggestionAction(input: {
     const [owned] = await tx
       .select({ id: trainingSuggestions.id, ruleId: trainingSuggestions.ruleId })
       .from(trainingSuggestions)
+      .innerJoin(dogs, eq(trainingSuggestions.dogId, dogs.id))
       .where(
         and(
           eq(trainingSuggestions.id, input.suggestionId),
           eq(trainingSuggestions.dogId, input.dogId),
+          eq(dogs.ownerId, input.userId),
         ),
       )
       .limit(1);
@@ -6567,18 +7067,29 @@ export async function recordSuggestionAction(input: {
 }
 ```
 
-Import `isSuggestionSkipped` and `lockSuggestionAnchor` from
-`./practice-anchor`.
+`TransactionType` comes from `../lib/safety-lock` (re-exported by
+`./safety-policy`); `isSuggestionSkipped` and `lockSuggestionAnchor` come from
+`./practice-anchor`. `syncAdvancementProposalInTx` is the transaction-aware
+entry point added in Task 15; the plain `syncAdvancementProposal` wrapper is
+used only on the pre-lock exercise path.
 
-- [ ] **Step 2: Typecheck**
+- [ ] **Step 3: Run focused tests and typecheck**
 
-Run: `pnpm --filter @turingcare/api exec tsc --noEmit`
-Expected: PASS with no errors. If `satisfies Omit<TrainingSuggestion, "type" | "ruleId">` reports a mismatch, fix the offending field on the object rather than widening the type.
+Run:
+`pnpm --filter @turingcare/api exec vitest run src/lib/suggestion.test.ts`
+then `pnpm --filter @turingcare/api exec tsc --noEmit`.
+Expected: seven passing tests and no type errors. If
+`satisfies Omit<TrainingSuggestion, "type" | "ruleId">` reports a mismatch,
+fix the offending field on the object rather than widening the type.
 
-- [ ] **Step 3: Commit**
+Also grep the finished file: `rg "db\.transaction|syncAdvancementProposal\(" apps/api/src/lib/suggestion.ts`
+must show no `db.transaction` inside `loadSuggestion` and exactly one
+`syncAdvancementProposal(` call — the pre-lock exercise path.
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add apps/api/src/lib/suggestion.ts
+git add apps/api/src/lib/suggestion.ts apps/api/src/lib/suggestion.test.ts
 git commit -m "feat(api): suggestion orchestrator with audit persistence"
 ```
 
@@ -6588,9 +7099,30 @@ git commit -m "feat(api): suggestion orchestrator with audit persistence"
 
 **Files:**
 - Modify: `apps/api/src/routes/dogs.ts`
+- Modify: `apps/api/src/test-helpers.ts`
 - Create: `apps/api/src/routes/suggestion.test.ts`
 
-The endpoints go inside the existing `dogs.ts` chain rather than a new sub-app: `dogsApp` already carries the `requireUser` middleware and its RPC types, and mounting a second app at `/api/dogs` would run session lookup twice per request.
+The endpoints go inside the existing `dogs.ts` chain rather than a new sub-app: `dogsApp` already carries the `requireUser` middleware and its RPC types, and mounting a second app at `/api/dogs` would run session lookup twice per request. The route test file has 45 integration tests.
+
+`createTestUser()` in `apps/api/src/test-helpers.ts` changes its rate-limit
+isolation header from `x-forwarded-for` to `fly-client-ip`, the header the API
+actually trusts, and derives the address from the user's own UUID instead of
+`Math.random()`:
+
+```ts
+const id = randomUUID();
+const ipOctet = (start: number) => (Number.parseInt(id.slice(start, start + 2), 16) % 254) + 1;
+const ip = `198.${ipOctet(0)}.${ipOctet(2)}.${ipOctet(4)}`;
+const email = `test-${id}@example.com`;
+const baseHeaders = { "Content-Type": "application/json", "fly-client-ip": ip };
+```
+
+Three independent octets drawn from the UUID make the synthetic, local-only
+IPv4 address collision-resistant across the many users this suite creates,
+where a single random final octet collided often enough to leak rate-limit
+state between tests. The address is never routed — it exists only so the
+in-process limiter buckets each `app.request()` user separately — and this
+test-only header does not change the production Fly edge trust boundary.
 
 - [ ] **Step 1: Write the failing test** — create `apps/api/src/routes/suggestion.test.ts`:
 
@@ -6599,7 +7131,7 @@ import type { TrainingSuggestion } from "@turingcare/shared";
 import { and, eq, sql } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
-import { db } from "../db";
+import { db, pool } from "../db";
 import {
   dogSafetySignals,
   trainingSuggestionActions,
@@ -6674,9 +7206,7 @@ async function setup() {
 
   async function logSession(skillId: string, occurredAt: string, body: Record<string, unknown>) {
     const variant = body.variant === "fallback" ? "fallback" : "primary";
-    const evidence = Object.fromEntries(
-      Object.entries(body).filter(([key]) => key !== "variant"),
-    );
+    const evidence = Object.fromEntries(Object.entries(body).filter(([key]) => key !== "variant"));
     const shown = await getSuggestion();
     const practicedTarget =
       shown.suggestionId &&
@@ -6701,7 +7231,7 @@ async function setup() {
     const res = await app.request(
       `/api/dogs/${dog.id}/suggestion?weekKey=${WEEK_KEY}&timezoneOffsetMinutes=0`,
       {
-      headers,
+        headers,
       },
     );
     expect(res.status).toBe(200);
@@ -6721,6 +7251,17 @@ async function setup() {
 }
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+
+async function waitForAdvisoryLockWaiter() {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const result = await pool.query<{ waiting: boolean }>(
+      "select exists (select 1 from pg_locks where locktype = 'advisory' and not granted and database = (select oid from pg_database where datname = current_database())) as waiting",
+    );
+    if (result.rows[0]?.waiting) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error("timed out waiting for an advisory lock waiter");
+}
 
 afterEach(async () => {
   for (let user = users.pop(); user; user = users.pop()) await user.cleanup();
@@ -6986,8 +7527,13 @@ describe("GET /api/dogs/:id/suggestion", () => {
       await hold;
     });
     await ready;
-    const suggestionPromise = ctx.getSuggestion();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    let completed = false;
+    const suggestionPromise = ctx.getSuggestion().then((suggestion) => {
+      completed = true;
+      return suggestion;
+    });
+    await waitForAdvisoryLockWaiter();
+    expect(completed).toBe(false);
     release?.();
     await safetyWrite;
 
@@ -7104,7 +7650,7 @@ describe("GET /api/dogs/:id/suggestion", () => {
     const res = await app.request(
       `/api/dogs/${ctx.dogId}/suggestion?weekKey=2026-08-11&timezoneOffsetMinutes=0`,
       {
-      headers: ctx.headers,
+        headers: ctx.headers,
       },
     );
     expect(res.status).toBe(400);
@@ -7132,6 +7678,28 @@ describe("GET /api/dogs/:id/suggestion", () => {
       { headers: mine.headers },
     );
     expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for malformed dog IDs on suggestion routes", async () => {
+    const ctx = await setup();
+    const suggestion = await app.request(
+      `/api/dogs/not-a-uuid/suggestion?weekKey=${WEEK_KEY}&timezoneOffsetMinutes=0`,
+      { headers: ctx.headers },
+    );
+    expect(suggestion.status).toBe(404);
+
+    const action = await app.request("/api/dogs/not-a-uuid/suggestions/not-a-uuid/actions", {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({ action: "started" }),
+    });
+    expect(action.status).toBe(404);
+
+    const decision = await app.request(
+      "/api/dogs/not-a-uuid/advancement-proposals/not-a-uuid/decision",
+      { method: "POST", headers: ctx.headers, body: JSON.stringify({ decision: "confirmed" }) },
+    );
+    expect(decision.status).toBe(404);
   });
 
   it("does not create a second audit row for concurrent identical views", async () => {
@@ -7181,9 +7749,7 @@ describe("GET /api/dogs/:id/suggestion", () => {
       outcome: "too_hard",
       safetySignal: "aggression_or_bite_risk",
     });
-    expect((await ctx.getSuggestion()).safety?.ruleId).toBe(
-      "reported_aggression_or_bite_risk",
-    );
+    expect((await ctx.getSuggestion()).safety?.ruleId).toBe("reported_aggression_or_bite_risk");
     await ctx.logSession(skillId, daysAgo(0), {
       outcome: "too_hard",
       safetySignal: "injury_or_pain",
@@ -7193,10 +7759,7 @@ describe("GET /api/dogs/:id/suggestion", () => {
       .select({ id: trainingSuggestions.id })
       .from(trainingSuggestions)
       .where(
-        and(
-          eq(trainingSuggestions.dogId, ctx.dogId),
-          eq(trainingSuggestions.suppressed, true),
-        ),
+        and(eq(trainingSuggestions.dogId, ctx.dogId), eq(trainingSuggestions.suppressed, true)),
       );
     expect(rows).toHaveLength(2);
   });
@@ -7276,14 +7839,11 @@ describe("suggestion actions and advancement decisions", () => {
     await ctx.focus(skillId);
     const suggestion = await ctx.getSuggestion();
     if (!suggestion.suggestionId) throw new Error("expected audited suggestion");
-    await app.request(
-      `/api/dogs/${ctx.dogId}/suggestions/${suggestion.suggestionId}/actions`,
-      {
-        method: "POST",
-        headers: ctx.headers,
-        body: JSON.stringify({ action: "skipped" }),
-      },
-    );
+    await app.request(`/api/dogs/${ctx.dogId}/suggestions/${suggestion.suggestionId}/actions`, {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({ action: "skipped" }),
+    });
     expect((await ctx.getSuggestion()).dismissed).toBe(true);
   });
 
@@ -7318,34 +7878,26 @@ describe("suggestion actions and advancement decisions", () => {
     await ctx.focus(skillId);
     const suggestion = await ctx.getSuggestion();
     if (!suggestion.suggestionId) throw new Error("expected audited suggestion");
-    await app.request(
-      `/api/dogs/${ctx.dogId}/suggestions/${suggestion.suggestionId}/actions`,
-      {
-        method: "POST",
-        headers: ctx.headers,
-        body: JSON.stringify({ action: "skipped" }),
-      },
-    );
-    const res = await app.request(
-      `/api/dogs/${ctx.dogId}/skills/${skillId}/sessions`,
-      {
-        method: "POST",
-        headers: ctx.headers,
-        body: JSON.stringify({
-          occurredAt: new Date().toISOString(),
-          timezoneOffsetMinutes: 0,
-          outcome: "went_well",
-          practicedTarget: {
-            suggestionId: suggestion.suggestionId,
-            variant: "primary",
-          },
-        }),
-      },
-    );
+    await app.request(`/api/dogs/${ctx.dogId}/suggestions/${suggestion.suggestionId}/actions`, {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({ action: "skipped" }),
+    });
+    const res = await app.request(`/api/dogs/${ctx.dogId}/skills/${skillId}/sessions`, {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({
+        occurredAt: new Date().toISOString(),
+        timezoneOffsetMinutes: 0,
+        outcome: "went_well",
+        practicedTarget: {
+          suggestionId: suggestion.suggestionId,
+          variant: "primary",
+        },
+      }),
+    });
     expect(res.status).toBe(201);
-    expect(await res.json()).toEqual(
-      expect.objectContaining({ anchorRejected: "invalid_anchor" }),
-    );
+    expect(await res.json()).toEqual(expect.objectContaining({ anchorRejected: "invalid_anchor" }));
   });
 
   it("rejects an anchor that waits behind a concurrent skip", async () => {
@@ -7375,19 +7927,16 @@ describe("suggestion actions and advancement decisions", () => {
     });
     await skipLocked;
 
-    const practice = app.request(
-      `/api/dogs/${ctx.dogId}/skills/${skillId}/sessions`,
-      {
-        method: "POST",
-        headers: ctx.headers,
-        body: JSON.stringify({
-          occurredAt: new Date().toISOString(),
-          timezoneOffsetMinutes: 0,
-          outcome: "went_well",
-          practicedTarget: { suggestionId, variant: "primary" },
-        }),
-      },
-    );
+    const practice = app.request(`/api/dogs/${ctx.dogId}/skills/${skillId}/sessions`, {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({
+        occurredAt: new Date().toISOString(),
+        timezoneOffsetMinutes: 0,
+        outcome: "went_well",
+        practicedTarget: { suggestionId, variant: "primary" },
+      }),
+    });
     releaseSkip();
     await skipTx;
 
@@ -7432,6 +7981,22 @@ describe("suggestion actions and advancement decisions", () => {
     expect(res.status).toBe(404);
   });
 
+  it("returns not found for malformed suggestion and proposal IDs", async () => {
+    const ctx = await setup();
+    const action = await app.request(`/api/dogs/${ctx.dogId}/suggestions/not-a-uuid/actions`, {
+      method: "POST",
+      headers: ctx.headers,
+      body: JSON.stringify({ action: "started" }),
+    });
+    expect(action.status).toBe(404);
+
+    const decision = await app.request(
+      `/api/dogs/${ctx.dogId}/advancement-proposals/not-a-uuid/decision`,
+      { method: "POST", headers: ctx.headers, body: JSON.stringify({ decision: "confirmed" }) },
+    );
+    expect(decision.status).toBe(404);
+  });
+
   it("raises the level only when the owner confirms the proposal", async () => {
     const ctx = await setup();
     const skillId = await ctx.addCatalogSkill("basic-manners.sit");
@@ -7471,14 +8036,11 @@ describe("suggestion actions and advancement decisions", () => {
 
     const [, decision] = await Promise.all([
       ctx.getSuggestion(),
-      app.request(
-        `/api/dogs/${ctx.dogId}/advancement-proposals/${proposalId}/decision`,
-        {
-          method: "POST",
-          headers: ctx.headers,
-          body: JSON.stringify({ decision: "confirmed" }),
-        },
-      ),
+      app.request(`/api/dogs/${ctx.dogId}/advancement-proposals/${proposalId}/decision`, {
+        method: "POST",
+        headers: ctx.headers,
+        body: JSON.stringify({ decision: "confirmed" }),
+      }),
     ]);
     expect(decision.status).toBe(200);
     const after = await ctx.getSuggestion();
@@ -7582,17 +8144,17 @@ describe("suggestion actions and advancement decisions", () => {
     await locked;
 
     let completed = false;
-    const manualWrite = app
-      .request(`/api/dogs/${ctx.dogId}/skills/${skillId}/level`, {
+    const manualWrite = Promise.resolve(
+      app.request(`/api/dogs/${ctx.dogId}/skills/${skillId}/level`, {
         method: "PUT",
         headers: ctx.headers,
         body: JSON.stringify({ level: 3 }),
-      })
-      .then((response) => {
-        completed = true;
-        return response;
-      });
-    await new Promise((resolve) => setTimeout(resolve, 50));
+      }),
+    ).then((response) => {
+      completed = true;
+      return response;
+    });
+    await waitForAdvisoryLockWaiter();
     expect(completed).toBe(false);
     releaseLock();
     await holder;
@@ -7607,10 +8169,10 @@ describe("suggestion actions and advancement decisions", () => {
     await ctx.logSession(skillId, daysAgo(2), { outcome: "went_well" });
     const latest = await ctx.logSession(skillId, daysAgo(1), { outcome: "went_well" });
     const suggestion = await ctx.getSuggestion();
-    await app.request(
-      `/api/dogs/${ctx.dogId}/skills/${skillId}/sessions/${latest.session.id}`,
-      { method: "DELETE", headers: ctx.headers },
-    );
+    await app.request(`/api/dogs/${ctx.dogId}/skills/${skillId}/sessions/${latest.session.id}`, {
+      method: "DELETE",
+      headers: ctx.headers,
+    });
     const res = await app.request(
       `/api/dogs/${ctx.dogId}/advancement-proposals/${suggestion.advancementProposal?.id}/decision`,
       {
@@ -7678,19 +8240,24 @@ describe("suggestion actions and advancement decisions", () => {
       await hold;
     });
     await ready;
-    const decision = app.request(
-      `/api/dogs/${ctx.dogId}/advancement-proposals/${proposal.id}/decision`,
-      {
+    let completed = false;
+    const decision = Promise.resolve(
+      app.request(`/api/dogs/${ctx.dogId}/advancement-proposals/${proposal.id}/decision`, {
         method: "POST",
         headers: ctx.headers,
         body: JSON.stringify({ decision: "confirmed" }),
-      },
+      }),
     );
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    const decisionResult = decision.then((response) => {
+      completed = true;
+      return response;
+    });
+    await waitForAdvisoryLockWaiter();
+    expect(completed).toBe(false);
     release?.();
     await safetyWrite;
 
-    const res = await decision;
+    const res = await decisionResult;
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "safety_suppressed" });
   });
@@ -7710,7 +8277,11 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
 
 ```ts
   .get("/:id/suggestion", zValidator("query", suggestionQuerySchema), async (c) => {
-    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    const dogId = c.req.param("id");
+    if (!uuidSchema.safeParse(dogId).success) {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    const dog = await findOwnedDog(c.get("userId"), dogId);
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { weekKey, timezoneOffsetMinutes } = c.req.valid("query");
     if (weekKey !== currentWeekKey(new Date(), timezoneOffsetMinutes)) {
@@ -7728,17 +8299,23 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
     "/:id/suggestions/:suggestionId/actions",
     zValidator("json", suggestionActionSchema),
     async (c) => {
-      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      const dogId = c.req.param("id");
+      if (!uuidSchema.safeParse(dogId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
+      const dog = await findOwnedDog(c.get("userId"), dogId);
       if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const suggestionId = c.req.param("suggestionId");
+      if (!uuidSchema.safeParse(suggestionId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
       const result = await recordSuggestionAction({
         userId: c.get("userId"),
         dogId: dog.id,
-        suggestionId: c.req.param("suggestionId"),
+        suggestionId,
         action: c.req.valid("json").action,
       });
-      if (result === "not_found") {
-        return c.json({ error: "not_found" } as const, 404);
-      }
+      if (result === "not_found") return c.json({ error: "not_found" } as const, 404);
       if (result === "dismissed") {
         return c.json({ error: "suggestion_dismissed" } as const, 409);
       }
@@ -7749,32 +8326,28 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
     "/:id/advancement-proposals/:proposalId/decision",
     zValidator("json", advancementDecisionSchema),
     async (c) => {
-      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      const dogId = c.req.param("id");
+      if (!uuidSchema.safeParse(dogId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
+      const dog = await findOwnedDog(c.get("userId"), dogId);
       if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const proposalId = c.req.param("proposalId");
+      if (!uuidSchema.safeParse(proposalId).success) {
+        return c.json({ error: "not_found" } as const, 404);
+      }
       const [owned] = await db
         .select({ id: advancementProposals.id, skillId: advancementProposals.skillId })
         .from(advancementProposals)
         .innerJoin(trainingSkills, eq(advancementProposals.skillId, trainingSkills.id))
         .innerJoin(trainingGoals, eq(trainingSkills.goalId, trainingGoals.id))
-        .where(
-          and(
-            eq(advancementProposals.id, c.req.param("proposalId")),
-            eq(trainingGoals.dogId, dog.id),
-          ),
-        )
+        .where(and(eq(advancementProposals.id, proposalId), eq(trainingGoals.dogId, dog.id)))
         .limit(1);
       if (!owned) return c.json({ error: "not_found" } as const, 404);
 
       const { decision } = c.req.valid("json");
-      const result = await decideAdvancementProposal(
-        dog.id,
-        owned.id,
-        owned.skillId,
-        decision,
-      );
-      if (result.status === "not_found") {
-        return c.json({ error: "not_found" } as const, 404);
-      }
+      const result = await decideAdvancementProposal(dog.id, owned.id, owned.skillId, decision);
+      if (result.status === "not_found") return c.json({ error: "not_found" } as const, 404);
       if (result.status === "stale") {
         return c.json({ error: "stale_proposal" } as const, 409);
       }
@@ -7795,18 +8368,32 @@ Expected: FAIL — every request 404s because `/suggestion`, `/suggestions/:id/a
   )
 ```
 
-Add to the imports in `apps/api/src/routes/dogs.ts`: `advancementDecisionSchema`,
-`suggestionActionSchema` and `suggestionQuerySchema` from
-`@turingcare/shared`; `advancementProposals` from `../db/schema`;
-`decideAdvancementProposal` from `../lib/advancement`; and
+Add to the imports in `apps/api/src/routes/dogs.ts`: `z` from `zod`;
+`advancementDecisionSchema`, `suggestionActionSchema` and
+`suggestionQuerySchema` from `@turingcare/shared`; `advancementProposals` from
+`../db/schema`; `decideAdvancementProposal` from `../lib/advancement`; and
 `currentWeekKey`, `loadSuggestion`, and `recordSuggestionAction` from
 `../lib/suggestion`.
+
+The three routes guard malformed path parameters before touching the database,
+so define the shared guard next to the other route-local schemas near the top of
+`apps/api/src/routes/dogs.ts` (after `focusRemoveCompatSchema`), above every use:
+
+```ts
+const uuidSchema = z.string().uuid();
+```
+
+A malformed dog, suggestion or proposal ID returns 404 rather than a 400: an
+unparseable ID is indistinguishable from one the owner does not have, and
+`findOwnedDog` would otherwise send a non-UUID string into a `uuid` column
+comparison and raise a Postgres `invalid input syntax` error.
 
 - [ ] **Step 4: Run it, expect PASS**
 
 Run: `pnpm --filter @turingcare/api exec vitest run src/routes/suggestion.test.ts`
 Expected: PASS — all suggestion route tests, including recovery, suppression,
-fallback-only advancement, authorization, audit dedupe, and concurrency.
+fallback-only advancement, authorization, malformed dog/suggestion/proposal IDs,
+audit dedupe, and explicit advisory-lock concurrency checks (45 tests).
 
 - [ ] **Step 5: Run the whole API suite, expect PASS**
 
@@ -7816,9 +8403,9 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-pnpm exec biome check --write apps/api/src/routes/dogs.ts apps/api/src/routes/suggestion.test.ts
+pnpm exec biome check --write apps/api/src/routes/dogs.ts apps/api/src/routes/suggestion.test.ts apps/api/src/test-helpers.ts
 pnpm --filter @turingcare/api exec tsc --noEmit
-git add apps/api/src/routes/dogs.ts apps/api/src/routes/suggestion.test.ts
+git add apps/api/src/routes/dogs.ts apps/api/src/routes/suggestion.test.ts apps/api/src/test-helpers.ts
 git commit -m "feat(api): suggestion, action and advancement decision endpoints"
 ```
 
@@ -8309,7 +8896,7 @@ export const REFERRAL_DIRECTORIES: {
     referrals: ["credentialed_trainer"],
   },
   {
-    href: "https://fearfreepets.com/fear-free-directory/",
+    href: "https://directory.fearfree.com/",
     labelKey: "safety.directoryFearFree",
     referrals: ["credentialed_trainer"],
   },
@@ -8335,8 +8922,23 @@ git commit -m "feat(web): typed option maps for practice evidence and suggestion
 **Files:**
 - Create: `apps/web/src/lib/suggestion.ts`
 - Modify: `apps/web/src/lib/progress.ts`
+- Modify: `apps/web/src/lib/week.ts`
 
-- [ ] **Step 1: Create `apps/web/src/lib/suggestion.ts`**
+- [ ] **Step 1: Add the owner-timezone week helper**
+
+Append to `apps/web/src/lib/week.ts`:
+
+```ts
+/** Monday YYYY-MM-DD for the week containing an instant in a supplied timezone. */
+export function weekKeyAtOffset(date: Date, timezoneOffsetMinutes: number): string {
+  const local = new Date(date.getTime() - timezoneOffsetMinutes * 60_000);
+  const daysSinceMonday = (local.getUTCDay() + 6) % 7;
+  local.setUTCDate(local.getUTCDate() - daysSinceMonday);
+  return local.toISOString().slice(0, 10);
+}
+```
+
+- [ ] **Step 2: Create `apps/web/src/lib/suggestion.ts`**
 
 ```ts
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8347,7 +8949,7 @@ import type {
 } from "@turingcare/shared";
 import { api } from "./api";
 import { suggestionKey } from "./suggestion-key";
-import { weekKeyOf } from "./week";
+import { weekKeyAtOffset } from "./week";
 
 export { suggestionKey } from "./suggestion-key";
 
@@ -8360,7 +8962,7 @@ export function useSuggestion(
 ) {
   return useQuery({
     queryKey: suggestionKey(dogId, weekKey),
-    enabled: !!dogId && weekKey === weekKeyOf(new Date()),
+    enabled: !!dogId && weekKey === weekKeyAtOffset(new Date(), timezoneOffsetMinutes),
     queryFn: async (): Promise<TrainingSuggestion> => {
       const res = await dogsApi.suggestion.$get({
         param: { id: dogId },
@@ -8382,7 +8984,10 @@ export function useSuggestionAction(dogId: string, weekKey: string) {
         param: { id: dogId, suggestionId: args.suggestionId },
         json: { action: args.action },
       });
-      if (!res.ok) throw new Error("action_failed");
+      if (!res.ok) {
+        const failed = await res.json();
+        throw new Error("error" in failed ? failed.error : "action_failed");
+      }
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: suggestionKey(dogId, weekKey) }),
@@ -8397,7 +9002,10 @@ export function useAdvancementDecision(dogId: string, weekKey: string) {
         param: { id: dogId, proposalId: args.proposalId },
         json: { decision: args.decision },
       });
-      if (!res.ok) throw new Error("decision_failed");
+      if (!res.ok) {
+        const failed = await res.json();
+        throw new Error("error" in failed ? failed.error : "decision_failed");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -8409,7 +9017,7 @@ export function useAdvancementDecision(dogId: string, weekKey: string) {
 }
 ```
 
-- [ ] **Step 2: Add the evidence mutation** — append to `apps/web/src/lib/progress.ts`:
+- [ ] **Step 3: Add the evidence mutation** — append to `apps/web/src/lib/progress.ts`:
 
 ```ts
 export function useSetSessionEvidence(dogId: string) {
@@ -8434,7 +9042,11 @@ export function useSetSessionEvidence(dogId: string) {
 
 Add `PracticeEvidenceInput` to the existing `@turingcare/shared` type import at the top of that file.
 
-- [ ] **Step 3: Preserve the API error code for session-form UX**
+Update the existing `invalidateProgress` helper to invalidate both
+`["progress", dogId]` and the `["suggestion", dogId]` prefix. Skill and
+session mutations change inputs or display data used by the suggestion.
+
+- [ ] **Step 4: Preserve the API error code for session-form UX**
 
 In the existing `useLogSession` mutation, replace the generic failed-response
 branch with:
@@ -8447,12 +9059,12 @@ branch with:
       return (await res.json()).session;
 ```
 
-- [ ] **Step 4: Typecheck**
+- [ ] **Step 5: Typecheck**
 
 Run: `pnpm --filter @turingcare/web exec tsc --noEmit`
 Expected: PASS. If the RPC path segments do not resolve, confirm Task 17's routes are mounted on `dogsApp` — the client types come straight from `AppType`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/lib/suggestion.ts apps/web/src/lib/progress.ts
@@ -8694,6 +9306,7 @@ Expected: FAIL — `Failed to resolve import "./suggestion-card"`.
 import { useI18n } from "@/i18n";
 import { REFERRAL_DIRECTORIES, REFERRAL_KEYS, SAFETY_BODY_KEYS } from "@/lib/practice-options";
 import type { SuggestionSafety } from "@turingcare/shared";
+import { useId } from "react";
 
 /**
  * Deliberately has no dismiss control: suppression must not be something an
@@ -8701,6 +9314,7 @@ import type { SuggestionSafety } from "@turingcare/shared";
  */
 export function SafetyNotice({ safety }: { safety: SuggestionSafety }) {
   const { t } = useI18n();
+  const titleId = useId();
   const directories = REFERRAL_DIRECTORIES.filter((entry) =>
     entry.referrals.includes(safety.referral),
   );
@@ -8708,9 +9322,9 @@ export function SafetyNotice({ safety }: { safety: SuggestionSafety }) {
     <section
       className="space-y-3 rounded border border-copper bg-cream p-4"
       role="alert"
-      aria-labelledby="safety-notice-title"
+      aria-labelledby={titleId}
     >
-      <h2 id="safety-notice-title" className="font-semibold text-slate">
+      <h2 id={titleId} className="font-semibold text-slate">
         {t("safety.title")}
       </h2>
       <p className="text-sm text-slate">{t(SAFETY_BODY_KEYS[safety.ruleId])}</p>
@@ -8760,10 +9374,12 @@ export function AdvancementProposalCard({
   proposal,
   skillName,
   onDecision,
+  pending = false,
 }: {
   proposal: AdvancementProposalDto;
   skillName: string;
   onDecision: (proposalId: string, decision: AdvancementDecision) => void;
+  pending?: boolean;
 }) {
   const { t, locale } = useI18n();
   return (
@@ -8797,6 +9413,7 @@ export function AdvancementProposalCard({
             key={entry.decision}
             type="button"
             variant={entry.decision === "confirmed" ? "default" : "outline"}
+            disabled={pending}
             onClick={() => onDecision(proposal.id, entry.decision)}
           >
             {t(entry.labelKey)}
@@ -8835,11 +9452,15 @@ export function SuggestionCard({
   onAction,
   onDecision,
   onPickFocus,
+  actionPending = false,
+  decisionPending = false,
 }: {
   suggestion: TrainingSuggestion;
   onAction: (action: SuggestionAction) => void;
   onDecision: (proposalId: string, decision: AdvancementDecision) => void;
   onPickFocus: () => void;
+  actionPending?: boolean;
+  decisionPending?: boolean;
 }) {
   const { t } = useI18n();
 
@@ -8936,7 +9557,7 @@ export function SuggestionCard({
             key={entry.action}
             type="button"
             variant={entry.action === "started" ? "default" : "outline"}
-            disabled={!suggestion.suggestionId}
+            disabled={!suggestion.suggestionId || actionPending}
             onClick={() => onAction(entry.action)}
           >
             {t(entry.labelKey)}
@@ -8952,6 +9573,7 @@ export function SuggestionCard({
           proposal={suggestion.advancementProposal}
           skillName={skill.name}
           onDecision={onDecision}
+          pending={decisionPending}
         />
       )}
     </section>
@@ -8962,7 +9584,7 @@ export function SuggestionCard({
 - [ ] **Step 6: Run it, expect PASS**
 
 Run: `pnpm --filter @turingcare/web exec vitest run src/components/training/suggestion-card.test.tsx`
-Expected: PASS — 9 tests.
+Expected: PASS — 11 tests, including unique safety-notice IDs and pending-action guards.
 
 - [ ] **Step 7: Commit**
 
@@ -8981,6 +9603,8 @@ git commit -m "feat(web): suggestion, safety and advancement cards"
 - Modify: `apps/web/src/components/progress/session-form.tsx`
 - Modify: `apps/web/src/components/progress/progress-panel.tsx`
 - Create: `apps/web/src/components/progress/session-form.test.tsx`
+- Create: `apps/web/src/components/progress/outcome-quick-capture.tsx`
+- Create: `apps/web/src/components/progress/outcome-quick-capture.test.tsx`
 - Modify: `apps/web/src/components/dogs/dog-card-body.tsx`
 - Modify: `apps/web/src/components/dogs/dog-card-body.test.tsx`
 
@@ -9343,7 +9967,8 @@ git commit -m "feat(web): optional structured evidence in the session form"
 ## Task 23: Wire the suggestion into the week view
 
 **Files:**
-- Create: `apps/web/src/components/progress/outcome-quick-capture.tsx`
+- Modify: `apps/web/src/components/progress/outcome-quick-capture.tsx`
+- Modify: `apps/web/src/components/week/week-grid.tsx`
 - Modify: `apps/web/src/routes/dog-week.tsx`
 - Modify: `apps/web/src/routes/dog-week.test.tsx`
 
@@ -9675,6 +10300,7 @@ export function OutcomeQuickCapture({
   onSkip,
   hasFallback,
   dimensions,
+  saving = false,
 }: {
   onSave: (
     input: PracticeEvidenceInput & { variant: "primary" | "fallback" },
@@ -9682,6 +10308,7 @@ export function OutcomeQuickCapture({
   onSkip: () => void;
   hasFallback: boolean;
   dimensions: PracticeDimension[];
+  saving?: boolean;
 }) {
   const { t } = useI18n();
   const [outcome, setOutcome] = useState<PracticeOutcome | null>(null);
@@ -9784,7 +10411,9 @@ export function OutcomeQuickCapture({
       )}
       <Button
         type="button"
-        disabled={(!outcome && !safetySignal) || Boolean(safetySignal && !safetyConfirmed)}
+        disabled={
+          saving || (!outcome && !safetySignal) || Boolean(safetySignal && !safetyConfirmed)
+        }
         onClick={() =>
           onSave({
             ...context,
@@ -9810,7 +10439,13 @@ export function OutcomeQuickCapture({
 import { OutcomeQuickCapture } from "@/components/progress/outcome-quick-capture";
 import { SuggestionCard } from "@/components/training/suggestion-card";
 import { useDeleteSession, useLogSession, useSetSessionEvidence } from "@/lib/progress";
-import { useAdvancementDecision, useSuggestion, useSuggestionAction } from "@/lib/suggestion";
+import {
+  suggestionKey,
+  useAdvancementDecision,
+  useSuggestion,
+  useSuggestionAction,
+} from "@/lib/suggestion";
+import { weekKeyAtOffset } from "@/lib/week";
 import type {
   AdvancementDecision,
   PracticeDimension,
@@ -9822,11 +10457,12 @@ import { toast } from "sonner";
 
 ```tsx
   const currentTimezoneOffsetMinutes = new Date().getTimezoneOffset();
-  const { data: suggestion, isError: suggestionError } = useSuggestion(
-    id,
-    weekKey,
-    currentTimezoneOffsetMinutes,
-  );
+  const currentWeekKey = weekKeyAtOffset(new Date(), currentTimezoneOffsetMinutes);
+  const {
+    data: suggestion,
+    isError: suggestionError,
+    isLoading: suggestionLoading,
+  } = useSuggestion(id, weekKey, currentTimezoneOffsetMinutes);
   const suggestionAction = useSuggestionAction(id, weekKey);
   const advancementDecision = useAdvancementDecision(id, weekKey);
   const setEvidence = useSetSessionEvidence(id);
@@ -9838,7 +10474,17 @@ import { toast } from "sonner";
     hasFallback: boolean;
     dimensions: PracticeDimension[];
   } | null>(null);
+  const logDisabled = logSession.isPending || (weekKey === currentWeekKey && suggestionLoading);
 ```
+
+Clear `pendingOutcome` whenever the dog or selected week changes. Pass
+`logDisabled` into `WeekGrid`; empty-cell and "log another" controls must be
+disabled while a session mutation is pending or while the required current-week
+suggestion is still loading. Capture the dog/week scope before awaiting a
+session mutation and do not show its quick capture if that scope changed before
+the request completed. After an evidence save, clear the quick capture only
+when its session ID still matches the saved target so an older request cannot
+remove a newer capture.
 
 ```tsx
   const onLog = async (skillId: string, day: Date) => {
@@ -9944,15 +10590,20 @@ Import `suggestionKey` alongside the suggestion hooks. No change is needed in `u
 Render the card immediately after `<WeekNav …/>` and the quick capture immediately after the summary paragraph:
 
 ```tsx
-      {!suggestionError && suggestion && (
+      {weekKey === currentWeekKey &&
+        !suggestionError &&
+        suggestion &&
+        suggestion.weekKey === weekKey && (
         <SuggestionCard
           suggestion={suggestion}
           onAction={onSuggestionAction}
           onDecision={onAdvancementDecision}
           onPickFocus={() => setPickerOpen(true)}
+          actionPending={suggestionAction.isPending}
+          decisionPending={advancementDecision.isPending}
         />
       )}
-      {suggestionError && (
+      {weekKey === currentWeekKey && suggestionError && (
         <p role="status" className="text-sm text-slate-soft">
           {t("suggestion.loadError")}
         </p>
@@ -9960,10 +10611,12 @@ Render the card immediately after `<WeekNav …/>` and the quick capture immedia
 
       {pendingOutcome && (
         <OutcomeQuickCapture
+          key={pendingOutcome.sessionId}
           hasFallback={pendingOutcome.hasFallback}
           dimensions={pendingOutcome.dimensions}
           onSave={onSaveOutcome}
           onSkip={() => setPendingOutcome(null)}
+          saving={setEvidence.isPending}
         />
       )}
 ```
@@ -10021,12 +10674,15 @@ concurrency:
   cancel-in-progress: false
 ```
 
-Use these complete production jobs:
+Use these complete production jobs. Drain, migration, API deployment, capacity
+restoration, and readiness stay in one bounded job so cancellation or runner
+scheduling cannot strand production between jobs:
 
 ```yaml
-  migrate:
+  deploy-api:
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -10039,65 +10695,56 @@ Use these complete production jobs:
           cache: pnpm
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: pnpm install --frozen-lockfile
-      - name: Drain old API and migrate
+      - name: Drain, migrate, deploy, and verify API
         run: |
           set -Eeuo pipefail
           original_count=$(flyctl machine list --json --app turingcare-api | jq 'length')
+          target_count=$original_count
+          if [ "$target_count" -lt 1 ]; then
+            target_count=1
+          fi
+          migrated=0
           restore_old_release() {
-            flyctl scale count "$original_count" --yes --app turingcare-api
-            if [ "$original_count" -gt 0 ]; then
-              curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://api.turingcare.dog/health
+            if [ "$original_count" -lt 1 ]; then
+              return
             fi
+            flyctl scale count "$original_count" --yes --app turingcare-api
+            curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/health
           }
-          restore_on_exit() {
+          recover_on_exit() {
             status=$?
             trap - EXIT INT TERM
-            restore_old_release
+            if [ "$migrated" -eq 0 ]; then
+              restore_old_release
+            else
+              flyctl scale count 0 --yes --app turingcare-api
+            fi
             exit "$status"
           }
-          trap restore_on_exit EXIT
+          trap recover_on_exit EXIT
           trap 'exit 130' INT
           trap 'exit 143' TERM
-          flyctl scale count 0 --yes --app turingcare-api
-          for attempt in $(seq 1 12); do
-            count=$(flyctl machine list --json --app turingcare-api | jq 'length')
-            if [ "$count" -eq 0 ]; then
-              break
+          if [ "$original_count" -gt 0 ]; then
+            flyctl scale count 0 --yes --app turingcare-api
+            for attempt in $(seq 1 12); do
+              count=$(flyctl machine list --json --app turingcare-api | jq 'length')
+              if [ "$count" -eq 0 ]; then
+                break
+              fi
+              sleep 5
+            done
+            remaining=$(flyctl machine list --json --app turingcare-api | jq 'length')
+            if [ "$remaining" -ne 0 ]; then
+              echo "API machines did not drain" >&2
+              exit 1
             fi
-            sleep 5
-          done
-          remaining=$(flyctl machine list --json --app turingcare-api | jq 'length')
-          if [ "$remaining" -ne 0 ]; then
-            echo "API machines did not drain" >&2
-            exit 1
           fi
           pnpm --filter @turingcare/api db:migrate
-          trap - EXIT INT TERM
-
-  deploy-api:
-    needs: migrate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy and verify compatible API
-        run: |
-          set -Eeuo pipefail
-          drain_on_exit() {
-            status=$?
-            trap - EXIT INT TERM
-            flyctl scale count 0 --yes --app turingcare-api
-            exit "$status"
-          }
-          trap drain_on_exit EXIT
-          trap 'exit 130' INT
-          trap 'exit 143' TERM
+          migrated=1
           flyctl deploy --remote-only --config apps/api/fly.toml
-          flyctl scale count 1 --yes --app turingcare-api
-          curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://api.turingcare.dog/ready
+          flyctl scale count "$target_count" --yes --app turingcare-api
+          curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/ready
           trap - EXIT INT TERM
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
   # The web uses the expanded focus/session contracts, so publish it only after
   # the migrated API is healthy.
@@ -10139,12 +10786,15 @@ drain_line=$(grep -n 'scale count 0' .github/workflows/deploy.yml | head -1 | cu
 migrate_line=$(grep -n '@turingcare/api db:migrate' .github/workflows/deploy.yml | tail -1 | cut -d: -f1)
 test -n "$drain_line" -a -n "$migrate_line" -a "$drain_line" -lt "$migrate_line"
 grep -q 'scale count "$original_count" --yes --app turingcare-api' .github/workflows/deploy.yml
-grep -q 'scale count 1 --yes --app turingcare-api' .github/workflows/deploy.yml
+grep -q 'scale count "$target_count" --yes --app turingcare-api' .github/workflows/deploy.yml
+grep -q 'https://turingcare-api.fly.dev/ready' .github/workflows/deploy.yml
+grep -A3 '^  deploy-api:' .github/workflows/deploy.yml | grep -q 'timeout-minutes: 20'
 grep -A1 '^  deploy-web:' .github/workflows/deploy.yml | grep -q 'needs: deploy-api'
 ```
 
 Expected: all commands exit 0, proving production migration drains first,
-contains a restore/serve command, and gates the web on the API.
+contains both failure restoration and capacity restoration, runs in one bounded
+API job, and gates the web on the API.
 
 Before editing the workflow, add a DB-backed readiness route. In
 `apps/api/src/app.test.ts`, import `db` from `./db` and `vi` from Vitest, then
@@ -10232,14 +10882,15 @@ and `0015` are present before the web deploy.
 Update `DEPLOY.md`'s opening diagram and parallel-deploy prose to:
 
 ```text
-push main → ci → drain+migrate → deploy-api → deploy-web
+push main → ci → deploy-api (drain+migrate+deploy+ready) → deploy-web
 ```
 
 State that production deploys are serialized, the API has a bounded maintenance
-window for schema-incompatible migrations, migration failure restores the old
-machine after rollback, and deploy/readiness failure leaves the API drained for
-operator intervention rather than serving an incompatible release. Update the
-"First deploy" section to use the same serialized order.
+window in one job for schema-incompatible migrations, migration failure
+restores the old machine count after rollback, and deploy/readiness failure
+leaves the API drained for operator intervention rather than serving an
+incompatible release. Update the "First deploy" section to use the same
+serialized order.
 
 - [ ] **Step 2: Run every gate**
 
@@ -10304,6 +10955,9 @@ Require the operator to abort if the selected row does not exactly match the
 ticket, attach the returned row to the internal ticket, and confirm the next
 suggestion request still evaluates all remaining safety signals. Record this
 runbook and the two-step owner confirmation in the PROJECT-LOG entry.
+Provide a paste-ready `psql` command with `ON_ERROR_STOP` and UUID variables,
+and use `\gset` plus `\if` so a zero-row exact lookup rolls back and exits
+non-zero before the delete.
 
 - [ ] **Step 8: Final commit**
 
@@ -10328,7 +10982,7 @@ git commit -m "docs: record the Gate 1 personalized training evidence loop"
 | Deterministic, explainable, no free-text inspection | 14 (pure `selectSuggestionRule`), 16 |
 | Works at cold start | 14 (`cold_start_curriculum_level`), 17 |
 | Advancement proposed only, owner-confirmed, never automatic | 3, 15, 17, 21 |
-| Structured safety inputs from concern and practice capture, not free-text scanning | 1 (`safetySignalValues`), 11, 13, 22 |
+| Structured safety inputs from concern and practice capture, not free-text scanning | 1 (`safetySignalValues`), 11 (concern, signal and journal writes all serialize through `withDogSafetyLock`), 13, 22 |
 | Safety suppression supersedes suggestions | 13, 16 (safety is evaluated before any exercise path), 17, 21 |
 | Referral guidance by category with directories | 13, 18, 21 |
 | Suggestion and advancement persistence + audit | 12, 16 |
@@ -10345,7 +10999,7 @@ git commit -m "docs: record the Gate 1 personalized training evidence loop"
 
 **Type consistency across tasks** — every identifier is defined once and referenced with the same name and shape afterwards:
 - Shared: `weekKeySchema`, `focusAddSchema`, `focusWeekQuerySchema`, `focusRemoveQuerySchema`, `practiceEvidenceSchema`, `practiceSessionSchema`, `practiceSessionApiSchema`, `PracticeDimension`, `EasingStrategy`, `SkillDimensionMetadata`, `AuthoredCatalogTemplate`, `CatalogSkill`, `CatalogTemplate`, `suggestionQuerySchema`, `suggestionActionSchema`, `advancementDecisionSchema`, `TrainingSuggestion`, `CurriculumExercise`, `CurriculumFallback`, `SuggestionEvidence`, `SuggestionSafety`, `AdvancementProposalDto`, `advancementRuleId`.
-- API: `CURRICULUM_VERSION`, `skillDimensionMetadata`, `trainingCurriculum`, `findCurriculumSkill`, `clampLevel`, `MAX_LEVEL`, `resolveCurriculumTarget`, `loadFocusWeek(dogId, weekKey, timezoneOffsetMinutes, weekEndTimezoneOffsetMinutes)`, `summarizeEvidence`, `loadSkillEvidence` (returns `{ summary, rows }`, consumed that way in Task 16), `loadRecentObservation`, `selectSuggestionRule`, `evaluateAdvancement`, `syncAdvancementProposal`, `decideAdvancementProposal`, `decideSafety`, `loadSafetyInputs`, `evaluateSafety`, `currentWeekKey`, `loadSuggestion`, `recordSuggestionAction`.
+- API: `CURRICULUM_VERSION`, `skillDimensionMetadata`, `trainingCurriculum`, `findCurriculumSkill`, `clampLevel`, `MAX_LEVEL`, `resolveCurriculumTarget`, `loadFocusWeek(dogId, weekKey, timezoneOffsetMinutes, weekEndTimezoneOffsetMinutes)`, `summarizeEvidence`, `loadSkillEvidence` (returns `{ summary, rows, advancementRows, latestMixedHadChallengingContext }`, consumed that way in Task 16), `loadRecentObservation`, `selectSuggestionRule`, `evaluateAdvancement`, `syncAdvancementProposalInTx(tx, skillId, evidence, evidenceRows)`, `syncAdvancementProposal(skillId, evidence, evidenceRows)` (default wrapper that opens its own transaction), `decideAdvancementProposal`, `decideSafety`, `loadSafetyInputs`, `evaluateSafety`, `evaluateSafetyWithLock(dogId, now, (decision, tx) => …)`, `TransactionType`, `lockDogSafety`, `withDogSafetyLock`, `currentWeekKey`, `loadSuggestion`, `recordSuggestionAction`.
 - Web: `weekKeyOf`, `focusKey(dogId, weekKey)`, `useFocusWeek(dogId, weekKey, timezoneOffsetMinutes, weekEndTimezoneOffsetMinutes)`, `useAddFocus(dogId, weekKey)`, `useRemoveFocus(dogId, weekKey)`, `suggestionKey`, `useSuggestion(dogId, weekKey, timezoneOffsetMinutes)`, `useSuggestionAction`, `useAdvancementDecision`, `useSetSessionEvidence`, `OUTCOME_KEYS`, `EASING_STRATEGY_KEYS`, `DIMENSION_CONFIG`, `SAFETY_SIGNAL_KEYS`, `RULE_REASON_KEYS`, `SAFETY_BODY_KEYS`, `REFERRAL_KEYS`, `REFERRAL_DIRECTORIES`, `SuggestionCard`, `SafetyNotice`, `AdvancementProposalCard`, `OutcomeQuickCapture`.
 - Owner-input enum values are declared once in `packages/shared` and mirrored by the pg enums in Tasks 10 and 12. The safety pg enum additionally contains the internal `severe_behavior_concern` rule, which is derived only from structured concern severity and never offered as an owner option. `suggestionRuleValues` and `safetyRuleValues` are stored as `text` because rule identifiers evolve faster than a pg enum should.
 
@@ -10360,6 +11014,6 @@ git commit -m "docs: record the Gate 1 personalized training evidence loop"
 8. Proposal synchronization is serialized per skill and snapshots the three supporting IDs, timestamps, and outcomes. Changed or deleted evidence withdraws the proposal, a stayed/rejected proposal needs newer evidence before it can reappear, and stale confirmation cannot overwrite a level.
 9. Injury/pain reports have a reviewed 90-day window. Aggression/bite risk, severe fear/panic, and the internal severe-concern signal never age out; every owner entry requires explicit confirmation, and restoring exercises requires a future reviewed professional-resolution workflow rather than an owner dismiss button. A two-operator runbook exists only to correct a support-verified input mistake.
 10. Audit rows carry scalar columns only, never jsonb or owner prose.
-11. Suggestion audit writes are fail-open and deduped per curriculum version and owner-local day, so a page refresh does not inflate the cohort data and a DB hiccup does not hide the suggestion.
+11. Suggestion audit writes are fail-open and deduped per curriculum version and owner-local day, so a page refresh does not inflate the cohort data and a DB hiccup does not hide the suggestion. The final decision, any suppression-driven proposal withdrawal and the audit row all share the safety-locked transaction — nothing inside that callback opens a nested transaction or writes through the global `db`, so the checked-out connection can never deadlock against itself. Fail-open is therefore implemented *outside* that transaction: a recognized audit-write failure rolls it back (leaving the proposal open for the next request to re-evaluate under the same lock) and returns the built suggestion with `suggestionId: null`, while a safety-load failure still surfaces.
 12. New endpoints live in `apps/api/src/routes/dogs.ts` to avoid a second `requireUser` pass and to keep RPC types on one app.
 13. Rule identifiers are returned to the client and localized there, so the API never renders owner-facing prose in a locale.

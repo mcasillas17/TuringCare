@@ -14,6 +14,12 @@ function renderGrid(locale: "en" | "es", sessionCount: number) {
       goalId: "g1",
       goalName: "Reliability",
       position: 0,
+      currentLevel: 1,
+      dimensions: [],
+      contextualProgress: {
+        status: "ready",
+        summary: { strongestContext: null, nextPracticeAction: null, safety: null },
+      },
       sessions: Array.from({ length: sessionCount }, (_, index) => ({
         id: `session-${index + 1}`,
         occurredAt: day.toISOString(),

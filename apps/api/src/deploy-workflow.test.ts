@@ -14,24 +14,20 @@ describe("production deployment protocol", () => {
     expect(workflowConcurrency).toContain("cancel-in-progress: false");
   });
 
-  it("applies compatible migrations, deploys the API, then applies post-deploy migrations", async () => {
+  it("drains, applies compatible migrations, deploys the API, then applies the migration tail", async () => {
     const workflow = await readFile(deployWorkflowUrl, "utf8");
-    const migrateCompatible = workflow.match(
-      /\n {2}migrate-compatible:\n(?<body>[\s\S]*?)(?=\n {2}[a-z][\w-]*:\n)/,
-    )?.groups?.body;
     const deployApi = workflow.match(/\n {2}deploy-api:\n(?<body>[\s\S]*?)(?=\n {2}[a-z][\w-]*:\n)/)
       ?.groups?.body;
     const migrate = workflow.match(/\n {2}migrate:\n(?<body>[\s\S]*?)(?=\n {2}[a-z][\w-]*:\n)/)
       ?.groups?.body;
 
-    expect(migrateCompatible).toContain("needs: ci");
-    expect(migrateCompatible).toContain("db:migrate:predeploy");
-    expect(deployApi).toContain("needs: migrate-compatible");
-    expect(deployApi).toContain("--strategy rolling");
+    expect(deployApi).toContain("needs: ci");
+    expect(deployApi).toContain("flyctl scale count 0");
+    expect(deployApi).toContain("db:migrate:predeploy");
+    expect(deployApi).toContain("flyctl deploy");
+    expect(deployApi).toContain("/ready");
     expect(migrate).toContain("needs: deploy-api");
-    expect(workflow.indexOf("  migrate-compatible:")).toBeLessThan(
-      workflow.indexOf("  deploy-api:"),
-    );
+    expect(migrate).toContain("db:migrate");
     expect(workflow.indexOf("  deploy-api:")).toBeLessThan(workflow.indexOf("  migrate:"));
   });
 

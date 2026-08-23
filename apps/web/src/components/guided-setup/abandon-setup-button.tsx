@@ -1,0 +1,159 @@
+import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n";
+import {
+  type GuidedSetupErrorMessageKey,
+  guidedSetupErrorMessageKey,
+  isGuidedSetupConflict,
+  useAbandonGuidedSetup,
+  useGuidedSetup,
+} from "@/lib/guided-setup";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+export function AbandonSetupButton({
+  setupId,
+  disabled = false,
+  onPendingChange,
+  canNavigate,
+}: {
+  setupId: string;
+  disabled?: boolean;
+  onPendingChange?: (pending: boolean) => void;
+  canNavigate?: () => boolean;
+}) {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const abandon = useAbandonGuidedSetup();
+  const { refetch: refetchGuidedSetup } = useGuidedSetup();
+  const [confirming, setConfirming] = useState(false);
+  const [submitError, setSubmitError] = useState<GuidedSetupErrorMessageKey | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const exitButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreExitFocusRef = useRef(false);
+  const mountedRef = useRef(true);
+  const onPendingChangeRef = useRef(onPendingChange);
+  const reportedPendingRef = useRef(false);
+  onPendingChangeRef.current = onPendingChange;
+
+  useEffect(() => {
+    if (confirming) confirmButtonRef.current?.focus();
+    if (!confirming && restoreExitFocusRef.current) {
+      restoreExitFocusRef.current = false;
+      exitButtonRef.current?.focus();
+    }
+  }, [confirming]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const pending = submitting || abandon.isPending;
+  useEffect(() => {
+    if (!mountedRef.current || pending === reportedPendingRef.current) {
+      return;
+    }
+    reportedPendingRef.current = pending;
+    onPendingChangeRef.current?.(pending);
+  }, [pending]);
+
+  const busy = disabled || submitting || abandon.isPending;
+
+  async function handleConfirm() {
+    if (busy) return;
+    setSubmitError(null);
+    setSubmitting(true);
+    reportedPendingRef.current = true;
+    onPendingChangeRef.current?.(true);
+    try {
+      const response = await abandon.mutateAsync({ setupId });
+      if (mountedRef.current && (canNavigate?.() ?? true)) {
+        navigate(response.setup.dogId ? `/my/dogs/${response.setup.dogId}` : "/my", {
+          replace: true,
+        });
+      }
+    } catch (error) {
+      if (isGuidedSetupConflict(error, "setup_already_completed")) {
+        try {
+          const reconciled = await refetchGuidedSetup({ throwOnError: true });
+          if (reconciled.isError || reconciled.error || !reconciled.data) {
+            if (mountedRef.current) {
+              setSubmitError(guidedSetupErrorMessageKey(error));
+            }
+            return;
+          }
+          if (mountedRef.current && (canNavigate?.() ?? true)) {
+            navigate(reconciled.data.active ? "/my/setup" : "/my", { replace: true });
+          }
+          return;
+        } catch {
+          if (mountedRef.current) {
+            setSubmitError(guidedSetupErrorMessageKey(error));
+          }
+          return;
+        }
+      }
+      if (mountedRef.current) {
+        setSubmitError(guidedSetupErrorMessageKey(error));
+      }
+    } finally {
+      if (mountedRef.current) {
+        setSubmitting(false);
+        reportedPendingRef.current = false;
+        onPendingChangeRef.current?.(false);
+      }
+    }
+  }
+
+  if (!confirming) {
+    return (
+      <Button
+        ref={exitButtonRef}
+        type="button"
+        variant="outline"
+        disabled={busy}
+        onClick={() => {
+          if (!busy) setConfirming(true);
+        }}
+      >
+        {t("guidedSetup.exitSetup")}
+      </Button>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded border border-silver bg-white p-4">
+      <p className="font-medium text-slate">{t("guidedSetup.confirmExitPrompt")}</p>
+      {submitError && (
+        <p role="alert" className="text-sm text-red-600">
+          {t(submitError)}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          ref={confirmButtonRef}
+          type="button"
+          disabled={busy}
+          onClick={handleConfirm}
+          className="bg-slate text-cream"
+        >
+          {busy ? t("guidedSetup.saving") : t("guidedSetup.confirmExit")}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy}
+          onClick={() => {
+            restoreExitFocusRef.current = true;
+            setConfirming(false);
+          }}
+        >
+          {t("guidedSetup.cancelExit")}
+        </Button>
+      </div>
+    </div>
+  );
+}

@@ -1,17 +1,48 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useDeleteDog, useDog } from "@/lib/dogs";
-import { useState } from "react";
-import { Link, NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+
+type DeleteRequest = {
+  token: number;
+  dogId: string;
+  pathname: string;
+  lifecycle: symbol;
+};
 
 export function DogLayout() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { id = "" } = useParams();
   const { data, isLoading, isError } = useDog(id);
   const del = useDeleteDog();
   const [confirming, setConfirming] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const routeRef = useRef({ dogId: id, pathname });
+  const deleteTokenRef = useRef(0);
+  const deleteRequestRef = useRef<DeleteRequest | null>(null);
+  const lifecycleRef = useRef<symbol | null>(null);
+
+  routeRef.current = { dogId: id, pathname };
+
+  useEffect(() => {
+    const lifecycle = Symbol();
+    lifecycleRef.current = lifecycle;
+    return () => {
+      if (lifecycleRef.current === lifecycle) {
+        lifecycleRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pathname) return;
+    setConfirming(false);
+    setDeleteError(null);
+  }, [pathname]);
 
   if (isLoading) return null;
   if (isError || !data) {
@@ -37,6 +68,15 @@ export function DogLayout() {
     female: t("dogs.sexFemale"),
   };
   const subtitle = [dog.breed, sizeLabel[dog.size], sexLabel[dog.sex]].filter(Boolean).join(" · ");
+  const isCurrentDeleteRequest = (request: DeleteRequest) => {
+    const route = routeRef.current;
+    return (
+      deleteRequestRef.current?.token === request.token &&
+      lifecycleRef.current === request.lifecycle &&
+      route.dogId === request.dogId &&
+      route.pathname === request.pathname
+    );
+  };
 
   const tabs = [
     { to: `/my/dogs/${dog.id}/journal`, label: t("dogHub.tabJournal"), end: false },
@@ -67,19 +107,45 @@ export function DogLayout() {
                 <Button
                   variant="outline"
                   onClick={async () => {
+                    const lifecycle = lifecycleRef.current;
+                    if (!lifecycle) return;
+                    const request: DeleteRequest = {
+                      token: ++deleteTokenRef.current,
+                      dogId: dog.id,
+                      pathname,
+                      lifecycle,
+                    };
+                    deleteRequestRef.current = request;
                     try {
                       await del.mutateAsync(dog.id);
+                      if (!isCurrentDeleteRequest(request)) return;
+                      deleteRequestRef.current = null;
+                      setDeleteError(null);
+                      setConfirming(false);
                       toast.success(t("dogs.deleted"));
                       navigate("/my/dogs");
-                    } catch {
+                    } catch (error) {
+                      if (!isCurrentDeleteRequest(request)) return;
+                      deleteRequestRef.current = null;
+                      if (error instanceof Error && error.message === "active_guided_setup") {
+                        setConfirming(false);
+                        setDeleteError(error.message);
+                        return;
+                      }
                       toast.error(t("dogs.saveFailed"));
                     }
                   }}
+                  disabled={del.isPending}
+                  aria-busy={del.isPending}
                   className="border-red-600 text-red-600"
                 >
                   {t("dogs.deleteYes")}
                 </Button>
-                <Button variant="outline" onClick={() => setConfirming(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirming(false)}
+                  disabled={del.isPending}
+                >
                   {t("dogs.deleteCancel")}
                 </Button>
               </>
@@ -91,6 +157,30 @@ export function DogLayout() {
           </div>
         </div>
         {confirming && <p className="text-sm text-red-600">{t("dogHub.deleteConfirm")}</p>}
+        {deleteError === "active_guided_setup" && (
+          <section
+            role="alert"
+            className="space-y-2 rounded border border-copper bg-cream p-3 text-sm text-slate"
+          >
+            <p>{t("guidedSetup.activeDeleteExplanation")}</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link className="font-medium underline" to="/my/setup">
+                {t("guidedSetup.resumeBeforeDelete")}
+              </Link>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setDeleteError(null);
+                  setConfirming(true);
+                }}
+                disabled={del.isPending}
+              >
+                {t("dogs.retryDelete")}
+              </Button>
+            </div>
+          </section>
+        )}
         <nav className="-mb-px flex gap-1 overflow-x-auto" aria-label={t("dogHub.backToDashboard")}>
           {tabs.map((tab) => (
             <NavLink

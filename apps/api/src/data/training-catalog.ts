@@ -1,5 +1,5 @@
 import { type Locale, type Messages, en, es } from "@turingcare/i18n";
-import type { CatalogTemplate } from "@turingcare/shared";
+import type { AuthoredCatalogTemplate } from "@turingcare/shared";
 
 type TrainingCatalogShape = typeof en.trainingCatalog;
 type TrainingCatalogMessages = Messages<TrainingCatalogShape>;
@@ -64,7 +64,7 @@ function resolveTrainingCatalogMessages(locale: Locale | string): TrainingCatalo
 function localizeTemplate(
   definition: AnyTemplateDefinition,
   messages: TrainingCatalogMessages,
-): CatalogTemplate {
+): AuthoredCatalogTemplate {
   const templateMessages = messages.templates[definition.key];
 
   return {
@@ -89,10 +89,10 @@ function localizeTemplate(
   };
 }
 
-export function getTrainingCatalog(locale: Locale | string = "en"): CatalogTemplate[] {
+export function getTrainingCatalog(locale: Locale | string = "en"): AuthoredCatalogTemplate[] {
   const messages = resolveTrainingCatalogMessages(locale);
 
   return templateDefinitions.map((definition) => localizeTemplate(definition, messages));
 }
 
-export const trainingCatalog: CatalogTemplate[] = getTrainingCatalog("en");
+export const trainingCatalog: AuthoredCatalogTemplate[] = getTrainingCatalog("en");

@@ -1,3 +1,4 @@
+import type { CatalogTemplate } from "@turingcare/shared";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { type getTrainingCatalog, trainingCatalog } from "../data/training-catalog";
@@ -19,10 +20,24 @@ describe("training: GET /api/training/templates", () => {
     users.push(u);
     const r = await app.request("/api/training/templates", { headers: u.authHeaders });
     expect(r.status).toBe(200);
-    const body = (await r.json()) as { templates: typeof trainingCatalog };
+    const body = (await r.json()) as { templates: CatalogTemplate[] };
     expect(body.templates).toHaveLength(trainingCatalog.length);
-    expect(body.templates[0]?.key).toBe(trainingCatalog[0]?.key);
-    expect(body.templates[0]?.skills.length).toBe(trainingCatalog[0]?.skills.length);
+    expect(body.templates[0]?.key).toBe("basic-manners");
+
+    const skill = body.templates[0]?.skills[0];
+    expect(skill).toBeDefined();
+    expect(skill).toMatchObject({
+      key: "basic-manners.sit",
+      dimensions: ["cue_support", "environment", "distraction"],
+      levelSteps: ["cue_support", "distraction", "environment", "environment"],
+      levelStepStrategies: [
+        "add_cue_help",
+        "reduce_distractions",
+        "use_quieter_environment",
+        "use_quieter_environment",
+      ],
+      baseEase: { dimension: "cue_support", strategy: "add_cue_help" },
+    });
   });
 
   it("returns catalog display text in the request locale", async () => {
