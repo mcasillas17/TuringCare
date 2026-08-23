@@ -1,6 +1,6 @@
 # Brief Share Privacy Hardening Design
 
-**Date:** 2026-08-22  
+**Date:** 2026-08-22
 **Status:** Approved for implementation planning
 
 ## Summary
@@ -292,4 +292,3 @@ properties.
 Because the migration clears superseded links before the stricter API runs, no hidden old
 token survives the rollout window. Rollback of application code remains possible, but the
 privacy-biased token cleanup is intentionally not reversed.
-
