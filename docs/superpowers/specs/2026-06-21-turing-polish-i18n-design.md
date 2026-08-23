@@ -5,6 +5,10 @@
 **Status:** Approved (design); implementing
 **Predecessor:** Turing companion phase 1 (PR #46, merged `8cbc38b`)
 
+> **Historical phase design:** Its en/es behavior remains, but the catalogs now live in
+> `@turingcare/i18n` and resolve through the shared i18next runtime described in
+> `../../LOCALIZATION.md`.
+
 ## Background
 
 Phase 1 shipped Turing as a corner mascot. Two issues surfaced once it was live:

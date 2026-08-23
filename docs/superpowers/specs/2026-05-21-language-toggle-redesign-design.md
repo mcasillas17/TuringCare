@@ -4,6 +4,10 @@
 **Status:** Approved (brainstorming)
 **Topic:** Make the `LanguageToggle` visually unmistakable (🇺🇸/🇲🇽 country flags) and ensure it sits in a clean top-right slot on every page where it was previously inline.
 
+> **Historical UI design:** Toggle visuals/placement evolved in later May specs. Its
+> locale runtime and persistence context was superseded by the 2026-08-23 end-to-end
+> design; current behavior is documented in `../../LOCALIZATION.md`.
+
 ---
 
 ## 1. Goal & scope

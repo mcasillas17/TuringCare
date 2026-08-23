@@ -35,7 +35,7 @@ pnpm dev                                   # api :3001, web :3000
 > like `direnv` to automate it). Alternative one-offs:
 > `DATABASE_URL=... pnpm --filter @turingcare/api db:push`.
 
-Open http://localhost:3000, register an account, and you land on `/app`.
+Open http://localhost:3000, register an account, and you land on `/my`.
 
 ## Architecture
 
@@ -44,7 +44,11 @@ Open http://localhost:3000, register an account, and you land on `/app`.
   end-to-end-typed RPC.
 - **apps/web** — Vite + React 19, Tailwind v4 (CSS-first), shadcn/ui, TanStack Query,
   React Router v7. Talks to the API same-origin via a Vite dev proxy so auth cookies
-  stay first-party. Uses `hc<AppType>` for typed API calls.
+  stay first-party. Uses `hc<AppType>` for typed API calls and `react-i18next` for
+  reactive English/Spanish rendering.
+- **packages/i18n** — Framework-neutral i18next runtime, exact `en`/`es` allowlist,
+  typed catalogs, browser-locale resolution, server translators, and UTC date helpers
+  shared by the web app and API.
 - **packages/shared** — Zod schemas shared by both apps.
 - **Postgres** — Docker Compose locally, Supabase in production. Deploy: see `DEPLOY.md`.
 
@@ -53,9 +57,33 @@ Open http://localhost:3000, register an account, and you land on `/app`.
 ```text
 apps/api      Hono backend
 apps/web      Vite + React frontend
+packages/i18n  Shared en/es catalogs and i18next runtime
 packages/shared  Shared Zod schemas / types
 docker-compose.yml  Local Postgres
 ```
+
+## Localization
+
+TuringCare supports exactly English (`en`) and Spanish (`es`). On first load the web app
+uses a valid `tc-locale` browser preference, then the first supported value in
+`navigator.languages` / `navigator.language`, and finally English. After authentication,
+a non-null account preference takes precedence over that local result; a new account with
+no preference is seeded from the already-resolved browser choice. Explicit language
+changes remain usable locally if account persistence fails.
+
+The web and Better Auth clients send the active locale as `X-TuringCare-Locale`. The API
+accepts only `en` or `es`, falls back to a supported weighted `Accept-Language` value and
+then English, and returns `Content-Language`. The shared catalogs drive the regular app,
+admin and accessibility copy, curated training templates, auth email chrome, and generated
+artifacts.
+
+Every Behavior Brief stores its generation locale. Its prose, dates, status/enum labels,
+owned and public views, email, and PDF therefore stay in that language even if the owner or
+viewer later changes UI language. Course/trainer records and user-authored journal, message,
+name, and contact fields are authored data and are never machine-translated.
+
+See [`docs/LOCALIZATION.md`](docs/LOCALIZATION.md) for the precedence and request contracts,
+content boundaries, failure/privacy behavior, and instructions for adding copy.
 
 ## What's built
 
@@ -84,8 +112,38 @@ Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highligh
   on this week and see a Mon–Sun grid of which days you practiced each one, with
   tap-to-log. Page back through prior weeks; the grid is computed from your dated
   practice sessions.
-- **i18n** — typed en/es catalogs with compile-time parity.
+- **i18n** — shared i18next-backed en/es catalogs with compile-time/runtime parity,
+  browser detection, account sync, request propagation, and locale-stable artifacts.
 - **Telemetry + admin dashboard** with rate-limited event ingestion.
+
+## Developer verification
+
+Use Node 22 (the CI and production runtime) and a migrated local Postgres database. The
+main repository gates are:
+
+```bash
+nvm use
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+Focused localization coverage can be inspected without adding repository artifacts:
+
+```bash
+pnpm --filter @turingcare/i18n exec vitest run --coverage \
+  --coverage.reporter=text --coverage.reportsDirectory=/tmp/turingcare-i18n-coverage
+pnpm --filter @turingcare/api exec vitest run --coverage \
+  --coverage.reporter=text --coverage.reportsDirectory=/tmp/turingcare-api-coverage
+pnpm --filter @turingcare/web exec vitest run --coverage \
+  --coverage.reporter=text --coverage.reportsDirectory=/tmp/turingcare-web-coverage
+```
+
+API tests use the real local Postgres database through the root `.env`; apply migrations
+first. The production API image also includes `packages/i18n` as a workspace dependency and
+is built and boot-smoked in CI.
 
 ## Browser tests
 

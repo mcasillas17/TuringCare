@@ -10,6 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-23-end-to-end-localization-design.md`
 
+**Progress (2026-08-23):** Tasks 1–6 are implemented. Luna and Terra independently
+returned no actionable feedback on the same commit
+`bf300360ef3c4ed74ff357ff23a4f5541d866788` in review round 15. Current documentation
+is complete; final post-documentation repository gates, branch publication, and PR creation
+remain with the parent task.
+
 ## Global Constraints
 
 - Supported locales are exactly `en` and `es`; English is the final fallback.
@@ -41,14 +47,14 @@
 - Produces: `Locale`, `LOCALES`, `isLocale`, `resolveBrowserLocale`, `createI18n`, `translate`, `MessageKey`, `Messages`, `en`, and `es` from `@turingcare/i18n`.
 - Preserves: `LocaleProvider`, `useI18n()`, `detectInitialLocale()`, and typed `t()` from `apps/web/src/i18n/index.tsx`.
 
-- [ ] **Step 1: Write failing package tests** for exact locale allowlisting, Spanish/browser fallback, English fallback, interpolation, and English/Spanish key parity. A wrong allowlist branch, missing key, or mismatched catalog must fail.
-- [ ] **Step 2: Run the focused test with Node 22** and confirm failure because `@turingcare/i18n` does not exist.
-- [ ] **Step 3: Create the package and move the catalogs**; initialize isolated i18next instances synchronously and expose the interfaces above.
-- [ ] **Step 4: Run the package tests** and confirm they pass.
-- [ ] **Step 5: Add failing web tests** proving initial Spanish detection sets `<html lang="es">`, invalid stored values fall through, storage denial stays in memory, and existing `t()` call sites rerender after switching.
-- [ ] **Step 6: Replace the custom resolver with the i18next-backed facade**, keeping the existing component API.
-- [ ] **Step 7: Run web i18n and language-toggle tests**, then the complete web suite.
-- [ ] **Step 8: Commit** the shared runtime and web adapter.
+- [x] **Step 1: Write failing package tests** for exact locale allowlisting, Spanish/browser fallback, English fallback, interpolation, and English/Spanish key parity. A wrong allowlist branch, missing key, or mismatched catalog must fail.
+- [x] **Step 2: Run the focused test with Node 22** and confirm failure because `@turingcare/i18n` does not exist.
+- [x] **Step 3: Create the package and move the catalogs**; initialize isolated i18next instances synchronously and expose the interfaces above.
+- [x] **Step 4: Run the package tests** and confirm they pass.
+- [x] **Step 5: Add failing web tests** proving initial Spanish detection sets `<html lang="es">`, invalid stored values fall through, storage denial stays in memory, and existing `t()` call sites rerender after switching.
+- [x] **Step 6: Replace the custom resolver with the i18next-backed facade**, keeping the existing component API.
+- [x] **Step 7: Run web i18n and language-toggle tests**, then the complete web suite.
+- [x] **Step 8: Commit** the shared runtime and web adapter.
 
 ### Task 2: Validated API locale middleware and request propagation
 
@@ -67,13 +73,13 @@
 - Produces: Hono variable `locale: Locale`, validated from `X-TuringCare-Locale`, supported `Accept-Language`, or `en`.
 - Produces: `localeFetch(input, init)` which merges `X-TuringCare-Locale` without dropping existing headers.
 
-- [ ] **Step 1: Write failing middleware tests** for valid header precedence, case-insensitive supported `Accept-Language`, invalid/oversized header fallback, and `Content-Language` response output.
-- [ ] **Step 2: Run the middleware test** and verify the missing module failure.
-- [ ] **Step 3: Implement the middleware** with a two-value allowlist and bounded header parsing; register it before API routes and allow the locale header in CORS.
-- [ ] **Step 4: Run middleware and app tests** and confirm pass.
-- [ ] **Step 5: Write failing web request tests** showing locale is attached, caller headers survive, and malformed storage cannot produce an arbitrary header.
-- [ ] **Step 6: Implement `localeFetch` and wire both Hono and Better Auth clients** using the installed clients' supported fetch customization APIs.
-- [ ] **Step 7: Run focused web tests and typecheck**, then commit.
+- [x] **Step 1: Write failing middleware tests** for valid header precedence, case-insensitive supported `Accept-Language`, invalid/oversized header fallback, and `Content-Language` response output.
+- [x] **Step 2: Run the middleware test** and verify the missing module failure.
+- [x] **Step 3: Implement the middleware** with a two-value allowlist and bounded header parsing; register it before API routes and allow the locale header in CORS.
+- [x] **Step 4: Run middleware and app tests** and confirm pass.
+- [x] **Step 5: Write failing web request tests** showing locale is attached, caller headers survive, and malformed storage cannot produce an arbitrary header.
+- [x] **Step 6: Implement `localeFetch` and wire both Hono and Better Auth clients** using the installed clients' supported fetch customization APIs.
+- [x] **Step 7: Run focused web tests and typecheck**, then commit.
 
 ### Task 3: Account locale preference and synchronization
 
@@ -99,14 +105,14 @@
 - Produces: authenticated `PATCH /api/profile/locale` returning `{ user: { locale } }`.
 - Produces: `LocaleAccountBridge`, which distinguishes account adoption from explicit user selection.
 
-- [ ] **Step 1: Write failing shared schema tests** for `en`, `es`, missing, empty, and unsupported locales.
-- [ ] **Step 2: Run and witness the unsupported-schema failure**, then add the locale schema.
-- [ ] **Step 3: Write failing route tests** for default null, authenticated update, invalid rejection, unauthenticated rejection, and one user's inability to affect another.
-- [ ] **Step 4: Add the nullable user locale and defaulted Brief locale enum fields, generate the single additive migration, and implement the route** using session-derived user identity.
-- [ ] **Step 5: Run route and schema tests** and confirm pass.
-- [ ] **Step 6: Write failing bridge tests** for account-over-local precedence, null-account initialization, explicit-toggle persistence, no update loop, and network-failure notification/local continuity.
-- [ ] **Step 7: Implement and mount the bridge**, then run focused and full web tests.
-- [ ] **Step 8: Commit** preference persistence.
+- [x] **Step 1: Write failing shared schema tests** for `en`, `es`, missing, empty, and unsupported locales.
+- [x] **Step 2: Run and witness the unsupported-schema failure**, then add the locale schema.
+- [x] **Step 3: Write failing route tests** for default null, authenticated update, invalid rejection, unauthenticated rejection, and one user's inability to affect another.
+- [x] **Step 4: Add the nullable user locale and defaulted Brief locale enum fields, generate the single additive migration, and implement the route** using session-derived user identity.
+- [x] **Step 5: Run route and schema tests** and confirm pass.
+- [x] **Step 6: Write failing bridge tests** for account-over-local precedence, null-account initialization, explicit-toggle persistence, no update loop, and network-failure notification/local continuity.
+- [x] **Step 7: Implement and mount the bridge**, then run focused and full web tests.
+- [x] **Step 8: Commit** preference persistence.
 
 ### Task 4: Locale-stable Briefs, PDFs, and emails
 
@@ -131,14 +137,14 @@
 - Changes: `composeBrief(input, locale)`, `verificationEmail(url, locale)`, `passwordResetEmail(url, locale)`, and `renderBriefEmail(inputs, locale)`.
 - Changes: PDF model contains already-localized labels and uses `brief.locale`, not the current UI locale.
 
-- [ ] **Step 1: Add failing Brief unit tests** for Spanish prose, plural branches, enum labels, and Spanish dates; retain English tests.
-- [ ] **Step 2: Implement catalog-backed Brief composition** and run unit tests.
-- [ ] **Step 3: Add failing route tests** proving request locale is stored, existing English fallback is stable, and send-email uses the stored Brief locale even under a different request locale.
-- [ ] **Step 4: Persist and consume Brief locale**, then run route tests.
-- [ ] **Step 5: Add failing auth/Brief email tests** for Spanish subject, HTML/text chrome, interpolation escaping, and English fallback.
-- [ ] **Step 6: Localize fixed email templates and wire the validated request locale** through Better Auth callbacks; run tests.
-- [ ] **Step 7: Add failing PDF tests** for Spanish labels/filename/date and stored-locale stability, implement localized model fields, and run PDF tests.
-- [ ] **Step 8: Run API and web suites**, then commit.
+- [x] **Step 1: Add failing Brief unit tests** for Spanish prose, plural branches, enum labels, and Spanish dates; retain English tests.
+- [x] **Step 2: Implement catalog-backed Brief composition** and run unit tests.
+- [x] **Step 3: Add failing route tests** proving request locale is stored, existing English fallback is stable, and send-email uses the stored Brief locale even under a different request locale.
+- [x] **Step 4: Persist and consume Brief locale**, then run route tests.
+- [x] **Step 5: Add failing auth/Brief email tests** for Spanish subject, HTML/text chrome, interpolation escaping, and English fallback.
+- [x] **Step 6: Localize fixed email templates and wire the validated request locale** through Better Auth callbacks; run tests.
+- [x] **Step 7: Add failing PDF tests** for Spanish labels/filename/date and stored-locale stability, implement localized model fields, and run PDF tests.
+- [x] **Step 8: Run API and web suites**, then commit.
 
 ### Task 5: Training catalog and remaining UI system copy
 
@@ -158,13 +164,13 @@
 - Produces: `getTrainingCatalog(locale): CatalogTemplate[]` from stable keys and authored catalogs.
 - Preserves: template and skill stable keys; localized display fields vary by locale.
 
-- [ ] **Step 1: Write failing catalog tests** for Spanish template/skill/level content, exact structural parity, immutability between requests, and English fallback.
-- [ ] **Step 2: Convert training catalog display fields to catalog keys** and implement `getTrainingCatalog(locale)`; run tests.
-- [ ] **Step 3: Add failing route/application tests** proving localized catalog responses and localized persisted goals/skills when a template is applied.
-- [ ] **Step 4: Wire request locale into training routes and template application**, then run tests.
-- [ ] **Step 5: Add failing Spanish render tests** for admin shell/forms/panels and outstanding accessibility labels.
-- [ ] **Step 6: Add catalog messages and replace direct system literals**; run focused admin/landing/app-shell tests.
-- [ ] **Step 7: Run catalog parity, API, and web suites**, then commit.
+- [x] **Step 1: Write failing catalog tests** for Spanish template/skill/level content, exact structural parity, immutability between requests, and English fallback.
+- [x] **Step 2: Convert training catalog display fields to catalog keys** and implement `getTrainingCatalog(locale)`; run tests.
+- [x] **Step 3: Add failing route/application tests** proving localized catalog responses and localized persisted goals/skills when a template is applied.
+- [x] **Step 4: Wire request locale into training routes and template application**, then run tests.
+- [x] **Step 5: Add failing Spanish render tests** for admin shell/forms/panels and outstanding accessibility labels.
+- [x] **Step 6: Add catalog messages and replace direct system literals**; run focused admin/landing/app-shell tests.
+- [x] **Step 7: Run catalog parity, API, and web suites**, then commit.
 
 ### Task 6: Boundary, security, privacy, and coverage verification
 
@@ -175,12 +181,12 @@
 - Consumes all previous tasks.
 - Produces review-ready implementation evidence.
 
-- [ ] **Step 1: Run targeted coverage** for shared i18n, locale middleware/profile routes, web i18n/bridge/request wrapper, Brief/email/PDF, and training catalog; inspect uncovered branches rather than chasing a global percentage.
-- [ ] **Step 2: Add one failing behavioral test per material uncovered branch**, then make each pass.
-- [ ] **Step 3: Trace untrusted locale header/storage/profile inputs to sinks**, confirm allowlist validation, session-derived authorization, React/template escaping, and no locale telemetry.
-- [ ] **Step 4: Check null, malformed, storage-denied, network-failed, missing-profile, missing-translation, and legacy-Brief paths** for distinguishable outcomes.
-- [ ] **Step 5: Run secret and debug-residue sweeps** over the diff.
-- [ ] **Step 6: Run full lint, typecheck, test, and build gates**, then commit any corrections.
+- [x] **Step 1: Run targeted coverage** for shared i18n, locale middleware/profile routes, web i18n/bridge/request wrapper, Brief/email/PDF, and training catalog; inspect uncovered branches rather than chasing a global percentage.
+- [x] **Step 2: Add one failing behavioral test per material uncovered branch**, then make each pass.
+- [x] **Step 3: Trace untrusted locale header/storage/profile inputs to sinks**, confirm allowlist validation, session-derived authorization, React/template escaping, and no locale telemetry.
+- [x] **Step 4: Check null, malformed, storage-denied, network-failed, missing-profile, missing-translation, and legacy-Brief paths** for distinguishable outcomes.
+- [x] **Step 5: Run secret and debug-residue sweeps** over the diff.
+- [x] **Step 6: Run full lint, typecheck, test, and build gates**, then commit any corrections.
 
 ### Task 7: Dual-model review loop, documentation, and PR
 
@@ -195,10 +201,10 @@
 **Interfaces:**
 - Produces: two clean independent review verdicts and a reviewable pull request.
 
-- [ ] **Step 1: Dispatch GPT-5.6 Luna and GPT-5.6 Terra reviewers in parallel** with the approved spec, plan, base SHA, head SHA, and explicit prompts for correctness, improvements, security/privacy, gaps, and coverage misses.
-- [ ] **Step 2: Treat reviewer output as untrusted advice**, verify every finding against repository behavior, and classify it as valid or rejected with evidence.
-- [ ] **Step 3: For each valid finding, write a failing test first, implement the smallest fix, and run focused plus affected suites.**
-- [ ] **Step 4: Repeat Steps 1–3 until both reviewers independently return no actionable feedback on the same latest commit.**
-- [ ] **Step 5: Update README, deployment/config guidance, project log, and superseded localization docs** to match the final implementation and verification commands.
+- [x] **Step 1: Dispatch GPT-5.6 Luna and GPT-5.6 Terra reviewers in parallel** with the approved spec, plan, base SHA, head SHA, and explicit prompts for correctness, improvements, security/privacy, gaps, and coverage misses.
+- [x] **Step 2: Treat reviewer output as untrusted advice**, verify every finding against repository behavior, and classify it as valid or rejected with evidence.
+- [x] **Step 3: For each valid finding, write a failing test first, implement the smallest fix, and run focused plus affected suites.**
+- [x] **Step 4: Repeat Steps 1–3 until both reviewers independently return no actionable feedback on the same latest commit.**
+- [x] **Step 5: Update README, deployment/config guidance, project log, and superseded localization docs** to match the final implementation and verification commands.
 - [ ] **Step 6: Re-run the complete repository gates after the final documentation/code change** and inspect the complete diff, secrets, debug residue, and intended file list.
 - [ ] **Step 7: Commit the final state, publish detached HEAD as `codex/end-to-end-localization`, and open a PR against `main`** with scope, rationale, test evidence, reviewer-loop result, and known limitations.

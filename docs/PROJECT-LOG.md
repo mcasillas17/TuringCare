@@ -83,6 +83,9 @@ In-house typed i18n (en/es catalogs with compile-time parity), LocaleProvider +
 useI18n + t(), browser-locale detection + localStorage persistence, EN|ES
 LanguageToggle in the nav and on auth/app pages, all landing + auth/app copy
 localized. No backend, no deps; meta/OG stay English (<html lang> flips).
+- Historical scope note: the frontend-only runtime and localStorage-only persistence were
+  superseded by the 2026-08-23 end-to-end localization phase below; this entry preserves what
+  shipped in May rather than describing current architecture.
 - Spec/plan: `specs/2026-05-17-i18n-spanish-design.md`, `plans/2026-05-17-i18n-spanish.md`
 - Commits: this cycle (see `git log`).
 
@@ -992,3 +995,65 @@ no new findings on changed files (pre-existing/adjudicated only).
 - Spec/plan: `docs/superpowers/specs/2026-06-21-turing-quiet-setting-design.md`,
   `docs/superpowers/plans/2026-06-21-turing-quiet-setting.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-quiet-setting`.
+
+## 2026-08-23 — End-to-end English/Spanish localization — IMPLEMENTED, PR PENDING
+
+Replaced the frontend-only custom translation store with a shared, typed
+`@turingcare/i18n` workspace package backed by i18next. The React adapter uses
+`react-i18next` while preserving `LocaleProvider`, `useI18n()`, and typed message keys;
+the API consumes the same catalogs. Supported locales remain exactly `en` and `es`.
+Initial resolution is valid `tc-locale` → browser language → English, then a non-null
+authenticated `user.locale` takes precedence. A null account preference is seeded once,
+explicit switches persist locally and to the authenticated profile, `<html lang>` follows
+the active UI locale, and storage/profile/network failures retain a localized in-memory
+fallback rather than claiming a remote save.
+
+Added bounded Hono locale middleware and a shared web/auth request wrapper:
+`X-TuringCare-Locale` → weighted supported `Accept-Language` → English, with strict
+allowlisting, CORS support, and `Content-Language` responses. Curated training templates
+now use stable language-neutral keys with localized display fields; application persists
+the request-language text. Admin dashboards, forms, dates, units, validation feedback,
+and outstanding accessibility labels use the catalogs. Auth verification/reset email
+chrome follows the initiating validated request locale. Trainer/course records and all
+user-authored names, journals, goals, messages, descriptions, and contact data remain
+authored content and are not machine-translated.
+
+Migration `0013_panoramic_skullbuster` added nullable `user.locale` and non-null,
+default-English `briefs.locale`. New Behavior Briefs store the validated generation locale;
+their prose, UTC-stable generated date, enum/status chrome, owned/public views, email, and
+PDF remain in that stored language after UI changes. Review hardening serialized per-dog
+generation and lifecycle transitions, made ambiguous latest versions and drafts fail closed,
+added idempotent send/replay behavior and localized stable error recovery, and introduced
+`0014_third_madripoor` to repair legacy duplicate versions and enforce unique
+`(dog_id, version)` values.
+
+The production rollout is now a non-canceling `production-deploy` queue:
+CI → compatible migrations through 0013 → serialized rolling Fly API replacement →
+post-deploy 0014/0015 → Cloudflare Pages. The predeploy selector fails closed if its known
+postdeploy suffix is no longer exact. `Dockerfile.api` includes both shared workspace
+packages and the workflow builds and health-smokes the production image. There are no new
+locale secrets or environment variables.
+
+Privacy hardening prevents public Brief bearer tokens from entering analytics: browser and
+API telemetry normalize `/b/<token>` (including route-equivalent `%62`/`%42` prefixes) to
+`/b/:token`, admin aggregation canonicalizes historical rows, and data-only migration
+`0015_brief_share_telemetry_privacy` cleans stored paths. Locale itself is not collected as
+telemetry. Public shares remain a strict finalized-Brief projection with no user ID, dog ID,
+or token in the response.
+
+GPT-5.6 Luna and GPT-5.6 Terra independently reviewed correctness, security/privacy,
+improvements, gaps, and coverage. Verified findings were fixed test-first through 14 waves;
+both returned **no actionable feedback** on the same exact code/release commit
+`bf300360ef3c4ed74ff357ff23a4f5541d866788` in round 15. At that commit the full matrix was
+**147 files / 983 tests**; lint, all four TypeScript projects, API/web builds, Drizzle
+consistency, isolated phased-migration smoke, frozen-lockfile install, deployment YAML parse,
+and production Docker `/health` smoke all passed. Established non-blocking notices remained:
+React suspended-resource `act(...)` messages in existing web tests, the Vite large-chunk
+advisory, API test diagnostics, and Docker's local legacy-builder advisory.
+
+- Current guide: `docs/LOCALIZATION.md`
+- Spec/plan: `docs/superpowers/specs/2026-08-23-end-to-end-localization-design.md`,
+  `docs/superpowers/plans/2026-08-23-end-to-end-localization.md`
+- Commit range: `841d592de140b52b2595805fd9c1843be4988c54..documentation-head` on the
+  localization branch; final PR number/merge SHA will be recorded after the parent task opens
+  the PR.

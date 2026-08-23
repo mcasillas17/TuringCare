@@ -1,7 +1,7 @@
 # End-to-end localization design
 
 **Date:** 2026-08-23
-**Status:** Approved for implementation by the user
+**Status:** Implemented and dual-review clean at `bf300360ef3c4ed74ff357ff23a4f5541d866788`
 **Scope:** English/Spanish locale resolution, shared catalogs, localized web/admin UI,
 API-served training content, generated Briefs, PDFs, and transactional emails.
 
@@ -89,3 +89,28 @@ Two independent reviewers—GPT-5.6 Luna and GPT-5.6 Terra—review correctness,
 security/privacy, gaps, and coverage. Findings are verified against the repository, fixed
 test-first, and both reviewers are rerun until each reports no remaining feedback.
 
+## Final implementation notes
+
+The approved design shipped with these review-driven hardening details:
+
+- Account-scoped rendering waits for a valid session identity and either the account locale
+  or an explicit local-fallback outcome. Profile payloads fail closed on malformed identity or
+  locale data, and session-scoped caches are cleared when the authenticated user changes.
+- Stored Brief dates use UTC calendar semantics across the owned view, public share, email, and
+  PDF. Artifact content carries the stored language while the surrounding application may remain
+  in the viewer's current UI language.
+- Brief generation and lifecycle transitions are serialized at database-backed ownership rows.
+  Migration `0014_third_madripoor` repairs legacy duplicate versions and enforces unique
+  `(dog_id, version)` values after a rolling API replacement; ambiguous latest-version reads and
+  draft shares fail closed during the compatibility window.
+- The production deploy is one non-canceling queue: compatible migrations through 0013, rolling
+  API deployment, post-deploy migrations 0014/0015, then web publication. The production image
+  includes both shared workspace packages and is boot-smoked in CI.
+- Public Brief bearer paths are normalized to `/b/:token` before telemetry emission and ingest,
+  again in admin aggregation, and historically by data-only migration
+  `0015_brief_share_telemetry_privacy`, including route-equivalent `%62`/`%42` prefixes.
+
+The final matrix at the clean review commit was 147 files / 983 tests. Lint, typecheck, build,
+Drizzle consistency, staged migration smoke, frozen-lockfile install, deployment YAML parsing,
+and production Docker health smoke all passed. Luna and Terra independently returned no
+actionable feedback on that same exact commit in review round 15.

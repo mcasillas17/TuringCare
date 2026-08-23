@@ -4,6 +4,11 @@
 **Status:** Approved design — parked behind the Turing-photo tweak; ready for implementation plan after it.
 **Scope:** `apps/web` frontend only. No backend, no new runtime deps, no routing change, no `users.locale`.
 
+> **Historical design, superseded 2026-08-23:** This document accurately records the
+> frontend-only first release. Current localization uses shared `@turingcare/i18n` catalogs,
+> i18next/react-i18next, validated API locale middleware, and nullable account persistence;
+> see `2026-08-23-end-to-end-localization-design.md` and `../../LOCALIZATION.md`.
+
 ## Goal
 
 Make the entire web UI available in **English (default) and Spanish**, with
