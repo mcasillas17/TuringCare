@@ -8,7 +8,7 @@ import { journalEntryUpdateSchema, journalMomentCreateSchema } from "./journal";
 import { profileUpdateSchema } from "./profile";
 import { practiceSessionSchema, trainingSkillSchema } from "./progress";
 import { trainerInputSchema } from "./trainer";
-import { isValidationMessageCode } from "./validation";
+import { isValidationMessageCode, normalizeValidationMessageCode } from "./validation";
 
 function issueMessage(schema: ZodTypeAny, input: unknown, path: string) {
   const result = schema.safeParse(input);
@@ -21,6 +21,14 @@ describe("shared validation message contract", () => {
     expect(isValidationMessageCode("validation.emailInvalid")).toBe(true);
     expect(isValidationMessageCode("validation.notARealCode")).toBe(false);
     expect(isValidationMessageCode(null)).toBe(false);
+  });
+
+  it("preserves known codes and maps uncoded Zod prose to the stable generic code", () => {
+    expect(normalizeValidationMessageCode("validation.emailInvalid")).toBe(
+      "validation.emailInvalid",
+    );
+    expect(normalizeValidationMessageCode("Invalid uuid")).toBe("validation.invalid");
+    expect(normalizeValidationMessageCode(undefined)).toBe("validation.invalid");
   });
 
   it.each([

@@ -1,4 +1,5 @@
 export const VALIDATION_MESSAGE_CODES = {
+  invalid: "validation.invalid",
   nameRequired: "validation.nameRequired",
   emailInvalid: "validation.emailInvalid",
   passwordTooShort: "validation.passwordTooShort",
@@ -27,4 +28,8 @@ const VALIDATION_MESSAGE_CODE_SET = new Set<string>(Object.values(VALIDATION_MES
 
 export function isValidationMessageCode(value: unknown): value is ValidationMessageCode {
   return typeof value === "string" && VALIDATION_MESSAGE_CODE_SET.has(value);
+}
+
+export function normalizeValidationMessageCode(value: unknown): ValidationMessageCode {
+  return isValidationMessageCode(value) ? value : VALIDATION_MESSAGE_CODES.invalid;
 }

@@ -51,44 +51,69 @@ export function translate(
 
 type I18n = {
   locale: Locale;
-  setLocale: (l: Locale) => void;
+  selectLocale: (locale: unknown) => boolean;
+  adoptLocale: (locale: unknown) => boolean;
+  explicitSelectionRevision: number;
   t: (key: MessageKey, vars?: Record<string, string | number>) => string;
 };
 
 const Ctx = createContext<I18n | null>(null);
 
-function activateLocale(locale: Locale) {
-  setActiveLocale(locale);
+function activateLocale(locale: unknown): locale is Locale {
+  if (!setActiveLocale(locale)) return false;
   if (typeof document !== "undefined") document.documentElement.lang = locale;
+  return true;
 }
 
 function initializeLocale() {
   const locale = detectInitialLocale();
   activateLocale(locale);
-  return locale;
+  return { explicitSelectionRevision: 0, locale };
 }
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(initializeLocale);
+  const [localeState, setLocaleState] = useState(initializeLocale);
+  const { explicitSelectionRevision, locale } = localeState;
 
   useEffect(() => {
     activateLocale(locale);
   }, [locale]);
 
-  const setLocale = useCallback((nextLocale: Locale) => {
-    activateLocale(nextLocale);
-    setLocaleState(nextLocale);
+  const updateLocale = useCallback((nextLocale: unknown, explicitSelection: boolean) => {
+    if (!activateLocale(nextLocale)) return false;
+    setLocaleState((current) => ({
+      explicitSelectionRevision: explicitSelection
+        ? current.explicitSelectionRevision + 1
+        : current.explicitSelectionRevision,
+      locale: nextLocale,
+    }));
 
     try {
       localStorage.setItem(STORAGE_KEY, nextLocale);
     } catch {
       /* ignore */
     }
+    return true;
   }, []);
 
+  const selectLocale = useCallback(
+    (nextLocale: unknown) => updateLocale(nextLocale, true),
+    [updateLocale],
+  );
+  const adoptLocale = useCallback(
+    (nextLocale: unknown) => updateLocale(nextLocale, false),
+    [updateLocale],
+  );
+
   const value = useMemo<I18n>(
-    () => ({ locale, setLocale, t: (key, vars) => translate(locale, key, vars) }),
-    [locale, setLocale],
+    () => ({
+      adoptLocale,
+      explicitSelectionRevision,
+      locale,
+      selectLocale,
+      t: (key, vars) => translate(locale, key, vars),
+    }),
+    [adoptLocale, explicitSelectionRevision, locale, selectLocale],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -100,7 +125,9 @@ export function useI18n(): I18n {
   if (!ctx) {
     return {
       locale: "en",
-      setLocale: () => {},
+      selectLocale: () => false,
+      adoptLocale: () => false,
+      explicitSelectionRevision: 0,
       t: (key, vars) => translate("en", key, vars),
     };
   }

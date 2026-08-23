@@ -10,7 +10,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubProfile(user: { id: string; name: string; email: string }) {
+function stubProfile(user: {
+  id: string;
+  name: string;
+  email: string;
+  locale: "en" | "es" | null;
+}) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
@@ -39,7 +44,7 @@ function setup() {
 
 describe("Profile", () => {
   it("prefills the name input and renders a read-only email", async () => {
-    stubProfile({ id: "u1", name: "Miguel", email: "m@example.com" });
+    stubProfile({ id: "u1", name: "Miguel", email: "m@example.com", locale: null });
     setup();
     await waitFor(() => expect(screen.getByDisplayValue("Miguel")).toBeInTheDocument());
     const email = screen.getByDisplayValue("m@example.com") as HTMLInputElement;
@@ -50,7 +55,7 @@ describe("Profile", () => {
 
   it("uses a localized generic fallback for a non-allowlisted default Zod message", async () => {
     localStorage.setItem("tc-locale", "es");
-    stubProfile({ id: "u1", name: "Miguel", email: "m@example.com" });
+    stubProfile({ id: "u1", name: "Miguel", email: "m@example.com", locale: null });
     setup();
     const name = await screen.findByDisplayValue("Miguel");
 

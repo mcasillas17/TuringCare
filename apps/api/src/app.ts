@@ -1,4 +1,3 @@
-import { zValidator } from "@hono/zod-validator";
 import { loginSchema, registerSchema } from "@turingcare/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -8,6 +7,7 @@ import { resolveAdminRole } from "./auth/admin-bootstrap";
 import { env } from "./env";
 import { type LocaleEnv, localeMiddleware } from "./middleware/locale";
 import { globalRateLimit } from "./middleware/rate-limit";
+import { stableZValidator } from "./middleware/validation";
 import { createMonitoringAuthHandler } from "./monitoring/auth-handler";
 import { createMonitoringErrorHandler } from "./monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "./monitoring/request-id";
@@ -57,17 +57,17 @@ const app = new Hono<ApiEnv & LocaleEnv>()
     const role = await resolveAdminRole(session.user);
     return c.json({ user: { ...session.user, role } });
   })
-  .post("/api/validate/register", zValidator("json", registerSchema), (c) =>
+  .post("/api/validate/register", stableZValidator("json", registerSchema), (c) =>
     c.json({ ok: true } as const),
   )
-  .post("/api/validate/login", zValidator("json", loginSchema), (c) =>
+  .post("/api/validate/login", stableZValidator("json", loginSchema), (c) =>
     c.json({ ok: true } as const),
   )
   .route("/api/dogs", dogsApp)
   .route("/api/journal", journalApp)
   .route("/api/share", shareApp)
   .route("/api/onboarding", onboardingApp)
-  .post("/api/events", zValidator("json", eventIngestSchema), async (c) => {
+  .post("/api/events", stableZValidator("json", eventIngestSchema), async (c) => {
     const { name, props } = c.req.valid("json");
     // Identity is resolved server-side from the auth cookie — never trusted
     // from the client. Anonymous (pre-auth, e.g. landing) is allowed.

@@ -1,18 +1,18 @@
-import { zValidator } from "@hono/zod-validator";
 import { courseInputSchema } from "@turingcare/shared";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { courses } from "../db/schema";
 import { type AdminVars, requireAdmin } from "../middleware/require-admin";
+import { stableZValidator } from "../middleware/validation";
 
 export const adminCoursesApp = new Hono<{ Variables: AdminVars }>()
   .use("*", requireAdmin)
-  .post("/", zValidator("json", courseInputSchema), async (c) => {
+  .post("/", stableZValidator("json", courseInputSchema), async (c) => {
     const [course] = await db.insert(courses).values(c.req.valid("json")).returning();
     return c.json({ course }, 201);
   })
-  .put("/:id", zValidator("json", courseInputSchema), async (c) => {
+  .put("/:id", stableZValidator("json", courseInputSchema), async (c) => {
     const [course] = await db
       .update(courses)
       .set({ ...c.req.valid("json"), updatedAt: new Date() })

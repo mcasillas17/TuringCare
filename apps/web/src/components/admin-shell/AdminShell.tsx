@@ -1,4 +1,5 @@
 import { BrandMark } from "@/components/BrandMark";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { signOut } from "@/lib/auth-client";
@@ -124,6 +125,8 @@ export function AdminShell() {
           >
             {t("app.signOut")}
           </Button>
+          <span aria-hidden="true" className="h-5 w-px bg-silver/70" />
+          <LanguageToggle />
         </div>
       </header>
       <div className="flex flex-1">

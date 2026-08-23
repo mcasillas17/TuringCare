@@ -2,6 +2,7 @@ import { act, render, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { en, es } from "@turingcare/i18n";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resetActiveLocale } from "./active-locale";
 import { LocaleProvider, detectInitialLocale, translate, useI18n } from "./index";
 
 function keyPaths(o: Record<string, unknown>, prefix = ""): string[] {
@@ -28,13 +29,13 @@ function ThrowingStorage(): Storage {
 }
 
 function LocaleProbe() {
-  const { locale, setLocale, t } = useI18n();
+  const { locale, selectLocale, t } = useI18n();
 
   return (
     <>
       <p>{t("nav.getStarted")}</p>
       <p data-testid="locale">{locale}</p>
-      <button type="button" onClick={() => setLocale("es")}>
+      <button type="button" onClick={() => selectLocale("es")}>
         switch
       </button>
     </>
@@ -42,6 +43,7 @@ function LocaleProbe() {
 }
 
 afterEach(() => {
+  resetActiveLocale();
   vi.unstubAllGlobals();
   document.documentElement.lang = "";
   localStorage.clear();
@@ -128,10 +130,56 @@ describe("useI18n + LocaleProvider", () => {
       wrapper: ({ children }) => <LocaleProvider>{children}</LocaleProvider>,
     });
 
-    act(() => result.current.setLocale("es"));
+    act(() => result.current.selectLocale("es"));
 
     expect(result.current.locale).toBe("es");
     expect(result.current.t("nav.getStarted")).toBe("Empezar");
+  });
+
+  it("rejects malformed runtime locale values without changing any locale sink", () => {
+    localStorage.setItem("tc-locale", "en");
+    vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US"] });
+
+    const { result } = renderHook(() => useI18n(), {
+      wrapper: ({ children }) => <LocaleProvider>{children}</LocaleProvider>,
+    });
+
+    let accepted: unknown;
+    act(() => {
+      accepted = result.current.selectLocale("fr" as never);
+    });
+
+    expect(accepted).toBe(false);
+    expect(result.current.locale).toBe("en");
+    expect(result.current.t("nav.getStarted")).toBe("Get started");
+    expect(localStorage.getItem("tc-locale")).toBe("en");
+    expect(document.documentElement.lang).toBe("en");
+  });
+
+  it("tracks explicit selection intent separately from account-locale adoption", () => {
+    const { result } = renderHook(() => useI18n(), {
+      wrapper: ({ children }) => <LocaleProvider>{children}</LocaleProvider>,
+    });
+    const context = result.current as typeof result.current & {
+      adoptLocale?: (locale: unknown) => boolean;
+      explicitSelectionRevision?: number;
+    };
+
+    expect(context.adoptLocale).toBeTypeOf("function");
+    expect(context.explicitSelectionRevision).toBe(0);
+    if (!context.adoptLocale) return;
+
+    act(() => {
+      expect(context.adoptLocale?.("es")).toBe(true);
+    });
+    expect(result.current.locale).toBe("es");
+    expect((result.current as typeof context).explicitSelectionRevision).toBe(0);
+
+    act(() => {
+      result.current.selectLocale("en");
+    });
+    expect(result.current.locale).toBe("en");
+    expect((result.current as typeof context).explicitSelectionRevision).toBe(1);
   });
 
   it("rerenders existing t() call sites after switching locale", async () => {

@@ -1,5 +1,6 @@
 import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 import { AdminShell } from "./AdminShell";
@@ -64,5 +65,20 @@ describe("AdminShell", () => {
     expect(screen.getByRole("link", { name: "Cursos" })).toHaveAttribute("href", "/admin/courses");
     expect(screen.getByRole("link", { name: /volver a la app/i })).toHaveAttribute("href", "/my");
     expect(screen.getByRole("button", { name: "Cerrar sesión" })).toBeInTheDocument();
+  });
+
+  it("exposes the language control by accessible label and switches it entirely by keyboard", async () => {
+    setup("/admin", "es");
+    const user = userEvent.setup();
+    const trigger = screen.getByRole("button", { name: "Idioma" });
+
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const english = await screen.findByRole("button", { name: "Cambiar a English" });
+    expect(english).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByRole("button", { name: "Language" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/admin");
   });
 });

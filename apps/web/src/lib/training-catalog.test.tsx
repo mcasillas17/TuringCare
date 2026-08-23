@@ -25,13 +25,13 @@ function requestHeaders(input: RequestInfo | URL, init?: RequestInit) {
 }
 
 function CatalogProbe() {
-  const { locale, setLocale } = useI18n();
+  const { locale, selectLocale } = useI18n();
   const { data } = useTrainingCatalog();
 
   return (
     <>
       <p>{data?.[0]?.name ?? "loading"}</p>
-      <button type="button" onClick={() => setLocale(locale === "en" ? "es" : "en")}>
+      <button type="button" onClick={() => selectLocale(locale === "en" ? "es" : "en")}>
         switch
       </button>
     </>

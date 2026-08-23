@@ -1,10 +1,10 @@
-import { zValidator } from "@hono/zod-validator";
 import { profileLocaleUpdateSchema, profileUpdateSchema } from "@turingcare/shared";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { user } from "../db/schema";
 import { type Vars, requireUser } from "../middleware/require-user";
+import { stableZValidator } from "../middleware/validation";
 
 export const profileApp = new Hono<{ Variables: Vars }>()
   .use("*", requireUser)
@@ -16,7 +16,7 @@ export const profileApp = new Hono<{ Variables: Vars }>()
     if (!u) return c.json({ error: "not_found" } as const, 404);
     return c.json({ user: u });
   })
-  .put("/", zValidator("json", profileUpdateSchema), async (c) => {
+  .put("/", stableZValidator("json", profileUpdateSchema), async (c) => {
     const [u] = await db
       .update(user)
       .set({ name: c.req.valid("json").name, updatedAt: new Date() })
@@ -25,7 +25,7 @@ export const profileApp = new Hono<{ Variables: Vars }>()
     if (!u) return c.json({ error: "not_found" } as const, 404);
     return c.json({ user: u });
   })
-  .patch("/locale", zValidator("json", profileLocaleUpdateSchema), async (c) => {
+  .patch("/locale", stableZValidator("json", profileLocaleUpdateSchema), async (c) => {
     const [u] = await db
       .update(user)
       .set({ locale: c.req.valid("json").locale, updatedAt: new Date() })

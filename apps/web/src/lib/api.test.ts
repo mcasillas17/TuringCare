@@ -123,7 +123,7 @@ describe("localeFetch", () => {
         createElement(LocaleProvider, null, children),
     });
 
-    act(() => result.current.setLocale("es"));
+    act(() => result.current.selectLocale("es"));
     await localeFetch("/health");
 
     expect(latestHeaders(fetchSpy).get("X-TuringCare-Locale")).toBe("es");

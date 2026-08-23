@@ -47,12 +47,12 @@ function createStorage(): Storage {
 }
 
 function Probe() {
-  const { locale, setLocale } = useI18n();
+  const { locale, selectLocale } = useI18n();
 
   return (
     <>
       <p data-testid="locale">{locale}</p>
-      <button type="button" onClick={() => setLocale(locale === "en" ? "es" : "en")}>
+      <button type="button" onClick={() => selectLocale(locale === "en" ? "es" : "en")}>
         switch
       </button>
     </>
@@ -73,20 +73,30 @@ type PatchRequest = {
   reject: () => void;
 };
 
+type ProfileRequest = {
+  userId: string;
+  resolve: () => void;
+};
+
 function setup({
   accountLocale,
   patchSucceeds = true,
   profiles,
   initialUserId = "u1",
+  profileResponse = "immediate",
 }: {
   accountLocale: "en" | "es" | null;
-  patchSucceeds?: boolean | "defer";
+  patchSucceeds?: boolean | "defer" | "malformed-once";
   profiles?: Record<string, TestProfile>;
   initialUserId?: string;
+  profileResponse?: "immediate" | "defer" | "malformed";
 }) {
   const patchLocales: string[] = [];
   const patchRequests: PatchRequest[] = [];
+  const profileRequests: ProfileRequest[] = [];
+  const requestedPaths: string[] = [];
   let currentUserId = initialUserId;
+  let sentMalformedPatch = false;
   const profileByUserId: Record<string, TestProfile> = profiles ?? {
     [initialUserId]: {
       id: initialUserId,
@@ -96,10 +106,16 @@ function setup({
     },
   };
 
+  useSessionMock.mockImplementation(() => ({
+    data: { user: { id: currentUserId } },
+    isPending: false,
+  }));
+
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
     const method = init?.method ?? (input instanceof Request ? input.method : "GET");
     const path = new URL(url, "http://localhost").pathname;
+    requestedPaths.push(path);
     const currentProfile = profileByUserId[currentUserId];
 
     if (!currentProfile) {
@@ -124,6 +140,32 @@ function setup({
     }
 
     if (path === "/api/profile" && method === "GET") {
+      const requestUserId = currentUserId;
+      const requestProfile = profileByUserId[requestUserId];
+      if (!requestProfile) throw new Error(`missing test profile ${requestUserId}`);
+
+      if (profileResponse === "defer") {
+        return new Promise<Response>((resolve) => {
+          profileRequests.push({
+            userId: requestUserId,
+            resolve: () =>
+              resolve(
+                new Response(JSON.stringify({ user: requestProfile }), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                }),
+              ),
+          });
+        });
+      }
+
+      if (profileResponse === "malformed") {
+        return new Response(JSON.stringify({ user: { ...requestProfile, locale: "fr" } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
       return new Response(JSON.stringify({ user: currentProfile }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -133,6 +175,14 @@ function setup({
     if (path === "/api/profile/locale" && method === "PATCH") {
       const body = JSON.parse(String(init?.body ?? "{}")) as { locale: "en" | "es" };
       patchLocales.push(body.locale);
+
+      if (patchSucceeds === "malformed-once" && !sentMalformedPatch) {
+        sentMalformedPatch = true;
+        return new Response(JSON.stringify({ user: { locale: "fr" } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
 
       if (patchSucceeds === "defer") {
         const requestUserId = currentUserId;
@@ -159,7 +209,7 @@ function setup({
         });
       }
 
-      if (!patchSucceeds) {
+      if (!patchSucceeds || patchSucceeds === "malformed-once") {
         return new Response(JSON.stringify({ error: "save_failed" }), {
           status: 500,
           headers: { "Content-Type": "application/json" },
@@ -182,22 +232,26 @@ function setup({
   vi.stubGlobal("fetch", fetchMock);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
-  render(
+  const tree = () => (
     <QueryClientProvider client={qc}>
       <LocaleProvider>
         <LocaleAccountBridge />
         <Probe />
       </LocaleProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(tree());
 
   return {
     patchLocales,
     patchRequests,
+    profileRequests,
     profiles: profileByUserId,
+    qc,
+    requestedPaths,
     switchUser(userId: string) {
       currentUserId = userId;
-      qc.invalidateQueries({ queryKey: ["me"] });
+      view.rerender(tree());
     },
   };
 }
@@ -285,7 +339,7 @@ describe("LocaleAccountBridge", () => {
 
   it("adopts the new user's locale instead of reusing a previous profile cache entry", async () => {
     localStorage.setItem("tc-locale", "en");
-    const { patchLocales, switchUser } = setup({
+    const { patchLocales, requestedPaths, switchUser } = setup({
       accountLocale: "es",
       profiles: {
         u1: { id: "u1", name: "Miguel", email: "m@example.com", locale: "es" },
@@ -301,6 +355,48 @@ describe("LocaleAccountBridge", () => {
     await waitFor(() => expect(screen.getByTestId("locale")).toHaveTextContent("en"));
     expect(localStorage.getItem("tc-locale")).toBe("en");
     expect(patchLocales).toEqual([]);
+    expect(requestedPaths).not.toContain("/me");
+  });
+
+  it("keeps an explicit toggle made while profile loading and persists it after resolution", async () => {
+    const { patchLocales, profileRequests } = setup({
+      accountLocale: "en",
+      profileResponse: "defer",
+    });
+
+    await waitFor(() => expect(profileRequests).toHaveLength(1));
+    await userEvent.click(screen.getByRole("button", { name: "switch" }));
+    expect(screen.getByTestId("locale")).toHaveTextContent("es");
+
+    profileRequests[0]?.resolve();
+
+    await waitFor(() => expect(patchLocales).toEqual(["es"]));
+    expect(screen.getByTestId("locale")).toHaveTextContent("es");
+    expect(localStorage.getItem("tc-locale")).toBe("es");
+  });
+
+  it("rejects a malformed profile locale without contaminating locale state", async () => {
+    localStorage.setItem("tc-locale", "en");
+    const { patchLocales, qc } = setup({ accountLocale: "en", profileResponse: "malformed" });
+
+    await waitFor(() => expect(qc.getQueryState(["profile", "u1"])?.status).toBe("error"));
+    expect(screen.getByTestId("locale")).toHaveTextContent("en");
+    expect(document.documentElement.lang).toBe("en");
+    expect(localStorage.getItem("tc-locale")).toBe("en");
+    expect(patchLocales).toEqual([]);
+  });
+
+  it("treats a malformed mutation locale as one failed save without contaminating UI state", async () => {
+    const { patchLocales } = setup({ accountLocale: "en", patchSucceeds: "malformed-once" });
+    await waitFor(() => expect(screen.getByTestId("locale")).toHaveTextContent("en"));
+
+    await userEvent.click(screen.getByRole("button", { name: "switch" }));
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledTimes(1));
+    expect(patchLocales).toEqual(["es"]);
+    expect(screen.getByTestId("locale")).toHaveTextContent("es");
+    expect(document.documentElement.lang).toBe("es");
+    expect(localStorage.getItem("tc-locale")).toBe("es");
   });
 
   it("keeps the final rapid toggle as the final account value when PATCH responses resolve out of order", async () => {
@@ -330,5 +426,59 @@ describe("LocaleAccountBridge", () => {
     patchRequests.at(-1)?.resolve();
 
     await waitFor(() => expect(profile.locale).toBe("en"));
+  });
+
+  it("ignores an old user's mutation resolution after an actual session user switch", async () => {
+    const { patchRequests, profiles, switchUser } = setup({
+      accountLocale: "en",
+      patchSucceeds: "defer",
+      profiles: {
+        u1: { id: "u1", name: "Miguel", email: "m@example.com", locale: "en" },
+        u2: { id: "u2", name: "Ana", email: "a@example.com", locale: "es" },
+      },
+    });
+    await waitFor(() => expect(screen.getByTestId("locale")).toHaveTextContent("en"));
+
+    await userEvent.click(screen.getByRole("button", { name: "switch" }));
+    await waitFor(() => expect(patchRequests).toHaveLength(1));
+
+    switchUser("u2");
+    await waitFor(() => expect(screen.getByTestId("locale")).toHaveTextContent("es"));
+    await userEvent.click(screen.getByRole("button", { name: "switch" }));
+    await waitFor(() => expect(patchRequests).toHaveLength(2));
+
+    patchRequests[1]?.resolve();
+    await waitFor(() => expect(profiles.u2?.locale).toBe("en"));
+    patchRequests[0]?.resolve();
+
+    await waitFor(() => expect(patchRequests).toHaveLength(2));
+    expect(profiles.u2?.locale).toBe("en");
+    expect(screen.getByTestId("locale")).toHaveTextContent("en");
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores an old user's mutation rejection instead of toasting in the new session", async () => {
+    const { patchRequests, switchUser } = setup({
+      accountLocale: "en",
+      patchSucceeds: "defer",
+      profiles: {
+        u1: { id: "u1", name: "Miguel", email: "m@example.com", locale: "en" },
+        u2: { id: "u2", name: "Ana", email: "a@example.com", locale: "en" },
+      },
+    });
+    await waitFor(() => expect(screen.getByTestId("locale")).toHaveTextContent("en"));
+
+    await userEvent.click(screen.getByRole("button", { name: "switch" }));
+    await waitFor(() => expect(patchRequests).toHaveLength(1));
+    switchUser("u2");
+    await waitFor(() => expect(screen.getByTestId("locale")).toHaveTextContent("en"));
+    await userEvent.click(screen.getByRole("button", { name: "switch" }));
+    await waitFor(() => expect(patchRequests).toHaveLength(2));
+
+    patchRequests[0]?.reject();
+
+    await waitFor(() => expect(toastErrorMock).not.toHaveBeenCalled());
+    patchRequests[1]?.resolve();
+    await waitFor(() => expect(screen.getByTestId("locale")).toHaveTextContent("es"));
   });
 });

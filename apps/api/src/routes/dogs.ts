@@ -1,5 +1,4 @@
 import { randomBytes } from "node:crypto";
-import { zValidator } from "@hono/zod-validator";
 import type { Locale } from "@turingcare/i18n";
 import {
   VALIDATION_MESSAGE_CODES,
@@ -46,6 +45,7 @@ import { loadFocusWeek } from "../lib/focus";
 import { loadProgress } from "../lib/progress";
 import { setSkillLevel } from "../lib/skill-level";
 import { type Vars, requireUser } from "../middleware/require-user";
+import { stableZValidator } from "../middleware/validation";
 import { recordEvent } from "../telemetry/record-event";
 
 const invalidJournalField = (path: "occurredAt" | "trend", message: string) =>
@@ -83,7 +83,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       .orderBy(desc(dogs.createdAt));
     return c.json({ dogs: rows });
   })
-  .post("/", zValidator("json", dogProfileSchema), async (c) => {
+  .post("/", stableZValidator("json", dogProfileSchema), async (c) => {
     const { weightLbs, ...body } = c.req.valid("json");
     const [dog] = await db
       .insert(dogs)
@@ -108,7 +108,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     ]);
     return c.json({ dog, concerns, goals });
   })
-  .put("/:id", zValidator("json", dogProfileSchema), async (c) => {
+  .put("/:id", stableZValidator("json", dogProfileSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { weightLbs, ...body } = c.req.valid("json");
@@ -129,7 +129,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     await db.delete(dogs).where(eq(dogs.id, dog.id));
     return c.json({ ok: true } as const);
   })
-  .post("/:id/concerns", zValidator("json", behaviorConcernSchema), async (c) => {
+  .post("/:id/concerns", stableZValidator("json", behaviorConcernSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const [concern] = await db
@@ -148,7 +148,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       );
     return c.json({ ok: true } as const);
   })
-  .post("/:id/goals", zValidator("json", trainingGoalSchema), async (c) => {
+  .post("/:id/goals", stableZValidator("json", trainingGoalSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const body = c.req.valid("json");
@@ -163,7 +163,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     });
     return c.json({ goal }, 201);
   })
-  .post("/:id/goals/from-template", zValidator("json", goalFromTemplateSchema), async (c) => {
+  .post("/:id/goals/from-template", stableZValidator("json", goalFromTemplateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { templateKey } = c.req.valid("json");
@@ -210,7 +210,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     return c.json(await loadProgress(dog.id));
   })
-  .post("/:id/goals/:goalId/skills", zValidator("json", trainingSkillSchema), async (c) => {
+  .post("/:id/goals/:goalId/skills", stableZValidator("json", trainingSkillSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const [goal] = await db
@@ -234,7 +234,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     if (!skill) throw new Error("failed to create skill");
     return c.json({ skill }, 201);
   })
-  .put("/:id/skills/:skillId", zValidator("json", trainingSkillSchema), async (c) => {
+  .put("/:id/skills/:skillId", stableZValidator("json", trainingSkillSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
@@ -249,7 +249,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     if (!updated) throw new Error("failed to update skill");
     return c.json({ skill: updated });
   })
-  .put("/:id/skills/:skillId/level", zValidator("json", skillLevelSchema), async (c) => {
+  .put("/:id/skills/:skillId/level", stableZValidator("json", skillLevelSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
@@ -273,25 +273,29 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
-  .post("/:id/skills/:skillId/sessions", zValidator("json", practiceSessionSchema), async (c) => {
-    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
-    if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
-    if (!skill) return c.json({ error: "not_found" } as const, 404);
-    const body = c.req.valid("json");
-    const [session] = await db
-      .insert(practiceSessions)
-      .values({
-        skillId: skill.id,
-        occurredAt: new Date(body.occurredAt),
-        durationMinutes: body.durationMinutes ?? null,
-        notes: body.notes ?? null,
-      })
-      .returning();
-    if (!session) throw new Error("failed to create practice session");
-    await recordEvent("training.practice_logged", { userId: c.get("userId") });
-    return c.json({ session }, 201);
-  })
+  .post(
+    "/:id/skills/:skillId/sessions",
+    stableZValidator("json", practiceSessionSchema),
+    async (c) => {
+      const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+      if (!dog) return c.json({ error: "not_found" } as const, 404);
+      const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
+      if (!skill) return c.json({ error: "not_found" } as const, 404);
+      const body = c.req.valid("json");
+      const [session] = await db
+        .insert(practiceSessions)
+        .values({
+          skillId: skill.id,
+          occurredAt: new Date(body.occurredAt),
+          durationMinutes: body.durationMinutes ?? null,
+          notes: body.notes ?? null,
+        })
+        .returning();
+      if (!session) throw new Error("failed to create practice session");
+      await recordEvent("training.practice_logged", { userId: c.get("userId") });
+      return c.json({ session }, 201);
+    },
+  )
   .delete("/:id/skills/:skillId/sessions/:sessionId", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
@@ -309,14 +313,14 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
-  .get("/:id/focus", zValidator("query", focusWeekQuerySchema), async (c) => {
+  .get("/:id/focus", stableZValidator("query", focusWeekQuerySchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { weekStart, weekEnd } = c.req.valid("query");
     const data = await loadFocusWeek(dog.id, weekStart, weekEnd);
     return c.json(data);
   })
-  .post("/:id/focus", zValidator("json", focusAddSchema), async (c) => {
+  .post("/:id/focus", stableZValidator("json", focusAddSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { skillId } = c.req.valid("json");
@@ -360,7 +364,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       .orderBy(desc(journalEntries.occurredAt));
     return c.json({ entries });
   })
-  .post("/:id/journal", zValidator("json", journalEntryCreateSchema), async (c) => {
+  .post("/:id/journal", stableZValidator("json", journalEntryCreateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const b = c.req.valid("json");
@@ -394,7 +398,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     });
     return c.json({ entry }, 201);
   })
-  .put("/:id/journal/:entryId", zValidator("json", journalEntryUpdateSchema), async (c) => {
+  .put("/:id/journal/:entryId", stableZValidator("json", journalEntryUpdateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const b = c.req.valid("json");
@@ -508,7 +512,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     await db.update(briefs).set({ shareToken: null }).where(eq(briefs.id, brief.id));
     return c.json({ ok: true } as const);
   })
-  .post("/:id/brief", zValidator("query", briefGenerateSchema), async (c) => {
+  .post("/:id/brief", stableZValidator("query", briefGenerateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { window } = c.req.valid("query");
@@ -581,7 +585,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     await recordEvent("brief.finalized", { userId: c.get("userId") });
     return c.json({ brief });
   })
-  .post("/:id/brief/send", zValidator("json", briefSendSchema), async (c) => {
+  .post("/:id/brief/send", stableZValidator("json", briefSendSchema), async (c) => {
     const userId = c.get("userId");
     const dog = await findOwnedDog(userId, c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);

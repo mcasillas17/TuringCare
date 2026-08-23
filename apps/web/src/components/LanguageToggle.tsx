@@ -10,7 +10,7 @@ const LOCALES: readonly Locale[] = ["en", "es"];
 const NAME_KEY = { en: "language.nameEn", es: "language.nameEs" } as const;
 
 export function LanguageToggle({ className }: { className?: string }) {
-  const { locale, setLocale, t } = useI18n();
+  const { locale, selectLocale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Set only when a desktop hover (not click/keyboard) opened the popover, so we
@@ -85,7 +85,7 @@ export function LanguageToggle({ className }: { className?: string }) {
               key={l}
               type="button"
               onClick={() => {
-                setLocale(l);
+                selectLocale(l);
                 setOpen(false);
               }}
               aria-label={t("language.switchTo", { lang: t(NAME_KEY[l]) })}
