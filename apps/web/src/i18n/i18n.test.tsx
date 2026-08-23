@@ -91,6 +91,24 @@ describe("translate", () => {
 });
 
 describe("useI18n + LocaleProvider", () => {
+  it("sets the initial document language before its first child render", () => {
+    vi.stubGlobal("navigator", { language: "es-MX", languages: ["es-MX"] });
+    let childRenderLanguage = "";
+
+    function FirstRenderProbe() {
+      childRenderLanguage = document.documentElement.lang;
+      return null;
+    }
+
+    render(
+      <LocaleProvider>
+        <FirstRenderProbe />
+      </LocaleProvider>,
+    );
+
+    expect(childRenderLanguage).toBe("es");
+  });
+
   it("sets html lang from the initial spanish locale", () => {
     vi.stubGlobal("navigator", { language: "es-MX", languages: ["es-MX"] });
 

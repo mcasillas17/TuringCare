@@ -1,7 +1,7 @@
 import { BrandMark } from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { briefVersionLabel, sharedBriefTitle } from "@/lib/brief-chrome";
+import { briefVersionLabel, normalizeBriefLocale, sharedBriefTitle } from "@/lib/brief-chrome";
 import { useSharedBrief } from "@/lib/shared-brief";
 import { Suspense, lazy } from "react";
 import { useParams } from "react-router-dom";
@@ -45,7 +45,10 @@ export function SharedBrief() {
               />
             </Suspense>
           </div>
-          <article className="brief-print whitespace-pre-wrap rounded border border-silver bg-white p-4 text-sm text-slate">
+          <article
+            lang={normalizeBriefLocale(data.locale)}
+            className="brief-print whitespace-pre-wrap rounded border border-silver bg-white p-4 text-sm text-slate"
+          >
             <div className="mb-2 font-semibold text-copper">
               {briefVersionLabel(data.locale)} {data.version}
             </div>

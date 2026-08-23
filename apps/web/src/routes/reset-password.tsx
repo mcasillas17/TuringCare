@@ -68,7 +68,7 @@ export function ResetPassword() {
     const { error } = await resetPassword({ newPassword, token: safeToken });
     setPending(false);
     if (error) {
-      toast.error(error.message ?? t("auth.resetFailed"));
+      toast.error(t("auth.resetFailed"));
       return;
     }
     toast.success(t("auth.resetSuccess"));

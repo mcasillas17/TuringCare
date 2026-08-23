@@ -24,7 +24,7 @@ export function Register() {
       password: String(fd.get("password")),
     });
     setPending(false);
-    if (error) return toast.error(error.message ?? t("auth.registerFailed"));
+    if (error) return toast.error(t("auth.registerFailed"));
     toast.success(t("auth.registered"));
     // Full-load navigation (see login.tsx): avoids the post-sign-up stale
     // useSession atom bouncing off the RequireAuth gate at /my.

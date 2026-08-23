@@ -82,4 +82,20 @@ describe("@turingcare/i18n catalogs", () => {
   it("keeps the English and Spanish catalogs in exact key parity", () => {
     expect(keyPaths(es).sort()).toEqual(keyPaths(en).sort());
   });
+
+  it("serves every generated-artifact namespace through the shared runtime", () => {
+    const i18n = createI18n("es");
+
+    expect([
+      translate(i18n, "generatedBrief.concerns"),
+      translate(i18n, "authEmail.verification.subject"),
+      translate(i18n, "briefEmail.sharedBy"),
+      translate(i18n, "briefPdf.labels.generated"),
+    ]).toEqual([
+      "Preocupaciones:",
+      "Verifica tu correo de TuringCare",
+      "Compartido por",
+      "Generado",
+    ]);
+  });
 });

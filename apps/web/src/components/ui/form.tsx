@@ -11,6 +11,7 @@ import {
 
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
+import { useValidationMessage } from "@/i18n/validation"
 
 const Form = FormProvider
 
@@ -133,7 +134,8 @@ function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
 
 function FormMessage({ className, children, ...props }: React.ComponentProps<"p">) {
   const { error, formMessageId } = useFormField()
-  const body = error ? String(error?.message ?? "") : children
+  const validationMessage = useValidationMessage()
+  const body = error ? validationMessage(error.message) : children
 
   if (!body) {
     return null

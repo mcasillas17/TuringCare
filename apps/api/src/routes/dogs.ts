@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
 import type { Locale } from "@turingcare/i18n";
 import {
+  VALIDATION_MESSAGE_CODES,
   behaviorConcernSchema,
   briefGenerateSchema,
   briefSendSchema,
@@ -365,7 +366,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     const b = c.req.valid("json");
     const occurredAt = b.occurredAt ? new Date(b.occurredAt) : new Date();
     if (Number.isNaN(occurredAt.getTime())) {
-      return c.json(invalidJournalField("occurredAt", "Invalid date"), 400);
+      return c.json(invalidJournalField("occurredAt", VALIDATION_MESSAGE_CODES.dateInvalid), 400);
     }
     const [entry] = await db
       .insert(journalEntries)
@@ -410,7 +411,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     if (b.occurredAt !== undefined) {
       const occurredAt = new Date(b.occurredAt);
       if (Number.isNaN(occurredAt.getTime())) {
-        return c.json(invalidJournalField("occurredAt", "Invalid date"), 400);
+        return c.json(invalidJournalField("occurredAt", VALIDATION_MESSAGE_CODES.dateInvalid), 400);
       }
       changes.occurredAt = occurredAt;
     }
@@ -419,7 +420,10 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     if (nextKind === "daily_checkin") {
       const nextTrend = b.trend === undefined ? existing.trend : b.trend;
       if (!nextTrend) {
-        return c.json(invalidJournalField("trend", "Trend is required for daily check-ins"), 400);
+        return c.json(
+          invalidJournalField("trend", VALIDATION_MESSAGE_CODES.dailyCheckInTrendRequired),
+          400,
+        );
       }
       changes.trend = nextTrend;
       changes.antecedent = null;

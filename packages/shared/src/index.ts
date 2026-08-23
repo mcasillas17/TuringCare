@@ -8,3 +8,4 @@ export * from "./progress";
 export * from "./profile";
 export * from "./trainer";
 export * from "./training-catalog";
+export * from "./validation";

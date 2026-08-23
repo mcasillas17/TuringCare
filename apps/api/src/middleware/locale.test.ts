@@ -127,4 +127,27 @@ describe("localeMiddleware", () => {
     expect(res.headers.get("Content-Language")).toBe("en");
     expect(await res.json()).toEqual({ locale: "en" });
   });
+
+  it("skips malformed one-character subtags and keeps later valid candidate ordering", async () => {
+    const app = buildApp();
+    const incompletePrivateUse = await app.request("/x", {
+      headers: { "Accept-Language": "es-x,en-US;q=0.8" },
+    });
+    const numericSingleton = await app.request("/x", {
+      headers: { "Accept-Language": "es-1,en-US;q=0.8" },
+    });
+
+    expect(await incompletePrivateUse.json()).toEqual({ locale: "en" });
+    expect(await numericSingleton.json()).toEqual({ locale: "en" });
+  });
+
+  it("falls back to English when every whole language tag is malformed", async () => {
+    const app = buildApp();
+    const res = await app.request("/x", {
+      headers: { "Accept-Language": "es-x,es-1" },
+    });
+
+    expect(res.headers.get("Content-Language")).toBe("en");
+    expect(await res.json()).toEqual({ locale: "en" });
+  });
 });

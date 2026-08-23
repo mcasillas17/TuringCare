@@ -1,4 +1,7 @@
+import { act, renderHook } from "@testing-library/react";
+import { type ReactNode, createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider, useI18n } from "../i18n";
 import { api, localeFetch } from "./api";
 import { authClient } from "./auth-client";
 
@@ -30,6 +33,23 @@ function createStorage(): Storage {
     setItem(key, value) {
       values.set(key, value);
     },
+  };
+}
+
+function createDeniedStorage(): Storage {
+  const unavailable = () => {
+    throw new DOMException("Storage access denied", "SecurityError");
+  };
+
+  return {
+    get length() {
+      return 0;
+    },
+    clear: unavailable,
+    getItem: unavailable,
+    key: unavailable,
+    removeItem: unavailable,
+    setItem: unavailable,
   };
 }
 
@@ -90,6 +110,45 @@ describe("localeFetch", () => {
     });
 
     expect(latestHeaders(fetchSpy).get("X-TuringCare-Locale")).toBeNull();
+  });
+
+  it("uses the active selected locale when browser storage reads and writes are denied", async () => {
+    vi.stubGlobal("localStorage", createDeniedStorage());
+    vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US"] });
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const { result } = renderHook(() => useI18n(), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(LocaleProvider, null, children),
+    });
+
+    act(() => result.current.setLocale("es"));
+    await localeFetch("/health");
+
+    expect(latestHeaders(fetchSpy).get("X-TuringCare-Locale")).toBe("es");
+  });
+
+  it("merges Request headers with init headers and preserves init precedence", async () => {
+    const storage = createStorage();
+    storage.setItem("tc-locale", "es");
+    vi.stubGlobal("localStorage", storage);
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const request = new Request("https://example.test/health", {
+      headers: { Authorization: "Bearer request", Accept: "text/plain" },
+    });
+
+    await localeFetch(request, {
+      headers: { Authorization: "Bearer init", "X-Trace-Id": "trace-1" },
+    });
+
+    const headers = latestHeaders(fetchSpy);
+    expect(headers.get("Authorization")).toBe("Bearer init");
+    expect(headers.get("Accept")).toBe("text/plain");
+    expect(headers.get("X-Trace-Id")).toBe("trace-1");
+    expect(headers.get("X-TuringCare-Locale")).toBe("es");
   });
 });
 

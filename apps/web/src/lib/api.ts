@@ -1,6 +1,7 @@
 import type { AppType } from "@turingcare/api";
 import { isLocale } from "@turingcare/i18n";
 import { hc } from "hono/client";
+import { getActiveLocale } from "../i18n/active-locale";
 
 const LOCALE_HEADER = "X-TuringCare-Locale";
 const STORAGE_KEY = "tc-locale";
@@ -26,7 +27,7 @@ function mergeHeaders(input: RequestInfo | URL, init: RequestInit | undefined) {
 
 export function localeFetch(input: RequestInfo | URL, init?: RequestInit) {
   const headers = mergeHeaders(input, init);
-  const locale = readStoredLocale();
+  const locale = getActiveLocale() ?? readStoredLocale();
 
   if (locale && !headers.has(LOCALE_HEADER)) {
     headers.set(LOCALE_HEADER, locale);

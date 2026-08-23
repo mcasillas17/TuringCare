@@ -9,6 +9,14 @@ const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn(),
 }));
 
+const { useSessionMock } = vi.hoisted(() => ({
+  useSessionMock: vi.fn(),
+}));
+
+vi.mock("@/lib/auth-client", () => ({
+  useSession: useSessionMock,
+}));
+
 vi.mock("sonner", () => ({
   toast: { error: toastErrorMock },
 }));
@@ -195,6 +203,7 @@ function setup({
 }
 
 beforeEach(() => {
+  useSessionMock.mockReturnValue({ data: { user: { id: "u1" } }, isPending: false });
   vi.stubGlobal("localStorage", createStorage());
   vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US"] });
 });
@@ -206,6 +215,27 @@ afterEach(() => {
 });
 
 describe("LocaleAccountBridge", () => {
+  it("does not start profile requests for an unauthenticated public route", async () => {
+    useSessionMock.mockReturnValue({ data: null, isPending: false });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={qc}>
+        <LocaleProvider>
+          <LocaleAccountBridge />
+          <Probe />
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("locale")).toHaveTextContent("en"));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("adopts a saved account locale over the current local locale", async () => {
     localStorage.setItem("tc-locale", "en");
     const { patchLocales } = setup({ accountLocale: "es" });

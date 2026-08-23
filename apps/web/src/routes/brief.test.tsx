@@ -160,6 +160,10 @@ describe("Brief review", () => {
     expect(screen.queryByText("Behavior Brief")).not.toBeInTheDocument();
     expect(screen.queryByText("Final · v3")).not.toBeInTheDocument();
     expect(screen.queryByText("Generated May 22, 2026")).not.toBeInTheDocument();
+    expect(screen.getByText("Resumen escrito por el usuario").closest("article")).toHaveAttribute(
+      "lang",
+      "es",
+    );
   });
 
   it("keeps owned brief chrome English from the stored locale even when the UI is Spanish", () => {
@@ -182,5 +186,9 @@ describe("Brief review", () => {
     expect(screen.queryByText("Resumen de conducta")).not.toBeInTheDocument();
     expect(screen.queryByText("Borrador · v2")).not.toBeInTheDocument();
     expect(screen.queryByText("Generado 22 de mayo de 2026")).not.toBeInTheDocument();
+    expect(screen.getByText("English stored brief").closest("article")).toHaveAttribute(
+      "lang",
+      "en",
+    );
   });
 });

@@ -7,7 +7,7 @@ const LOCALE_HEADER = "X-TuringCare-Locale";
 const MAX_LOCALE_HEADER_LENGTH = 16;
 const MAX_ACCEPT_LANGUAGE_LENGTH = 256;
 const MAX_ACCEPT_LANGUAGE_VALUES = 8;
-const LANGUAGE_TAG_PATTERN = /^(?<primary>[a-z]{1,8})(?:-[a-z0-9]{1,8})*$/i;
+const MAX_LANGUAGE_TAG_LENGTH = 64;
 const QUALITY_VALUE_PATTERN = /^(?:0(?:\.\d{1,3})?|1(?:\.0{1,3})?)$/;
 
 function parseLocaleHeader(value: string | undefined): Locale | null {
@@ -18,12 +18,17 @@ function parseLocaleHeader(value: string | undefined): Locale | null {
 }
 
 function parseLanguageTag(value: string): Locale | null {
-  const normalized = value.trim().toLowerCase();
-  const match = LANGUAGE_TAG_PATTERN.exec(normalized);
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_LANGUAGE_TAG_LENGTH) return null;
 
-  if (!match?.groups?.primary) return null;
+  try {
+    const [canonicalLanguage] = Intl.getCanonicalLocales(trimmed);
+    const primaryLanguage = canonicalLanguage?.split("-")[0]?.toLowerCase();
 
-  return isLocale(match.groups.primary) ? match.groups.primary : null;
+    return isLocale(primaryLanguage) ? primaryLanguage : null;
+  } catch {
+    return null;
+  }
 }
 
 function parseQualityValue(value: string): number | null {

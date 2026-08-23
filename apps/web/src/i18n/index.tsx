@@ -15,6 +15,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { setActiveLocale } from "./active-locale";
 
 const STORAGE_KEY = "tc-locale";
 const INSTANCES = {
@@ -56,14 +57,26 @@ type I18n = {
 
 const Ctx = createContext<I18n | null>(null);
 
+function activateLocale(locale: Locale) {
+  setActiveLocale(locale);
+  if (typeof document !== "undefined") document.documentElement.lang = locale;
+}
+
+function initializeLocale() {
+  const locale = detectInitialLocale();
+  activateLocale(locale);
+  return locale;
+}
+
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(detectInitialLocale);
+  const [locale, setLocaleState] = useState<Locale>(initializeLocale);
 
   useEffect(() => {
-    if (typeof document !== "undefined") document.documentElement.lang = locale;
+    activateLocale(locale);
   }, [locale]);
 
   const setLocale = useCallback((nextLocale: Locale) => {
+    activateLocale(nextLocale);
     setLocaleState(nextLocale);
 
     try {

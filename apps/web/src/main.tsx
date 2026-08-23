@@ -57,6 +57,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
     <QueryClientProvider client={queryClient}>
       <LocaleProvider>
         <BrowserRouter>
+          <LocaleAccountBridge />
           <PageViewTracker />
           <Routes>
             <Route path="/" element={<Landing />} />
@@ -90,10 +91,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
             <Route
               element={
                 <RequireAuth>
-                  <>
-                    <LocaleAccountBridge />
-                    <AppShell />
-                  </>
+                  <AppShell />
                 </RequireAuth>
               }
             >
@@ -117,10 +115,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
               path="/admin"
               element={
                 <RequireAdmin>
-                  <>
-                    <LocaleAccountBridge />
-                    <AdminShell />
-                  </>
+                  <AdminShell />
                 </RequireAdmin>
               }
             >

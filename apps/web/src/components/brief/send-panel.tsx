@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useValidationMessage } from "@/i18n/validation";
 import { useBriefSends, useSendBrief } from "@/lib/brief-send";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type BriefSendInput, briefSendSchema } from "@turingcare/shared";
@@ -19,6 +20,7 @@ export function SendPanel({
   initialRecipient?: string;
 }) {
   const { t, locale } = useI18n();
+  const validationMessage = useValidationMessage();
   const send = useSendBrief(dogId);
   const { data: sends } = useBriefSends(dogId);
   const {
@@ -66,7 +68,9 @@ export function SendPanel({
             {...register("recipient")}
           />
           {errors.recipient && (
-            <span className="text-xs text-red-600">{errors.recipient.message}</span>
+            <span className="text-xs text-red-600">
+              {validationMessage(errors.recipient.message)}
+            </span>
           )}
         </label>
         <label className="block">
@@ -80,7 +84,11 @@ export function SendPanel({
             placeholder={t("briefSend.messagePh")}
             {...register("message", { setValueAs: (v) => v || undefined })}
           />
-          {errors.message && <span className="text-xs text-red-600">{errors.message.message}</span>}
+          {errors.message && (
+            <span className="text-xs text-red-600">
+              {validationMessage(errors.message.message)}
+            </span>
+          )}
         </label>
 
         <Button type="submit" disabled={isSubmitting} className="w-full bg-slate text-cream">

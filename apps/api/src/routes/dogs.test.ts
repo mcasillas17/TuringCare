@@ -28,13 +28,17 @@ const validDog = {
   spayedNeutered: true,
 };
 
-function expectValidationIssue(body: unknown, path: string) {
+function expectValidationIssue(body: unknown, path: string, message?: string) {
   const result = body as {
     success?: boolean;
-    error?: { issues?: Array<{ path?: Array<string | number> }> };
+    error?: { issues?: Array<{ path?: Array<string | number>; message?: string }> };
   };
   expect(result.success).toBe(false);
-  expect(result.error?.issues?.some((issue) => issue.path?.includes(path))).toBe(true);
+  expect(
+    result.error?.issues?.some(
+      (issue) => issue.path?.includes(path) && (message === undefined || issue.message === message),
+    ),
+  ).toBe(true);
 }
 
 describe("dogs: list & create", () => {
@@ -349,7 +353,7 @@ describe("dogs: journal", () => {
       body: JSON.stringify({ ...entry, occurredAt: "not-a-date" }),
     });
     expect(r.status).toBe(400);
-    expectValidationIssue(await r.json(), "occurredAt");
+    expectValidationIssue(await r.json(), "occurredAt", "validation.dateInvalid");
 
     const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
     expect(((await list.json()) as { entries: unknown[] }).entries).toEqual([]);
@@ -1047,7 +1051,7 @@ describe("dogs: journal PUT", () => {
       body: JSON.stringify({ kind: "daily_checkin" }),
     });
     expect(r.status).toBe(400);
-    expectValidationIssue(await r.json(), "trend");
+    expectValidationIssue(await r.json(), "trend", "validation.dailyCheckInTrendRequired");
 
     const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
     const { entries } = (await list.json()) as {
@@ -1143,7 +1147,7 @@ describe("dogs: journal PUT", () => {
       body: JSON.stringify({ occurredAt: "not-a-date", note: "Should not persist" }),
     });
     expect(r.status).toBe(400);
-    expectValidationIssue(await r.json(), "occurredAt");
+    expectValidationIssue(await r.json(), "occurredAt", "validation.dateInvalid");
 
     const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
     const { entries } = (await list.json()) as {

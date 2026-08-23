@@ -83,11 +83,15 @@ it("valid submit: calls resetPassword and navigates to /login on success", async
 });
 
 it("API error: surfaces a toast and stays on the page", async () => {
-  resetPasswordMock.mockResolvedValue({ data: null, error: { message: "bad" } });
+  resetPasswordMock.mockResolvedValue({
+    data: null,
+    error: { message: "sensitive upstream detail" },
+  });
   setup("/reset-password?token=abc");
   await userEvent.type(screen.getByLabelText(/new password/i), "password-123");
   await userEvent.type(screen.getByLabelText(/confirm password/i), "password-123");
   await userEvent.click(screen.getByRole("button", { name: /update password/i }));
-  expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("bad"));
+  expect(toastErrorMock).toHaveBeenCalledWith("Could not reset the password.");
+  expect(toastErrorMock).not.toHaveBeenCalledWith(expect.stringContaining("sensitive"));
   expect(screen.queryByText("login-page")).toBeNull();
 });

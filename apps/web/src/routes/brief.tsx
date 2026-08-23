@@ -2,7 +2,12 @@ import { BriefShareSheet } from "@/components/brief/share-sheet";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useBrief, useGenerateBrief } from "@/lib/brief";
-import { briefGeneratedLabel, briefStatusLabel, briefTitle } from "@/lib/brief-chrome";
+import {
+  briefGeneratedLabel,
+  briefStatusLabel,
+  briefTitle,
+  normalizeBriefLocale,
+} from "@/lib/brief-chrome";
 import { useDogs } from "@/lib/dogs";
 import { type BriefWindow, briefWindows } from "@turingcare/shared";
 import { useEffect, useState } from "react";
@@ -110,7 +115,10 @@ export function Brief() {
 
           {brief && (
             <>
-              <article className="brief-print overflow-hidden rounded-xl border border-silver bg-white text-sm text-slate">
+              <article
+                lang={normalizeBriefLocale(brief.locale)}
+                className="brief-print overflow-hidden rounded-xl border border-silver bg-white text-sm text-slate"
+              >
                 <header className="flex items-center justify-between border-b-2 border-copper px-5 py-3">
                   <span className="text-lg font-bold text-slate">
                     Turing<span className="text-copper">Care</span>

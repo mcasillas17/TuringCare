@@ -74,6 +74,10 @@ it("renders shared brief chrome and PDF handoff from stored Spanish locale under
   );
   expect(screen.getByText("Versión 2")).toBeInTheDocument();
   expect(screen.getByTestId("download-locale")).toHaveTextContent("es");
+  expect(screen.getByText("Resumen redactado por la familia").closest("article")).toHaveAttribute(
+    "lang",
+    "es",
+  );
   expect(screen.queryByRole("heading", { name: "Shared Behavior Brief" })).not.toBeInTheDocument();
   expect(screen.queryByText("Version 2")).not.toBeInTheDocument();
 });

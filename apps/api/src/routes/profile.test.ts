@@ -37,15 +37,16 @@ describe("profile", () => {
     });
     expect(put.status).toBe(200);
     expect(((await put.json()) as { user: { name: string } }).user.name).toBe("Renamed");
-    expect(
-      (
-        await app.request("/api/profile", {
-          method: "PUT",
-          headers: u.authHeaders,
-          body: JSON.stringify({ name: "" }),
-        })
-      ).status,
-    ).toBe(400);
+    const invalid = await app.request("/api/profile", {
+      method: "PUT",
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "es" },
+      body: JSON.stringify({ name: "" }),
+    });
+    expect(invalid.status).toBe(400);
+    const invalidBody = (await invalid.json()) as {
+      error: { issues: Array<{ message: string }> };
+    };
+    expect(invalidBody.error.issues[0]?.message).toBe("validation.nameRequired");
   });
 
   it("returns a null locale before the user chooses an account locale", async () => {

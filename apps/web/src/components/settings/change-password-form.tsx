@@ -1,27 +1,28 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useValidationMessage } from "@/i18n/validation";
 import { changePassword } from "@/lib/auth-client";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { VALIDATION_MESSAGE_CODES } from "@turingcare/shared";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-// Inline schema: not shared because the messages are localized via the
-// `t()` call in render. The min-8 expectation mirrors register/login.
-function makeSchema(t: (k: import("@/i18n/types").MessageKey) => string) {
+// Inline because this payload belongs to Better Auth rather than the TuringCare API.
+function makeSchema() {
   return z
     .object({
-      currentPassword: z.string().min(8, t("settings.passwordTooShort")),
-      newPassword: z.string().min(8, t("settings.passwordTooShort")),
-      confirmNewPassword: z.string().min(8, t("settings.passwordTooShort")),
+      currentPassword: z.string().min(8, VALIDATION_MESSAGE_CODES.passwordTooShort),
+      newPassword: z.string().min(8, VALIDATION_MESSAGE_CODES.passwordTooShort),
+      confirmNewPassword: z.string().min(8, VALIDATION_MESSAGE_CODES.passwordTooShort),
     })
     .refine((v) => v.newPassword === v.confirmNewPassword, {
       path: ["confirmNewPassword"],
-      message: t("settings.passwordMismatch"),
+      message: VALIDATION_MESSAGE_CODES.passwordMismatch,
     })
     .refine((v) => v.newPassword !== v.currentPassword, {
       path: ["newPassword"],
-      message: t("settings.passwordSameAsCurrent"),
+      message: VALIDATION_MESSAGE_CODES.passwordSameAsCurrent,
     });
 }
 
@@ -31,7 +32,8 @@ const inputCls = "w-full rounded border border-silver bg-white px-3 py-2 text-sm
 
 export function ChangePasswordForm() {
   const { t } = useI18n();
-  const schema = makeSchema(t);
+  const validationMessage = useValidationMessage();
+  const schema = makeSchema();
   const {
     register,
     handleSubmit,
@@ -68,7 +70,9 @@ export function ChangePasswordForm() {
           {...register("currentPassword")}
         />
         {errors.currentPassword?.message && (
-          <span className="text-xs text-red-600">{errors.currentPassword.message}</span>
+          <span className="text-xs text-red-600">
+            {validationMessage(errors.currentPassword.message)}
+          </span>
         )}
       </label>
       <label className="block space-y-1">
@@ -81,7 +85,9 @@ export function ChangePasswordForm() {
           {...register("newPassword")}
         />
         {errors.newPassword?.message && (
-          <span className="text-xs text-red-600">{errors.newPassword.message}</span>
+          <span className="text-xs text-red-600">
+            {validationMessage(errors.newPassword.message)}
+          </span>
         )}
       </label>
       <label className="block space-y-1">
@@ -94,7 +100,9 @@ export function ChangePasswordForm() {
           {...register("confirmNewPassword")}
         />
         {errors.confirmNewPassword?.message && (
-          <span className="text-xs text-red-600">{errors.confirmNewPassword.message}</span>
+          <span className="text-xs text-red-600">
+            {validationMessage(errors.confirmNewPassword.message)}
+          </span>
         )}
       </label>
 

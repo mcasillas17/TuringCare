@@ -4,9 +4,17 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SendPanel } from "./send-panel";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  localStorage.clear();
+  vi.unstubAllGlobals();
+});
 
-function setup(briefStatus: "draft" | "finalized" | null, initialRecipient?: string) {
+function setup(
+  briefStatus: "draft" | "finalized" | null,
+  initialRecipient?: string,
+  locale: "en" | "es" = "en",
+) {
+  localStorage.setItem("tc-locale", locale);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -50,6 +58,20 @@ describe("SendPanel", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
     await waitFor(() => expect(screen.getByText(/valid email/i)).toBeInTheDocument());
+  });
+
+  it("renders an allowlisted validation code in Spanish", async () => {
+    stubFetch(async () => new Response(JSON.stringify({ sends: [] }), { status: 200 }));
+    setup("finalized", undefined, "es");
+    fireEvent.change(screen.getByLabelText(/Email del destinatario/i), {
+      target: { value: "not-an-email" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Enviar$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Ingresa un correo electrónico válido")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("validation.emailInvalid")).not.toBeInTheDocument();
   });
 
   it("submits a valid send and clears the form", async () => {

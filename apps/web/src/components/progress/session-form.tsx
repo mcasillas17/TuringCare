@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useValidationMessage } from "@/i18n/validation";
 import { useLogSession } from "@/lib/progress";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type PracticeSessionInput, practiceSessionSchema } from "@turingcare/shared";
@@ -26,6 +27,7 @@ export function SessionForm({
   onSaved?: () => void;
 }) {
   const { t } = useI18n();
+  const validationMessage = useValidationMessage();
   const logSession = useLogSession(dogId);
   const {
     register,
@@ -58,7 +60,9 @@ export function SessionForm({
         <span className="text-sm">{t("progress.occurredAt")}</span>
         <input type="datetime-local" className={input} {...register("occurredAt")} />
         {errors.occurredAt && (
-          <span className="text-xs text-red-600">{errors.occurredAt.message}</span>
+          <span className="text-xs text-red-600">
+            {validationMessage(errors.occurredAt.message)}
+          </span>
         )}
       </label>
       <label className="block">

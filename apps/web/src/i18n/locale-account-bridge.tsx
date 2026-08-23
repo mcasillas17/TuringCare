@@ -1,3 +1,4 @@
+import { useSession } from "@/lib/auth-client";
 import { useMe } from "@/lib/me";
 import { useProfile, useUpdateProfileLocale } from "@/lib/profile";
 import type { Locale } from "@turingcare/i18n";
@@ -5,7 +6,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useI18n } from ".";
 
-export function LocaleAccountBridge() {
+function AuthenticatedLocaleAccountBridge() {
   const { locale, setLocale, t } = useI18n();
   const { data: me } = useMe();
   const { data: profile } = useProfile(me?.id ?? null);
@@ -89,4 +90,12 @@ export function LocaleAccountBridge() {
   }, [locale, persistLocale, profile]);
 
   return null;
+}
+
+export function LocaleAccountBridge() {
+  const { data: session, isPending } = useSession();
+
+  if (isPending || !session) return null;
+
+  return <AuthenticatedLocaleAccountBridge />;
 }

@@ -1,4 +1,4 @@
-import type { Locale } from "@turingcare/i18n";
+import { type Locale, createI18n, translate } from "@turingcare/i18n";
 import type { EmailBody } from "./templates";
 
 export interface BriefEmailInputs {
@@ -17,21 +17,11 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-const briefEmailCatalog = {
-  en: {
-    title: "Behavior Brief",
-    sharedBy: "Shared by",
-    footer: "TuringCare · humane, reward-based dog training support",
-  },
-  es: {
-    title: "Resumen de conducta",
-    sharedBy: "Compartido por",
-    footer: "TuringCare · Apoyo humano y basado en recompensas para el adiestramiento canino",
-  },
-} as const;
-
 export function renderBriefEmail(args: BriefEmailInputs, locale: Locale = "en"): EmailBody {
-  const t = briefEmailCatalog[locale];
+  const i18n = createI18n(locale);
+  const title = translate(i18n, "briefEmail.title");
+  const sharedBy = translate(i18n, "briefEmail.sharedBy");
+  const footer = translate(i18n, "briefEmail.footer");
   const safeDog = escapeHtml(args.dogName);
   const safeOwner = escapeHtml(args.ownerName);
   const safeMessage = args.message ? escapeHtml(args.message) : null;
@@ -45,22 +35,22 @@ export function renderBriefEmail(args: BriefEmailInputs, locale: Locale = "en"):
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:32px">
 <tr><td>
-<h1 style="margin:0 0 4px;font-size:20px;color:#0f172a">${t.title}: ${safeDog}</h1>
-<p style="margin:0 0 20px;font-size:13px;color:#6b7280">${t.sharedBy} ${safeOwner}</p>
+<h1 style="margin:0 0 4px;font-size:20px;color:#0f172a">${title}: ${safeDog}</h1>
+<p style="margin:0 0 20px;font-size:13px;color:#6b7280">${sharedBy} ${safeOwner}</p>
 ${messageBlock}
 <div style="font-size:14px;line-height:1.6;white-space:pre-wrap;color:#0f172a">${safeSummary}</div>
 </td></tr></table>
-<p style="margin:16px 0 0;font-size:11px;color:#9ca3af">${t.footer}</p>
+<p style="margin:16px 0 0;font-size:11px;color:#9ca3af">${footer}</p>
 </td></tr></table></body></html>`;
 
-  const textParts = [`${t.title}: ${args.dogName}`, `${t.sharedBy} ${args.ownerName}`, ""];
+  const textParts = [`${title}: ${args.dogName}`, `${sharedBy} ${args.ownerName}`, ""];
   if (args.message) {
     textParts.push(args.message, "", "---", "");
   }
-  textParts.push(args.summary, "", "--", t.footer);
+  textParts.push(args.summary, "", "--", footer);
 
   return {
-    subject: `${t.title}: ${args.dogName}`,
+    subject: `${title}: ${args.dogName}`,
     html,
     text: textParts.join("\n"),
   };

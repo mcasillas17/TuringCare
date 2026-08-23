@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useValidationMessage } from "@/i18n/validation";
 import { useCreateDog, useDog, useUpdateDog } from "@/lib/dogs";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type DogProfile, dogProfileSchema } from "@turingcare/shared";
@@ -12,6 +13,7 @@ const inputCls = "w-full rounded border border-silver bg-white px-3 py-2 text-sm
 
 export function DogForm({ mode }: { mode: "create" | "edit" }) {
   const { t } = useI18n();
+  const validationMessage = useValidationMessage();
   const navigate = useNavigate();
   const { id } = useParams();
   const create = useCreateDog();
@@ -70,7 +72,9 @@ export function DogForm({ mode }: { mode: "create" | "edit" }) {
         <label className="block">
           <span className="text-sm font-medium text-slate">{t("dogs.fieldName")}</span>
           <input className={inputCls} {...register("name")} />
-          {errors.name && <span className="text-xs text-red-600">{errors.name.message}</span>}
+          {errors.name && (
+            <span className="text-xs text-red-600">{validationMessage(errors.name.message)}</span>
+          )}
         </label>
         <label className="block">
           <span className="text-sm font-medium text-slate">{t("dogs.fieldBreed")}</span>

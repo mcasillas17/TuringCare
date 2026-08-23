@@ -1,11 +1,14 @@
 import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Profile } from "./profile";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  localStorage.clear();
+  vi.unstubAllGlobals();
+});
 
 function stubProfile(user: { id: string; name: string; email: string }) {
   vi.stubGlobal(
@@ -43,5 +46,18 @@ describe("Profile", () => {
     expect(email).toBeInTheDocument();
     expect(email.readOnly).toBe(true);
     expect(email.disabled).toBe(true);
+  });
+
+  it("uses a localized generic fallback for a non-allowlisted default Zod message", async () => {
+    localStorage.setItem("tc-locale", "es");
+    stubProfile({ id: "u1", name: "Miguel", email: "m@example.com" });
+    setup();
+    const name = await screen.findByDisplayValue("Miguel");
+
+    fireEvent.change(name, { target: { value: "x".repeat(101) } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByText("Revisa este campo.")).toBeInTheDocument();
+    expect(screen.queryByText(/String must contain/i)).not.toBeInTheDocument();
   });
 });
