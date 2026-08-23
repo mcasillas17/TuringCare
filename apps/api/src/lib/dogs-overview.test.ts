@@ -77,6 +77,7 @@ describe("loadDogsOverview", () => {
       avgLevel: null,
       briefStatus: null,
       briefVersion: null,
+      briefAmbiguous: false,
     });
   });
 

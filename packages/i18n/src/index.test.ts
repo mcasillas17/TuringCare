@@ -117,4 +117,25 @@ describe("@turingcare/i18n catalogs", () => {
       "Generado",
     ]);
   });
+
+  it("serves distinct English and Spanish messages for every stable Brief send conflict", () => {
+    const english = createI18n("en");
+    const spanish = createI18n("es");
+    const keys = [
+      "briefSend.versionConflict",
+      "briefSend.idempotencyConflict",
+      "briefSend.rateLimited",
+    ] as const;
+
+    expect(keys.map((key) => translate(english, key))).toEqual([
+      "There is more than one latest Brief version. Generate a new version.",
+      "This send attempt was already used with different details. Review it and try again.",
+      "You've reached the daily send limit. Try again later.",
+    ]);
+    expect(keys.map((key) => translate(spanish, key))).toEqual([
+      "Hay más de una versión reciente del resumen. Genera una nueva versión.",
+      "Este intento de envío ya se usó con otros datos. Revisa e inténtalo de nuevo.",
+      "Alcanzaste el límite diario de envíos. Inténtalo más tarde.",
+    ]);
+  });
 });

@@ -1,14 +1,21 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { db, pool } from "../db";
-import { briefSends, briefs, practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
+import {
+  events,
+  briefSends,
+  briefs,
+  practiceSessions,
+  trainingGoals,
+  trainingSkills,
+} from "../db/schema";
 import { createMonitoringErrorHandler } from "../monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "../monitoring/request-id";
 import { type TestUser, createTestUser } from "../test-helpers";
 import { waitForBlockingChain, waitForSessionBlocked } from "../test-pg-concurrency";
-import { sendFailedException } from "./dogs";
+import { resolveBriefSendReplay, sendFailedException } from "./dogs";
 
 // Wraps the real `sendEmail` so its normal (log-mode, no RESEND_API_KEY)
 // behavior is unchanged for every other test in this file; only the
@@ -29,6 +36,21 @@ const validDog = {
   vaccineStage: "in_progress",
   spayedNeutered: true,
 };
+
+describe("resolveBriefSendReplay", () => {
+  const existing = { id: "send-1", recipient: "trainer@example.com", message: null };
+
+  it("distinguishes a replay, a conflicting intent, and a missing recovery row", () => {
+    expect(resolveBriefSendReplay(existing, { recipient: "trainer@example.com" })).toEqual({
+      kind: "replayed",
+      send: existing,
+    });
+    expect(resolveBriefSendReplay(existing, { recipient: "other@example.com" })).toEqual({
+      kind: "idempotency_conflict",
+    });
+    expect(resolveBriefSendReplay(undefined, { recipient: "trainer@example.com" })).toBeNull();
+  });
+});
 
 function expectValidationIssue(body: unknown, path: string, message?: string) {
   const result = body as {
@@ -1061,7 +1083,7 @@ describe("dogs: brief", () => {
     );
   });
 
-  it("fails every latest-Brief read and side effect closed on a legacy duplicate maximum", async () => {
+  it("fails every latest-Brief consumer closed on a legacy duplicate maximum", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
@@ -1116,6 +1138,33 @@ describe("dogs: brief", () => {
         expect(await response.json()).toEqual({ error: "brief_version_conflict" });
       }
       expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+
+      const [accountOverview, dogsOverview] = await Promise.all([
+        app.request("/api/overview", { headers: u.authHeaders }),
+        app.request("/api/dogs/overview", { headers: u.authHeaders }),
+      ]);
+      expect(accountOverview.status).toBe(200);
+      expect(await accountOverview.json()).toMatchObject({
+        latestBrief: null,
+        latestBriefAmbiguous: true,
+      });
+      expect(dogsOverview.status).toBe(200);
+      const dogsOverviewBody = (await dogsOverview.json()) as {
+        dogs: Array<{
+          id: string;
+          summary: {
+            briefStatus: "draft" | "finalized" | null;
+            briefVersion: number | null;
+            briefAmbiguous: boolean;
+          };
+        }>;
+      };
+      expect(dogsOverviewBody.dogs.find(({ id }) => id === dog.id)?.summary).toMatchObject({
+        briefStatus: null,
+        briefVersion: null,
+        briefAmbiguous: true,
+      });
+
       const repaired = await app.request(`/api/dogs/${dog.id}/brief`, {
         method: "POST",
         headers: u.authHeaders,
@@ -1604,6 +1653,155 @@ describe("dogs: brief send", () => {
     expect(secondBody.send.id).toBe(firstBody.send.id);
     expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(sendEmail).mock.calls[0]?.[0].idempotencyKey).toBe(firstBody.send.id);
+    expect(
+      await db
+        .select({ id: briefSends.id })
+        .from(briefSends)
+        .where(eq(briefSends.id, firstBody.send.id)),
+    ).toHaveLength(1);
+    const emailedEvents = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.userId, u.userId), eq(events.name, "brief.emailed")));
+    expect(emailedEvents).toHaveLength(1);
+  });
+
+  it("POST send: concurrent replay records one provider delivery, audit, and emailed event", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    let releaseProvider: (() => void) | undefined;
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
+    const providerRelease = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    vi.mocked(sendEmail).mockClear();
+    vi.mocked(sendEmail).mockImplementationOnce(async () => {
+      markProviderStarted?.();
+      await providerRelease;
+    });
+    const body = JSON.stringify({
+      recipient: "concurrent-replay@example.com",
+      idempotencyKey: "0aacbb6a-9189-4614-9a6e-c732efcc5d1d",
+    });
+
+    const first = app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+    await providerStarted;
+    const second = app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+    releaseProvider?.();
+    const responses = await Promise.all([first, second]);
+
+    expect(responses.map(({ status }) => status)).toEqual([201, 201]);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+    expect(
+      await db
+        .select({ id: briefSends.id })
+        .from(briefSends)
+        .where(eq(briefSends.sentByUserId, u.userId)),
+    ).toHaveLength(1);
+    expect(
+      await db
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.userId, u.userId), eq(events.name, "brief.emailed"))),
+    ).toHaveLength(1);
+  });
+
+  it("POST send: conflicting replay preserves one provider delivery, audit, and emailed event", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const idempotencyKey = "1aacbb6a-9189-4614-9a6e-c732efcc5d1d";
+    const first = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "original@example.com", idempotencyKey }),
+    });
+    const conflict = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "different@example.com", idempotencyKey }),
+    });
+
+    expect(first.status).toBe(201);
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toEqual({ error: "idempotency_conflict" });
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+    expect(
+      await db
+        .select({ id: briefSends.id })
+        .from(briefSends)
+        .where(eq(briefSends.sentByUserId, u.userId)),
+    ).toHaveLength(1);
+    expect(
+      await db
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.userId, u.userId), eq(events.name, "brief.emailed"))),
+    ).toHaveLength(1);
+  });
+
+  it("POST send: concurrent global-key collision delivers, audits, and records exactly once", async () => {
+    const firstUser = await createTestUser();
+    const secondUser = await createTestUser();
+    users.push(firstUser, secondUser);
+    const firstDog = await makeDog(firstUser);
+    const secondDog = await makeDog(secondUser);
+    await makeFinalizedBrief(firstUser, firstDog.id);
+    await makeFinalizedBrief(secondUser, secondDog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const idempotencyKey = "2aacbb6a-9189-4614-9a6e-c732efcc5d1d";
+
+    const responses = await Promise.all([
+      app.request(`/api/dogs/${firstDog.id}/brief/send`, {
+        method: "POST",
+        headers: firstUser.authHeaders,
+        body: JSON.stringify({ recipient: "first-owner@example.com", idempotencyKey }),
+      }),
+      app.request(`/api/dogs/${secondDog.id}/brief/send`, {
+        method: "POST",
+        headers: secondUser.authHeaders,
+        body: JSON.stringify({ recipient: "second-owner@example.com", idempotencyKey }),
+      }),
+    ]);
+
+    expect(responses.map(({ status }) => status).sort()).toEqual([201, 409]);
+    const conflict = responses.find(({ status }) => status === 409);
+    expect(await conflict?.json()).toEqual({ error: "idempotency_conflict" });
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+    expect(
+      await db
+        .select({ id: briefSends.id })
+        .from(briefSends)
+        .where(eq(briefSends.id, idempotencyKey)),
+    ).toHaveLength(1);
+    const participatingEvents = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(
+        and(
+          eq(events.name, "brief.emailed"),
+          or(eq(events.userId, firstUser.userId), eq(events.userId, secondUser.userId)),
+        ),
+      );
+    expect(participatingEvents).toHaveLength(1);
   });
 
   it("POST send: serializes the daily quota across two dogs owned by one user", async () => {

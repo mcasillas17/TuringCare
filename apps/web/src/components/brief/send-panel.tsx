@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useValidationMessage } from "@/i18n/validation";
+import { BriefRequestError, briefSendErrorMessageKey } from "@/lib/brief-errors";
 import { createBriefSendIdempotencyKey } from "@/lib/brief-idempotency";
 import { useBriefSends, useSendBrief } from "@/lib/brief-send";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -54,8 +55,11 @@ export function SendPanel({
       submission.current = undefined;
       toast.success(t("briefSend.sent"));
       reset();
-    } catch {
-      toast.error(t("briefSend.sendFailed"));
+    } catch (error) {
+      if (error instanceof BriefRequestError && error.code === "idempotency_conflict") {
+        submission.current = undefined;
+      }
+      toast.error(t(briefSendErrorMessageKey(error)));
     }
   });
 

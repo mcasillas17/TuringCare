@@ -74,6 +74,16 @@ export function sendFailedException(c: Context, cause: unknown): HTTPException {
   return new HTTPException(502, { res: c.json({ error: "send_failed" } as const, 502), cause });
 }
 
+export function resolveBriefSendReplay<T extends { recipient: string; message: string | null }>(
+  existing: T | undefined,
+  intent: { recipient: string; message?: string | null },
+) {
+  if (!existing) return null;
+  return existing.recipient === intent.recipient && existing.message === (intent.message ?? null)
+    ? ({ kind: "replayed", send: existing } as const)
+    : ({ kind: "idempotency_conflict" } as const);
+}
+
 export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .use("*", requireUser)
   .get("/", async (c) => {
@@ -724,12 +734,8 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
           .limit(1);
         return existing;
       };
-      const existing = await loadExistingSend();
-      if (existing) {
-        return existing.recipient === body.recipient && existing.message === (body.message ?? null)
-          ? ({ kind: "sent", send: existing } as const)
-          : ({ kind: "idempotency_conflict" } as const);
-      }
+      const existingResult = resolveBriefSendReplay(await loadExistingSend(), body);
+      if (existingResult) return existingResult;
 
       const latest = resolveLatestBriefRows(
         await tx
@@ -774,14 +780,10 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         .onConflictDoNothing({ target: briefSends.id })
         .returning();
       if (!send) {
-        const concurrentlyCommitted = await loadExistingSend();
-        if (
-          concurrentlyCommitted?.recipient === body.recipient &&
-          concurrentlyCommitted.message === (body.message ?? null)
-        ) {
-          return { kind: "sent", send: concurrentlyCommitted } as const;
-        }
-        return { kind: "idempotency_conflict" } as const;
+        return (
+          resolveBriefSendReplay(await loadExistingSend(), body) ??
+          ({ kind: "idempotency_conflict" } as const)
+        );
       }
 
       try {
@@ -812,7 +814,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       return c.json({ error: "idempotency_conflict" } as const, 409);
     }
 
-    await recordEvent("brief.emailed", { userId });
+    if (result.kind === "sent") await recordEvent("brief.emailed", { userId });
     return c.json({ send: result.send }, 201);
   })
   .get("/:id/brief/sends", async (c) => {

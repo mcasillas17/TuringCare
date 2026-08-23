@@ -2,12 +2,14 @@ import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { BriefSendInput } from "@turingcare/shared";
+import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SendPanel } from "./send-panel";
 
 afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function setup(
@@ -73,6 +75,34 @@ describe("SendPanel", () => {
       expect(screen.getByText("Ingresa un correo electrónico válido")).toBeInTheDocument(),
     );
     expect(screen.queryByText("validation.emailInvalid")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      "brief_version_conflict",
+      "Hay más de una versión reciente del resumen. Genera una nueva versión.",
+    ],
+    [
+      "idempotency_conflict",
+      "Este intento de envío ya se usó con otros datos. Revisa e inténtalo de nuevo.",
+    ],
+    ["send_rate_limited", "Alcanzaste el límite diario de envíos. Inténtalo más tarde."],
+  ])("renders the Spanish message for stable send code %s", async (code, message) => {
+    const errorToast = vi.spyOn(toast, "error");
+    stubFetch(async (_url, init) =>
+      init?.method === "POST"
+        ? new Response(JSON.stringify({ error: code }), {
+            status: code === "send_rate_limited" ? 429 : 409,
+          })
+        : new Response(JSON.stringify({ sends: [] }), { status: 200 }),
+    );
+    setup("finalized", undefined, "es");
+    fireEvent.change(await screen.findByLabelText(/Email del destinatario/i), {
+      target: { value: "trainer@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Enviar$/i }));
+
+    await waitFor(() => expect(errorToast).toHaveBeenCalledWith(message));
   });
 
   it("submits a valid send and clears the form", async () => {
@@ -150,6 +180,29 @@ describe("SendPanel", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /^Send$/i })).toBeEnabled());
 
     fireEvent.change(recipient, { target: { value: "second@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await waitFor(() => expect(posted).toHaveLength(2));
+
+    expect(posted[1]?.idempotencyKey).not.toBe(posted[0]?.idempotencyKey);
+  });
+
+  it("creates a new idempotency key after a definitive idempotency conflict", async () => {
+    const posted: BriefSendInput[] = [];
+    stubFetch(async (_url, init) => {
+      if (init?.method === "POST") {
+        posted.push(JSON.parse(String(init.body)) as BriefSendInput);
+        return new Response(JSON.stringify({ error: "idempotency_conflict" }), { status: 409 });
+      }
+      return new Response(JSON.stringify({ sends: [] }), { status: 200 });
+    });
+    setup("finalized");
+    fireEvent.change(await screen.findByLabelText(/Recipient email/i), {
+      target: { value: "retry@example.com" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
+    await waitFor(() => expect(posted).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Send$/i })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: /^Send$/i }));
     await waitFor(() => expect(posted).toHaveLength(2));
 

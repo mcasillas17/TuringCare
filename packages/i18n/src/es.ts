@@ -893,6 +893,11 @@ export const es = {
     send: "Enviar",
     sending: "Enviando…",
     needsFinalized: "Marca el resumen como definitivo para enviarlo.",
+    notFound: "Este resumen ya no está disponible.",
+    versionConflict: "Hay más de una versión reciente del resumen. Genera una nueva versión.",
+    idempotencyConflict:
+      "Este intento de envío ya se usó con otros datos. Revisa e inténtalo de nuevo.",
+    rateLimited: "Alcanzaste el límite diario de envíos. Inténtalo más tarde.",
     sent: "Enviado",
     sendFailed: "No se pudo enviar. Inténtalo de nuevo.",
     historyTitle: "Enviados",

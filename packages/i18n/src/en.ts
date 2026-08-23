@@ -874,6 +874,11 @@ export const en = {
     send: "Send",
     sending: "Sending…",
     needsFinalized: "Mark the brief finalized to send it.",
+    notFound: "This Brief is no longer available.",
+    versionConflict: "There is more than one latest Brief version. Generate a new version.",
+    idempotencyConflict:
+      "This send attempt was already used with different details. Review it and try again.",
+    rateLimited: "You've reached the daily send limit. Try again later.",
     sent: "Sent",
     sendFailed: "Couldn't send. Try again.",
     historyTitle: "Sent",

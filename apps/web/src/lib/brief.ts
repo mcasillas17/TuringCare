@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useTuring } from "@/components/turing/turing-context";
 import { api } from "./api";
+import { readBriefRequestError } from "./brief-errors";
 
 const b = api.api.dogs[":id"].brief;
 
@@ -13,7 +14,7 @@ export function useBrief(dogId: string) {
     enabled: !!dogId,
     queryFn: async () => {
       const res = await b.$get({ param: { id: dogId } });
-      if (!res.ok) throw new Error("load_failed");
+      if (!res.ok) throw await readBriefRequestError(res, "load", "load_failed");
       return (await res.json()).brief;
     },
   });
@@ -23,7 +24,7 @@ export function useGenerateBrief(dogId: string) {
   return useMutation({
     mutationFn: async (window: BriefWindow) => {
       const res = await b.$post({ param: { id: dogId }, query: { window } });
-      if (!res.ok) throw new Error("gen_failed");
+      if (!res.ok) throw await readBriefRequestError(res, "generate", "gen_failed");
       return (await res.json()).brief;
     },
     onSuccess: () => {
@@ -38,7 +39,7 @@ export function useFinalizeBrief(dogId: string) {
   return useMutation({
     mutationFn: async () => {
       const res = await b.$put({ param: { id: dogId } });
-      if (!res.ok) throw new Error("save_failed");
+      if (!res.ok) throw await readBriefRequestError(res, "finalize", "save_failed");
       return (await res.json()).brief;
     },
     onSuccess: () => {
@@ -55,7 +56,7 @@ export function useShareBrief(dogId: string) {
   return useMutation({
     mutationFn: async () => {
       const res = await b.share.$post({ param: { id: dogId } });
-      if (!res.ok) throw new Error("share_failed");
+      if (!res.ok) throw await readBriefRequestError(res, "share", "share_failed");
       return (await res.json()) as { token: string; url: string };
     },
     onSuccess: () => {
@@ -69,7 +70,7 @@ export function useRevokeShare(dogId: string) {
   return useMutation({
     mutationFn: async () => {
       const res = await b.share.$delete({ param: { id: dogId } });
-      if (!res.ok) throw new Error("revoke_failed");
+      if (!res.ok) throw await readBriefRequestError(res, "revoke", "revoke_failed");
       return (await res.json()) as { ok: true };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["brief", dogId] }),

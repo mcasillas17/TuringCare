@@ -19,6 +19,7 @@ describe("overview", () => {
       dogCount: 0,
       journalEntryCount: 0,
       latestBrief: null,
+      latestBriefAmbiguous: false,
       recentActivity: [],
     });
     const dr = await app.request("/api/dogs", {
@@ -43,14 +44,30 @@ describe("overview", () => {
         intensity: 3,
       }),
     });
+    await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+    await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "PUT",
+      headers: u.authHeaders,
+    });
     const r = await app.request("/api/overview", { headers: u.authHeaders });
     const body = (await r.json()) as {
       dogCount: number;
       journalEntryCount: number;
+      latestBrief: { dogId: string; dogName: string; status: string } | null;
+      latestBriefAmbiguous: boolean;
       recentActivity: { dogName: string; behavior: string }[];
     };
     expect(body.dogCount).toBe(1);
     expect(body.journalEntryCount).toBe(1);
+    expect(body.latestBrief).toMatchObject({
+      dogId: dog.id,
+      dogName: "Biscuit",
+      status: "finalized",
+    });
+    expect(body.latestBriefAmbiguous).toBe(false);
     expect(body.recentActivity[0]).toMatchObject({ dogName: "Biscuit", behavior: "Barked" });
   });
 });
