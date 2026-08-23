@@ -44,7 +44,12 @@ function briefSendBody(input: Record<string, unknown>) {
 }
 
 describe("resolveBriefSendIntent", () => {
-  const existing = { id: "send-1", recipient: "trainer@example.com", message: null };
+  const existing = {
+    id: "send-1",
+    briefId: "brief-1",
+    recipient: "trainer@example.com",
+    message: null,
+  };
 
   it("distinguishes a replay, a conflicting intent, and a missing recovery row", () => {
     expect(resolveBriefSendIntent(existing, { recipient: "trainer@example.com" })).toEqual({
@@ -54,6 +59,12 @@ describe("resolveBriefSendIntent", () => {
     expect(resolveBriefSendIntent(existing, { recipient: "other@example.com" })).toEqual({
       kind: "idempotency_conflict",
     });
+    expect(
+      resolveBriefSendIntent(existing, {
+        briefId: "brief-2",
+        recipient: "trainer@example.com",
+      }),
+    ).toEqual({ kind: "idempotency_conflict" });
     expect(resolveBriefSendIntent(undefined, { recipient: "trainer@example.com" })).toBeNull();
   });
 });
@@ -1778,6 +1789,54 @@ describe("dogs: brief send", () => {
     ).toHaveLength(1);
   });
 
+  it("POST send: never recovers an old pending key for a newer Brief", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const firstBrief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    vi.mocked(sendEmail).mockRejectedValueOnce(new Error("provider unavailable"));
+    const oldKey = "86acbb6a-9189-4614-9a6e-c732efcc5d1d";
+
+    const failed = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        briefId: firstBrief.id,
+        recipient: "versioned@example.com",
+        idempotencyKey: oldKey,
+      }),
+    });
+    expect(failed.status).toBe(502);
+
+    const secondBrief = await makeFinalizedBrief(u, dog.id);
+    const staleRecovery = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        briefId: secondBrief.id,
+        recipient: "versioned@example.com",
+        idempotencyKey: oldKey,
+      }),
+    });
+
+    expect(staleRecovery.status).toBe(409);
+    expect(await staleRecovery.json()).toEqual({ error: "idempotency_conflict" });
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+
+    const freshSend = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: briefSendBody({
+        briefId: secondBrief.id,
+        recipient: "versioned@example.com",
+      }),
+    });
+    expect(freshSend.status).toBe(201);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(2);
+  });
+
   it("POST send: concurrent replay records one provider delivery, audit, and emailed event", async () => {
     const u = await createTestUser();
     users.push(u);
@@ -2051,7 +2110,7 @@ describe("dogs: brief send", () => {
     expect(await r.json()).toEqual({ error: "not_finalized" });
   });
 
-  it("POST send: commits delivery audit before a concurrent dog deletion can proceed", async () => {
+  it("POST send: holds no database transaction while provider delivery is pending", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
@@ -2070,8 +2129,6 @@ describe("dogs: brief send", () => {
       await providerRelease;
     });
     const deleter = await pool.connect();
-    let deleterOpen = false;
-
     try {
       const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
         method: "POST",
@@ -2081,33 +2138,24 @@ describe("dogs: brief send", () => {
       await providerStarted;
 
       await deleter.query("BEGIN");
-      deleterOpen = true;
-      const pidResult = await deleter.query<{ pid: number }>(
-        "SELECT pg_backend_pid()::integer AS pid",
-      );
-      const deleterPid = Number(pidResult.rows[0]?.pid);
-      const deletion = deleter.query(`DELETE FROM "dogs" WHERE "id" = $1`, [dog.id]);
-      await waitForSessionBlocked(pool, deleterPid);
+      await deleter.query(`DELETE FROM "dogs" WHERE "id" = $1`, [dog.id]);
+      await deleter.query("COMMIT");
       releaseProvider?.();
 
       const sendResponse = await send;
       expect(sendResponse.status).toBe(201);
-      await deletion;
       const audits = await db
         .select({ recipient: briefSends.recipient })
         .from(briefSends)
         .where(eq(briefSends.recipient, "race@example.com"));
-      expect(audits).toEqual([{ recipient: "race@example.com" }]);
-      await deleter.query("COMMIT");
-      deleterOpen = false;
+      expect(audits).toEqual([]);
     } finally {
       releaseProvider?.();
-      if (deleterOpen) await deleter.query("ROLLBACK");
       deleter.release();
     }
   });
 
-  it("POST send: preserves the durable intent and releases deletion when the provider fails", async () => {
+  it("POST send: lets owner deletion erase a pending intent during provider failure", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
@@ -2126,8 +2174,6 @@ describe("dogs: brief send", () => {
       await providerResult;
     });
     const deleter = await pool.connect();
-    let deleterOpen = false;
-
     try {
       const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
         method: "POST",
@@ -2136,35 +2182,19 @@ describe("dogs: brief send", () => {
       });
       await providerStarted;
       await deleter.query("BEGIN");
-      deleterOpen = true;
-      const pidResult = await deleter.query<{ pid: number }>(
-        "SELECT pg_backend_pid()::integer AS pid",
-      );
-      const deleterPid = Number(pidResult.rows[0]?.pid);
-      const deletion = deleter.query(`DELETE FROM "dogs" WHERE "id" = $1`, [dog.id]);
-      await waitForSessionBlocked(pool, deleterPid);
+      await deleter.query(`DELETE FROM "dogs" WHERE "id" = $1`, [dog.id]);
+      await deleter.query("COMMIT");
       rejectProvider?.(new Error("deferred-provider-failure"));
 
       const sendResponse = await send;
       expect(sendResponse.status).toBe(502);
-      await deletion;
       const audits = await db
         .select({ id: briefSends.id, deliveredAt: briefSends.deliveredAt })
         .from(briefSends)
         .where(eq(briefSends.recipient, "failed-race@example.com"));
-      expect(audits).toHaveLength(1);
-      expect(audits[0]?.deliveredAt).toBeNull();
-      await deleter.query("COMMIT");
-      deleterOpen = false;
-      expect(
-        await db
-          .select({ id: briefSends.id })
-          .from(briefSends)
-          .where(eq(briefSends.recipient, "failed-race@example.com")),
-      ).toEqual([]);
+      expect(audits).toEqual([]);
     } finally {
       rejectProvider?.(new Error("test cleanup"));
-      if (deleterOpen) await deleter.query("ROLLBACK");
       deleter.release();
     }
   });

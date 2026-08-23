@@ -235,12 +235,34 @@ export function sendFailedException(c: Context, cause: unknown): HTTPException {
   return new HTTPException(502, { res: c.json({ error: "send_failed" } as const, 502), cause });
 }
 
-export function resolveBriefSendIntent<T extends { recipient: string; message: string | null }>(
+const activeBriefDeliveries = new Map<string, Promise<void>>();
+
+/** Coalesces same-process retries; provider idempotency covers separate API machines. */
+async function deliverBriefSend(idempotencyKey: string, deliver: () => Promise<void>) {
+  const active = activeBriefDeliveries.get(idempotencyKey);
+  if (active) return active;
+
+  const attempt = deliver();
+  activeBriefDeliveries.set(idempotencyKey, attempt);
+  try {
+    await attempt;
+  } finally {
+    if (activeBriefDeliveries.get(idempotencyKey) === attempt) {
+      activeBriefDeliveries.delete(idempotencyKey);
+    }
+  }
+}
+
+export function resolveBriefSendIntent<
+  T extends { briefId: string; recipient: string; message: string | null },
+>(
   existing: T | undefined,
-  intent: { recipient: string; message?: string | null },
+  intent: { briefId?: string; recipient: string; message?: string | null },
 ) {
   if (!existing) return null;
-  return existing.recipient === intent.recipient && existing.message === (intent.message ?? null)
+  return (intent.briefId === undefined || existing.briefId === intent.briefId) &&
+    existing.recipient === intent.recipient &&
+    existing.message === (intent.message ?? null)
     ? ({ kind: "matched", send: existing } as const)
     : ({ kind: "idempotency_conflict" } as const);
 }
@@ -1485,6 +1507,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       if (latest.kind === "missing") return { kind: "not_found" } as const;
       if (latest.kind === "conflict") return latest;
       const brief = latest.brief;
+      if (body.briefId && body.briefId !== brief.id) return { kind: "conflict" } as const;
       if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
 
       const [sendCount] = await tx
@@ -1537,17 +1560,16 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     }
     if (prepared.kind === "replayed") return c.json({ send: prepared.send }, 201);
 
-    const delivery = await db.transaction(async (tx) => {
-      const [lockedSend] = await tx
-        .select()
-        .from(briefSends)
-        .where(and(eq(briefSends.id, prepared.send.id), eq(briefSends.sentByUserId, userId)))
-        .for("update")
-        .limit(1);
-      if (!lockedSend) return { kind: "not_found" } as const;
-      if (lockedSend.deliveredAt) return { kind: "replayed", send: lockedSend } as const;
+    const [currentSend] = await db
+      .select()
+      .from(briefSends)
+      .where(and(eq(briefSends.id, prepared.send.id), eq(briefSends.sentByUserId, userId)))
+      .limit(1);
+    if (!currentSend) return c.json({ error: "not_found" } as const, 404);
+    if (currentSend.deliveredAt) return c.json({ send: currentSend }, 201);
 
-      try {
+    try {
+      await deliverBriefSend(prepared.send.id, async () => {
         await sendEmail({
           to: prepared.send.recipient,
           replyTo: prepared.replyTo,
@@ -1556,21 +1578,40 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
           text: prepared.email.text,
           idempotencyKey: prepared.send.id,
         });
-      } catch (error) {
-        throw sendFailedException(c, error);
-      }
+      });
+    } catch (error) {
+      throw sendFailedException(c, error);
+    }
 
-      const [send] = await tx
-        .update(briefSends)
-        .set({ deliveredAt: new Date() })
-        .where(eq(briefSends.id, lockedSend.id))
-        .returning();
-      if (!send) throw new Error("failed to mark Brief send delivered");
-      return { kind: "sent", send } as const;
-    });
-    if (delivery.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
-    if (delivery.kind === "sent") await recordEvent("brief.emailed", { userId });
-    return c.json({ send: delivery.send }, 201);
+    const [send] = await db
+      .update(briefSends)
+      .set({ deliveredAt: new Date() })
+      .where(
+        and(
+          eq(briefSends.id, prepared.send.id),
+          eq(briefSends.sentByUserId, userId),
+          isNull(briefSends.deliveredAt),
+        ),
+      )
+      .returning();
+    if (send) {
+      await recordEvent("brief.emailed", { userId });
+      return c.json({ send }, 201);
+    }
+
+    const [replayed] = await db
+      .select()
+      .from(briefSends)
+      .where(and(eq(briefSends.id, prepared.send.id), eq(briefSends.sentByUserId, userId)))
+      .limit(1);
+    // A concurrent owner-authorized dog/account deletion can intentionally
+    // erase the audit after the provider accepted the email. Preserve the
+    // successful delivery response without recreating deleted private data.
+    if (!replayed) {
+      return c.json({ send: { ...prepared.send, deliveredAt: new Date() } }, 201);
+    }
+    if (!replayed.deliveredAt) throw new Error("failed to mark Brief send delivered");
+    return c.json({ send: replayed }, 201);
   })
   .get("/:id/brief/sends", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));

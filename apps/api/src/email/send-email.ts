@@ -43,7 +43,7 @@ export interface SendEmailDeps {
   client?: ResendLike;
   apiKey?: string;
   from?: string;
-  /** Hard network deadline; the default bounds transactions held across delivery. */
+  /** Hard network deadline; the default bounds request and provider resources. */
   timeoutMs?: number;
   /** Optional capture callback. When provided, the email is recorded here
    *  instead of being sent via Resend (useful for tests / E2E mode). */

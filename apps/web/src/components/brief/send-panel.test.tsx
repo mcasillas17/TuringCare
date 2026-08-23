@@ -23,7 +23,12 @@ function setup(
   return render(
     <QueryClientProvider client={qc}>
       <LocaleProvider>
-        <SendPanel dogId="d1" briefStatus={briefStatus} initialRecipient={initialRecipient} />
+        <SendPanel
+          dogId="d1"
+          briefId="brief-current"
+          briefStatus={briefStatus}
+          initialRecipient={initialRecipient}
+        />
       </LocaleProvider>
     </QueryClientProvider>,
   );
@@ -182,6 +187,7 @@ describe("SendPanel", () => {
     const posted: BriefSendInput[] = [];
     const pending = {
       id: "95acbb6a-9189-4614-9a6e-c732efcc5d1d",
+      briefId: "brief-current",
       recipient: "recover@example.com",
       message: "Please review",
       sentAt: "2026-05-20T10:00:00Z",
@@ -206,6 +212,7 @@ describe("SendPanel", () => {
     await waitFor(() => expect(posted).toHaveLength(1));
 
     expect(posted[0]).toEqual({
+      briefId: pending.briefId,
       recipient: pending.recipient,
       message: pending.message,
       idempotencyKey: pending.id,
@@ -217,6 +224,7 @@ describe("SendPanel", () => {
     const posted: BriefSendInput[] = [];
     const pending = {
       id: "85acbb6a-9189-4614-9a6e-c732efcc5d1d",
+      briefId: "brief-current",
       recipient: "recover@example.com",
       message: null,
       sentAt: "2026-05-20T10:00:00Z",
@@ -251,6 +259,7 @@ describe("SendPanel", () => {
     const posted: BriefSendInput[] = [];
     const pending = {
       id: "75acbb6a-9189-4614-9a6e-c732efcc5d1d",
+      briefId: "brief-current",
       recipient: "cached@example.com",
       message: null,
       sentAt: "2026-05-20T10:00:00Z",
@@ -278,6 +287,68 @@ describe("SendPanel", () => {
     fireEvent.click(sendButton);
     await waitFor(() => expect(posted).toHaveLength(1));
 
+    expect(posted[0]?.idempotencyKey).toBe(pending.id);
+  });
+
+  it("does not recover a pending key from an earlier Brief version", async () => {
+    const posted: BriefSendInput[] = [];
+    const oldPending = {
+      id: "65acbb6a-9189-4614-9a6e-c732efcc5d1d",
+      briefId: "brief-old",
+      recipient: "versioned@example.com",
+      message: null,
+      sentAt: "2026-05-20T10:00:00Z",
+      status: "pending",
+    };
+    stubFetch(async (_url, init) => {
+      if (init?.method === "POST") {
+        posted.push(JSON.parse(String(init.body)) as BriefSendInput);
+        return new Response(JSON.stringify({ send: { id: posted[0]?.idempotencyKey } }), {
+          status: 201,
+        });
+      }
+      return new Response(JSON.stringify({ sends: [oldPending] }), { status: 200 });
+    });
+    setup("finalized", oldPending.recipient);
+
+    await clickReadySend();
+    await waitFor(() => expect(posted).toHaveLength(1));
+
+    expect(posted[0]?.briefId).toBe("brief-current");
+    expect(posted[0]?.idempotencyKey).not.toBe(oldPending.id);
+  });
+
+  it("stays fail-closed after a history error and recovers the pending key on retry", async () => {
+    const posted: BriefSendInput[] = [];
+    const pending = {
+      id: "55acbb6a-9189-4614-9a6e-c732efcc5d1d",
+      briefId: "brief-current",
+      recipient: "history-error@example.com",
+      message: null,
+      sentAt: "2026-05-20T10:00:00Z",
+      status: "pending",
+    };
+    let historyReads = 0;
+    stubFetch(async (_url, init) => {
+      if (init?.method === "POST") {
+        posted.push(JSON.parse(String(init.body)) as BriefSendInput);
+        return new Response(JSON.stringify({ send: { ...pending, status: "delivered" } }), {
+          status: 201,
+        });
+      }
+      historyReads += 1;
+      return historyReads === 1
+        ? new Response(JSON.stringify({ error: "load_failed" }), { status: 500 })
+        : new Response(JSON.stringify({ sends: [pending] }), { status: 200 });
+    });
+    setup("finalized", pending.recipient);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Retry before sending/i);
+    expect(screen.getByRole("button", { name: /^Send$/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /^Retry$/i }));
+
+    await clickReadySend();
+    await waitFor(() => expect(posted).toHaveLength(1));
     expect(posted[0]?.idempotencyKey).toBe(pending.id);
   });
 

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 const BriefDownloadButton = lazy(() => import("@/components/brief-download-button"));
 
 type BriefLike = {
+  id: string;
   status: "draft" | "finalized";
   version: number;
   summary: string;
@@ -156,7 +157,12 @@ export function BriefShareSheet({
       )}
 
       {panel === "email" && (
-        <SendPanel dogId={dogId} briefStatus="finalized" initialRecipient={initialRecipient} />
+        <SendPanel
+          dogId={dogId}
+          briefId={brief.id}
+          briefStatus="finalized"
+          initialRecipient={initialRecipient}
+        />
       )}
 
       {panel === "link" && (

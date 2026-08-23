@@ -14,10 +14,12 @@ const inputCls = "w-full rounded border border-silver bg-white px-3 py-2 text-sm
 
 export function SendPanel({
   dogId,
+  briefId,
   briefStatus,
   initialRecipient,
 }: {
   dogId: string;
+  briefId: string;
   briefStatus: "draft" | "finalized" | null;
   initialRecipient?: string;
 }) {
@@ -57,19 +59,25 @@ export function SendPanel({
     // mint a replacement key until that recovery read has succeeded.
     if (!sendHistoryReady) return;
     try {
-      const intent = JSON.stringify([v.recipient, v.message ?? null]);
+      const intent = JSON.stringify([briefId, v.recipient, v.message ?? null]);
       if (submission.current?.intent !== intent) {
         const recoverable = sends?.find(
           (candidate) =>
             candidate.status === "pending" &&
-            JSON.stringify([candidate.recipient, candidate.message ?? null]) === intent,
+            candidate.briefId === briefId &&
+            JSON.stringify([candidate.briefId, candidate.recipient, candidate.message ?? null]) ===
+              intent,
         );
         submission.current = {
           intent,
           idempotencyKey: recoverable?.id ?? createBriefSendIdempotencyKey(),
         };
       }
-      await send.mutateAsync({ ...v, idempotencyKey: submission.current.idempotencyKey });
+      await send.mutateAsync({
+        ...v,
+        briefId,
+        idempotencyKey: submission.current.idempotencyKey,
+      });
       submission.current = undefined;
       toast.success(t("briefSend.sent"));
       reset();
@@ -84,6 +92,7 @@ export function SendPanel({
   const retryPendingSend = async (pending: NonNullable<typeof sends>[number]) => {
     try {
       await send.mutateAsync({
+        briefId: pending.briefId,
         recipient: pending.recipient,
         message: pending.message,
         idempotencyKey: pending.id,
