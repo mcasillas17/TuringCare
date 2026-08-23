@@ -32,8 +32,14 @@ type Capture = typeof captureApiError;
  * is never logged twice.
  */
 export function createMonitoringErrorHandler(
+  capture?: Capture,
+): ErrorHandler<ApiEnv>;
+export function createMonitoringErrorHandler<E extends ApiEnv>(
+  capture?: Capture,
+): ErrorHandler<E>;
+export function createMonitoringErrorHandler<E extends ApiEnv>(
   capture: Capture = captureApiError,
-): ErrorHandler<ApiEnv> {
+): ErrorHandler<E> {
   return (err, c) => {
     const route = routePath(c) || "unmatched";
     const method = c.req.method;

@@ -10,6 +10,7 @@ import { globalRateLimit } from "./middleware/rate-limit";
 import { createMonitoringAuthHandler } from "./monitoring/auth-handler";
 import { createMonitoringErrorHandler } from "./monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "./monitoring/request-id";
+import { type LocaleEnv, localeMiddleware } from "./middleware/locale";
 import { adminApp } from "./routes/admin";
 import { adminCoursesApp } from "./routes/admin-courses";
 import { adminTrainersApp } from "./routes/admin-trainers";
@@ -26,8 +27,9 @@ import { trainingApp } from "./routes/training";
 import { eventIngestSchema } from "./telemetry/events";
 import { recordEvent } from "./telemetry/record-event";
 
-const app = new Hono<ApiEnv>()
+const app = new Hono<ApiEnv & LocaleEnv>()
   .use("*", requestIdMiddleware)
+  .use("*", localeMiddleware)
   .use(
     "*",
     secureHeaders({
@@ -42,7 +44,7 @@ const app = new Hono<ApiEnv>()
     cors({
       origin: env.FRONTEND_URL,
       credentials: true,
-      allowHeaders: ["Content-Type"],
+      allowHeaders: ["Content-Type", "X-TuringCare-Locale"],
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       exposeHeaders: ["X-Request-ID"],
     }),
@@ -92,7 +94,7 @@ const app = new Hono<ApiEnv>()
     createMonitoringAuthHandler((req) => auth.handler(req)),
   );
 
-app.onError(createMonitoringErrorHandler());
+app.onError(createMonitoringErrorHandler<ApiEnv & LocaleEnv>());
 
 export { app };
 export type AppType = typeof app;
