@@ -61,6 +61,7 @@ const metrics: Metrics = {
     { step: "signup", users: 128 },
     { step: "first_dog", users: 64 },
     { step: "first_journal", users: 24 },
+    { step: "first_brief", users: 8 },
   ],
   topPages: [{ path: "/my", count: 90 }],
   eventsByDay: [{ day: "2026-05-01", name: "page.viewed", count: 90 }],
@@ -102,9 +103,11 @@ it("Funnel localizes known activation steps in Spanish without exposing raw step
   expect(screen.getByText("Registro")).toBeInTheDocument();
   expect(screen.getByText("Primer perro")).toBeInTheDocument();
   expect(screen.getByText("Primer diario")).toBeInTheDocument();
+  expect(screen.getByText("Primer resumen")).toBeInTheDocument();
   expect(screen.queryByText("signup")).not.toBeInTheDocument();
   expect(screen.queryByText("first_dog")).not.toBeInTheDocument();
   expect(screen.queryByText("first_journal")).not.toBeInTheDocument();
+  expect(screen.queryByText("first_brief")).not.toBeInTheDocument();
 });
 
 it("Growth gives the count series a localized Spanish chart name", () => {

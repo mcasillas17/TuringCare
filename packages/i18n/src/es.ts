@@ -486,6 +486,7 @@ export const es = {
     funnelSignup: "Registro",
     funnelFirstDog: "Primer perro",
     funnelFirstJournal: "Primer diario",
+    funnelFirstBrief: "Primer resumen",
     featureUsage: "Uso de funciones",
     noEventsInRange: "Sin eventos en el periodo.",
     topPages: "Páginas principales",

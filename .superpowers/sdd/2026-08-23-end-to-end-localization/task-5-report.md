@@ -273,3 +273,53 @@ No blocking concerns.
 
 - No blocking concerns for the fix-round changes.
 - Full repo lint is still red on unrelated existing files; this round left those untouched and verified the touched-file hygiene separately.
+
+## Fix round 2 — `first_brief` funnel step
+
+### Scope
+
+- Added the API-emitted `first_brief` activation step to the Spanish funnel render test.
+- Added `admin.funnelFirstBrief` to English and Spanish catalogs.
+- Mapped stable funnel step key `first_brief` to `admin.funnelFirstBrief` in `FUNNEL_STEP_LABEL_KEYS`.
+- Kept the API-emitted stable key unchanged.
+
+### RED
+
+- `NODE_OPTIONS='--no-experimental-webstorage' pnpm --filter @turingcare/web test -- src/routes/admin/panels/panels.test.tsx`
+  - exit 1.
+  - Expected failure:
+    - `❯ src/routes/admin/panels/panels.test.tsx (8 tests | 1 failed)`
+    - `× Funnel localizes known activation steps in Spanish without exposing raw step keys`
+    - `Unable to find an element with the text: Primer resumen`
+    - Rendered DOM showed raw `first_brief`.
+
+### GREEN / verification
+
+- `NODE_OPTIONS='--no-experimental-webstorage' pnpm --dir apps/web exec vitest run src/routes/admin/panels/panels.test.tsx`
+  - exit 0.
+  - `Test Files  1 passed (1)`
+  - `Tests  8 passed (8)`
+- `pnpm --filter @turingcare/i18n test`
+  - exit 0.
+  - `Test Files  1 passed (1)`
+  - `Tests  7 passed (7)`
+- `NODE_OPTIONS='--no-experimental-webstorage' pnpm --filter @turingcare/web typecheck`
+  - exit 0.
+  - `tsc --noEmit`
+- `pnpm --filter @turingcare/i18n typecheck`
+  - exit 0.
+  - `tsc --noEmit`
+- `pnpm exec biome check apps/web/src/routes/admin/panels/funnel.tsx apps/web/src/routes/admin/panels/panels.test.tsx packages/i18n/src/en.ts packages/i18n/src/es.ts`
+  - exit 0.
+  - `Checked 4 files in 18ms. No fixes applied.`
+
+### Files changed in fix round 2
+
+- `apps/web/src/routes/admin/panels/funnel.tsx`
+- `apps/web/src/routes/admin/panels/panels.test.tsx`
+- `packages/i18n/src/en.ts`
+- `packages/i18n/src/es.ts`
+
+### Concerns
+
+- No blocking concerns for fix round 2.

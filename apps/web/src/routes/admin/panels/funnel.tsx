@@ -6,6 +6,7 @@ const FUNNEL_STEP_LABEL_KEYS = {
   signup: "admin.funnelSignup",
   first_dog: "admin.funnelFirstDog",
   first_journal: "admin.funnelFirstJournal",
+  first_brief: "admin.funnelFirstBrief",
 } as const satisfies Record<string, MessageKey>;
 
 function getFunnelStepLabelKey(step: string): MessageKey | null {

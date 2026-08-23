@@ -469,6 +469,7 @@ export const en = {
     funnelSignup: "Sign-up",
     funnelFirstDog: "First dog",
     funnelFirstJournal: "First journal",
+    funnelFirstBrief: "First Brief",
     featureUsage: "Feature usage",
     noEventsInRange: "No events in range.",
     topPages: "Top pages",
