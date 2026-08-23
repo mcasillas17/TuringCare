@@ -5,6 +5,7 @@ import { es } from "./es";
 export { en, es };
 
 export const LOCALES = ["en", "es"] as const;
+const SUPPORTED_BROWSER_LANGUAGE_PATTERN = /^(en|es)(?:-[a-z0-9]{1,8})*$/i;
 
 export type Locale = (typeof LOCALES)[number];
 export type Messages<T = En> = {
@@ -39,10 +40,9 @@ export function resolveBrowserLocale(
     typeof languages === "string" ? [languages] : Array.isArray(languages) ? languages : [];
 
   for (const language of browserLanguages) {
-    const normalized = language.toLowerCase();
+    const primaryLanguage = SUPPORTED_BROWSER_LANGUAGE_PATTERN.exec(language)?.[1]?.toLowerCase();
 
-    if (normalized.startsWith("en")) return "en";
-    if (normalized.startsWith("es")) return "es";
+    if (isLocale(primaryLanguage)) return primaryLanguage;
   }
 
   return "en";

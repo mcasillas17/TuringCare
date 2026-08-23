@@ -1,6 +1,6 @@
-import { en, es } from "@turingcare/i18n";
 import { act, render, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { en, es } from "@turingcare/i18n";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider, detectInitialLocale, translate, useI18n } from "./index";
 

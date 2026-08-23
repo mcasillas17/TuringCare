@@ -1,12 +1,20 @@
 import {
+  type Locale,
+  type MessageKey,
   createI18n,
   isLocale,
   resolveBrowserLocale,
   translate as translateMessage,
-  type Locale,
-  type MessageKey,
 } from "@turingcare/i18n";
-import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 const STORAGE_KEY = "tc-locale";
 const INSTANCES = {

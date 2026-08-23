@@ -1,6 +1,6 @@
-import { en, es } from "@turingcare/i18n";
 import { LocaleProvider } from "@/i18n/index";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { en, es } from "@turingcare/i18n";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TuringCompanion } from "./turing-companion";

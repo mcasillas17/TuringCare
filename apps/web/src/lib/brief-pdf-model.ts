@@ -57,6 +57,7 @@ const pdfCatalog = {
   en: {
     title: "Behavior Brief",
     filenamePrefix: "behavior-brief",
+    unknownDogName: "Unknown",
     labels: {
       breed: "Breed",
       age: "Age",
@@ -73,6 +74,7 @@ const pdfCatalog = {
   es: {
     title: "Resumen de conducta",
     filenamePrefix: "resumen-conducta",
+    unknownDogName: "Desconocido",
     labels: {
       breed: "Raza",
       age: "Edad",
@@ -117,14 +119,13 @@ export function buildBriefPdfModel(input: {
   dog?: DogForPdf | null;
   /** Reference time for date formatting / age (injectable for tests). */
   now?: string | number | Date;
-  locale?: string;
 }): BriefPdfModel {
   const { brief, dog, now } = input;
   const locale = brief.locale ?? "en";
   const t = pdfCatalog[locale];
   const refNow = now ? new Date(now) : new Date();
 
-  const dogName = dog?.name?.trim() || "Unknown";
+  const dogName = dog?.name?.trim() || t.unknownDogName;
   const breed = dog?.breed?.trim() ? dog.breed.trim() : null;
 
   let ageYears: number | null = null;

@@ -10,7 +10,7 @@ function keyPaths(o: Record<string, unknown>, prefix = ""): string[] {
 }
 
 afterEach(() => {
-  delete (globalThis as Record<string, unknown>).__i18next_supportNoticeShown;
+  Reflect.deleteProperty(globalThis, "__i18next_supportNoticeShown");
   vi.restoreAllMocks();
 });
 
@@ -35,11 +35,15 @@ describe("@turingcare/i18n locale helpers", () => {
     expect(resolveBrowserLocale(["fr-FR", "pt-BR"])).toBe("en");
     expect(resolveBrowserLocale([])).toBe("en");
   });
+
+  it("does not treat an arbitrary language beginning with es as Spanish", () => {
+    expect(resolveBrowserLocale(["esoteric"])).toBe("en");
+  });
 });
 
 describe("@turingcare/i18n runtime", () => {
   it("initializes without emitting the i18next support banner", () => {
-    delete (globalThis as Record<string, unknown>).__i18next_supportNoticeShown;
+    Reflect.deleteProperty(globalThis, "__i18next_supportNoticeShown");
     const info = vi.spyOn(console, "info");
 
     createI18n("en");

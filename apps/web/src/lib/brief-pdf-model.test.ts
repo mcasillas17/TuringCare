@@ -11,6 +11,13 @@ const baseBrief = {
   locale: "en" as const,
 };
 
+const currentUiLocaleIsNotPdfModelInput = {
+  brief: baseBrief,
+  // @ts-expect-error PDF chrome is determined by the stored Brief locale, not the current UI.
+  locale: "es",
+} satisfies Parameters<typeof buildBriefPdfModel>[0];
+void currentUiLocaleIsNotPdfModelInput;
+
 const baseDog = {
   id: "d1",
   name: "Biscuit",
@@ -92,6 +99,16 @@ describe("buildBriefPdfModel", () => {
     expect(m.age).toBeNull();
   });
 
+  it("localizes the missing-dog fallback from the stored Spanish Brief locale", () => {
+    const m = buildBriefPdfModel({
+      brief: { ...baseBrief, locale: "es" },
+      dog: undefined,
+      now: "2026-05-19T12:00:00.000Z",
+    });
+
+    expect(m.dogName).toBe("Desconocido");
+  });
+
   it("produces a safe filename slug from the dog name", () => {
     const m = buildBriefPdfModel({
       brief: baseBrief,
@@ -124,15 +141,14 @@ describe("buildBriefPdfModel", () => {
     });
   });
 
-  it("prefers brief.locale over the current UI locale", () => {
+  it("defaults a legacy Brief without a stored locale to English", () => {
     const m = buildBriefPdfModel({
-      brief: { ...baseBrief, locale: "es" },
+      brief: { ...baseBrief, locale: undefined },
       dog: baseDog,
       now: "2026-05-19T12:00:00.000Z",
-      locale: "en",
     });
 
-    expect(m.title).toBe("Resumen de conducta");
-    expect(m.generatedAt).toBe("19 de mayo de 2026");
+    expect(m.title).toBe("Behavior Brief");
+    expect(m.generatedAt).toBe("May 19, 2026");
   });
 });

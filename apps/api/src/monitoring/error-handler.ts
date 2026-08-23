@@ -31,12 +31,8 @@ type Capture = typeof captureApiError;
  * sentry.ts). Each branch runs at most once per request, so a given failure
  * is never logged twice.
  */
-export function createMonitoringErrorHandler(
-  capture?: Capture,
-): ErrorHandler<ApiEnv>;
-export function createMonitoringErrorHandler<E extends ApiEnv>(
-  capture?: Capture,
-): ErrorHandler<E>;
+export function createMonitoringErrorHandler(capture?: Capture): ErrorHandler<ApiEnv>;
+export function createMonitoringErrorHandler<E extends ApiEnv>(capture?: Capture): ErrorHandler<E>;
 export function createMonitoringErrorHandler<E extends ApiEnv>(
   capture: Capture = captureApiError,
 ): ErrorHandler<E> {

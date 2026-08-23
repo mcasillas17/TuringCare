@@ -20,11 +20,10 @@ export function BriefDownloadButton({
   brief: Omit<BriefForPdf, "generatedAt"> & { generatedAt?: string };
   dog: DogForPdf | undefined;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const model = buildBriefPdfModel({
     brief: { ...brief, generatedAt: brief.generatedAt ?? "" },
     dog,
-    locale,
   });
   return (
     <PDFDownloadLink

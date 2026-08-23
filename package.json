@@ -23,6 +23,7 @@
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@playwright/test": "^1.62.1",
+    "@vitest/coverage-v8": "2.1.9",
     "concurrently": "^9.1.0",
     "typescript": "^5.7.0",
     "wrangler": "^4.92.0"

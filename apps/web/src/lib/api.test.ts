@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { authClient } from "./auth-client";
 import { api, localeFetch } from "./api";
+import { authClient } from "./auth-client";
 
 type FetchSpy = {
   mock: {
@@ -47,7 +47,9 @@ describe("localeFetch", () => {
     const storage = createStorage();
     storage.setItem("tc-locale", "es");
     vi.stubGlobal("localStorage", storage);
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
 
     await localeFetch("/health");
 
@@ -59,7 +61,9 @@ describe("localeFetch", () => {
     const storage = createStorage();
     storage.setItem("tc-locale", "es");
     vi.stubGlobal("localStorage", storage);
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
 
     await localeFetch("/health", {
       headers: {
@@ -77,7 +81,9 @@ describe("localeFetch", () => {
     const storage = createStorage();
     storage.setItem("tc-locale", "fr");
     vi.stubGlobal("localStorage", storage);
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
 
     await localeFetch("/health", {
       headers: { Accept: "application/json" },
@@ -92,7 +98,9 @@ describe("localized API clients", () => {
     const storage = createStorage();
     storage.setItem("tc-locale", "es");
     vi.stubGlobal("localStorage", storage);
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
 
     await api.health.$get();
 
