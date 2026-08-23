@@ -1127,3 +1127,20 @@ and pre-lock-clock plumbing.
   `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
 - Code commits: `59c26a2..6b9d1b2` on `feat/contextual-progress-insights`.
 - Pull request: [#68](https://github.com/mcasillas17/TuringCare/pull/68).
+
+## 2026-08-22 — Brief share privacy hardening
+Behavior Brief sharing now guarantees at most one active public link per dog
+via a PostgreSQL partial unique index over non-null share tokens, while
+preserving multi-version Brief history. Generating a new Brief version now
+atomically revokes any existing public link, so new versions are private by
+default and owners must explicitly re-share them; public reads remain limited
+to the strict whitelist only.
+
+The web separates time-window selection from version creation and warns that
+regenerating a Brief revokes any active public link. Coverage spans
+multi-version lifecycle rules, queued share/generate/revoke concurrency,
+QueryClient cache-authority after share-state mutations, localized English and
+Spanish UX copy, and public-route whitelist/privacy assertions.
+- Spec/plan: `docs/superpowers/specs/2026-08-22-brief-share-privacy-design.md`,
+  `docs/superpowers/plans/2026-08-22-brief-share-privacy.md`
+- Commits: this branch (see `git log`).

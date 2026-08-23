@@ -1,9 +1,17 @@
-import { eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
-import { db } from "../db";
-import { guidedSetups, practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
+import { db, pool } from "../db";
+import {
+  briefSends,
+  briefs,
+  guidedSetups,
+  practiceSessions,
+  trainingGoals,
+  trainingSkills,
+} from "../db/schema";
+import { lockBriefLifecycle, withBriefLifecycleLock } from "../lib/brief-lifecycle";
 import { createMonitoringErrorHandler } from "../monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "../monitoring/request-id";
 import { type TestUser, createTestUser } from "../test-helpers";
@@ -845,6 +853,39 @@ describe("dogs: brief", () => {
   afterEach(async () => {
     for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
   });
+
+  type Deferred<T> = {
+    promise: Promise<T>;
+    resolve: (value: T | PromiseLike<T>) => void;
+  };
+
+  function createDeferred<T>(): Deferred<T> {
+    let resolve!: Deferred<T>["resolve"];
+    const promise = new Promise<T>((innerResolve) => {
+      resolve = innerResolve;
+    });
+    return { promise, resolve };
+  }
+
+  async function waitForBriefLifecycleLockWaiters(dogId: string, expected: number) {
+    const lockKey = `brief-lifecycle:${dogId}`;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const result = await pool.query<{ waiters: string }>(
+        "select count(*)::text as waiters from pg_locks " +
+          "where not granted " +
+          "and locktype = 'advisory' " +
+          "and database = (select oid from pg_database where datname = current_database()) " +
+          "and classid = case when hashtext($1) < 0 then 4294967295 else 0 end " +
+          "and objid = (hashtext($1)::bigint & 4294967295) " +
+          "and objsubid = 1",
+        [lockKey],
+      );
+      if (Number(result.rows[0]?.waiters) >= expected) return;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    throw new Error(`expected ${expected} Brief lifecycle lock waiters for ${dogId}`);
+  }
+
   async function makeDog(u: TestUser) {
     const r = await app.request("/api/dogs", {
       method: "POST",
@@ -853,6 +894,31 @@ describe("dogs: brief", () => {
     });
     return ((await r.json()) as { dog: { id: string } }).dog;
   }
+
+  async function seedDuplicateVersionBriefs(dogId: string) {
+    const [older, newer] = await db
+      .insert(briefs)
+      .values([
+        {
+          dogId,
+          summary: "Older duplicate version Brief",
+          version: 7,
+          status: "draft",
+          generatedAt: new Date("2026-02-01T08:00:00.000Z"),
+        },
+        {
+          dogId,
+          summary: "Newer duplicate version Brief",
+          version: 7,
+          status: "draft",
+          generatedAt: new Date("2026-02-01T09:00:00.000Z"),
+        },
+      ])
+      .returning({ id: briefs.id, summary: briefs.summary });
+    if (!older || !newer) throw new Error("expected seeded duplicate Brief rows");
+    return { older, newer };
+  }
+
   it("generates, fetches, finalizes a brief", async () => {
     const u = await createTestUser();
     users.push(u);
@@ -910,6 +976,284 @@ describe("dogs: brief", () => {
     });
     expect(fin.status).toBe(200);
     expect(((await fin.json()) as { brief: { status: string } }).brief.status).toBe("finalized");
+  });
+
+  it("selects the newest generated Brief when duplicate versions exist", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const seeded = await seedDuplicateVersionBriefs(dog.id);
+
+    const fetchedResponse = await app.request(`/api/dogs/${dog.id}/brief`, {
+      headers: u.authHeaders,
+    });
+    expect(fetchedResponse.status).toBe(200);
+    expect(
+      (
+        (await fetchedResponse.json()) as {
+          brief: { id: string; summary: string; status: string };
+        }
+      ).brief,
+    ).toMatchObject({
+      id: seeded.newer.id,
+      summary: seeded.newer.summary,
+      status: "draft",
+    });
+
+    const finalizedResponse = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "PUT",
+      headers: u.authHeaders,
+    });
+    expect(finalizedResponse.status).toBe(200);
+    expect(
+      ((await finalizedResponse.json()) as { brief: { id: string; status: string } }).brief,
+    ).toMatchObject({
+      id: seeded.newer.id,
+      status: "finalized",
+    });
+
+    const rows = await db
+      .select({ id: briefs.id, status: briefs.status })
+      .from(briefs)
+      .where(eq(briefs.dogId, dog.id))
+      .orderBy(asc(briefs.generatedAt));
+    expect(rows).toEqual([
+      { id: seeded.older.id, status: "draft" },
+      { id: seeded.newer.id, status: "finalized" },
+    ]);
+  });
+
+  it("waits to finalize the Brief that committed while the lifecycle lock was held", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const seeded = await seedDuplicateVersionBriefs(dog.id);
+    const releaseHolder = createDeferred<void>();
+    const holderEntered = createDeferred<void>();
+
+    const holder = db.transaction(async (tx) => {
+      await lockBriefLifecycle(tx, dog.id);
+      holderEntered.resolve();
+      await releaseHolder.promise;
+    });
+
+    await holderEntered.promise;
+    const finalize = app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "PUT",
+      headers: u.authHeaders,
+    });
+
+    try {
+      await waitForBriefLifecycleLockWaiters(dog.id, 1);
+      const [newer] = await db
+        .insert(briefs)
+        .values({
+          dogId: dog.id,
+          summary: "Committed newest Brief while finalize waited",
+          version: 8,
+          status: "draft",
+          generatedAt: new Date("2026-02-01T10:00:00.000Z"),
+        })
+        .returning({ id: briefs.id, status: briefs.status, summary: briefs.summary });
+      if (!newer) throw new Error("expected committed newer Brief");
+
+      releaseHolder.resolve();
+      await holder;
+
+      const response = await finalize;
+      expect(response.status).toBe(200);
+      expect(
+        (
+          (await response.json()) as {
+            brief: { id: string; version: number; status: string; summary: string };
+          }
+        ).brief,
+      ).toMatchObject({
+        id: newer.id,
+        version: 8,
+        status: "finalized",
+        summary: newer.summary,
+      });
+
+      const rows = await db
+        .select({ id: briefs.id, version: briefs.version, status: briefs.status })
+        .from(briefs)
+        .where(eq(briefs.dogId, dog.id))
+        .orderBy(asc(briefs.generatedAt), asc(briefs.id));
+      expect(rows).toEqual([
+        { id: seeded.older.id, version: 7, status: "draft" },
+        { id: seeded.newer.id, version: 7, status: "draft" },
+        { id: newer.id, version: 8, status: "finalized" },
+      ]);
+    } finally {
+      releaseHolder.resolve();
+      await Promise.allSettled([holder, finalize]);
+    }
+  });
+
+  it("serializes simultaneous generation into sequential Brief versions", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+
+    const responses = await Promise.all([
+      app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: u.authHeaders }),
+      app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: u.authHeaders }),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([201, 201]);
+    const rows = await db
+      .select({ version: briefs.version })
+      .from(briefs)
+      .where(eq(briefs.dogId, dog.id))
+      .orderBy(asc(briefs.version));
+    expect(rows.map((row) => row.version)).toEqual([1, 2]);
+  });
+
+  it("waits to share the Brief that committed while the lifecycle lock was held", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const initial = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+    expect(initial.status).toBe(201);
+
+    const releaseHolder = createDeferred<void>();
+    const holderEntered = createDeferred<void>();
+    const holder = withBriefLifecycleLock(dog.id, async (tx) => {
+      await tx.insert(briefs).values({
+        dogId: dog.id,
+        summary: "Newer private Brief",
+        version: 2,
+        status: "draft",
+      });
+      holderEntered.resolve();
+      await releaseHolder.promise;
+    });
+
+    await holderEntered.promise;
+    const share = app.request(`/api/dogs/${dog.id}/brief/share`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+
+    try {
+      await waitForBriefLifecycleLockWaiters(dog.id, 1);
+      releaseHolder.resolve();
+      await holder;
+
+      const response = await share;
+      expect(response.status).toBe(200);
+      const { token } = (await response.json()) as { token: string };
+      const rows = await db
+        .select({ version: briefs.version, shareToken: briefs.shareToken })
+        .from(briefs)
+        .where(eq(briefs.dogId, dog.id))
+        .orderBy(asc(briefs.version));
+      expect(rows).toEqual([
+        { version: 1, shareToken: null },
+        { version: 2, shareToken: token },
+      ]);
+      const publicResponse = await app.request(`/api/share/brief/${token}`);
+      expect(publicResponse.status).toBe(200);
+      expect(((await publicResponse.json()) as { brief: { version: number } }).brief.version).toBe(
+        2,
+      );
+    } finally {
+      releaseHolder.resolve();
+      await Promise.allSettled([holder, share]);
+    }
+  });
+
+  it("commits a new private Brief after revoking an active share", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: u.authHeaders });
+    const shared = await app.request(`/api/dogs/${dog.id}/brief/share`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+    const { token } = (await shared.json()) as { token: string };
+
+    const releaseHolder = createDeferred<void>();
+    const holderEntered = createDeferred<void>();
+    const holder = withBriefLifecycleLock(dog.id, async () => {
+      holderEntered.resolve();
+      await releaseHolder.promise;
+    });
+    await holderEntered.promise;
+    const generate = app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+
+    try {
+      await waitForBriefLifecycleLockWaiters(dog.id, 1);
+      releaseHolder.resolve();
+      expect((await generate).status).toBe(201);
+
+      const rows = await db
+        .select({ version: briefs.version, shareToken: briefs.shareToken })
+        .from(briefs)
+        .where(eq(briefs.dogId, dog.id))
+        .orderBy(asc(briefs.version));
+      expect(rows).toEqual([
+        { version: 1, shareToken: null },
+        { version: 2, shareToken: null },
+      ]);
+      expect((await app.request(`/api/share/brief/${token}`)).status).toBe(404);
+    } finally {
+      releaseHolder.resolve();
+      await Promise.allSettled([holder, generate]);
+    }
+  });
+
+  it("commits queued share before revoke, leaving every Brief private", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: u.authHeaders });
+
+    const releaseHolder = createDeferred<void>();
+    const holderEntered = createDeferred<void>();
+    const holder = withBriefLifecycleLock(dog.id, async () => {
+      holderEntered.resolve();
+      await releaseHolder.promise;
+    });
+    await holderEntered.promise;
+    const share = app.request(`/api/dogs/${dog.id}/brief/share`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+    let revoke: ReturnType<typeof app.request> | undefined;
+
+    try {
+      await waitForBriefLifecycleLockWaiters(dog.id, 1);
+      const revokeRequest = app.request(`/api/dogs/${dog.id}/brief/share`, {
+        method: "DELETE",
+        headers: u.authHeaders,
+      });
+      revoke = revokeRequest;
+      await waitForBriefLifecycleLockWaiters(dog.id, 2);
+      releaseHolder.resolve();
+
+      const [shareResponse, revokeResponse] = await Promise.all([share, revokeRequest]);
+      expect(shareResponse.status).toBe(200);
+      expect(revokeResponse.status).toBe(200);
+      const { token } = (await shareResponse.json()) as { token: string };
+      const remainingTokens = await db
+        .select({ shareToken: briefs.shareToken })
+        .from(briefs)
+        .where(and(eq(briefs.dogId, dog.id), isNotNull(briefs.shareToken)));
+      expect(remainingTokens).toEqual([]);
+      expect((await app.request(`/api/share/brief/${token}`)).status).toBe(404);
+    } finally {
+      releaseHolder.resolve();
+      await Promise.allSettled([holder, share, ...(revoke ? [revoke] : [])]);
+    }
   });
 
   it("owner isolation: other user 404", async () => {
@@ -1276,6 +1620,45 @@ describe("dogs: brief send", () => {
     };
     expect(send.recipient).toBe("sarah@example.com");
     expect(send.message).toBe("Hi Sarah");
+  });
+
+  it("POST send: uses the newest generated finalized brief when duplicate versions exist", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const [, newer] = await db
+      .insert(briefs)
+      .values([
+        {
+          dogId: dog.id,
+          summary: "Older duplicate finalized Brief",
+          version: 7,
+          status: "finalized",
+          generatedAt: new Date("2026-03-01T08:00:00.000Z"),
+        },
+        {
+          dogId: dog.id,
+          summary: "Newer duplicate finalized Brief",
+          version: 7,
+          status: "finalized",
+          generatedAt: new Date("2026-03-01T09:00:00.000Z"),
+        },
+      ])
+      .returning({ id: briefs.id });
+    if (!newer) throw new Error("expected newer duplicate finalized Brief row");
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "sarah@example.com", message: "Hi Sarah" }),
+    });
+    expect(response.status).toBe(201);
+
+    const sends = await db
+      .select({ briefId: briefSends.briefId })
+      .from(briefSends)
+      .where(eq(briefSends.sentByUserId, u.userId));
+    expect(sends).toEqual([{ briefId: newer.id }]);
   });
 
   it("POST send: returns 409 when brief is draft", async () => {

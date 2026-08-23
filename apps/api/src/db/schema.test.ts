@@ -1,10 +1,11 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import {
   advancementProposals,
   advancementStatusEnum,
+  briefs,
   dogSafetySignals,
   dogs,
   guidedSetups,
@@ -99,6 +100,95 @@ describe("journal schema", () => {
       "occurred_at",
       "id",
     ]);
+  });
+});
+
+describe("briefs schema", () => {
+  it("declares one active share index per dog for non-private briefs", () => {
+    const index = getTableConfig(briefs).indexes.find(
+      ({ config }) => config.name === "briefs_one_active_share_per_dog_idx",
+    );
+
+    expect(index?.config.unique).toBe(true);
+    expect(index?.config.columns.map((column) => ("name" in column ? column.name : null))).toEqual([
+      "dog_id",
+    ]);
+    expect(summarizeSql(index?.config.where)).toEqual([
+      { kind: "string", value: "" },
+      { kind: "column", name: "share_token" },
+      { kind: "string", value: " IS NOT NULL" },
+    ]);
+  });
+
+  it("keeps the committed brief share privacy cleanup migration", () => {
+    const migrationSql = readFileSync(
+      new URL("../../drizzle/0020_brief_share_privacy.sql", import.meta.url),
+      "utf8",
+    );
+    const rowNumberIndex = migrationSql.indexOf("row_number() OVER");
+    const partitionByDogIndex = migrationSql.indexOf('PARTITION BY "dog_id"', rowNumberIndex);
+    const orderByRecencyIndex = migrationSql.indexOf(
+      'ORDER BY "version" DESC, "generated_at" DESC, "id" DESC',
+      partitionByDogIndex,
+    );
+    const updateBriefsIndex = migrationSql.indexOf('UPDATE "briefs"');
+    const setShareTokenNullIndex = migrationSql.indexOf(
+      'SET "share_token" = NULL',
+      updateBriefsIndex,
+    );
+    const briefRankGuardIndex = migrationSql.indexOf(
+      "AND ranked_briefs.brief_rank > 1",
+      setShareTokenNullIndex,
+    );
+    const nonNullShareTokenGuardIndex = migrationSql.indexOf(
+      'AND "briefs"."share_token" IS NOT NULL;',
+      briefRankGuardIndex,
+    );
+    const statementBreakpointIndex = migrationSql.indexOf(
+      "--> statement-breakpoint",
+      nonNullShareTokenGuardIndex,
+    );
+    const createUniqueIndex = migrationSql.indexOf(
+      'CREATE UNIQUE INDEX "briefs_one_active_share_per_dog_idx"',
+      statementBreakpointIndex,
+    );
+    const partialUniqueIndexPredicateIndex = migrationSql.indexOf(
+      'WHERE "briefs"."share_token" IS NOT NULL;',
+      createUniqueIndex,
+    );
+
+    expect(rowNumberIndex).toBeGreaterThanOrEqual(0);
+    expect(partitionByDogIndex).toBeGreaterThan(rowNumberIndex);
+    expect(orderByRecencyIndex).toBeGreaterThan(partitionByDogIndex);
+    expect(updateBriefsIndex).toBeGreaterThanOrEqual(0);
+    expect(setShareTokenNullIndex).toBeGreaterThan(updateBriefsIndex);
+    expect(briefRankGuardIndex).toBeGreaterThan(setShareTokenNullIndex);
+    expect(nonNullShareTokenGuardIndex).toBeGreaterThan(briefRankGuardIndex);
+    expect(statementBreakpointIndex).toBeGreaterThan(nonNullShareTokenGuardIndex);
+    expect(createUniqueIndex).toBeGreaterThan(statementBreakpointIndex);
+    expect(partialUniqueIndexPredicateIndex).toBeGreaterThan(createUniqueIndex);
+  });
+});
+
+describe("telemetry schema", () => {
+  it("keeps the committed Brief share telemetry privacy cleanup migration", () => {
+    const migrationPath = new URL(
+      "../../drizzle/0021_brief_share_telemetry_privacy.sql",
+      import.meta.url,
+    );
+
+    expect(existsSync(migrationPath)).toBe(true);
+    if (!existsSync(migrationPath)) return;
+
+    const migrationSql = readFileSync(migrationPath, "utf8");
+
+    expect(migrationSql).toMatch(/UPDATE "events"/);
+    expect(migrationSql).toMatch(/"name" = 'page\.viewed'/);
+    expect(migrationSql).toMatch(/jsonb_typeof\("props"->'path'\) = 'string'/);
+    expect(migrationSql).toMatch(/"props"->>'path' ~\* '\^\/b\/\[\^\/\]\+\/\*\$'/);
+    expect(migrationSql).toMatch(
+      /jsonb_set\("props", '\{path\}', to_jsonb\('\/b\/:token'::text\), false\)/,
+    );
   });
 });
 

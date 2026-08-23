@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { PageViewTracker } from "./track";
+import { PageViewTracker, pageViewPath } from "./track";
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
@@ -28,6 +28,76 @@ it("posts a page.viewed event for the current path", async () => {
   const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
   const body = JSON.parse(firstCall[1].body as string);
   expect(body).toEqual({ name: "page.viewed", props: { path: "/my" } });
+});
+
+it("redacts a public Brief token from page-view telemetry", () => {
+  render(
+    <MemoryRouter initialEntries={["/b/super-secret-token"]}>
+      <PageViewTracker />
+      <Routes>
+        <Route path="/b/:token" element={<div>shared Brief</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+  const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
+  const serializedBody = firstCall[1].body as string;
+
+  expect(JSON.parse(serializedBody)).toEqual({
+    name: "page.viewed",
+    props: { path: "/b/:token" },
+  });
+  expect(serializedBody).not.toContain("super-secret-token");
+});
+
+it("redacts a case-variant public Brief token from page-view telemetry", () => {
+  render(
+    <MemoryRouter initialEntries={["/B/super-secret-token"]}>
+      <PageViewTracker />
+      <Routes>
+        <Route path="/b/:token" element={<div>shared Brief</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+  const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
+  const serializedBody = firstCall[1].body as string;
+
+  expect(JSON.parse(serializedBody)).toEqual({
+    name: "page.viewed",
+    props: { path: "/b/:token" },
+  });
+  expect(serializedBody).not.toContain("super-secret-token");
+});
+
+it.each(["/b/repeated-secret//", "/B/repeated-secret///"])(
+  "redacts a public Brief token with repeated trailing slashes from page-view telemetry for %s",
+  (pathname) => {
+    render(
+      <MemoryRouter initialEntries={[pathname]}>
+        <PageViewTracker />
+        <Routes>
+          <Route path="/b/:token" element={<div>shared Brief</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+    const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
+    const serializedBody = firstCall[1].body as string;
+
+    expect(JSON.parse(serializedBody)).toEqual({
+      name: "page.viewed",
+      props: { path: "/b/:token" },
+    });
+    expect(serializedBody).not.toContain("repeated-secret");
+  },
+);
+
+it.each(["/b", "/b//x", "/b/x/y", "/billing"])("does not redact non-Brief path %s", (pathname) => {
+  expect(pageViewPath(pathname)).toBe(pathname);
 });
 
 it("fires a new page.viewed on route change", async () => {

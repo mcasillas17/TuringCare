@@ -550,17 +550,25 @@ export const journalEntries = pgTable(
   ],
 );
 
-export const briefs = pgTable("briefs", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  dogId: uuid("dog_id")
-    .notNull()
-    .references(() => dogs.id, { onDelete: "cascade" }),
-  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
-  status: briefStatusEnum("status").notNull().default("draft"),
-  summary: text("summary").notNull(),
-  version: integer("version").notNull().default(1),
-  shareToken: text("share_token").unique(),
-});
+export const briefs = pgTable(
+  "briefs",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    dogId: uuid("dog_id")
+      .notNull()
+      .references(() => dogs.id, { onDelete: "cascade" }),
+    generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+    status: briefStatusEnum("status").notNull().default("draft"),
+    summary: text("summary").notNull(),
+    version: integer("version").notNull().default(1),
+    shareToken: text("share_token").unique(),
+  },
+  (t) => [
+    uniqueIndex("briefs_one_active_share_per_dog_idx")
+      .on(t.dogId)
+      .where(sql`${t.shareToken} IS NOT NULL`),
+  ],
+);
 
 export const briefSends = pgTable("brief_sends", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
