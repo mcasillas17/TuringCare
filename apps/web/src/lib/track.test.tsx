@@ -51,6 +51,27 @@ it("redacts a public Brief token from page-view telemetry", () => {
   expect(serializedBody).not.toContain("super-secret-token");
 });
 
+it("redacts a case-variant public Brief token from page-view telemetry", () => {
+  render(
+    <MemoryRouter initialEntries={["/B/super-secret-token"]}>
+      <PageViewTracker />
+      <Routes>
+        <Route path="/b/:token" element={<div>shared Brief</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+  const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
+  const serializedBody = firstCall[1].body as string;
+
+  expect(JSON.parse(serializedBody)).toEqual({
+    name: "page.viewed",
+    props: { path: "/b/:token" },
+  });
+  expect(serializedBody).not.toContain("super-secret-token");
+});
+
 it("fires a new page.viewed on route change", async () => {
   render(
     <MemoryRouter initialEntries={["/my"]}>

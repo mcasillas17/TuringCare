@@ -41,6 +41,27 @@ describe("telemetry events allowlist", () => {
     });
   });
 
+  it("redacts case-variant public Brief paths while preserving other props", () => {
+    expect(
+      eventIngestSchema.parse({
+        name: "page.viewed",
+        props: { path: "/B/super-secret", other: "kept" },
+      }),
+    ).toEqual({
+      name: "page.viewed",
+      props: { path: "/b/:token", other: "kept" },
+    });
+    expect(
+      eventIngestSchema.parse({
+        name: "page.viewed",
+        props: { path: "/B/super-secret/", other: "kept" },
+      }),
+    ).toEqual({
+      name: "page.viewed",
+      props: { path: "/b/:token", other: "kept" },
+    });
+  });
+
   it("preserves ordinary page-view paths", () => {
     expect(
       eventIngestSchema.parse({
