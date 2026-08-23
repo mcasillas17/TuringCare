@@ -8,6 +8,7 @@ const baseBrief = {
   status: "draft" as const,
   summary: "Behavior Brief — Biscuit\nConcerns: separation anxiety.",
   version: 2,
+  locale: "en" as const,
 };
 
 const baseDog = {
@@ -98,5 +99,40 @@ describe("buildBriefPdfModel", () => {
       now: "2026-05-19T12:00:00.000Z",
     });
     expect(m.fileName).toBe("behavior-brief-mr-waffles-good-boy.pdf");
+  });
+
+  it("uses the stored Spanish brief locale for labels, filename, date, and enum values", () => {
+    const m = buildBriefPdfModel({
+      brief: { ...baseBrief, locale: "es", status: "finalized" },
+      dog: baseDog,
+      now: "2026-05-19T12:00:00.000Z",
+    });
+
+    expect(m.title).toBe("Resumen de conducta");
+    expect(m.fileName).toBe("resumen-conducta-biscuit.pdf");
+    expect(m.generatedAt).toBe("19 de mayo de 2026");
+    expect(m.statusLabel).toBe("Definitivo");
+    expect(m.age).toBe("4 años");
+    expect(m.size).toBe("Mediano");
+    expect(m.sex).toBe("Hembra");
+    expect(m.labels).toEqual({
+      breed: "Raza",
+      age: "Edad",
+      size: "Tamaño",
+      sex: "Sexo",
+      generated: "Generado",
+    });
+  });
+
+  it("prefers brief.locale over the current UI locale", () => {
+    const m = buildBriefPdfModel({
+      brief: { ...baseBrief, locale: "es" },
+      dog: baseDog,
+      now: "2026-05-19T12:00:00.000Z",
+      locale: "en",
+    });
+
+    expect(m.title).toBe("Resumen de conducta");
+    expect(m.generatedAt).toBe("19 de mayo de 2026");
   });
 });

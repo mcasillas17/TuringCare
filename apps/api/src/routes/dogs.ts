@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
+import type { Locale } from "@turingcare/i18n";
 import {
   behaviorConcernSchema,
   briefGenerateSchema,
@@ -71,7 +72,7 @@ export function sendFailedException(c: Context, cause: unknown): HTTPException {
   return new HTTPException(502, { res: c.json({ error: "send_failed" } as const, 502), cause });
 }
 
-export const dogsApp = new Hono<{ Variables: Vars }>()
+export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .use("*", requireUser)
   .get("/", async (c) => {
     const rows = await db
@@ -524,26 +525,36 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         .orderBy(desc(briefs.version))
         .limit(1),
     ]);
-    const summary = composeBrief({
-      dog: { name: dog.name, breed: dog.breed, size: dog.size, sex: dog.sex },
-      concerns: concerns.map((x) => ({ concern: x.concern, severity: x.severity })),
-      goals: goals.map((x) => ({ goal: x.goal })),
-      entries: entries.map((e) => ({
-        note: e.note,
-        kind: e.kind,
-        trend: e.trend,
-        behavior: e.behavior,
-        antecedent: e.antecedent,
-        consequence: e.consequence,
-        intensity: e.intensity,
-        occurredAt: e.occurredAt.toISOString(),
-      })),
-      windowDays,
-      progress: progress.goals,
-    });
+    const locale = c.get("locale");
+    const summary = composeBrief(
+      {
+        dog: { name: dog.name, breed: dog.breed, size: dog.size, sex: dog.sex },
+        concerns: concerns.map((x) => ({ concern: x.concern, severity: x.severity })),
+        goals: goals.map((x) => ({ goal: x.goal })),
+        entries: entries.map((e) => ({
+          note: e.note,
+          kind: e.kind,
+          trend: e.trend,
+          behavior: e.behavior,
+          antecedent: e.antecedent,
+          consequence: e.consequence,
+          intensity: e.intensity,
+          occurredAt: e.occurredAt.toISOString(),
+        })),
+        windowDays,
+        progress: progress.goals,
+      },
+      locale,
+    );
     const [brief] = await db
       .insert(briefs)
-      .values({ dogId: dog.id, summary, version: (last?.version ?? 0) + 1, status: "draft" })
+      .values({
+        dogId: dog.id,
+        locale,
+        summary,
+        version: (last?.version ?? 0) + 1,
+        status: "draft",
+      })
       .returning();
     await recordEvent("brief.generated", { userId: c.get("userId"), props: { window } });
     return c.json({ brief }, 201);
@@ -601,12 +612,15 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!owner) return c.json({ error: "not_found" } as const, 404);
 
     const body = c.req.valid("json");
-    const email = renderBriefEmail({
-      dogName: dog.name,
-      ownerName: owner.name ?? owner.email,
-      message: body.message ?? null,
-      summary: brief.summary,
-    });
+    const email = renderBriefEmail(
+      {
+        dogName: dog.name,
+        ownerName: owner.name ?? owner.email,
+        message: body.message ?? null,
+        summary: brief.summary,
+      },
+      brief.locale,
+    );
 
     try {
       await sendEmail({

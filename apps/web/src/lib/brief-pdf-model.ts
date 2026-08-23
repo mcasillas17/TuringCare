@@ -6,11 +6,14 @@
  * @react-pdf imports so it is trivially unit-testable.
  */
 
+import type { Locale } from "@turingcare/i18n";
+
 export type BriefForPdf = {
   generatedAt: string;
   status: string;
   summary: string;
   version: number;
+  locale?: Locale;
 };
 
 export type DogForPdf = {
@@ -34,13 +37,56 @@ export type BriefPdfModel = {
   size: string | null;
   sex: string | null;
   status: string;
+  statusLabel: string;
   version: number;
   /** Localized/readable generated date string. */
   generatedAt: string;
   summary: string;
   /** Safe download filename, e.g. "behavior-brief-biscuit.pdf". */
   fileName: string;
+  labels: {
+    breed: string;
+    age: string;
+    size: string;
+    sex: string;
+    generated: string;
+  };
 };
+
+const pdfCatalog = {
+  en: {
+    title: "Behavior Brief",
+    filenamePrefix: "behavior-brief",
+    labels: {
+      breed: "Breed",
+      age: "Age",
+      size: "Size",
+      sex: "Sex",
+      generated: "Generated",
+    },
+    status: { draft: "draft", finalized: "finalized" },
+    size: { small: "Small", medium: "Medium", large: "Large", giant: "Giant" },
+    sex: { male: "Male", female: "Female" },
+    years: (value: number) => `${value} yr`,
+    months: (value: number) => `${value} mo`,
+  },
+  es: {
+    title: "Resumen de conducta",
+    filenamePrefix: "resumen-conducta",
+    labels: {
+      breed: "Raza",
+      age: "Edad",
+      size: "Tamaño",
+      sex: "Sexo",
+      generated: "Generado",
+    },
+    status: { draft: "Borrador", finalized: "Definitivo" },
+    size: { small: "Pequeño", medium: "Mediano", large: "Grande", giant: "Gigante" },
+    sex: { male: "Macho", female: "Hembra" },
+    years: (value: number) => `${value} ${value === 1 ? "año" : "años"}`,
+    months: (value: number) => `${value} ${value === 1 ? "mes" : "meses"}`,
+  },
+} as const;
 
 function monthsBetween(from: Date, to: Date): number {
   let months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
@@ -48,10 +94,11 @@ function monthsBetween(from: Date, to: Date): number {
   return Math.max(0, months);
 }
 
-function ageLabel(dob: Date, now: Date): { years: number; label: string } {
+function ageLabel(dob: Date, now: Date, locale: Locale): { years: number; label: string } {
   const months = monthsBetween(dob, now);
   const years = Math.floor(months / 12);
-  return years >= 1 ? { years, label: `${years} yr` } : { years: 0, label: `${months} mo` };
+  const t = pdfCatalog[locale];
+  return years >= 1 ? { years, label: t.years(years) } : { years: 0, label: t.months(months) };
 }
 
 function slug(name: string): string {
@@ -72,7 +119,9 @@ export function buildBriefPdfModel(input: {
   now?: string | number | Date;
   locale?: string;
 }): BriefPdfModel {
-  const { brief, dog, now, locale = "en" } = input;
+  const { brief, dog, now } = input;
+  const locale = brief.locale ?? "en";
+  const t = pdfCatalog[locale];
   const refNow = now ? new Date(now) : new Date();
 
   const dogName = dog?.name?.trim() || "Unknown";
@@ -83,7 +132,7 @@ export function buildBriefPdfModel(input: {
   if (dog?.dateOfBirth) {
     const dob = new Date(dog.dateOfBirth);
     if (!Number.isNaN(dob.getTime())) {
-      const a = ageLabel(dob, refNow);
+      const a = ageLabel(dob, refNow, locale);
       ageYears = a.years;
       age = a.label;
     }
@@ -105,17 +154,21 @@ export function buildBriefPdfModel(input: {
 
   return {
     brandName: "TuringCare",
-    title: "Behavior Brief",
+    title: t.title,
     dogName,
     breed,
     ageYears,
     age,
-    size: dog?.size?.trim() ? dog.size.trim() : null,
-    sex: dog?.sex?.trim() ? dog.sex.trim() : null,
+    size: dog?.size?.trim()
+      ? (t.size[dog.size.trim() as keyof typeof t.size] ?? dog.size.trim())
+      : null,
+    sex: dog?.sex?.trim() ? (t.sex[dog.sex.trim() as keyof typeof t.sex] ?? dog.sex.trim()) : null,
     status: brief.status,
+    statusLabel: t.status[brief.status as keyof typeof t.status] ?? brief.status,
     version: brief.version,
     generatedAt,
     summary: brief.summary,
-    fileName: `behavior-brief-${slug(dogName)}.pdf`,
+    fileName: `${t.filenamePrefix}-${slug(dogName)}.pdf`,
+    labels: t.labels,
   };
 }

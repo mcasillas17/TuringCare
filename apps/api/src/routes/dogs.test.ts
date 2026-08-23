@@ -889,6 +889,44 @@ describe("dogs: brief", () => {
     expect(brief.summary).not.toContain("ancient incident");
     expect(brief.summary).toContain("Check-ins: 1 better, 0 same, 0 harder.");
   });
+
+  it("stores the validated request locale when generating a Spanish brief", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+
+    const res = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "POST",
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "es" },
+    });
+
+    expect(res.status).toBe(201);
+    const { brief } = (await res.json()) as {
+      brief: { locale: string; summary: string };
+    };
+    expect(brief.locale).toBe("es");
+    expect(brief.summary).toContain("Preocupaciones:");
+    expect(brief.summary).toContain("Diario: 0 entradas en los últimos 30 días");
+  });
+
+  it("keeps the English default for briefs generated without a locale header", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+
+    const res = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+
+    expect(res.status).toBe(201);
+    const { brief } = (await res.json()) as {
+      brief: { locale: string; summary: string };
+    };
+    expect(brief.locale).toBe("en");
+    expect(brief.summary).toContain("Concerns:");
+    expect(brief.summary).toContain("Journal: 0 entries in the last 30 days");
+  });
 });
 
 describe("dogs: journal PUT", () => {
@@ -1184,6 +1222,22 @@ describe("dogs: brief send", () => {
     return ((await fin.json()) as { brief: { id: string; status: string } }).brief;
   }
 
+  async function makeFinalizedBriefWithHeaders(
+    u: TestUser,
+    dogId: string,
+    headers: Record<string, string>,
+  ) {
+    await app.request(`/api/dogs/${dogId}/brief`, {
+      method: "POST",
+      headers: { ...u.authHeaders, ...headers },
+    });
+    const fin = await app.request(`/api/dogs/${dogId}/brief`, {
+      method: "PUT",
+      headers: u.authHeaders,
+    });
+    return ((await fin.json()) as { brief: { id: string; status: string } }).brief;
+  }
+
   it("POST send: happy path on a finalized brief", async () => {
     const u = await createTestUser();
     users.push(u);
@@ -1200,6 +1254,32 @@ describe("dogs: brief send", () => {
     };
     expect(send.recipient).toBe("sarah@example.com");
     expect(send.message).toBe("Hi Sarah");
+  });
+
+  it("POST send: uses the stored brief locale instead of the current request locale", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBriefWithHeaders(u, dog.id, { "X-TuringCare-Locale": "es" });
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "en" },
+      body: JSON.stringify({ recipient: "sarah@example.com", message: "Hola Sarah" }),
+    });
+
+    expect(r.status).toBe(201);
+    const sent = vi.mocked(sendEmail).mock.calls[0]?.[0] as {
+      subject: string;
+      html: string;
+      text: string;
+    };
+    expect(sent.subject).toBe("Resumen de conducta: Biscuit");
+    expect(sent.html).toContain("Compartido por");
+    expect(sent.text).toContain("Resumen de conducta: Biscuit");
+    expect(sent.text).toContain("Preocupaciones:");
   });
 
   it("POST send: returns 409 when brief is draft", async () => {

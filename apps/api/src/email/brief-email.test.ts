@@ -39,4 +39,46 @@ describe("renderBriefEmail", () => {
     expect(html).not.toContain("<img src=x>");
     expect(html).toContain("&lt;script&gt;");
   });
+
+  it("renders Spanish subject, HTML chrome, and text fallback", () => {
+    const out = renderBriefEmail(
+      {
+        ...base,
+        message: "Hola Sarah",
+        summary: "Preocupaciones:\n- Reactividad con correa",
+      },
+      "es",
+    );
+
+    expect(out.subject).toBe("Resumen de conducta: Biscuit");
+    expect(out.html).toContain("Resumen de conducta: Biscuit");
+    expect(out.html).toContain("Compartido por Miguel");
+    expect(out.html).toContain("Apoyo humano y basado en recompensas");
+    expect(out.text).toContain("Resumen de conducta: Biscuit");
+    expect(out.text).toContain("Compartido por Miguel");
+    expect(out.text).toContain("Preocupaciones:");
+    expect(out.html).not.toContain("Behavior Brief");
+    expect(out.html).not.toContain("Shared by");
+  });
+
+  it("escapes Spanish brief email interpolation in HTML while preserving text data", () => {
+    const out = renderBriefEmail(
+      {
+        dogName: "<Biscuit>",
+        ownerName: 'Miguel "M"',
+        message: "<hola>",
+        summary: "<resumen>",
+      },
+      "es",
+    );
+
+    expect(out.html).not.toContain("<Biscuit>");
+    expect(out.html).not.toContain("<hola>");
+    expect(out.html).not.toContain("<resumen>");
+    expect(out.html).toContain("&lt;Biscuit&gt;");
+    expect(out.html).toContain("Miguel &quot;M&quot;");
+    expect(out.text).toContain("<Biscuit>");
+    expect(out.text).toContain("<hola>");
+    expect(out.text).toContain("<resumen>");
+  });
 });

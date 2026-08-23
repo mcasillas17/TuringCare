@@ -1,4 +1,4 @@
-import { isLocale, type Locale } from "@turingcare/i18n";
+import { type Locale, isLocale } from "@turingcare/i18n";
 import { createMiddleware } from "hono/factory";
 
 export type LocaleEnv = { Variables: { locale: Locale } };
@@ -85,9 +85,15 @@ function parseAcceptLanguage(value: string | undefined): Locale {
   return bestMatch?.locale ?? "en";
 }
 
+export function resolveRequestLocale(request: Pick<Request, "headers">): Locale {
+  return (
+    parseLocaleHeader(request.headers.get(LOCALE_HEADER) ?? undefined) ??
+    parseAcceptLanguage(request.headers.get("Accept-Language") ?? undefined)
+  );
+}
+
 export const localeMiddleware = createMiddleware<LocaleEnv>(async (c, next) => {
-  const locale =
-    parseLocaleHeader(c.req.header(LOCALE_HEADER)) ?? parseAcceptLanguage(c.req.header("Accept-Language"));
+  const locale = resolveRequestLocale(c.req.raw);
 
   c.set("locale", locale);
 

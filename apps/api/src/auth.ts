@@ -5,7 +5,12 @@ import * as schema from "./db/schema";
 import { sendEmail } from "./email/send-email";
 import { passwordResetEmail, verificationEmail } from "./email/templates";
 import { env } from "./env";
+import { resolveRequestLocale } from "./middleware/locale";
 import { recordEvent } from "./telemetry/record-event";
+
+function authRequestLocale(request: Request | undefined) {
+  return request ? resolveRequestLocale(request) : "en";
+}
 
 // Fly terminates TLS and forwards the real client IP. Without this Better Auth
 // cannot key the limiter on the client and logs "Rate limiting skipped: could
@@ -28,9 +33,9 @@ export const auth = betterAuth({
   trustedOrigins: [env.FRONTEND_URL],
   emailAndPassword: {
     enabled: true,
-    sendResetPassword: async ({ user, url }) => {
+    sendResetPassword: async ({ user, url }, request) => {
       try {
-        await sendEmail({ to: user.email, ...passwordResetEmail(url) });
+        await sendEmail({ to: user.email, ...passwordResetEmail(url, authRequestLocale(request)) });
       } catch (err) {
         console.error("[auth] sendResetPassword failed", {
           userId: user.id,
@@ -41,9 +46,9 @@ export const auth = betterAuth({
   },
   emailVerification: {
     sendOnSignUp: true,
-    sendVerificationEmail: async ({ user, url }) => {
+    sendVerificationEmail: async ({ user, url }, request) => {
       try {
-        await sendEmail({ to: user.email, ...verificationEmail(url) });
+        await sendEmail({ to: user.email, ...verificationEmail(url, authRequestLocale(request)) });
       } catch (err) {
         console.error("[auth] sendVerificationEmail failed", {
           userId: user.id,
