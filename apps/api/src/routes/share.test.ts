@@ -1,9 +1,10 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { auth } from "../auth";
-import { db } from "../db";
-import { user } from "../db/schema";
+import { db, pool } from "../db";
+import { briefs, user } from "../db/schema";
+import { waitForBlockingChain } from "../test-pg-concurrency";
 
 async function signedUpCookie(email: string) {
   await auth.api.signUpEmail({ body: { name: "Sh", email, password: "password-123" } });
@@ -72,6 +73,117 @@ describe("brief share mint/revoke", () => {
       headers: { cookie },
     });
     expect(del.status).toBe(200);
+  });
+
+  it("serializes simultaneous mints so every successful response returns the live token", async () => {
+    const email = `share_concurrent_${Date.now()}@example.com`;
+    emails.push(email);
+    const cookie = await signedUpCookie(email);
+    const dogId = await createDogWithBrief(cookie);
+    const [brief] = await db
+      .select({ id: briefs.id })
+      .from(briefs)
+      .where(eq(briefs.dogId, dogId))
+      .orderBy(desc(briefs.version))
+      .limit(1);
+    if (!brief) throw new Error("expected generated brief");
+
+    const blocker = await pool.connect();
+    let blockerOpen = false;
+    try {
+      await blocker.query("BEGIN");
+      blockerOpen = true;
+      await blocker.query(`SELECT "id" FROM "briefs" WHERE "id" = $1 FOR UPDATE`, [brief.id]);
+      const pidResult = await blocker.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const blockerPid = Number(pidResult.rows[0]?.pid);
+
+      const requests = Array.from({ length: 2 }, () =>
+        app.request(`/api/dogs/${dogId}/brief/share`, {
+          method: "POST",
+          headers: { cookie },
+        }),
+      );
+      await waitForBlockingChain(pool, blockerPid, 2);
+      await blocker.query("COMMIT");
+      blockerOpen = false;
+
+      const responses = await Promise.all(requests);
+      expect(responses.map(({ status }) => status)).toEqual([200, 200]);
+      const payloads = await Promise.all(
+        responses.map((response) => response.json() as Promise<{ token: string }>),
+      );
+      expect(new Set(payloads.map(({ token }) => token))).toHaveLength(1);
+      expect((await app.request(`/api/share/brief/${payloads[0]?.token}`)).status).toBe(200);
+    } finally {
+      if (blockerOpen) await blocker.query("ROLLBACK");
+      blocker.release();
+    }
+  });
+
+  it("linearizes a queued revoke before mint without resurrecting the revoked token", async () => {
+    const email = `share_revoke_mint_${Date.now()}@example.com`;
+    emails.push(email);
+    const cookie = await signedUpCookie(email);
+    const dogId = await createDogWithBrief(cookie);
+    const initialMint = await app.request(`/api/dogs/${dogId}/brief/share`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    const { token: revokedToken } = (await initialMint.json()) as { token: string };
+    const [brief] = await db
+      .select({ id: briefs.id })
+      .from(briefs)
+      .where(eq(briefs.dogId, dogId))
+      .orderBy(desc(briefs.version))
+      .limit(1);
+    if (!brief) throw new Error("expected generated brief");
+
+    const blocker = await pool.connect();
+    let blockerOpen = false;
+    try {
+      await blocker.query("BEGIN");
+      blockerOpen = true;
+      await blocker.query(`SELECT "id" FROM "briefs" WHERE "id" = $1 FOR UPDATE`, [brief.id]);
+      const pidResult = await blocker.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const blockerPid = Number(pidResult.rows[0]?.pid);
+
+      const revoke = app.request(`/api/dogs/${dogId}/brief/share`, {
+        method: "DELETE",
+        headers: { cookie },
+      });
+      await waitForBlockingChain(pool, blockerPid, 1);
+      let mintSettled = false;
+      const mint = Promise.resolve(
+        app.request(`/api/dogs/${dogId}/brief/share`, { method: "POST", headers: { cookie } }),
+      ).then((response) => {
+        mintSettled = true;
+        return response;
+      });
+      const serialization = await Promise.race([
+        mint.then(() => "mint_completed" as const),
+        waitForBlockingChain(pool, blockerPid, 2).then(() => "mint_queued" as const),
+      ]);
+      const mintCompletedBeforeRelease = mintSettled;
+
+      await blocker.query("COMMIT");
+      blockerOpen = false;
+      const [revokeResponse, mintResponse] = await Promise.all([revoke, mint]);
+      expect(serialization).toBe("mint_queued");
+      expect(mintCompletedBeforeRelease).toBe(false);
+      expect(revokeResponse.status).toBe(200);
+      expect(mintResponse.status).toBe(200);
+      const { token: liveToken } = (await mintResponse.json()) as { token: string };
+      expect(liveToken).not.toBe(revokedToken);
+      expect((await app.request(`/api/share/brief/${revokedToken}`)).status).toBe(404);
+      expect((await app.request(`/api/share/brief/${liveToken}`)).status).toBe(200);
+    } finally {
+      if (blockerOpen) await blocker.query("ROLLBACK");
+      blocker.release();
+    }
   });
 
   it("404 when minting for a dog with no brief", async () => {

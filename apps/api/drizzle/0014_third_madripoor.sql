@@ -1,3 +1,4 @@
+LOCK TABLE "briefs" IN SHARE ROW EXCLUSIVE MODE;--> statement-breakpoint
 WITH "dogs_with_duplicate_versions" AS (
 	SELECT "dog_id"
 	FROM "briefs"

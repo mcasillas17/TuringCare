@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
-import { db } from "../db";
+import { db, pool } from "../db";
 import { briefs, practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
 import { createMonitoringErrorHandler } from "../monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "../monitoring/request-id";
 import { type TestUser, createTestUser } from "../test-helpers";
+import { waitForBlockingChain } from "../test-pg-concurrency";
 import { sendFailedException } from "./dogs";
 
 // Wraps the real `sendEmail` so its normal (log-mode, no RESEND_API_KEY)
@@ -916,6 +917,40 @@ describe("dogs: brief", () => {
       latest.locale === "es" ? "Resumen de conducta: Biscuit" : "Behavior Brief: Biscuit",
     );
     expect(email?.html).toContain(`<html lang="${latest.locale}">`);
+  });
+
+  it("returns 404 when the dog is deleted before the generation transaction locks it", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const deleter = await pool.connect();
+    let deleterOpen = false;
+
+    try {
+      await deleter.query("BEGIN");
+      deleterOpen = true;
+      await deleter.query(`SELECT "id" FROM "dogs" WHERE "id" = $1 FOR UPDATE`, [dog.id]);
+      const pidResult = await deleter.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const deleterPid = Number(pidResult.rows[0]?.pid);
+
+      const generation = app.request(`/api/dogs/${dog.id}/brief`, {
+        method: "POST",
+        headers: u.authHeaders,
+      });
+      await waitForBlockingChain(pool, deleterPid, 1);
+      await deleter.query(`DELETE FROM "dogs" WHERE "id" = $1`, [dog.id]);
+      await deleter.query("COMMIT");
+      deleterOpen = false;
+
+      const response = await generation;
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
+    } finally {
+      if (deleterOpen) await deleter.query("ROLLBACK");
+      deleter.release();
+    }
   });
 
   it("enforces unique Brief versions per dog at the database boundary", async () => {

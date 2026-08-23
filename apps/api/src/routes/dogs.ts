@@ -484,32 +484,67 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .post("/:id/brief/share", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const [brief] = await db
-      .select()
-      .from(briefs)
-      .where(eq(briefs.dogId, dog.id))
-      .orderBy(desc(briefs.version))
-      .limit(1);
-    if (!brief) return c.json({ error: "no_brief" } as const, 404);
-    let token = brief.shareToken;
-    if (!token) {
-      token = randomBytes(18).toString("base64url");
-      await db.update(briefs).set({ shareToken: token }).where(eq(briefs.id, brief.id));
-    }
+    const result = await db.transaction(async (tx) => {
+      const [lockedDog] = await tx
+        .select({ id: dogs.id })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
+        .for("update");
+      if (!lockedDog) return { kind: "not_found" } as const;
+
+      const [brief] = await tx
+        .select()
+        .from(briefs)
+        .where(eq(briefs.dogId, lockedDog.id))
+        .orderBy(desc(briefs.version))
+        .limit(1)
+        .for("update");
+      if (!brief) return { kind: "no_brief" } as const;
+      if (brief.shareToken) return { kind: "shared", token: brief.shareToken } as const;
+
+      const token = randomBytes(18).toString("base64url");
+      const [updated] = await tx
+        .update(briefs)
+        .set({ shareToken: token })
+        .where(eq(briefs.id, brief.id))
+        .returning({ shareToken: briefs.shareToken });
+      if (updated?.shareToken !== token) throw new Error("failed to mint brief share token");
+      return { kind: "shared", token } as const;
+    });
+    if (result.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
+    if (result.kind === "no_brief") return c.json({ error: "no_brief" } as const, 404);
     await recordEvent("brief.shared", { userId: c.get("userId") });
-    return c.json({ token, url: `${env.FRONTEND_URL}/b/${token}` });
+    return c.json({ token: result.token, url: `${env.FRONTEND_URL}/b/${result.token}` });
   })
   .delete("/:id/brief/share", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const [brief] = await db
-      .select()
-      .from(briefs)
-      .where(eq(briefs.dogId, dog.id))
-      .orderBy(desc(briefs.version))
-      .limit(1);
-    if (!brief) return c.json({ error: "not_found" } as const, 404);
-    await db.update(briefs).set({ shareToken: null }).where(eq(briefs.id, brief.id));
+    const revoked = await db.transaction(async (tx) => {
+      const [lockedDog] = await tx
+        .select({ id: dogs.id })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
+        .for("update");
+      if (!lockedDog) return false;
+
+      const [brief] = await tx
+        .select({ id: briefs.id })
+        .from(briefs)
+        .where(eq(briefs.dogId, lockedDog.id))
+        .orderBy(desc(briefs.version))
+        .limit(1)
+        .for("update");
+      if (!brief) return false;
+
+      const [updated] = await tx
+        .update(briefs)
+        .set({ shareToken: null })
+        .where(eq(briefs.id, brief.id))
+        .returning({ id: briefs.id });
+      if (!updated) throw new Error("failed to revoke brief share token");
+      return true;
+    });
+    if (!revoked) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
   .post("/:id/brief", stableZValidator("query", briefGenerateSchema), async (c) => {
@@ -552,17 +587,22 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       // The parent dog row is the database-backed, per-dog serialization point.
       // PostgreSQL holds this row lock until commit, so a concurrent generator
       // cannot read the previous version until the earlier insert is visible.
-      await tx.select({ id: dogs.id }).from(dogs).where(eq(dogs.id, dog.id)).for("update");
+      const [lockedDog] = await tx
+        .select({ id: dogs.id })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
+        .for("update");
+      if (!lockedDog) return null;
       const [last] = await tx
         .select({ version: briefs.version })
         .from(briefs)
-        .where(eq(briefs.dogId, dog.id))
+        .where(eq(briefs.dogId, lockedDog.id))
         .orderBy(desc(briefs.version))
         .limit(1);
       const [created] = await tx
         .insert(briefs)
         .values({
-          dogId: dog.id,
+          dogId: lockedDog.id,
           locale,
           summary,
           version: (last?.version ?? 0) + 1,
@@ -572,6 +612,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       if (!created) throw new Error("failed to create brief");
       return created;
     });
+    if (!brief) return c.json({ error: "not_found" } as const, 404);
     await recordEvent("brief.generated", { userId: c.get("userId"), props: { window } });
     return c.json({ brief }, 201);
   })
