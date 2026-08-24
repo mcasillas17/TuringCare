@@ -3,10 +3,11 @@ import * as dogsLib from "@/lib/dogs";
 import type { DogOverview } from "@/lib/dogs";
 import * as journalLib from "@/lib/journal";
 import * as progressLib from "@/lib/progress";
+import type { ProgressGoal } from "@/lib/progress";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DogCardBody } from "./dog-card-body";
 
 vi.mock("@/lib/dogs", async () => {
@@ -31,8 +32,9 @@ const overview: DogOverview = {
   },
 };
 
-function setup() {
-  vi.mocked(progressLib.useProgress).mockReturnValue({ data: [] } as unknown as ReturnType<
+function setup(locale: "en" | "es" = "en", goals: ProgressGoal[] = []) {
+  localStorage.setItem("tc-locale", locale);
+  vi.mocked(progressLib.useProgress).mockReturnValue({ data: goals } as unknown as ReturnType<
     typeof progressLib.useProgress
   >);
   vi.mocked(journalLib.useJournal).mockReturnValue({ data: [] } as unknown as ReturnType<
@@ -68,7 +70,39 @@ function setup() {
   return { removeConcern, addConcern };
 }
 
+afterEach(() => {
+  localStorage.clear();
+});
+
 describe("DogCardBody", () => {
+  it("localizes the compact skill-level prefix", () => {
+    setup("es", [
+      {
+        id: "g1",
+        goal: "Caminar con calma",
+        catalogGoalKey: null,
+        avgConfidence: 3,
+        skills: [
+          {
+            id: "s1",
+            name: "Correa suelta",
+            confidence: 3,
+            position: 0,
+            catalogSkillKey: null,
+            sessionCount: 0,
+            firstSessionAt: null,
+            lastSessionAt: null,
+            lastNote: null,
+            sessions: [],
+            milestones: [],
+          },
+        ],
+      },
+    ]);
+
+    expect(screen.getByText("N3")).toBeInTheDocument();
+  });
+
   it("opens the Log moment dialog in place (no navigation)", () => {
     setup();
     fireEvent.click(screen.getByRole("button", { name: /log moment/i }));

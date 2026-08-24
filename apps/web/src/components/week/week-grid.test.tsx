@@ -1,6 +1,6 @@
 import { LocaleProvider } from "@/i18n";
 import type { FocusSkill } from "@/lib/weekly-focus";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WeekGrid } from "./week-grid";
 
@@ -59,4 +59,16 @@ describe("WeekGrid session-count accessibility label", () => {
       expect(screen.getByRole("button", { name: accessibleName })).toHaveTextContent(visualLabel);
     },
   );
+
+  it("formats session time with the active locale when a populated cell opens", () => {
+    renderGrid("es", 1);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Recall el lunes, 18 de mayo de 2026: 1 sesión",
+      }),
+    );
+
+    expect(screen.getByText(/12:00.*5 min/)).toBeInTheDocument();
+  });
 });

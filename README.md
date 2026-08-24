@@ -47,8 +47,8 @@ Open http://localhost:3000, register an account, and you land on `/app`.
   stay first-party. Uses `hc<AppType>` for typed API calls and `react-i18next` for
   reactive English/Spanish rendering.
 - **packages/i18n** — Framework-neutral i18next runtime, exact `en`/`es` allowlist,
-  typed catalogs, browser-locale resolution, server translators, and UTC date helpers
-  shared by the web app and API.
+  typed catalogs, browser-locale resolution, server translators, and locale-safe date
+  helpers shared by the web app and API.
 - **packages/shared** — Zod schemas shared by both apps.
 - **Postgres** — Docker Compose locally, Supabase in production. Deploy: see `DEPLOY.md`.
 
@@ -76,6 +76,13 @@ accepts only `en` or `es`, falls back to a supported weighted `Accept-Language` 
 then English, and returns `Content-Language`. The shared catalogs drive the regular app,
 admin and accessibility copy, curated training templates, auth email chrome, and generated
 artifacts.
+
+Catalog tests enforce exact key and interpolation-placeholder parity. A TypeScript AST audit
+also rejects uncatalogued production TypeScript UI copy, hardcoded accessibility/toast copy,
+including Sonner option aliases, spreads, shorthand properties, and callback methods, plus
+direct `toLocale*` calls and local date formatters. Unresolved imported or dynamically
+produced toast options fail closed. Shared date helpers require an explicit supported locale
+and safely reject malformed dates.
 
 Every Behavior Brief stores its generation locale. Its prose, dates, status/enum labels,
 owned and public views, email, and PDF therefore stay in that language even if the owner or
@@ -127,7 +134,7 @@ Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highligh
   safety signals pause exercises and refer owners to appropriate support.
 - **i18n** — shared i18next-backed en/es catalogs with compile-time/runtime parity,
   browser detection, account sync, request propagation, localized training content,
-  and locale-stable artifacts.
+  locale-stable artifacts, placeholder parity, and AST copy/date guardrails.
 - **Telemetry + admin dashboard** with rate-limited event ingestion.
 
 ## Developer verification

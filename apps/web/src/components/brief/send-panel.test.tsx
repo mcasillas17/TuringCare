@@ -428,6 +428,30 @@ describe("SendPanel", () => {
     expect(screen.getByText(/mark@trainer.dog/)).toBeInTheDocument();
   });
 
+  it("renders a localized fallback for an invalid delivered date", async () => {
+    stubFetch(
+      async () =>
+        new Response(
+          JSON.stringify({
+            sends: [
+              {
+                id: "s1",
+                recipient: "sarah@example.com",
+                message: null,
+                sentAt: "not-a-date",
+                status: "delivered",
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+    );
+
+    setup("finalized", undefined, "es");
+
+    expect(await screen.findByText(/sarah@example.com/)).toHaveTextContent("No disponible");
+  });
+
   it("renders empty state when no sends", async () => {
     stubFetch(async () => new Response(JSON.stringify({ sends: [] }), { status: 200 }));
     setup("finalized");

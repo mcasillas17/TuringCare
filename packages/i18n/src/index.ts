@@ -8,6 +8,7 @@ export const LOCALES = ["en", "es"] as const;
 const MAX_BROWSER_LANGUAGE_TAG_LENGTH = 64;
 
 export type Locale = (typeof LOCALES)[number];
+export type DateFormatInput = string | number | Date | null | undefined;
 export type UtcDateFormatOptions = Omit<Intl.DateTimeFormatOptions, "timeZone">;
 export type Messages<T = En> = {
   [K in keyof T]: T[K] extends string
@@ -60,15 +61,24 @@ export function resolveBrowserLocale(
   return "en";
 }
 
-export function formatDateInUtc(
+export function formatDate(
   locale: Locale,
-  value: string | number | Date,
-  options: UtcDateFormatOptions,
+  value: DateFormatInput,
+  options: Intl.DateTimeFormatOptions = {},
 ): string | null {
+  if (value == null) return null;
   const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
 
-  return new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" }).format(date);
+  return new Intl.DateTimeFormat(locale, options).format(date);
+}
+
+export function formatDateInUtc(
+  locale: Locale,
+  value: DateFormatInput,
+  options: UtcDateFormatOptions,
+): string | null {
+  return formatDate(locale, value, { ...options, timeZone: "UTC" });
 }
 
 export function createI18n(locale: Locale): I18n {

@@ -160,6 +160,7 @@ describe("buildBriefPdfModel", () => {
       size: "Tamaño",
       sex: "Sexo",
       generated: "Generado",
+      version: "Versión",
     });
   });
 

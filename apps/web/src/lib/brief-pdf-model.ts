@@ -57,6 +57,7 @@ export type BriefPdfModel = {
     size: string;
     sex: string;
     generated: string;
+    version: string;
   };
 };
 
@@ -179,6 +180,7 @@ export function buildBriefPdfModel(input: {
       size: t("briefPdf.labels.size"),
       sex: t("briefPdf.labels.sex"),
       generated: t("briefPdf.labels.generated"),
+      version: t("briefPdf.labels.version"),
     },
   };
 }

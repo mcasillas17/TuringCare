@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import type { MessageKey } from "@/i18n/types";
+import { formatDate } from "@turingcare/i18n";
 import type { AdvancementDecision, AdvancementProposalDto } from "@turingcare/shared";
 
 const DECISIONS: { decision: AdvancementDecision; labelKey: MessageKey }[] = [
@@ -42,9 +43,8 @@ export function AdvancementProposalCard({
       <ul className="text-xs text-slate-soft">
         {proposal.supportingSessions.map((session) => (
           <li key={session.id}>
-            {new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(
-              new Date(`${session.practiceDay}T12:00:00`),
-            )}
+            {formatDate(locale, `${session.practiceDay}T12:00:00`, { dateStyle: "medium" }) ??
+              t("common.unavailable")}
           </li>
         ))}
       </ul>
