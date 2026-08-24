@@ -235,8 +235,9 @@ current all-predeploy classification remains safe.
 
 The API must deploy before the web. It accepts exact new-client Brief IDs and a narrow
 legacy `{ recipient, message }` payload. Legacy sends proceed only when one Brief version
-can be established or an existing durable audit matches the canonical intent; otherwise
-the API returns `client_upgrade_required` without provider I/O. Delivery claims older than
+can be established; an existing canonical audit may be replayed only within that one version.
+Every multi-version ID-less request returns `client_upgrade_required` without provider I/O.
+Delivery claims older than
 30 seconds are retry-reclaimable with the same durable provider key, but the database
 trigger blocks deletion for every non-null claim regardless of age. Operators recover a
 stale or timestamp-less claim by retrying from the linked Brief screen, not by deleting

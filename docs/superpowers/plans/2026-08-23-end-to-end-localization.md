@@ -213,8 +213,9 @@ published in PR #70.
 
 - Exact `briefId` plus UUID idempotency binding for current clients, with a narrow compatibility
   decoder for the actual former `{ recipient, message }` payload.
-- Durable canonical-intent recovery for old random audit IDs without coupling retry identity to
-  `BETTER_AUTH_SECRET`; ambiguous multi-version legacy requests send nothing and ask for refresh.
+- Durable single-version canonical-intent recovery for old random audit IDs without coupling retry
+  identity to `BETTER_AUTH_SECRET`; every multi-version ID-less request sends nothing and asks for
+  refresh because recipient/message cannot establish the intended version.
 - Intent persistence before provider I/O, provider calls outside transactions, durable provider
   idempotency, bounded retry claims, and explicit active/recovery outcomes.
 - `0025` delivery confirmation and `0026` fail-closed deletion claims, including raw cascade,

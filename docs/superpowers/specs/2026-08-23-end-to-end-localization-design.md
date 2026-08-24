@@ -105,8 +105,9 @@ The approved design shipped with these review-driven hardening details:
   draft shares fail closed during the compatibility window.
 - Brief email delivery is intent-first and exact-version bound. New clients provide a Brief ID
   and idempotency UUID; the audit commits before provider I/O and its durable UUID is the provider
-  key. The API supports the actual former `{ recipient, message }` payload only when it can bind
-  one Brief or recover a canonical stored intent. Ambiguous legacy tabs fail without sending.
+  key. The API supports the actual former `{ recipient, message }` payload only when exactly one
+  Brief exists, where it can recover a canonical stored intent for that version. Every
+  multi-version ID-less request fails without sending because content cannot identify a version.
   Provider I/O holds no database connection, stale claims are retry-reclaimable, and migrations
   `0025`/`0026` distinguish delivered sends while blocking dog/account cascades for every claimed
   send until explicit recovery. Onboarding counts only confirmed delivery.

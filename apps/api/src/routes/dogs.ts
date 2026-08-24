@@ -1505,8 +1505,8 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         );
         return { kind: "pending", send, email, replyTo: owner.email } as const;
       };
-      const loadLegacyIntentSends = async (briefId?: string) => {
-        return tx
+      const loadLegacyIntentSend = async (briefId: string) => {
+        const [existing] = await tx
           .select({
             id: briefSends.id,
             briefId: briefSends.briefId,
@@ -1522,8 +1522,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
           .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
           .where(
             and(
-              eq(briefs.dogId, lockedDog.id),
-              briefId === undefined ? undefined : eq(briefSends.briefId, briefId),
+              eq(briefSends.briefId, briefId),
               eq(briefSends.sentByUserId, userId),
               eq(briefSends.recipient, body.recipient),
               body.message == null
@@ -1532,21 +1531,14 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
             ),
           )
           .orderBy(desc(briefSends.sentAt), desc(briefSends.id))
-          .limit(2);
+          .limit(1);
+        return existing;
       };
       const existingResult = body.idempotencyKey
         ? resolveBriefSendIntent(await loadExistingSend(body.idempotencyKey), body)
         : null;
       if (existingResult?.kind === "idempotency_conflict") return existingResult;
       if (existingResult?.kind === "matched") return prepareMatchedIntent(existingResult.send);
-
-      if (!body.idempotencyKey && body.briefId === undefined) {
-        const legacyMatches = await loadLegacyIntentSends();
-        if (legacyMatches.length === 1 && legacyMatches[0]) {
-          return prepareMatchedIntent(legacyMatches[0]);
-        }
-        if (legacyMatches.length > 1) return { kind: "client_upgrade_required" } as const;
-      }
 
       const latestRows = await tx
         .select()
@@ -1567,8 +1559,8 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       }
       if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
 
-      if (!body.idempotencyKey && body.briefId !== undefined) {
-        const [legacyReplay] = await loadLegacyIntentSends(brief.id);
+      if (!body.idempotencyKey) {
+        const legacyReplay = await loadLegacyIntentSend(brief.id);
         if (legacyReplay) return prepareMatchedIntent(legacyReplay);
       }
       const sendId = body.idempotencyKey ?? randomUUID();

@@ -98,6 +98,7 @@ brainstorm → spec → plan → build flow.
 - A database trigger blocks deletion of every claimed send regardless of claim age. Dog and
   account deletion expose localized active/recovery states instead of silently cascading
   away evidence while provider outcome is uncertain.
-- Legacy web payloads remain rollout-compatible only when one exact Brief can be established
-  or one unique canonical stored intent matches. Ambiguous old tabs fail closed without sending.
+- Legacy web payloads remain rollout-compatible only when exactly one Brief version can be
+  established. Every multi-version ID-less request fails closed without sending because
+  recipient/message content cannot prove the tab's intended version.
 - The onboarding "shared" milestone counts only rows with confirmed `delivered_at`.

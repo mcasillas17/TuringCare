@@ -1177,9 +1177,11 @@ exact-version-bound protocol.
 Current clients provide a Brief ID and idempotency UUID. The API commits that durable audit
 before provider I/O, releases database locks, and passes the send UUID to the provider. A
 narrow rollout decoder keeps actual former `{ recipient, message }` tabs safe: one Brief can
-be bound, a canonical existing intent can be replayed, and ambiguous multi-version requests
-return localized refresh guidance without sending. This remains stable across server-secret
-rotation and pre-rollout random audit IDs. Delivery claims coordinate retry takeover without
+be bound and a canonical existing intent for that one version can be replayed. Every
+multi-version ID-less request returns localized refresh guidance without sending, even if
+recipient/message match an older audit, because those fields cannot identify the intended
+version. Single-version recovery remains stable across server-secret rotation and pre-rollout
+random audit IDs. Delivery claims coordinate retry takeover without
 ever weakening deletion protection; stale or timestamp-less claims require explicit recovery.
 Dog/account deletion and account-deletion races fail closed with localized links, the database
 trigger also protects raw cascades, and onboarding counts only confirmed deliveries.

@@ -2008,7 +2008,7 @@ describe("dogs: brief send", () => {
     expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
   });
 
-  it("POST send: replays a uniquely matched legacy audit after a newer Brief exists", async () => {
+  it("POST send: does not guess a legacy retry's version from a unique older audit", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
@@ -2032,42 +2032,6 @@ describe("dogs: brief send", () => {
       body: JSON.stringify({
         recipient: "pre-versioned@example.com",
         message: "Retry the accepted v1 send",
-      }),
-    });
-
-    expect(response.status).toBe(201);
-    const responseBody = (await response.json()) as {
-      send: { id: string; briefId: string };
-    };
-    expect(responseBody.send).toMatchObject({ id: legacySendId, briefId: firstBrief.id });
-    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
-  });
-
-  it("POST send: rejects a legacy retry that matches audits for two Brief versions", async () => {
-    const u = await createTestUser();
-    users.push(u);
-    const dog = await makeDog(u);
-    const firstBrief = await makeFinalizedBrief(u, dog.id);
-    const secondBrief = await makeFinalizedBrief(u, dog.id);
-    await db.insert(briefSends).values(
-      [firstBrief.id, secondBrief.id].map((briefId) => ({
-        id: randomUUID(),
-        briefId,
-        recipient: "ambiguous-retry@example.com",
-        message: "Same legacy intent",
-        sentByUserId: u.userId,
-        deliveredAt: new Date(),
-      })),
-    );
-    const { sendEmail } = await import("../email/send-email");
-    vi.mocked(sendEmail).mockClear();
-
-    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
-      method: "POST",
-      headers: u.authHeaders,
-      body: JSON.stringify({
-        recipient: "ambiguous-retry@example.com",
-        message: "Same legacy intent",
       }),
     });
 
