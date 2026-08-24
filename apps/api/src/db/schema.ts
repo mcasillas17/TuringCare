@@ -583,6 +583,8 @@ export const briefSends = pgTable("brief_sends", {
   message: text("message"),
   sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  deliveryClaimId: text("delivery_claim_id"),
+  deliveryClaimedAt: timestamp("delivery_claimed_at", { withTimezone: true }),
   sentByUserId: text("sent_by_user_id").references(() => user.id, { onDelete: "set null" }),
 });
 

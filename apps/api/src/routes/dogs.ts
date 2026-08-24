@@ -22,7 +22,7 @@ import {
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
-import { and, count, desc, eq, gte, isNotNull, isNull, lt, max, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNotNull, isNull, lt, max, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -235,32 +235,16 @@ export function sendFailedException(c: Context, cause: unknown): HTTPException {
   return new HTTPException(502, { res: c.json({ error: "send_failed" } as const, 502), cause });
 }
 
-const activeBriefDeliveries = new Map<string, Promise<void>>();
-
-/** Coalesces same-process retries; provider idempotency covers separate API machines. */
-async function deliverBriefSend(idempotencyKey: string, deliver: () => Promise<void>) {
-  const active = activeBriefDeliveries.get(idempotencyKey);
-  if (active) return active;
-
-  const attempt = deliver();
-  activeBriefDeliveries.set(idempotencyKey, attempt);
-  try {
-    await attempt;
-  } finally {
-    if (activeBriefDeliveries.get(idempotencyKey) === attempt) {
-      activeBriefDeliveries.delete(idempotencyKey);
-    }
-  }
-}
+const BRIEF_DELIVERY_RECLAIM_AFTER_MS = 30_000;
 
 export function resolveBriefSendIntent<
   T extends { briefId: string; recipient: string; message: string | null },
 >(
   existing: T | undefined,
-  intent: { briefId?: string; recipient: string; message?: string | null },
+  intent: { briefId: string; recipient: string; message?: string | null },
 ) {
   if (!existing) return null;
-  return (intent.briefId === undefined || existing.briefId === intent.briefId) &&
+  return existing.briefId === intent.briefId &&
     existing.recipient === intent.recipient &&
     existing.message === (intent.message ?? null)
     ? ({ kind: "matched", send: existing } as const)
@@ -353,6 +337,9 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     } catch (error) {
       if (hasConstraint(error, "guided_setups_active_dog_required")) {
         return c.json({ error: "active_guided_setup" } as const, 409);
+      }
+      if (hasConstraint(error, "brief_sends_delivery_in_progress")) {
+        return c.json({ error: "brief_delivery_in_progress" } as const, 409);
       }
       throw error;
     }
@@ -1507,7 +1494,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       if (latest.kind === "missing") return { kind: "not_found" } as const;
       if (latest.kind === "conflict") return latest;
       const brief = latest.brief;
-      if (body.briefId && body.briefId !== brief.id) return { kind: "conflict" } as const;
+      if (body.briefId !== brief.id) return { kind: "conflict" } as const;
       if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
 
       const [sendCount] = await tx
@@ -1560,37 +1547,84 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     }
     if (prepared.kind === "replayed") return c.json({ send: prepared.send }, 201);
 
-    const [currentSend] = await db
-      .select()
-      .from(briefSends)
-      .where(and(eq(briefSends.id, prepared.send.id), eq(briefSends.sentByUserId, userId)))
-      .limit(1);
-    if (!currentSend) return c.json({ error: "not_found" } as const, 404);
-    if (currentSend.deliveredAt) return c.json({ send: currentSend }, 201);
+    const deliveryClaimId = randomBytes(16).toString("hex");
+    const staleBefore = new Date(Date.now() - BRIEF_DELIVERY_RECLAIM_AFTER_MS);
+    const deliveryClaim = await db.transaction(async (tx) => {
+      const [owner] = await tx
+        .select({ id: user.id })
+        .from(user)
+        .where(eq(user.id, userId))
+        .for("update")
+        .limit(1);
+      if (!owner) return { kind: "not_found" } as const;
+      const [lockedDog] = await tx
+        .select({ id: dogs.id })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, userId)))
+        .for("update")
+        .limit(1);
+      if (!lockedDog) return { kind: "not_found" } as const;
+
+      const [claimed] = await tx
+        .update(briefSends)
+        .set({ deliveryClaimId, deliveryClaimedAt: new Date() })
+        .where(
+          and(
+            eq(briefSends.id, prepared.send.id),
+            eq(briefSends.sentByUserId, userId),
+            isNull(briefSends.deliveredAt),
+            or(isNull(briefSends.deliveryClaimId), lt(briefSends.deliveryClaimedAt, staleBefore)),
+          ),
+        )
+        .returning();
+      if (claimed) return { kind: "claimed", send: claimed } as const;
+
+      const [existing] = await tx
+        .select()
+        .from(briefSends)
+        .where(and(eq(briefSends.id, prepared.send.id), eq(briefSends.sentByUserId, userId)))
+        .limit(1);
+      if (!existing) return { kind: "not_found" } as const;
+      return existing.deliveredAt
+        ? ({ kind: "replayed", send: existing } as const)
+        : ({ kind: "in_progress" } as const);
+    });
+    if (deliveryClaim.kind === "not_found") {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    if (deliveryClaim.kind === "replayed") return c.json({ send: deliveryClaim.send }, 201);
+    if (deliveryClaim.kind === "in_progress") {
+      return c.json({ error: "send_in_progress" } as const, 409);
+    }
 
     try {
-      await deliverBriefSend(prepared.send.id, async () => {
-        await sendEmail({
-          to: prepared.send.recipient,
-          replyTo: prepared.replyTo,
-          subject: prepared.email.subject,
-          html: prepared.email.html,
-          text: prepared.email.text,
-          idempotencyKey: prepared.send.id,
-        });
+      await sendEmail({
+        to: prepared.send.recipient,
+        replyTo: prepared.replyTo,
+        subject: prepared.email.subject,
+        html: prepared.email.html,
+        text: prepared.email.text,
+        idempotencyKey: prepared.send.id,
       });
     } catch (error) {
+      await db
+        .update(briefSends)
+        .set({ deliveryClaimId: null, deliveryClaimedAt: null })
+        .where(
+          and(eq(briefSends.id, prepared.send.id), eq(briefSends.deliveryClaimId, deliveryClaimId)),
+        );
       throw sendFailedException(c, error);
     }
 
     const [send] = await db
       .update(briefSends)
-      .set({ deliveredAt: new Date() })
+      .set({ deliveredAt: new Date(), deliveryClaimId: null, deliveryClaimedAt: null })
       .where(
         and(
           eq(briefSends.id, prepared.send.id),
           eq(briefSends.sentByUserId, userId),
           isNull(briefSends.deliveredAt),
+          eq(briefSends.deliveryClaimId, deliveryClaimId),
         ),
       )
       .returning();
@@ -1604,13 +1638,10 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       .from(briefSends)
       .where(and(eq(briefSends.id, prepared.send.id), eq(briefSends.sentByUserId, userId)))
       .limit(1);
-    // A concurrent owner-authorized dog/account deletion can intentionally
-    // erase the audit after the provider accepted the email. Preserve the
-    // successful delivery response without recreating deleted private data.
-    if (!replayed) {
-      return c.json({ send: { ...prepared.send, deliveredAt: new Date() } }, 201);
+    if (!replayed) throw new Error("Brief send disappeared during claimed delivery");
+    if (!replayed.deliveredAt) {
+      return c.json({ error: "send_in_progress" } as const, 409);
     }
-    if (!replayed.deliveredAt) throw new Error("failed to mark Brief send delivered");
     return c.json({ send: replayed }, 201);
   })
   .get("/:id/brief/sends", async (c) => {

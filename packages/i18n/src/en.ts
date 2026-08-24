@@ -547,6 +547,8 @@ export const en = {
     deleteCancel: "Cancel",
     deleteYes: "Yes, delete",
     retryDelete: "Try deletion again",
+    deliveryInProgressDeleteExplanation:
+      "A Brief email is being delivered right now. Wait a moment, then try deleting again.",
     createTitle: "Add a dog",
     editTitle: "Edit profile",
     save: "Save",
@@ -1182,6 +1184,7 @@ export const en = {
     versionConflict: "There is more than one latest Brief version. Generate a new version.",
     idempotencyConflict:
       "This send attempt was already used with different details. Review it and try again.",
+    sendInProgress: "This delivery is already in progress. Check history before retrying.",
     rateLimited: "You've reached the daily send limit. Try again later.",
     sent: "Sent",
     sendFailed: "Couldn't send. Try again.",

@@ -52,20 +52,27 @@ describe("resolveBriefSendIntent", () => {
   };
 
   it("distinguishes a replay, a conflicting intent, and a missing recovery row", () => {
-    expect(resolveBriefSendIntent(existing, { recipient: "trainer@example.com" })).toEqual({
-      kind: "matched",
-      send: existing,
-    });
-    expect(resolveBriefSendIntent(existing, { recipient: "other@example.com" })).toEqual({
-      kind: "idempotency_conflict",
-    });
+    expect(
+      resolveBriefSendIntent(existing, {
+        briefId: "brief-1",
+        recipient: "trainer@example.com",
+      }),
+    ).toEqual({ kind: "matched", send: existing });
+    expect(
+      resolveBriefSendIntent(existing, { briefId: "brief-1", recipient: "other@example.com" }),
+    ).toEqual({ kind: "idempotency_conflict" });
     expect(
       resolveBriefSendIntent(existing, {
         briefId: "brief-2",
         recipient: "trainer@example.com",
       }),
     ).toEqual({ kind: "idempotency_conflict" });
-    expect(resolveBriefSendIntent(undefined, { recipient: "trainer@example.com" })).toBeNull();
+    expect(
+      resolveBriefSendIntent(undefined, {
+        briefId: "brief-1",
+        recipient: "trainer@example.com",
+      }),
+    ).toBeNull();
   });
 });
 
@@ -998,7 +1005,7 @@ describe("dogs: brief", () => {
         ...u.authHeaders,
         "X-TuringCare-Locale": latest.locale === "en" ? "es" : "en",
       },
-      body: briefSendBody({ recipient: "trainer@example.com" }),
+      body: briefSendBody({ briefId: latest.id, recipient: "trainer@example.com" }),
     });
     expect(sent.status).toBe(201);
     const email = vi.mocked(sendEmail).mock.calls[0]?.[0];
@@ -1195,7 +1202,7 @@ describe("dogs: brief", () => {
         app.request(`/api/dogs/${dog.id}/brief/send`, {
           method: "POST",
           headers: u.authHeaders,
-          body: briefSendBody({ recipient: "legacy-conflict@example.com" }),
+          body: briefSendBody({ briefId: randomUUID(), recipient: "legacy-conflict@example.com" }),
         }),
       ]);
 
@@ -1675,11 +1682,15 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: briefSendBody({ recipient: "sarah@example.com", message: "Hi Sarah" }),
+      body: briefSendBody({
+        briefId: brief.id,
+        recipient: "sarah@example.com",
+        message: "Hi Sarah",
+      }),
     });
     expect(r.status).toBe(201);
     const { send } = (await r.json()) as {
@@ -1693,10 +1704,11 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const { sendEmail } = await import("../email/send-email");
     vi.mocked(sendEmail).mockClear();
     const body = JSON.stringify({
+      briefId: brief.id,
       recipient: "idempotent@example.com",
       idempotencyKey: "95acbb6a-9189-4614-9a6e-c732efcc5d1d",
     });
@@ -1736,12 +1748,16 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const { sendEmail } = await import("../email/send-email");
     vi.mocked(sendEmail).mockClear();
     vi.mocked(sendEmail).mockRejectedValueOnce(new Error("provider unavailable"));
     const idempotencyKey = "96acbb6a-9189-4614-9a6e-c732efcc5d1d";
-    const body = JSON.stringify({ recipient: "durable@example.com", idempotencyKey });
+    const body = JSON.stringify({
+      briefId: brief.id,
+      recipient: "durable@example.com",
+      idempotencyKey,
+    });
 
     const failed = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
@@ -1787,6 +1803,49 @@ describe("dogs: brief send", () => {
         .from(events)
         .where(and(eq(events.userId, u.userId), eq(events.name, "brief.emailed"))),
     ).toHaveLength(1);
+  });
+
+  it("POST send: reclaims a stale delivery claim with the same provider idempotency key", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const idempotencyKey = "76acbb6a-9189-4614-9a6e-c732efcc5d1d";
+    await db.insert(briefSends).values({
+      id: idempotencyKey,
+      briefId: brief.id,
+      recipient: "stale-claim@example.com",
+      sentByUserId: u.userId,
+      deliveryClaimId: "abandoned-worker",
+      deliveryClaimedAt: new Date(Date.now() - 31_000),
+    });
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        briefId: brief.id,
+        recipient: "stale-claim@example.com",
+        idempotencyKey,
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendEmail).mock.calls[0]?.[0].idempotencyKey).toBe(idempotencyKey);
+    const [stored] = await db
+      .select({
+        deliveredAt: briefSends.deliveredAt,
+        deliveryClaimId: briefSends.deliveryClaimId,
+        deliveryClaimedAt: briefSends.deliveryClaimedAt,
+      })
+      .from(briefSends)
+      .where(eq(briefSends.id, idempotencyKey));
+    expect(stored?.deliveredAt).toBeInstanceOf(Date);
+    expect(stored?.deliveryClaimId).toBeNull();
+    expect(stored?.deliveryClaimedAt).toBeNull();
   });
 
   it("POST send: never recovers an old pending key for a newer Brief", async () => {
@@ -1837,11 +1896,31 @@ describe("dogs: brief send", () => {
     expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(2);
   });
 
-  it("POST send: concurrent replay records one provider delivery, audit, and emailed event", async () => {
+  it("POST send: rejects a stale client that omits the Brief id after a newer version exists", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
     await makeFinalizedBrief(u, dog.id);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: briefSendBody({ recipient: "stale-client@example.com" }),
+    });
+
+    expect(response.status).toBe(400);
+    expectValidationIssue(await response.json(), "briefId");
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+  });
+
+  it("POST send: concurrent replay records one provider delivery, audit, and emailed event", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const { sendEmail } = await import("../email/send-email");
     let releaseProvider: (() => void) | undefined;
     let markProviderStarted: (() => void) | undefined;
@@ -1857,6 +1936,7 @@ describe("dogs: brief send", () => {
       await providerRelease;
     });
     const body = JSON.stringify({
+      briefId: brief.id,
       recipient: "concurrent-replay@example.com",
       idempotencyKey: "0aacbb6a-9189-4614-9a6e-c732efcc5d1d",
     });
@@ -1872,10 +1952,12 @@ describe("dogs: brief send", () => {
       headers: u.authHeaders,
       body,
     });
+    const secondResponse = await second;
     releaseProvider?.();
-    const responses = await Promise.all([first, second]);
+    const firstResponse = await first;
 
-    expect(responses.map(({ status }) => status)).toEqual([201, 201]);
+    expect([firstResponse.status, secondResponse.status]).toEqual([201, 409]);
+    expect(await secondResponse.json()).toEqual({ error: "send_in_progress" });
     expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
     expect(
       await db
@@ -1895,19 +1977,27 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const { sendEmail } = await import("../email/send-email");
     vi.mocked(sendEmail).mockClear();
     const idempotencyKey = "1aacbb6a-9189-4614-9a6e-c732efcc5d1d";
     const first = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "original@example.com", idempotencyKey }),
+      body: JSON.stringify({
+        briefId: brief.id,
+        recipient: "original@example.com",
+        idempotencyKey,
+      }),
     });
     const conflict = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "different@example.com", idempotencyKey }),
+      body: JSON.stringify({
+        briefId: brief.id,
+        recipient: "different@example.com",
+        idempotencyKey,
+      }),
     });
 
     expect(first.status).toBe(201);
@@ -1934,8 +2024,8 @@ describe("dogs: brief send", () => {
     users.push(firstUser, secondUser);
     const firstDog = await makeDog(firstUser);
     const secondDog = await makeDog(secondUser);
-    await makeFinalizedBrief(firstUser, firstDog.id);
-    await makeFinalizedBrief(secondUser, secondDog.id);
+    const firstBrief = await makeFinalizedBrief(firstUser, firstDog.id);
+    const secondBrief = await makeFinalizedBrief(secondUser, secondDog.id);
     const { sendEmail } = await import("../email/send-email");
     vi.mocked(sendEmail).mockClear();
     const idempotencyKey = "2aacbb6a-9189-4614-9a6e-c732efcc5d1d";
@@ -1944,12 +2034,20 @@ describe("dogs: brief send", () => {
       app.request(`/api/dogs/${firstDog.id}/brief/send`, {
         method: "POST",
         headers: firstUser.authHeaders,
-        body: JSON.stringify({ recipient: "first-owner@example.com", idempotencyKey }),
+        body: JSON.stringify({
+          briefId: firstBrief.id,
+          recipient: "first-owner@example.com",
+          idempotencyKey,
+        }),
       }),
       app.request(`/api/dogs/${secondDog.id}/brief/send`, {
         method: "POST",
         headers: secondUser.authHeaders,
-        body: JSON.stringify({ recipient: "second-owner@example.com", idempotencyKey }),
+        body: JSON.stringify({
+          briefId: secondBrief.id,
+          recipient: "second-owner@example.com",
+          idempotencyKey,
+        }),
       }),
     ]);
 
@@ -1981,7 +2079,7 @@ describe("dogs: brief send", () => {
     const firstDog = await makeDog(u);
     const secondDog = await makeDog(u);
     const firstBrief = await makeFinalizedBrief(u, firstDog.id);
-    await makeFinalizedBrief(u, secondDog.id);
+    const secondBrief = await makeFinalizedBrief(u, secondDog.id);
     await db.insert(briefSends).values(
       Array.from({ length: 9 }, (_, index) => ({
         briefId: firstBrief.id,
@@ -2002,11 +2100,14 @@ describe("dogs: brief send", () => {
         "SELECT pg_backend_pid()::integer AS pid",
       );
       const blockerPid = Number(pidResult.rows[0]?.pid);
-      const sends = [firstDog, secondDog].map((dog, index) =>
+      const sends = [
+        { briefId: firstBrief.id, dog: firstDog },
+        { briefId: secondBrief.id, dog: secondDog },
+      ].map(({ briefId, dog }, index) =>
         app.request(`/api/dogs/${dog.id}/brief/send`, {
           method: "POST",
           headers: u.authHeaders,
-          body: briefSendBody({ recipient: `concurrent-${index}@example.com` }),
+          body: briefSendBody({ briefId, recipient: `concurrent-${index}@example.com` }),
         }),
       );
       await waitForBlockingChain(pool, blockerPid, 2);
@@ -2031,7 +2132,7 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const { sendEmail } = await import("../email/send-email");
     vi.mocked(sendEmail).mockClear();
     const deleter = await pool.connect();
@@ -2048,7 +2149,7 @@ describe("dogs: brief send", () => {
       const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
         method: "POST",
         headers: u.authHeaders,
-        body: briefSendBody({ recipient: "account-delete@example.com" }),
+        body: briefSendBody({ briefId: brief.id, recipient: "account-delete@example.com" }),
       });
       await waitForBlockingChain(pool, deleterPid, 1);
 
@@ -2070,14 +2171,20 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBriefWithHeaders(u, dog.id, { "X-TuringCare-Locale": "es" });
+    const brief = await makeFinalizedBriefWithHeaders(u, dog.id, {
+      "X-TuringCare-Locale": "es",
+    });
     const { sendEmail } = await import("../email/send-email");
     vi.mocked(sendEmail).mockClear();
 
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: { ...u.authHeaders, "X-TuringCare-Locale": "en" },
-      body: briefSendBody({ recipient: "sarah@example.com", message: "Hola Sarah" }),
+      body: briefSendBody({
+        briefId: brief.id,
+        recipient: "sarah@example.com",
+        message: "Hola Sarah",
+      }),
     });
 
     expect(r.status).toBe(201);
@@ -2096,25 +2203,125 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await app.request(`/api/dogs/${dog.id}/brief`, {
+    const generated = await app.request(`/api/dogs/${dog.id}/brief`, {
       method: "POST",
       headers: u.authHeaders,
     });
+    const draft = ((await generated.json()) as { brief: { id: string } }).brief;
     // do NOT finalize
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: briefSendBody({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ briefId: draft.id, recipient: "sarah@example.com" }),
     });
     expect(r.status).toBe(409);
     expect(await r.json()).toEqual({ error: "not_finalized" });
   });
 
-  it("POST send: holds no database transaction while provider delivery is pending", async () => {
+  it("POST send: blocks dog deletion during provider delivery without holding a transaction", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    let releaseProvider: (() => void) | undefined;
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
+    const providerRelease = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    vi.mocked(sendEmail).mockImplementationOnce(async () => {
+      markProviderStarted?.();
+      await providerRelease;
+    });
+    try {
+      const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
+        method: "POST",
+        headers: u.authHeaders,
+        body: briefSendBody({ briefId: brief.id, recipient: "race@example.com" }),
+      });
+      await providerStarted;
+
+      const blockedDelete = await app.request(`/api/dogs/${dog.id}`, {
+        method: "DELETE",
+        headers: u.authHeaders,
+      });
+      expect(blockedDelete.status).toBe(409);
+      expect(await blockedDelete.json()).toEqual({ error: "brief_delivery_in_progress" });
+
+      releaseProvider?.();
+
+      const sendResponse = await send;
+      expect(sendResponse.status).toBe(201);
+      const completedDelete = await app.request(`/api/dogs/${dog.id}`, {
+        method: "DELETE",
+        headers: u.authHeaders,
+      });
+      expect(completedDelete.status).toBe(200);
+    } finally {
+      releaseProvider?.();
+    }
+  });
+
+  it("POST send: clears a failed claim before allowing dog deletion", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    let rejectProvider: ((reason: Error) => void) | undefined;
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
+    const providerResult = new Promise<void>((_resolve, reject) => {
+      rejectProvider = reject;
+    });
+    vi.mocked(sendEmail).mockImplementationOnce(async () => {
+      markProviderStarted?.();
+      await providerResult;
+    });
+    try {
+      const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
+        method: "POST",
+        headers: u.authHeaders,
+        body: briefSendBody({ briefId: brief.id, recipient: "failed-race@example.com" }),
+      });
+      await providerStarted;
+
+      const blockedDelete = await app.request(`/api/dogs/${dog.id}`, {
+        method: "DELETE",
+        headers: u.authHeaders,
+      });
+      expect(blockedDelete.status).toBe(409);
+      expect(await blockedDelete.json()).toEqual({ error: "brief_delivery_in_progress" });
+
+      rejectProvider?.(new Error("deferred-provider-failure"));
+
+      const sendResponse = await send;
+      expect(sendResponse.status).toBe(502);
+      const completedDelete = await app.request(`/api/dogs/${dog.id}`, {
+        method: "DELETE",
+        headers: u.authHeaders,
+      });
+      expect(completedDelete.status).toBe(200);
+      const audits = await db
+        .select({ id: briefSends.id, deliveredAt: briefSends.deliveredAt })
+        .from(briefSends)
+        .where(eq(briefSends.recipient, "failed-race@example.com"));
+      expect(audits).toEqual([]);
+    } finally {
+      rejectProvider?.(new Error("test cleanup"));
+    }
+  });
+
+  it("POST send: blocks account cascade deletion until provider delivery finishes", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const { sendEmail } = await import("../email/send-email");
     let releaseProvider: (() => void) | undefined;
     let markProviderStarted: (() => void) | undefined;
@@ -2133,68 +2340,20 @@ describe("dogs: brief send", () => {
       const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
         method: "POST",
         headers: u.authHeaders,
-        body: briefSendBody({ recipient: "race@example.com" }),
+        body: briefSendBody({ briefId: brief.id, recipient: "account-race@example.com" }),
       });
       await providerStarted;
 
-      await deleter.query("BEGIN");
-      await deleter.query(`DELETE FROM "dogs" WHERE "id" = $1`, [dog.id]);
-      await deleter.query("COMMIT");
-      releaseProvider?.();
+      await expect(
+        deleter.query(`DELETE FROM "user" WHERE "id" = $1`, [u.userId]),
+      ).rejects.toMatchObject({ constraint: "brief_sends_delivery_in_progress" });
 
-      const sendResponse = await send;
-      expect(sendResponse.status).toBe(201);
-      const audits = await db
-        .select({ recipient: briefSends.recipient })
-        .from(briefSends)
-        .where(eq(briefSends.recipient, "race@example.com"));
-      expect(audits).toEqual([]);
+      releaseProvider?.();
+      expect((await send).status).toBe(201);
+      const deleted = await deleter.query(`DELETE FROM "user" WHERE "id" = $1`, [u.userId]);
+      expect(deleted.rowCount).toBe(1);
     } finally {
       releaseProvider?.();
-      deleter.release();
-    }
-  });
-
-  it("POST send: lets owner deletion erase a pending intent during provider failure", async () => {
-    const u = await createTestUser();
-    users.push(u);
-    const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
-    const { sendEmail } = await import("../email/send-email");
-    let rejectProvider: ((reason: Error) => void) | undefined;
-    let markProviderStarted: (() => void) | undefined;
-    const providerStarted = new Promise<void>((resolve) => {
-      markProviderStarted = resolve;
-    });
-    const providerResult = new Promise<void>((_resolve, reject) => {
-      rejectProvider = reject;
-    });
-    vi.mocked(sendEmail).mockImplementationOnce(async () => {
-      markProviderStarted?.();
-      await providerResult;
-    });
-    const deleter = await pool.connect();
-    try {
-      const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
-        method: "POST",
-        headers: u.authHeaders,
-        body: briefSendBody({ recipient: "failed-race@example.com" }),
-      });
-      await providerStarted;
-      await deleter.query("BEGIN");
-      await deleter.query(`DELETE FROM "dogs" WHERE "id" = $1`, [dog.id]);
-      await deleter.query("COMMIT");
-      rejectProvider?.(new Error("deferred-provider-failure"));
-
-      const sendResponse = await send;
-      expect(sendResponse.status).toBe(502);
-      const audits = await db
-        .select({ id: briefSends.id, deliveredAt: briefSends.deliveredAt })
-        .from(briefSends)
-        .where(eq(briefSends.recipient, "failed-race@example.com"));
-      expect(audits).toEqual([]);
-    } finally {
-      rejectProvider?.(new Error("test cleanup"));
       deleter.release();
     }
   });
@@ -2206,7 +2365,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: briefSendBody({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ briefId: randomUUID(), recipient: "sarah@example.com" }),
     });
     expect(r.status).toBe(404);
   });
@@ -2215,11 +2374,11 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: briefSendBody({ recipient: "not-an-email" }),
+      body: briefSendBody({ briefId: brief.id, recipient: "not-an-email" }),
     });
     expect(r.status).toBe(400);
   });
@@ -2228,11 +2387,12 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
       body: briefSendBody({
+        briefId: brief.id,
         recipient: "sarah@example.com",
         message: "x".repeat(501),
       }),
@@ -2245,11 +2405,11 @@ describe("dogs: brief send", () => {
     const b = await createTestUser();
     users.push(a, b);
     const dog = await makeDog(a);
-    await makeFinalizedBrief(a, dog.id);
+    const brief = await makeFinalizedBrief(a, dog.id);
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: b.authHeaders,
-      body: briefSendBody({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ briefId: brief.id, recipient: "sarah@example.com" }),
     });
     expect(r.status).toBe(404);
   });
@@ -2262,7 +2422,7 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
 
     const { sendEmail } = await import("../email/send-email");
     vi.mocked(sendEmail).mockRejectedValueOnce(new Error("resend-timeout-sentinel-do-not-leak"));
@@ -2271,7 +2431,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: briefSendBody({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ briefId: brief.id, recipient: "sarah@example.com" }),
     });
     const text = await r.text();
 
@@ -2304,17 +2464,17 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     // Send twice
     await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: briefSendBody({ recipient: "first@example.com" }),
+      body: briefSendBody({ briefId: brief.id, recipient: "first@example.com" }),
     });
     await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: briefSendBody({ recipient: "second@example.com" }),
+      body: briefSendBody({ briefId: brief.id, recipient: "second@example.com" }),
     });
     const r = await app.request(`/api/dogs/${dog.id}/brief/sends`, {
       headers: u.authHeaders,

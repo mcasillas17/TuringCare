@@ -164,6 +164,20 @@ describe("DogLayout", () => {
     expect(toastError).not.toHaveBeenCalled();
   });
 
+  it("shows inline recovery while a Brief delivery protects deletion", async () => {
+    deleteDog.mockRejectedValueOnce(new Error("brief_delivery_in_progress"));
+    renderLayoutAt("/my/dogs/d1/journal");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.getByRole("alert")).toHaveTextContent(/brief email is being delivered/i);
+    expect(screen.queryByRole("link", { name: /resume/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try deletion again/i })).toBeInTheDocument();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
   it("shows a conflict after pushing the same route during deletion", async () => {
     const pending = deferred<never>();
     deleteDog.mockReturnValueOnce(pending.promise);

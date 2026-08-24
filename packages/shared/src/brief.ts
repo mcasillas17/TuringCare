@@ -8,7 +8,7 @@ export const briefSendIntentSchema = z.object({
 export type BriefSendIntent = z.infer<typeof briefSendIntentSchema>;
 
 export const briefSendSchema = briefSendIntentSchema.extend({
-  briefId: z.string().uuid(VALIDATION_MESSAGE_CODES.invalid).optional(),
+  briefId: z.string().uuid(VALIDATION_MESSAGE_CODES.invalid),
   idempotencyKey: z.string().uuid(VALIDATION_MESSAGE_CODES.invalid),
 });
 export type BriefSendInput = z.infer<typeof briefSendSchema>;

@@ -565,6 +565,8 @@ export const es = {
     deleteCancel: "Cancelar",
     deleteYes: "Sí, eliminar",
     retryDelete: "Intentar eliminar de nuevo",
+    deliveryInProgressDeleteExplanation:
+      "Se está enviando un Resumen en este momento. Espera un momento e intenta eliminar de nuevo.",
     createTitle: "Agregar un perro",
     editTitle: "Editar perfil",
     save: "Guardar",
@@ -1206,6 +1208,7 @@ export const es = {
     versionConflict: "Hay más de una versión reciente del resumen. Genera una nueva versión.",
     idempotencyConflict:
       "Este intento de envío ya se usó con otros datos. Revisa e inténtalo de nuevo.",
+    sendInProgress: "Este envío ya está en curso. Revisa el historial antes de reintentar.",
     rateLimited: "Alcanzaste el límite diario de envíos. Inténtalo más tarde.",
     sent: "Enviado",
     sendFailed: "No se pudo enviar. Inténtalo de nuevo.",
