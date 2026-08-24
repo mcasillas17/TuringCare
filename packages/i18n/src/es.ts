@@ -50,6 +50,7 @@ export const es = {
     willAdd: "Se agregarán estas habilidades:",
     applied: "Plantilla aplicada",
     applyFailed: "No se pudo aplicar la plantilla",
+    levelAbbreviation: "N",
     levelPrefix: "Nivel",
   },
   trainingCatalog: {
@@ -1422,7 +1423,14 @@ export const es = {
     title: "Resumen de conducta",
     filenamePrefix: "resumen-conducta",
     unknownDogName: "Desconocido",
-    labels: { breed: "Raza", age: "Edad", size: "Tamaño", sex: "Sexo", generated: "Generado" },
+    labels: {
+      breed: "Raza",
+      age: "Edad",
+      size: "Tamaño",
+      sex: "Sexo",
+      generated: "Generado",
+      version: "Versión",
+    },
     status: { draft: "Borrador", finalized: "Definitivo" },
     size: { small: "Pequeño", medium: "Mediano", large: "Grande", giant: "Gigante" },
     sex: { male: "Macho", female: "Hembra" },
@@ -1431,7 +1439,7 @@ export const es = {
     monthOne: "{value} mes",
     monthOther: "{value} meses",
   },
-  common: { loading: "Cargando…" },
+  common: { loading: "Cargando…", unavailable: "No disponible" },
   notFound: {
     title: "Página no encontrada",
     body: "Esta página no existe o ha sido movida. Te llevamos de vuelta.",

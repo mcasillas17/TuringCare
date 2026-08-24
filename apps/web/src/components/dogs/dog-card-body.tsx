@@ -91,7 +91,11 @@ export function DogCardBody({ dog }: { dog: DogOverview }) {
                     key={s.id}
                     className="rounded-full border border-silver bg-cream px-2 py-0.5 text-xs text-slate"
                   >
-                    {s.name} <span className="font-bold text-copper">L{s.confidence}</span>
+                    {s.name}{" "}
+                    <span className="font-bold text-copper">
+                      {t("training.levelAbbreviation")}
+                      {s.confidence}
+                    </span>
                   </span>
                 ))}
               </div>

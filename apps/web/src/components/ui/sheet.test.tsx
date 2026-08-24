@@ -6,7 +6,7 @@ describe("Sheet", () => {
   it("renders title + children when open and closes on Escape", () => {
     const onClose = vi.fn();
     render(
-      <Sheet open title="Log a moment" onClose={onClose}>
+      <Sheet open title="Log a moment" closeLabel="Close" onClose={onClose}>
         <p>body</p>
       </Sheet>,
     );
@@ -18,7 +18,7 @@ describe("Sheet", () => {
 
   it("renders nothing when closed", () => {
     const { container } = render(
-      <Sheet open={false} title="x" onClose={() => {}}>
+      <Sheet open={false} title="x" closeLabel="Close" onClose={() => {}}>
         <p>body</p>
       </Sheet>,
     );
@@ -28,7 +28,7 @@ describe("Sheet", () => {
   it("closes when the backdrop is clicked", () => {
     const onClose = vi.fn();
     render(
-      <Sheet open title="x" onClose={onClose}>
+      <Sheet open title="x" closeLabel="Close" onClose={onClose}>
         <p>body</p>
       </Sheet>,
     );

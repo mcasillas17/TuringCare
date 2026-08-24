@@ -114,7 +114,7 @@ export function BriefPdfDocument({ model }: { model: BriefPdfModel }) {
 
         <View style={styles.footer} fixed>
           <Text>
-            {model.brandName} · v{model.version}
+            {model.brandName} · {model.labels.version} {model.version}
           </Text>
           <Text>
             {model.labels.generated} {model.generatedAt}

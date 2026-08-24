@@ -40,6 +40,7 @@ export const en = {
     willAdd: "Will add these skills:",
     applied: "Template applied",
     applyFailed: "Couldn't apply template",
+    levelAbbreviation: "L",
     levelPrefix: "Level",
   },
   trainingCatalog: {
@@ -1397,7 +1398,14 @@ export const en = {
     title: "Behavior Brief",
     filenamePrefix: "behavior-brief",
     unknownDogName: "Unknown",
-    labels: { breed: "Breed", age: "Age", size: "Size", sex: "Sex", generated: "Generated" },
+    labels: {
+      breed: "Breed",
+      age: "Age",
+      size: "Size",
+      sex: "Sex",
+      generated: "Generated",
+      version: "Version",
+    },
     status: { draft: "draft", finalized: "finalized" },
     size: { small: "Small", medium: "Medium", large: "Large", giant: "Giant" },
     sex: { male: "Male", female: "Female" },
@@ -1406,7 +1414,7 @@ export const en = {
     monthOne: "{value} mo",
     monthOther: "{value} mo",
   },
-  common: { loading: "Loading…" },
+  common: { loading: "Loading…", unavailable: "Unavailable" },
   notFound: {
     title: "Page not found",
     body: "This page doesn't exist or has moved. Let's get you back.",

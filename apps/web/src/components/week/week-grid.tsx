@@ -1,7 +1,7 @@
 import { useI18n } from "@/i18n";
 import { dayKey } from "@/lib/week";
 import type { FocusSession, FocusSkill } from "@/lib/weekly-focus";
-import { formatDateInUtc } from "@turingcare/i18n";
+import { formatDate, formatDateInUtc } from "@turingcare/i18n";
 import { useState } from "react";
 
 type Props = {
@@ -108,10 +108,10 @@ export function WeekGrid({
                         {cellSessions.map((s) => (
                           <div key={s.id} className="flex items-center justify-between gap-2">
                             <span className="text-xs text-slate-soft">
-                              {new Date(s.occurredAt).toLocaleTimeString(locale, {
+                              {formatDate(locale, s.occurredAt, {
                                 hour: "numeric",
                                 minute: "2-digit",
-                              })}
+                              }) ?? t("common.unavailable")}
                               {s.durationMinutes != null
                                 ? ` · ${t(
                                     s.durationMinutes === 1

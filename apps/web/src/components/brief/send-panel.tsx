@@ -5,6 +5,7 @@ import { BriefRequestError, briefSendErrorMessageKey } from "@/lib/brief-errors"
 import { createBriefSendIdempotencyKey } from "@/lib/brief-idempotency";
 import { useBriefSends, useSendBrief } from "@/lib/brief-send";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { formatDate } from "@turingcare/i18n";
 import { type BriefSendIntent, briefSendIntentSchema } from "@turingcare/shared";
 import { useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
@@ -103,8 +104,6 @@ export function SendPanel({
     }
   };
 
-  const fmt = new Intl.DateTimeFormat(locale, { dateStyle: "medium" });
-
   return (
     <section className="space-y-3 rounded border border-silver bg-white p-4">
       <h2 className="font-semibold text-slate">{t("briefSend.title")}</h2>
@@ -176,7 +175,8 @@ export function SendPanel({
                   {s.recipient} —{" "}
                   {s.status === "pending"
                     ? t("briefSend.deliveryPending")
-                    : fmt.format(new Date(String(s.sentAt)))}
+                    : (formatDate(locale, String(s.sentAt), { dateStyle: "medium" }) ??
+                      t("common.unavailable"))}
                 </span>
                 {s.status === "pending" && (
                   <Button

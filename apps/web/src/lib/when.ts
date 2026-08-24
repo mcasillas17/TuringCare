@@ -1,5 +1,7 @@
 // Local-time humanized date/time helpers for the journal timeline and capture.
 
+import { type Locale, formatDate } from "@turingcare/i18n";
+
 /** Local YYYY-MM-DD key for a date. */
 export function localDayKey(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -19,22 +21,26 @@ export function dayKindOf(value: string | Date, now: Date = new Date()): DayKind
 }
 
 /** "Jun 1" in-year, "Dec 31, 2025" across years. */
-export function dateLabel(value: string | Date, now: Date = new Date(), locale = "en"): string {
+export function dateLabel(
+  value: string | Date,
+  now: Date = new Date(),
+  locale: Locale = "en",
+): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "";
   const sameYear = d.getFullYear() === now.getFullYear();
-  return new Intl.DateTimeFormat(locale, {
-    month: "short",
-    day: "numeric",
-    year: sameYear ? undefined : "numeric",
-  }).format(d);
+  return (
+    formatDate(locale, d, {
+      month: "short",
+      day: "numeric",
+      year: sameYear ? undefined : "numeric",
+    }) ?? ""
+  );
 }
 
 /** "4:05 PM" — localized wall-clock time. */
-export function humanTime(value: string | Date, locale = "en"): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(d);
+export function humanTime(value: string | Date, locale: Locale = "en"): string {
+  return formatDate(locale, value, { hour: "numeric", minute: "2-digit" }) ?? "";
 }
 
 /** "YYYY-MM-DDTHH:mm" in LOCAL time, for <input type="datetime-local">. */

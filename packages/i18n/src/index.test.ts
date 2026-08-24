@@ -3,6 +3,7 @@ import {
   createI18n,
   en,
   es,
+  formatDate,
   formatDateInUtc,
   isLocale,
   resolveBrowserLocale,
@@ -17,12 +18,48 @@ function keyPaths(o: Record<string, unknown>, prefix = ""): string[] {
   );
 }
 
+function messageEntries(catalog: Record<string, unknown>, prefix = ""): Array<[string, string]> {
+  return Object.entries(catalog).flatMap(([key, value]) => {
+    const path = `${prefix}${key}`;
+    return value && typeof value === "object"
+      ? messageEntries(value as Record<string, unknown>, `${path}.`)
+      : [[path, String(value)]];
+  });
+}
+
+function placeholders(message: string): string[] {
+  return [...message.matchAll(/\{([^}]+)\}/g)]
+    .flatMap((match) => (match[1] ? [match[1]] : []))
+    .sort();
+}
+
 afterEach(() => {
   Reflect.deleteProperty(globalThis, "__i18next_supportNoticeShown");
   vi.restoreAllMocks();
 });
 
 describe("@turingcare/i18n locale helpers", () => {
+  it("formats a valid date in the explicit locale and rejects an invalid date", () => {
+    expect(
+      formatDate("es", "2026-05-19T12:00:00.000Z", {
+        day: "numeric",
+        month: "long",
+        timeZone: "UTC",
+        year: "numeric",
+      }),
+    ).toBe("19 de mayo de 2026");
+    expect(
+      formatDate("en", new Date("2026-05-19T12:00:00.000Z"), {
+        month: "short",
+        timeZone: "UTC",
+        year: "numeric",
+      }),
+    ).toBe("May 2026");
+    expect(formatDate("en", "not-a-date")).toBeNull();
+    expect(formatDate("en", null)).toBeNull();
+    expect(formatDate("es", undefined)).toBeNull();
+  });
+
   it("formats an instant in the explicit locale while preserving its UTC calendar day", () => {
     expect(
       formatDateInUtc("es", "2026-05-19T00:30:00.000Z", {
@@ -100,6 +137,17 @@ describe("@turingcare/i18n runtime", () => {
 describe("@turingcare/i18n catalogs", () => {
   it("keeps the English and Spanish catalogs in exact key parity", () => {
     expect(keyPaths(es).sort()).toEqual(keyPaths(en).sort());
+  });
+
+  it("keeps interpolation placeholders in parity for every catalog message", () => {
+    const english = new Map(messageEntries(en));
+    const spanish = new Map(messageEntries(es));
+
+    for (const [key, englishMessage] of english) {
+      expect(placeholders(spanish.get(key) ?? ""), `es.${key}`).toEqual(
+        placeholders(englishMessage),
+      );
+    }
   });
 
   it("serves every generated-artifact namespace through the shared runtime", () => {

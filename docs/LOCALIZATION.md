@@ -16,6 +16,54 @@ Do not add a second catalog under an app. Add fixed system copy to both
 `packages/i18n/src/en.ts` and `packages/i18n/src/es.ts`, then use its typed message key.
 Keep stable API error codes language-neutral and translate them at the UI boundary.
 
+Catalog tests enforce both exact key parity and interpolation-placeholder parity across
+every English and Spanish leaf message. A translation must preserve the same `{variable}`
+names as its English source; reordered placeholders are supported, missing or renamed ones
+fail the i18n package tests.
+
+## Web copy and date guardrails
+
+`apps/web/src/i18n/ui-copy-audit.test.ts` parses production TypeScript with the TypeScript
+AST. It scans all non-test `.ts` and `.tsx` files below `apps/web/src` and fails when fixed
+interface copy bypasses the catalog in JSX text, common accessibility attributes (including
+Sonner's `containerAriaLabel` and the shared Sheet's `closeLabel`), Sonner toast titles,
+descriptions, and promise states, or reviewed display-object properties and props. Sonner
+imports are recognized through named, local, and namespace aliases. Toast option objects are
+resolved through local aliases and spreads, including shorthand values, getters, callback
+methods, or function declarations. Imported shorthand values, and imported or dynamic option
+sources, property calls, or direct toast messages that cannot be resolved within the file,
+fail closed; catalog calls are trusted only when their `t` binding comes from the app's
+`useI18n` hook imported from the exact app module, and local option-helper returns are
+inspected. Local constants, nested object and array destructured constants, getter values,
+destructuring defaults, parameter defaults, and non-exported helper or object-member returns
+are followed into those sinks. For destructuring from imported, dynamic, or reviewed authored
+producers, the audit checks both unresolved source/member provenance and any literal fallback,
+because either value can render. An unresolved spread is evaluated according to whether it can
+override a known property. Every getter return path is inspected through both destructuring
+and direct or chained member access. React `useState` tuple values remain authored runtime
+state, but literal and lazy-literal initializers are still audited as fixed copy. A narrow
+module-and-export allowlist covers existing hooks and catalog lookups whose results are
+reviewed authored or localized data. The exact export identity is preserved through named
+import aliases, namespace members, and members of local object literals passed directly to the
+unshadowed global `Object.freeze`. Mutable object-member aliases fail closed. Trust begins only
+after that producer is called; the imported function object and its static properties remain
+untrusted UI-copy sources. Same-named imports from any other module and other imported/dynamic
+factories fail closed. Allowlisted producer output is treated as authored or localized, but a
+literal destructuring default is still fixed UI copy and must use the catalog. Imported
+JSX spreads and their nested local aliases are rejected so a separate copy module cannot
+bypass the catalog. Exported helper returns are also checked for fixed copy, with a narrow,
+reviewed allowlist for stable serializers, query keys, and typed message-key helpers.
+The audit rejects direct `toLocale*` calls and `Intl.DateTimeFormat` construction throughout
+production source. Authored values, catalog calls, stable machine data, brand identities,
+and narrowly reviewed decorative glyphs remain outside the fixed-copy rule.
+
+Use `formatDate(locale, value, options)` from `@turingcare/i18n` for local-time display and
+`formatDateInUtc(locale, value, options)` for locale-stable artifact/calendar dates. Both
+require an allowlisted locale and return `null` for absent or malformed dates instead of
+throwing. UI callers must choose an appropriate localized fallback such as
+`common.unavailable`; do not call ambient `toLocale*` methods or construct a formatter
+inside a component.
+
 ## Web preference resolution
 
 The effective preference order is:
@@ -157,7 +205,7 @@ diagnostic; recipient addresses and subjects are not written to that fallback lo
    stored `Locale`; do not read browser state in email/PDF/Brief composition.
 4. For curated training data, preserve stable keys and localize only display fields.
 5. Add English and Spanish behavior tests, including fallback and malformed-input branches.
-6. Run the focused package/app test, then the full Node 22 gates from `README.md`.
+6. Run the catalog and web AST audits, then the full Node 22 gates from `README.md`.
 
 Useful focused checks:
 
@@ -165,7 +213,7 @@ Useful focused checks:
 pnpm --filter @turingcare/i18n test
 pnpm --filter @turingcare/shared test
 pnpm --filter @turingcare/api exec vitest run src/middleware/locale.test.ts
-pnpm --filter @turingcare/web exec vitest run src/i18n src/lib/api.test.ts
+pnpm --filter @turingcare/web exec vitest run src/i18n src/lib/api.test.ts src/lib/when.test.ts
 ```
 
 API tests require the migrated local Postgres database. Use Vitest's

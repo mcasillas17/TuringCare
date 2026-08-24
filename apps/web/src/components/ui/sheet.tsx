@@ -6,15 +6,15 @@ type SheetProps = {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
-  /** Optional close-button label for screen readers. */
-  closeLabel?: string;
+  /** Localized close-button label for screen readers. */
+  closeLabel: string;
 };
 
 /**
  * Minimal modal sheet: full-screen on phone (bottom-anchored), centered card on
  * larger screens. Closes on Escape and backdrop click. Locks body scroll while open.
  */
-export function Sheet({ open, title, onClose, children, closeLabel = "Close" }: SheetProps) {
+export function Sheet({ open, title, onClose, children, closeLabel }: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   // Keep the latest onClose without re-subscribing the listener every render
