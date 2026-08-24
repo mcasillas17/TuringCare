@@ -218,6 +218,8 @@ published in PR #70.
   refresh because recipient/message cannot establish the intended version.
 - Intent persistence before provider I/O, provider calls outside transactions, durable provider
   idempotency, bounded retry claims, and explicit active/recovery outcomes.
+- Fail-fast production validation for the Resend key and PII-free non-production fallback logs,
+  preventing provider-free sends from being recorded as delivered.
 - `0025` delivery confirmation and `0026` fail-closed deletion claims, including raw cascade,
   stale/null-time recovery, dog deletion, account preflight, and account-race coverage.
 - Delivered-only onboarding state and localized English/Spanish retry, refresh, and deletion

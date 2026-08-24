@@ -11,7 +11,9 @@ describe("sendEmail", () => {
     const client: ResendLike = { emails: { send: vi.fn() } };
     await sendEmail(ARGS, { client, apiKey: undefined, from: "F <f@x.com>" });
     expect(client.emails.send).not.toHaveBeenCalled();
-    expect(info).toHaveBeenCalledWith("[email:dev]", { to: ARGS.to, subject: ARGS.subject });
+    expect(info).toHaveBeenCalledWith("[email:dev] delivery skipped: provider not configured");
+    expect(info.mock.calls.flat().join(" ")).not.toContain(ARGS.to);
+    expect(info.mock.calls.flat().join(" ")).not.toContain(ARGS.subject);
   });
 
   it("sends via the client when an api key is present", async () => {
@@ -91,7 +93,8 @@ describe("sendEmail", () => {
       { to: "u@example.com", subject: "Hi", html: "<p>x</p>", text: "x" },
       { apiKey: undefined },
     );
-    expect(info).toHaveBeenCalledWith("[email:dev]", { to: "u@example.com", subject: "Hi" });
+    expect(info).toHaveBeenCalledWith("[email:dev] delivery skipped: provider not configured");
+    expect(info.mock.calls.flat().join(" ")).not.toContain("u@example.com");
   });
 });
 

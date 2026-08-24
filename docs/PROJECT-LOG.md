@@ -175,8 +175,9 @@ the logged-in path via `vi.mock`; landing.test stays green for logged-out.
 
 ## 2026-05-19 — Transactional email provider (P1) — SHIPPED
 Security backlog P1. Provider-isolated `email/send-email.ts` (Resend SDK; only
-file importing it) with a log-only no-op fallback when `RESEND_API_KEY` is
-unset (local/CI never send, no network, never throw); `EmailSendError` chains
+file importing it) with a redacted no-network fallback when `RESEND_API_KEY` is
+unset outside production (local/CI never send; production now fails configuration
+validation); `EmailSendError` chains
 cause; body/identity guards. Pure `email/templates.ts`
 (verification + reset, inline-styled HTML + text, paste-link fallback). Better
 Auth `emailAndPassword.sendResetPassword` + `emailVerification`
@@ -1185,6 +1186,9 @@ random audit IDs. Delivery claims coordinate retry takeover without
 ever weakening deletion protection; stale or timestamp-less claims require explicit recovery.
 Dog/account deletion and account-deletion races fail closed with localized links, the database
 trigger also protects raw cascades, and onboarding counts only confirmed deliveries.
+Production configuration now requires a non-empty Resend key, preventing provider-free sends
+from being recorded as delivered. Development/CI no-key mode retains its no-network behavior
+but logs neither recipient address nor subject.
 
 The production rollout preserves the running `production-deploy` workflow while preventing
 phase interleaving: CI → drain legacy API → full migrations through 0026 → deploy and verify

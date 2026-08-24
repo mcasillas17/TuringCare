@@ -52,8 +52,9 @@ export interface SendEmailDeps {
 
 /**
  * Deliver one transactional email. Provider-isolated. With no API key
- * (local/CI) it logs and resolves — no network, never throws. With a key it
- * sends via Resend and throws EmailSendError on any provider/transport failure.
+ * (local/CI only; production configuration rejects this state) it emits one
+ * redacted diagnostic and resolves without network I/O. With a key it sends via
+ * Resend and throws EmailSendError on any provider/transport failure.
  */
 export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): Promise<void> {
   if (!args.to.trim() || !args.subject.trim()) {
@@ -80,7 +81,7 @@ export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): 
   const from = deps.from ?? env.EMAIL_FROM;
 
   if (!apiKey) {
-    console.info("[email:dev]", { to: args.to, subject: args.subject });
+    console.info("[email:dev] delivery skipped: provider not configured");
     return;
   }
 

@@ -111,6 +111,9 @@ The approved design shipped with these review-driven hardening details:
   Provider I/O holds no database connection, stale claims are retry-reclaimable, and migrations
   `0025`/`0026` distinguish delivered sends while blocking dog/account cascades for every claimed
   send until explicit recovery. Onboarding counts only confirmed delivery.
+- Production environment validation requires a non-empty Resend key before the API starts, so a
+  provider-free path cannot mark localized Brief/auth mail delivered. The non-production no-key
+  fallback is no-network and logs only a fixed diagnostic without recipient or subject.
 - The production deploy prevents phase interleaving and preserves the running workflow: drain the
   legacy API, apply the complete immutable migration history through 0026, deploy and verify the
   dual-protocol API, idempotently verify no migration remains, then publish the exact-binding web.

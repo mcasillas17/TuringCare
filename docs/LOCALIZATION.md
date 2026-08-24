@@ -145,6 +145,10 @@ and in admin aggregation. Migration `0024_brief_share_telemetry_privacy` cleans 
 literal and route-equivalent once-encoded share paths. Public share responses expose a strict
 Brief whitelist and never return a user ID, dog ID, or token.
 
+Production configuration requires `RESEND_API_KEY`, so localized Brief/auth emails cannot be
+acknowledged in provider-free log mode. Non-production no-key mode logs only a fixed redacted
+diagnostic; recipient addresses and subjects are not written to that fallback log.
+
 ## Adding or changing localized copy
 
 1. Decide whether the value is fixed system copy. Leave authored database fields unchanged.

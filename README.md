@@ -87,7 +87,8 @@ Brief version and idempotency key. During the web rollout, the API also accepts 
 `{ recipient, message }` payload only when one exact Brief can be established; an ambiguous
 old tab is asked to refresh without sending. Pending sends can be retried with the same
 provider idempotency key, and dog/account deletion pauses with a localized recovery link
-while delivery state is unresolved.
+while delivery state is unresolved. Production refuses to start without its Resend key, so
+provider-free fallback can never be recorded as a successful delivery.
 
 This end-to-end localization work was implemented for
 [PR #70](https://github.com/mcasillas17/TuringCare/pull/70). See

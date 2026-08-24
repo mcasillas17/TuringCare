@@ -4,6 +4,10 @@
 **Status:** Approved (brainstorming)
 **Topic:** Security backlog **P1** — wire a transactional email provider (Resend) and Better Auth's email callbacks. Hard dependency for P2 (email verification) and P3 (password reset / recovery).
 
+> **Production hardening amendment (2026-08-23):** Production configuration now requires a
+> non-empty `RESEND_API_KEY` and fails startup without it. The non-production no-key fallback
+> remains no-network but logs only a fixed redacted diagnostic, never recipient or subject.
+
 ---
 
 ## 1. Goal & scope
@@ -54,8 +58,9 @@ export async function sendEmail(args: SendEmailArgs, deps?: { client?: ResendLik
 - Resolve `apiKey` (default `env.RESEND_API_KEY`), `from` (default
   `env.EMAIL_FROM`), `client` (default: a lazily-constructed Resend client when
   an API key exists; injectable for tests).
-- **No API key** → `console.info("[email:dev]", { to, subject })` (subject/to
-  only — never the link/token body) and resolve. No network, never throws.
+- **No API key outside production** → emit one fixed delivery-skipped diagnostic and resolve.
+  No network, no recipient/subject/body in logs. Production environment validation rejects this
+  configuration before startup.
 - **API key present** → send via the client; a provider/SDK error → throw
   `EmailSendError` (message carries provider status/context only — no API key,
   no PII, no token).
@@ -71,7 +76,8 @@ export function passwordResetEmail(url: string): { subject: string; html: string
   pixels, no external assets.
 
 ### `apps/api/src/env.ts` (additive)
-- `RESEND_API_KEY: z.string().optional()` — absence = dev log mode.
+- `RESEND_API_KEY` is blank/optional only for development and test; production refinement
+  requires a non-empty value and fails startup otherwise.
 - `EMAIL_FROM: z.string().default("TuringCare <noreply@send.turingcare.dog>")`.
 
 `resend` added to `apps/api` dependencies (only `send-email.ts` imports it).
@@ -122,8 +128,8 @@ Operator actions (documented in the spec/DEPLOY.md, **not** code):
    and a DMARC record in Cloudflare DNS; wait for Resend to verify.
 3. `fly secrets set --app turingcare-api RESEND_API_KEY=… EMAIL_FROM='TuringCare <noreply@send.turingcare.dog>'`.
 
-Until the domain is verified + secret set, prod simply runs in log mode for
-email (no crash) — deploy is not blocked by DNS propagation.
+The domain must be verified and the secret set before production deployment; otherwise the API
+fails configuration validation instead of acknowledging provider-free delivery.
 
 ---
 

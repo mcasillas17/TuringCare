@@ -1,10 +1,14 @@
 # Transactional Email Provider (P1) Implementation Plan
 
+> **Production hardening amendment (2026-08-23):** The historical steps below introduced an
+> optional provider key for local/CI. Current production configuration fails startup when that
+> key is absent or blank, and the non-production fallback no longer logs recipient or subject.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the API a reusable, provider-isolated `sendEmail` capability (Resend) and wire Better Auth's verification + password-reset email callbacks — with no user-facing behavior change (`requireEmailVerification` stays OFF).
 
-**Architecture:** One provider seam: `email/send-email.ts` (only file importing the `resend` SDK; dependency-injectable; logs instead of sending when `RESEND_API_KEY` is unset) + pure `email/templates.ts`. Better Auth callbacks call `sendEmail` wrapped in swallow-on-error so a flaky provider can't break sign-up or `/forget-password`.
+**Architecture:** One provider seam: `email/send-email.ts` (only file importing the `resend` SDK; dependency-injectable; uses a redacted no-network fallback outside production when `RESEND_API_KEY` is unset) + pure `email/templates.ts`. Production configuration requires the key. Better Auth callbacks call `sendEmail` wrapped in swallow-on-error so a flaky provider can't break sign-up or `/forget-password`.
 
 **Tech Stack:** Hono, Better Auth, Drizzle, Zod, `resend` SDK, Vitest. Vitest auto-loads `.env`; Postgres `turingcare-postgres` running. No network in tests; CI never sends.
 
@@ -15,7 +19,8 @@
 ## File Structure
 
 - `apps/api/package.json` *(modify)* — add `resend` dependency.
-- `apps/api/src/env.ts` *(modify)* — `RESEND_API_KEY` (optional), `EMAIL_FROM` (defaulted).
+- `apps/api/src/env.ts` *(modify)* — `RESEND_API_KEY` (optional outside production,
+  required in production), `EMAIL_FROM` (defaulted).
 - `.env.example` *(modify)* — document both, key blank locally.
 - `apps/api/src/email/templates.ts` *(create)* — pure `verificationEmail` / `passwordResetEmail` builders.
 - `apps/api/src/email/templates.test.ts` *(create)*.
@@ -42,9 +47,9 @@ Expected: `resend` appears in `apps/api/package.json` dependencies; root `pnpm-l
 In `apps/api/src/env.ts`, add inside the `z.object({ … })` immediately after the `EVENT_RETENTION_DAYS` line:
 
 ```ts
-  // Resend API key. UNSET locally/CI → email runs in log-only mode (no network,
-  // no real send). Set as a Fly secret in production.
-  RESEND_API_KEY: z.string().optional(),
+  // Blank/unset is allowed for local/CI redacted no-network mode. A production
+  // schema refinement requires a non-empty key and fails startup otherwise.
+  RESEND_API_KEY: z.string().trim().optional().transform((value) => value || undefined),
   // From address for all transactional email. Prod uses the verified
   // send.turingcare.dog subdomain; local default is a harmless placeholder.
   EMAIL_FROM: z.string().default("TuringCare <noreply@send.turingcare.dog>"),
@@ -504,8 +509,8 @@ In `DEPLOY.md`, add a new subsection (place it right after the Fly-secrets secti
 ```markdown
 ### Transactional email (Resend) — one-time setup
 
-Until these are done, production runs email in **log-only mode** (no crash, no
-mail). Deploy is not blocked by DNS propagation.
+These steps must be complete before production deployment. Missing provider configuration
+fails startup rather than acknowledging mail that was not sent.
 
 1. Create a Resend account; create an API key.
 2. In Resend, add domain `send.turingcare.dog`. Add the generated **SPF**,
@@ -549,8 +554,9 @@ Append to `docs/PROJECT-LOG.md` (newest at the bottom):
 
 ```markdown
 ## 2026-05-19 — Transactional email provider (P1) — SHIPPED
-Provider-isolated `sendEmail` (Resend SDK) with a log-only no-op fallback when
-`RESEND_API_KEY` is unset (local/CI never send, no network); pure
+Provider-isolated `sendEmail` (Resend SDK) with a redacted no-op fallback when
+`RESEND_API_KEY` is unset outside production (local/CI never send, no network; production
+fails configuration validation); pure
 verification/reset HTML+text templates; Better Auth `sendResetPassword` +
 `emailVerification.sendVerificationEmail` (`sendOnSignUp:true`) wired with
 swallow-on-error so a flaky provider can't break sign-up or `/forget-password`.

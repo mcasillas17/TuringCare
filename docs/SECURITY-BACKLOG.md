@@ -17,8 +17,9 @@ brainstorm → spec → plan → build flow.
 
 ## Shipped — Transactional email and password recovery
 
-- Resend delivery is wired when `RESEND_API_KEY` and `EMAIL_FROM` are configured as Fly
-  secrets; local/CI environments without a key remain in explicit log-only mode.
+- Resend delivery is wired through Fly secrets. Production fails startup when
+  `RESEND_API_KEY` is absent or blank; local/CI environments without a key emit only a fixed
+  redacted diagnostic and perform no delivery.
 - Better Auth password-reset email generation and the web forgot/reset-password routes are
   implemented with localized English/Spanish chrome.
 - Verification emails are sent on sign-up, but account access is not yet conditioned on

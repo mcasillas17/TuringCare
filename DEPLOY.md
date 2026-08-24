@@ -139,8 +139,10 @@ fly secrets set --app turingcare-api \
 
 ### Transactional email (Resend) — one-time setup
 
-Until these are done, production runs email in **log-only mode** (no crash, no
-mail). Deploy is not blocked by DNS propagation.
+Complete these steps before deploying. The production API now fails configuration
+validation when `RESEND_API_KEY` is absent or blank, preventing Brief, verification,
+or reset emails from being acknowledged without provider delivery. Local/CI no-key
+mode emits only a redacted diagnostic with no recipient or subject.
 
 1. Create a Resend account; create an API key.
 2. In Resend, add domain `send.turingcare.dog`. Add the generated **SPF**,
