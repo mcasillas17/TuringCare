@@ -35,6 +35,7 @@ describe("migration 0026 Brief delivery claims", () => {
 
     const activeId = randomUUID();
     const failClosedId = randomUUID();
+    const staleId = randomUUID();
     const clearedId = randomUUID();
     await pool.query(
       `INSERT INTO "${schema}"."brief_sends"
@@ -42,8 +43,9 @@ describe("migration 0026 Brief delivery claims", () => {
        VALUES
         ($1, 'active', clock_timestamp()),
         ($2, 'missing-timestamp', NULL),
-        ($3, NULL, NULL)`,
-      [activeId, failClosedId, clearedId],
+        ($3, 'stale', clock_timestamp() - interval '31 seconds'),
+        ($4, NULL, NULL)`,
+      [activeId, failClosedId, staleId, clearedId],
     );
 
     await expect(
@@ -51,6 +53,9 @@ describe("migration 0026 Brief delivery claims", () => {
     ).rejects.toMatchObject({ constraint: "brief_sends_delivery_in_progress" });
     await expect(
       pool.query(`DELETE FROM "${schema}"."brief_sends" WHERE "id" = $1`, [failClosedId]),
+    ).rejects.toMatchObject({ constraint: "brief_sends_delivery_in_progress" });
+    await expect(
+      pool.query(`DELETE FROM "${schema}"."brief_sends" WHERE "id" = $1`, [staleId]),
     ).rejects.toMatchObject({ constraint: "brief_sends_delivery_in_progress" });
 
     const clearedDelete = await pool.query(

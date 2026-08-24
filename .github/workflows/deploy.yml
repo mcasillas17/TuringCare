@@ -55,11 +55,36 @@ jobs:
       - name: Smoke production API image
         run: scripts/smoke-api-image.sh turingcare-api:ci
 
+  # Publish the new client first. It remains compatible with the legacy API,
+  # while the legacy client cannot safely satisfy newly required request
+  # fields once the enforcing API is live.
+  deploy-web:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build frontend (prod API URL)
+        run: pnpm --filter @turingcare/web build
+        env:
+          VITE_API_URL: https://api.turingcare.dog
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name=turingcare-web --branch=main
+
   # Drain the schema-incompatible legacy API, apply the complete ordered
   # migration history, then deploy and verify the new API. No legacy writer can
   # resume after migration begins.
   deploy-api:
-    needs: ci
+    needs: deploy-web
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -143,27 +168,3 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Apply post-deploy migrations
         run: pnpm --filter @turingcare/api db:migrate
-
-  # The web uses the expanded focus/session and locale contracts, so publish it
-  # only after the verified API and final migrations are healthy.
-  deploy-web:
-    needs: migrate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Build frontend (prod API URL)
-        run: pnpm --filter @turingcare/web build
-        env:
-          VITE_API_URL: https://api.turingcare.dog
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/web/dist --project-name=turingcare-web --branch=main

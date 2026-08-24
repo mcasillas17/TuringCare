@@ -178,6 +178,22 @@ describe("DogLayout", () => {
     expect(toastError).not.toHaveBeenCalled();
   });
 
+  it("links to pending Brief recovery when a delivery claim was abandoned", async () => {
+    deleteDog.mockRejectedValueOnce(new Error("brief_delivery_recovery_required"));
+    renderLayoutAt("/my/dogs/d1/journal");
+
+    fireEvent.click(screen.getByRole("button", { name: /delete dog/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.getByRole("alert")).toHaveTextContent(/needs confirmation/i);
+    expect(screen.getByRole("link", { name: /resolve pending delivery/i })).toHaveAttribute(
+      "href",
+      "/my/dogs/d1/brief",
+    );
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
   it("shows a conflict after pushing the same route during deletion", async () => {
     const pending = deferred<never>();
     deleteDog.mockReturnValueOnce(pending.promise);

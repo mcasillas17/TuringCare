@@ -11,6 +11,13 @@ export type ProfileUser = {
   locale: Locale | null;
 };
 
+export type AccountDeletionReadiness =
+  | { status: "ready" }
+  | {
+      status: "brief_delivery_in_progress" | "brief_delivery_recovery_required";
+      dogId: string;
+    };
+
 type ProfileResponseErrorCode = "invalid_profile_locale_response" | "invalid_profile_response";
 
 export class ProfileResponseError extends Error {
@@ -25,6 +32,27 @@ export class ProfileResponseError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+export async function getAccountDeletionReadiness(): Promise<AccountDeletionReadiness> {
+  const response = await api.api.profile["deletion-readiness"].$get();
+  // The web bundle is intentionally deployed before the enforcing API. During
+  // that short compatibility window the legacy API has no readiness route and
+  // also has no durable delivery claims to reconcile.
+  if (response.status === 404) return { status: "ready" };
+  if (!response.ok) throw new Error("account_deletion_readiness_failed");
+  const body: unknown = await response.json();
+  if (isRecord(body) && body.status === "ready") return { status: "ready" };
+  if (
+    isRecord(body) &&
+    (body.status === "brief_delivery_in_progress" ||
+      body.status === "brief_delivery_recovery_required") &&
+    typeof body.dogId === "string" &&
+    body.dogId.length > 0
+  ) {
+    return { status: body.status, dogId: body.dogId };
+  }
+  throw new Error("invalid_account_deletion_readiness");
 }
 
 async function decodeProfileResponse(

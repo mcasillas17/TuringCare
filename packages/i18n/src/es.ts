@@ -567,6 +567,9 @@ export const es = {
     retryDelete: "Intentar eliminar de nuevo",
     deliveryInProgressDeleteExplanation:
       "Se está enviando un Resumen en este momento. Espera un momento e intenta eliminar de nuevo.",
+    deliveryRecoveryDeleteExplanation:
+      "Es necesario confirmar un envío anterior antes de eliminar este perro. Abre el Resumen y reintenta primero el envío pendiente.",
+    resolveBriefDelivery: "Resolver el envío pendiente",
     createTitle: "Agregar un perro",
     editTitle: "Editar perfil",
     save: "Guardar",
@@ -1314,6 +1317,10 @@ export const es = {
     deleting: "Eliminando…",
     accountDeleted: "Cuenta eliminada",
     deleteFailed: "No se pudo eliminar. Inténtalo de nuevo.",
+    accountDeletionDeliveryInProgress:
+      "Se está enviando un Resumen en este momento. Espera un momento antes de eliminar tu cuenta.",
+    accountDeletionDeliveryRecovery:
+      "Es necesario confirmar un envío anterior antes de eliminar tu cuenta.",
     cancel: "Cancelar",
   },
   validation: {

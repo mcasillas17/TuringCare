@@ -549,6 +549,9 @@ export const en = {
     retryDelete: "Try deletion again",
     deliveryInProgressDeleteExplanation:
       "A Brief email is being delivered right now. Wait a moment, then try deleting again.",
+    deliveryRecoveryDeleteExplanation:
+      "A previous Brief delivery needs confirmation before this dog can be deleted. Open the Brief and retry its pending delivery first.",
+    resolveBriefDelivery: "Resolve pending delivery",
     createTitle: "Add a dog",
     editTitle: "Edit profile",
     save: "Save",
@@ -1290,6 +1293,10 @@ export const en = {
     deleting: "Deleting…",
     accountDeleted: "Account deleted",
     deleteFailed: "Couldn't delete. Try again.",
+    accountDeletionDeliveryInProgress:
+      "A Brief email is being delivered right now. Wait a moment before deleting your account.",
+    accountDeletionDeliveryRecovery:
+      "A previous Brief delivery needs confirmation before your account can be deleted.",
     cancel: "Cancel",
   },
   validation: {

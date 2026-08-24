@@ -1822,6 +1822,15 @@ describe("dogs: brief send", () => {
     const { sendEmail } = await import("../email/send-email");
     vi.mocked(sendEmail).mockClear();
 
+    const blockedDelete = await app.request(`/api/dogs/${dog.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+    expect(blockedDelete.status).toBe(409);
+    expect(await blockedDelete.json()).toEqual({
+      error: "brief_delivery_recovery_required",
+    });
+
     const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
@@ -1846,6 +1855,12 @@ describe("dogs: brief send", () => {
     expect(stored?.deliveredAt).toBeInstanceOf(Date);
     expect(stored?.deliveryClaimId).toBeNull();
     expect(stored?.deliveryClaimedAt).toBeNull();
+
+    const completedDelete = await app.request(`/api/dogs/${dog.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+    expect(completedDelete.status).toBe(200);
   });
 
   it("POST send: never recovers an old pending key for a newer Brief", async () => {

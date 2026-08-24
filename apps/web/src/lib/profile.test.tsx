@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useProfile, useUpdateProfileLocale } from "./profile";
+import { getAccountDeletionReadiness, useProfile, useUpdateProfileLocale } from "./profile";
 
 function wrapper(queryClient: QueryClient) {
   return function QueryWrapper({ children }: { children: ReactNode }) {
@@ -15,6 +15,38 @@ afterEach(() => {
 });
 
 describe("profile response decoding", () => {
+  it("accepts allowlisted account-deletion readiness and rejects malformed payloads", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ status: "brief_delivery_recovery_required", dogId: "dog-1" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "brief_delivery_recovery_required" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getAccountDeletionReadiness()).resolves.toEqual({
+      status: "brief_delivery_recovery_required",
+      dogId: "dog-1",
+    });
+    await expect(getAccountDeletionReadiness()).rejects.toThrow(
+      "invalid_account_deletion_readiness",
+    );
+  });
+
+  it("allows account deletion when the legacy API has no readiness route", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
+
+    await expect(getAccountDeletionReadiness()).resolves.toEqual({ status: "ready" });
+  });
+
   it("does not fetch or create an unscoped query when the session user id is null", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

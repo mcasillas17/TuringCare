@@ -235,8 +235,6 @@ export function sendFailedException(c: Context, cause: unknown): HTTPException {
   return new HTTPException(502, { res: c.json({ error: "send_failed" } as const, 502), cause });
 }
 
-const BRIEF_DELIVERY_RECLAIM_AFTER_MS = 30_000;
-
 export function resolveBriefSendIntent<
   T extends { briefId: string; recipient: string; message: string | null },
 >(
@@ -324,6 +322,21 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
           .limit(1);
         if (activeGuidedSetup) return { kind: "active_guided_setup" } as const;
 
+        const claimedDeliveries = await tx
+          .select({
+            recoveryRequired: sql<boolean>`${briefSends.deliveryClaimedAt} IS NULL OR ${briefSends.deliveryClaimedAt} < clock_timestamp() - interval '30 seconds'`,
+          })
+          .from(briefSends)
+          .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
+          .where(and(eq(briefs.dogId, dog.id), isNotNull(briefSends.deliveryClaimId)))
+          .for("update");
+        if (claimedDeliveries.some(({ recoveryRequired }) => !recoveryRequired)) {
+          return { kind: "brief_delivery_in_progress" } as const;
+        }
+        if (claimedDeliveries.length > 0) {
+          return { kind: "brief_delivery_recovery_required" } as const;
+        }
+
         const [deleted] = await tx
           .delete(dogs)
           .where(eq(dogs.id, dog.id))
@@ -333,6 +346,12 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       if (result.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
       if (result.kind === "active_guided_setup") {
         return c.json({ error: "active_guided_setup" } as const, 409);
+      }
+      if (result.kind === "brief_delivery_in_progress") {
+        return c.json({ error: "brief_delivery_in_progress" } as const, 409);
+      }
+      if (result.kind === "brief_delivery_recovery_required") {
+        return c.json({ error: "brief_delivery_recovery_required" } as const, 409);
       }
     } catch (error) {
       if (hasConstraint(error, "guided_setups_active_dog_required")) {
@@ -1548,7 +1567,6 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     if (prepared.kind === "replayed") return c.json({ send: prepared.send }, 201);
 
     const deliveryClaimId = randomBytes(16).toString("hex");
-    const staleBefore = new Date(Date.now() - BRIEF_DELIVERY_RECLAIM_AFTER_MS);
     const deliveryClaim = await db.transaction(async (tx) => {
       const [owner] = await tx
         .select({ id: user.id })
@@ -1567,13 +1585,16 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
 
       const [claimed] = await tx
         .update(briefSends)
-        .set({ deliveryClaimId, deliveryClaimedAt: new Date() })
+        .set({ deliveryClaimId, deliveryClaimedAt: sql`clock_timestamp()` })
         .where(
           and(
             eq(briefSends.id, prepared.send.id),
             eq(briefSends.sentByUserId, userId),
             isNull(briefSends.deliveredAt),
-            or(isNull(briefSends.deliveryClaimId), lt(briefSends.deliveryClaimedAt, staleBefore)),
+            or(
+              isNull(briefSends.deliveryClaimId),
+              lt(briefSends.deliveryClaimedAt, sql`clock_timestamp() - interval '30 seconds'`),
+            ),
           ),
         )
         .returning();

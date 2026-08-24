@@ -3,8 +3,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { auth } from "../auth";
 import { db } from "../db";
-import { user } from "../db/schema";
+import { briefSends, user } from "../db/schema";
 import { type TestUser, createTestUser } from "../test-helpers";
+
+const validDog = {
+  name: "Biscuit",
+  size: "medium",
+  sex: "female",
+  source: "rescue",
+  vaccineStage: "in_progress",
+  spayedNeutered: true,
+};
 
 async function deleteUserWhileKeepingItsAuthenticatedSession(u: TestUser) {
   const session = await auth.api.getSession({ headers: new Headers(u.authHeaders) });
@@ -57,6 +66,66 @@ describe("profile", () => {
 
     expect(get.status).toBe(200);
     expect(((await get.json()) as { user: { locale: string | null } }).user.locale).toBeNull();
+  });
+
+  it("reports the concrete recovery path before account deletion", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const created = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify(validDog),
+    });
+    const { dog } = (await created.json()) as { dog: { id: string } };
+    await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+    const finalized = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "PUT",
+      headers: u.authHeaders,
+    });
+    const { brief } = (await finalized.json()) as { brief: { id: string } };
+    const [send] = await db
+      .insert(briefSends)
+      .values({
+        briefId: brief.id,
+        recipient: "pending@example.com",
+        sentByUserId: u.userId,
+        deliveryClaimId: "abandoned-worker",
+        deliveryClaimedAt: new Date(Date.now() - 31_000),
+      })
+      .returning({ id: briefSends.id });
+    if (!send) throw new Error("expected Brief send fixture");
+
+    const stale = await app.request("/api/profile/deletion-readiness", {
+      headers: u.authHeaders,
+    });
+    expect(await stale.json()).toEqual({
+      status: "brief_delivery_recovery_required",
+      dogId: dog.id,
+    });
+
+    await db
+      .update(briefSends)
+      .set({ deliveryClaimedAt: new Date() })
+      .where(eq(briefSends.id, send.id));
+    const active = await app.request("/api/profile/deletion-readiness", {
+      headers: u.authHeaders,
+    });
+    expect(await active.json()).toEqual({
+      status: "brief_delivery_in_progress",
+      dogId: dog.id,
+    });
+
+    await db
+      .update(briefSends)
+      .set({ deliveryClaimId: null, deliveryClaimedAt: null })
+      .where(eq(briefSends.id, send.id));
+    const ready = await app.request("/api/profile/deletion-readiness", {
+      headers: u.authHeaders,
+    });
+    expect(await ready.json()).toEqual({ status: "ready" });
   });
 
   it("returns not_found when the authenticated user row is missing during a name update", async () => {
