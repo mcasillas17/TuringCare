@@ -103,6 +103,35 @@ serialized at database-backed ownership rows, `(dog_id, version)` is unique afte
 `0023_third_madripoor`, draft Briefs cannot be shared, and stable machine error codes drive
 localized recovery feedback.
 
+## Durable Brief email delivery
+
+The current shared client contract requires both an exact `briefId` and a UUID
+`idempotencyKey`. The send audit is written before provider I/O, the provider receives the
+durable send UUID as its idempotency key, and no database transaction or ownership lock is
+held across the network call. A delivered timestamp distinguishes successful delivery from
+an intent that still needs recovery; onboarding counts only delivered sends.
+
+The API temporarily supports the actual former web payload, `{ recipient, message }`, so the
+API can deploy before a new web bundle without making already-open tabs unsafe. This decoder
+is intentionally narrower than the shared schema:
+
+- With one Brief version, the request binds to that exact row.
+- With multiple versions, an unbound legacy request returns `client_upgrade_required` and
+  sends nothing.
+- A retry first matches the canonical stored owner/Brief/recipient/message intent, so a
+  pre-rollout random audit UUID or server-secret rotation cannot cause redelivery.
+- An active delivery claim returns `send_in_progress`. A claim with a missing timestamp or
+  older than 30 seconds can be reclaimed only by retrying that same durable intent; the
+  provider still receives the original send UUID.
+
+Migration `0025_petite_guardian` adds and backfills `delivered_at`. Migration
+`0026_first_nitro` adds the delivery claim and a database trigger that rejects deletion of
+any claimed send, including stale or timestamp-less claims. The 30-second threshold permits
+retry takeover; it never makes deletion safe. Dog deletion and account-deletion preflight
+therefore distinguish an active delivery from recovery-required state and link the owner to
+the affected Brief. This fail-closed database guard also protects raw cascade deletes and a
+request-time recheck covers account-deletion races.
+
 ## Privacy and telemetry
 
 A locale is a two-value display preference, is not used as an identity signal, and is not

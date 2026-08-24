@@ -89,3 +89,17 @@ brainstorm → spec → plan → build flow.
 - Minimum password length enforced server-side (8).
 - Admin access is promote-only via the server-side `ADMIN_EMAILS` allowlist
   (no client-settable role; `role` is `input:false` at sign-up).
+
+## Shipped — Brief delivery durability and deletion privacy (2026-08-23)
+
+- Brief sends persist an owner-scoped, exact-version intent before contacting the email
+  provider and reuse the durable send UUID as the provider idempotency key.
+- Delivery provider I/O runs outside database transactions. A bounded claim coordinates
+  retries; stale or timestamp-less claims are recoverable only through the same stored
+  intent, so server-secret rotation cannot change delivery identity.
+- A database trigger blocks deletion of every claimed send regardless of claim age. Dog and
+  account deletion expose localized active/recovery states instead of silently cascading
+  away evidence while provider outcome is uncertain.
+- Legacy web payloads remain rollout-compatible only when one exact Brief can be established
+  or a canonical stored intent matches. Ambiguous old tabs fail closed without sending.
+- The onboarding "shared" milestone counts only rows with confirmed `delivered_at`.

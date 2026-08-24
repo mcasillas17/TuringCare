@@ -1170,15 +1170,26 @@ authored content and are not machine-translated.
 Behavior Briefs store the validated generation locale; their prose, UTC-stable generated
 date, enum/status chrome, owned/public views, email, and PDF remain in that language after
 UI changes. Review hardening serialized per-dog generation and lifecycle transitions,
-made ambiguous latest versions and drafts fail closed, added idempotent send/replay
-behavior and localized stable error recovery, and repaired legacy duplicate versions
-before enforcing unique `(dog_id, version)` values.
+made ambiguous latest versions and drafts fail closed, repaired legacy duplicate versions
+before enforcing unique `(dog_id, version)` values, and made email delivery an intent-first,
+exact-version-bound protocol.
+
+Current clients provide a Brief ID and idempotency UUID. The API commits that durable audit
+before provider I/O, releases database locks, and passes the send UUID to the provider. A
+narrow rollout decoder keeps actual former `{ recipient, message }` tabs safe: one Brief can
+be bound, a canonical existing intent can be replayed, and ambiguous multi-version requests
+return localized refresh guidance without sending. This remains stable across server-secret
+rotation and pre-rollout random audit IDs. Delivery claims coordinate retry takeover without
+ever weakening deletion protection; stale or timestamp-less claims require explicit recovery.
+Dog/account deletion and account-deletion races fail closed with localized links, the database
+trigger also protects raw cascades, and onboarding counts only confirmed deliveries.
 
 The production rollout preserves the running `production-deploy` workflow while preventing
-phase interleaving: CI → compatible migrations → serialized rolling Fly API replacement →
-post-deploy migrations → Cloudflare Pages. `Dockerfile.api` includes both shared workspace
-packages and the workflow builds and health-smokes the production image. There are no new
-locale secrets or environment variables.
+phase interleaving: CI → drain legacy API → full migrations through 0026 → deploy and verify
+the dual-protocol Fly API → idempotent migration verification → Cloudflare Pages. This
+API-first order protects old tabs before the exact-binding web appears. `Dockerfile.api`
+includes both shared workspace packages and the workflow builds and health-smokes the
+production image. There are no new locale secrets or environment variables.
 
 Privacy hardening prevents public Brief bearer tokens from entering analytics: browser and
 API telemetry normalize `/b/<token>` (including route-equivalent `%62`/`%42` prefixes) to
@@ -1186,19 +1197,14 @@ API telemetry normalize `/b/<token>` (including route-equivalent `%62`/`%42` pre
 cleans stored paths. Locale itself is not collected as telemetry. Public shares remain a
 strict finalized-Brief projection with no user ID, dog ID, or token in the response.
 
-GPT-5.6 Luna and GPT-5.6 Terra independently reviewed correctness, security/privacy,
-improvements, gaps, and coverage. Verified findings were fixed test-first through 14 waves;
-both returned **no actionable feedback** on the same exact code/release commit
-`bf300360ef3c4ed74ff357ff23a4f5541d866788` in round 15. At that commit the full matrix was
-**147 files / 983 tests**; lint, all four TypeScript projects, API/web builds, Drizzle
-consistency, isolated phased-migration smoke, frozen-lockfile install, deployment YAML parse,
-and production Docker `/health` smoke all passed. Established non-blocking notices remained:
-React suspended-resource `act(...)` messages in existing web tests, the Vite large-chunk
-advisory, API test diagnostics, and Docker's local legacy-builder advisory.
+GPT-5.6 Luna and GPT-5.6 Terra independently and repeatedly reviewed correctness,
+security/privacy, improvements, gaps, and coverage, including a complete pass after merging
+current `main`. Verified findings were fixed test-first. Both returned **no actionable
+feedback** on the same final code state after the durability, deletion, and rollout changes.
+Final fresh repository, full-migration, deployment-contract, and production-image evidence is
+recorded in PR #70.
 
 - Current guide: `docs/LOCALIZATION.md`
 - Spec/plan: `docs/superpowers/specs/2026-08-23-end-to-end-localization-design.md`,
   `docs/superpowers/plans/2026-08-23-end-to-end-localization.md`
-- Reviewer-clean code/release range:
-  `841d592de140b52b2595805fd9c1843be4988c54..bf300360ef3c4ed74ff357ff23a4f5541d866788`.
-- Published for review as PR #70; the merge SHA will be recorded after merge.
+- Published for review as [PR #70](https://github.com/mcasillas17/TuringCare/pull/70).

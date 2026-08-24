@@ -3,22 +3,22 @@
 End-to-end deploy on every push to `main`:
 
 ```
-push main → ci → deploy-api (drain+migrate through 0022+deploy+ready)
-                    → migrate (0023+0024) → deploy-web
+push main → ci → deploy-api (drain+full migrate+deploy+ready)
+                    → migrate (idempotent verification) → deploy-web
 ```
 
 - **Frontend** → Cloudflare Pages (`turingcare.dog`, `www.turingcare.dog`)
 - **Backend** → Fly.io (`api.turingcare.dog`)
 - **Database** → Supabase Postgres
 
-Production deploys are serialized. For schema-incompatible migrations, one
-bounded API job drains the old machines, applies migrations through `0022`,
-deploys, restores the prior machine count, and verifies readiness without a
-runner gap between phases. Before migration begins, a failure restores the old
-release. Once migration is attempted, any failure leaves the API drained for
-operator intervention because an earlier migration may already have committed;
-the workflow never guesses that the legacy schema is still safe. A separate job
-then applies the explicit post-deploy `0023–0024` tail.
+Production deploys are serialized. One bounded API job drains the old machines,
+applies the complete committed migration history through `0026`, deploys, restores
+the prior machine count, and verifies readiness without a runner gap between phases.
+Before migration begins, a failure restores the old release. Once migration is
+attempted, any failure leaves the API drained for operator intervention because an
+earlier migration may already have committed; the workflow never guesses that the
+legacy schema is still safe. A separate migration job then idempotently verifies that
+the deployed release left no pending migration.
 The first deploy bootstraps one API machine when no prior machine exists. Health
 checks use the stable `turingcare-api.fly.dev` hostname, so custom-domain
 provisioning cannot block recovery. The web deploys only after the migrated API
@@ -211,23 +211,36 @@ gh secret set CLOUDFLARE_ACCOUNT_ID
 ## 6. Database rollout contract
 
 `main` owns the immutable `0013–0021` migration history. Localization and Brief
-concurrency migrations append to that history; never restore the old colliding
-`0013–0015` filenames or rewrite an already-applied migration.
+concurrency/delivery migrations append to that history; never restore the old
+colliding `0013–0015` filenames or rewrite an already-applied migration.
 
 | Phase | Migration / action | Compatibility rule |
 |---|---|---|
 | Drained pre-deploy | Apply `0013–0021` | Personalized training, guided setup, contextual progress, and initial Brief-share privacy changes are schema-incompatible with the legacy API, so all old Fly machines stay drained. |
 | Drained pre-deploy | Apply `0022_panoramic_skullbuster` | Adds the `locale` enum, nullable `user.locale`, and non-null/default-English `briefs.locale`. |
-| API | Deploy and verify `/ready` | Starts only the locale-aware, dog-row-serializing API; readiness verifies both the expanded main schema and locale columns. |
-| Post-deploy | Apply `0023_third_madripoor` | Repairs duplicate per-dog Brief versions under writer-blocking locks, then adds the `(dog_id, version)` unique constraint. No legacy writer can resume at this point. |
-| Post-deploy | Apply `0024_brief_share_telemetry_privacy` | Broadens `0021`'s data cleanup to encoded/case-variant public Brief bearer paths and paths attached to a mislabeled client event. It does not replace or modify `0021`. |
-| Web | Publish Cloudflare Pages | Requires the locale-aware API and completed migration sequence. |
+| Drained pre-deploy | Apply `0023_third_madripoor` | Repairs duplicate per-dog Brief versions under writer-blocking locks, then adds the `(dog_id, version)` unique constraint. |
+| Drained pre-deploy | Apply `0024_brief_share_telemetry_privacy` | Broadens `0021`'s cleanup to encoded/case-variant public Brief bearer paths and mislabeled client events. |
+| Drained pre-deploy | Apply `0025_petite_guardian` | Adds `brief_sends.delivered_at` and treats historical completed audits as delivered. |
+| Drained pre-deploy | Apply `0026_first_nitro` | Adds durable delivery claims and a fail-closed delete trigger for claimed sends. |
+| API | Deploy and verify `/ready` | Starts the locale-aware API with exact Brief binding, provider-idempotent retry recovery, and narrow legacy-payload compatibility. |
+| Verify | Run full `db:migrate` | Idempotently proves the complete history is installed; no post-deploy tail is expected. |
+| Web | Publish Cloudflare Pages | New clients require exact Brief and idempotency IDs; the already-deployed API keeps old tabs safe until this bundle replaces them. |
 
 `pnpm --filter @turingcare/api db:migrate:predeploy` builds a temporary migration
-set ending at `0022`. It deliberately fails closed unless `0023` and `0024` are
-the exact journal tail. When adding a later migration, explicitly classify its
-phase and update `apps/api/src/db/migrate-predeploy.ts` plus the rollout contract
-tests; do not assume the current split remains safe.
+set containing the complete journal. Its empty post-deploy allowlist is a fail-closed
+declaration that every current migration runs while the API is drained. When adding a
+later migration, explicitly classify its phase and update
+`apps/api/src/db/migrate-predeploy.ts` plus the rollout contract tests; do not assume the
+current all-predeploy classification remains safe.
+
+The API must deploy before the web. It accepts exact new-client Brief IDs and a narrow
+legacy `{ recipient, message }` payload. Legacy sends proceed only when one Brief version
+can be established or an existing durable audit matches the canonical intent; otherwise
+the API returns `client_upgrade_required` without provider I/O. Delivery claims older than
+30 seconds are retry-reclaimable with the same durable provider key, but the database
+trigger blocks deletion for every non-null claim regardless of age. Operators recover a
+stale or timestamp-less claim by retrying from the linked Brief screen, not by deleting
+the audit row or weakening the trigger.
 
 This release adds no locale environment variable or secret. Locale is a
 validated request, account, and artifact value; keep `.env.example`, GitHub
@@ -287,10 +300,11 @@ Or Fly Dashboard → `turingcare-api` → **Monitoring → Releases →** select
 previous release → **Rollback**. (Schema rollbacks are separate: write a new
 down migration; don't roll the API back past a schema change without it.)
 
-Do not restore an API that can write Brief versions by an unlocked read-max
-after `0023` is installed. Prefer a forward fix. A schema rollback must be a
-new, reviewed migration; do not drop the locale enum, either Brief uniqueness
-index, or attempt to reverse the historical telemetry cleanup in `0021`/`0024`.
+Do not restore an API that can write Brief versions by an unlocked read-max after
+`0023` is installed or one that cannot understand the delivery columns after `0025`/`0026`.
+Prefer a forward fix. A schema rollback must be a new, reviewed migration; do not drop the
+locale enum, either Brief uniqueness index, the claimed-send deletion guard, or attempt to
+reverse the historical telemetry cleanup in `0021`/`0024`.
 
 ### Frontend (Cloudflare Pages)
 

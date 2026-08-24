@@ -1,7 +1,7 @@
 # End-to-end localization design
 
 **Date:** 2026-08-23
-**Status:** Implemented and dual-review clean at `bf300360ef3c4ed74ff357ff23a4f5541d866788`
+**Status:** Implemented and dual-review clean; published as PR #70
 **Scope:** English/Spanish locale resolution, shared catalogs, localized web/admin UI,
 API-served training content, generated Briefs, PDFs, and transactional emails.
 
@@ -101,18 +101,27 @@ The approved design shipped with these review-driven hardening details:
   in the viewer's current UI language.
 - Brief generation and lifecycle transitions are serialized at database-backed ownership rows.
   Migration `0023_third_madripoor` repairs legacy duplicate versions and enforces unique
-  `(dog_id, version)` values after a rolling API replacement; ambiguous latest-version reads and
+  `(dog_id, version)` values while the legacy API is drained; ambiguous latest-version reads and
   draft shares fail closed during the compatibility window.
-- The production deploy prevents phase interleaving and preserves the running workflow:
-  drain the legacy API, apply main's immutable 0013–0021 history plus locale migration 0022,
-  deploy and verify the new API, apply post-deploy migrations 0023/0024, then publish the web.
-  GitHub Actions retains at most one pending run, replacing an older pending push with a newer
-  one. The production image includes both shared workspace packages and is boot-smoked in CI.
+- Brief email delivery is intent-first and exact-version bound. New clients provide a Brief ID
+  and idempotency UUID; the audit commits before provider I/O and its durable UUID is the provider
+  key. The API supports the actual former `{ recipient, message }` payload only when it can bind
+  one Brief or recover a canonical stored intent. Ambiguous legacy tabs fail without sending.
+  Provider I/O holds no database connection, stale claims are retry-reclaimable, and migrations
+  `0025`/`0026` distinguish delivered sends while blocking dog/account cascades for every claimed
+  send until explicit recovery. Onboarding counts only confirmed delivery.
+- The production deploy prevents phase interleaving and preserves the running workflow: drain the
+  legacy API, apply the complete immutable migration history through 0026, deploy and verify the
+  dual-protocol API, idempotently verify no migration remains, then publish the exact-binding web.
+  GitHub Actions retains at most one pending run, replacing an older pending push with a newer one.
+  The production image includes both shared workspace packages and is boot-smoked in CI.
 - Public Brief bearer paths are normalized to `/b/:token` before telemetry emission and ingest,
   again in admin aggregation, and historically by data-only migration
   `0024_brief_share_telemetry_privacy`, including route-equivalent `%62`/`%42` prefixes.
 
-The final matrix at the clean review commit was 147 files / 983 tests. Lint, typecheck, build,
-Drizzle consistency, staged migration smoke, frozen-lockfile install, deployment YAML parsing,
-and production Docker health smoke all passed. Luna and Terra independently returned no
-actionable feedback on that same exact commit in review round 15.
+The implementation was repeatedly reviewed after rebasing onto current `main`. Verified findings
+were fixed test-first, including exact Brief-version binding, durable provider idempotency,
+provider calls outside transactions, fail-closed deletion recovery, legacy-tab rollout safety,
+and secret-rotation-independent retry lookup. Luna and Terra independently returned no actionable
+feedback on the same final code state. Final repository, migration, workflow, and production-image
+evidence is recorded in PR #70.

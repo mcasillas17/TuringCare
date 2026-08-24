@@ -82,6 +82,13 @@ owned and public views, email, and PDF therefore stay in that language even if t
 viewer later changes UI language. Course/trainer records and user-authored journal, message,
 name, and contact fields are authored data and are never machine-translated.
 
+Brief email delivery is durable and retry-safe. New clients bind each request to an exact
+Brief version and idempotency key. During the web rollout, the API also accepts the former
+`{ recipient, message }` payload only when one exact Brief can be established; an ambiguous
+old tab is asked to refresh without sending. Pending sends can be retried with the same
+provider idempotency key, and dog/account deletion pauses with a localized recovery link
+while delivery state is unresolved.
+
 This end-to-end localization work was implemented for
 [PR #70](https://github.com/mcasillas17/TuringCare/pull/70). See
 [`docs/LOCALIZATION.md`](docs/LOCALIZATION.md) for the current precedence and request

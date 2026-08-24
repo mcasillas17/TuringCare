@@ -10,11 +10,11 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-23-end-to-end-localization-design.md`
 
-**Progress (2026-08-23):** Tasks 1–6 are implemented. Luna and Terra independently
-returned no actionable feedback on the same commit
-`bf300360ef3c4ed74ff357ff23a4f5541d866788` in review round 15. Current documentation
-is complete, post-documentation repository gates are green, and the branch is published in
-PR #70.
+**Progress (2026-08-23):** Tasks 1–7 are implemented. After integration with current
+`main`, Luna and Terra repeatedly reviewed correctness, security/privacy, improvement gaps,
+and coverage. All verified findings were fixed test-first, and both independently returned
+no actionable feedback on the same final code state. Documentation and the final evidence are
+published in PR #70.
 
 ## Global Constraints
 
@@ -208,3 +208,19 @@ PR #70.
 - [x] **Step 5: Update README, deployment/config guidance, project log, and superseded localization docs** to match the final implementation and verification commands.
 - [x] **Step 6: Re-run the complete repository gates after the final documentation/code change** and inspect the complete diff, secrets, debug residue, and intended file list.
 - [x] **Step 7: Commit the final state, publish detached HEAD as `codex/end-to-end-localization`, and open a PR against `main`** with scope, rationale, test evidence, reviewer-loop result, and known limitations.
+
+#### Post-integration hardening delivered in Task 7
+
+- Exact `briefId` plus UUID idempotency binding for current clients, with a narrow compatibility
+  decoder for the actual former `{ recipient, message }` payload.
+- Durable canonical-intent recovery for old random audit IDs without coupling retry identity to
+  `BETTER_AUTH_SECRET`; ambiguous multi-version legacy requests send nothing and ask for refresh.
+- Intent persistence before provider I/O, provider calls outside transactions, durable provider
+  idempotency, bounded retry claims, and explicit active/recovery outcomes.
+- `0025` delivery confirmation and `0026` fail-closed deletion claims, including raw cascade,
+  stale/null-time recovery, dog deletion, account preflight, and account-race coverage.
+- Delivered-only onboarding state and localized English/Spanish retry, refresh, and deletion
+  recovery interfaces.
+- API-first deployment compatibility: the full migration history is applied while drained, the
+  dual-protocol API becomes ready, the migration job verifies an empty tail, and then the new web
+  requiring exact IDs is published.
