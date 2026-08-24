@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { Locale } from "@turingcare/i18n";
 import {
   VALIDATION_MESSAGE_CODES,
@@ -256,21 +256,6 @@ const briefSendRequestSchema = briefSendSchema.partial({
   briefId: true,
   idempotencyKey: true,
 });
-
-function legacyBriefSendIdempotencyKey(input: {
-  userId: string;
-  dogId: string;
-  briefId: string;
-  recipient: string;
-  message: string | null;
-}) {
-  const digest = createHmac("sha256", env.BETTER_AUTH_SECRET)
-    .update(
-      JSON.stringify([input.userId, input.dogId, input.briefId, input.recipient, input.message]),
-    )
-    .digest("hex");
-  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
-}
 
 export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .use("*", requireUser)
@@ -1520,6 +1505,35 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         );
         return { kind: "pending", send, email, replyTo: owner.email } as const;
       };
+      const loadLegacyIntentSend = async (briefId: string) => {
+        const [existing] = await tx
+          .select({
+            id: briefSends.id,
+            briefId: briefSends.briefId,
+            recipient: briefSends.recipient,
+            message: briefSends.message,
+            sentAt: briefSends.sentAt,
+            deliveredAt: briefSends.deliveredAt,
+            sentByUserId: briefSends.sentByUserId,
+            briefSummary: briefs.summary,
+            briefLocale: briefs.locale,
+          })
+          .from(briefSends)
+          .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
+          .where(
+            and(
+              eq(briefSends.briefId, briefId),
+              eq(briefSends.sentByUserId, userId),
+              eq(briefSends.recipient, body.recipient),
+              body.message == null
+                ? isNull(briefSends.message)
+                : eq(briefSends.message, body.message),
+            ),
+          )
+          .orderBy(desc(briefSends.sentAt), desc(briefSends.id))
+          .limit(1);
+        return existing;
+      };
       const existingResult = body.idempotencyKey
         ? resolveBriefSendIntent(await loadExistingSend(body.idempotencyKey), body)
         : null;
@@ -1545,20 +1559,11 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       }
       if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
 
-      const sendId =
-        body.idempotencyKey ??
-        legacyBriefSendIdempotencyKey({
-          userId,
-          dogId: lockedDog.id,
-          briefId: brief.id,
-          recipient: body.recipient,
-          message: body.message ?? null,
-        });
       if (!body.idempotencyKey) {
-        const legacyReplay = resolveBriefSendIntent(await loadExistingSend(sendId), body);
-        if (legacyReplay?.kind === "idempotency_conflict") return legacyReplay;
-        if (legacyReplay?.kind === "matched") return prepareMatchedIntent(legacyReplay.send);
+        const legacyReplay = await loadLegacyIntentSend(brief.id);
+        if (legacyReplay) return prepareMatchedIntent(legacyReplay);
       }
+      const sendId = body.idempotencyKey ?? randomUUID();
 
       const [sendCount] = await tx
         .select({ value: count() })

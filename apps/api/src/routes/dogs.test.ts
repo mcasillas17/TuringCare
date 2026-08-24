@@ -1977,6 +1977,37 @@ describe("dogs: brief send", () => {
     expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
   });
 
+  it("POST send: matches a randomly keyed pre-rollout audit before legacy redelivery", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const legacySendId = randomUUID();
+    await db.insert(briefSends).values({
+      id: legacySendId,
+      briefId: brief.id,
+      recipient: "pre-rollout@example.com",
+      message: "Already accepted",
+      sentByUserId: u.userId,
+      deliveredAt: new Date(),
+    });
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        recipient: "pre-rollout@example.com",
+        message: "Already accepted",
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(((await response.json()) as { send: { id: string } }).send.id).toBe(legacySendId);
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+  });
+
   it("POST send: requires a client upgrade when an omitted Brief id is ambiguous", async () => {
     const u = await createTestUser();
     users.push(u);
