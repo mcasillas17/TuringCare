@@ -1,5 +1,5 @@
 import { buildBriefPdfModel } from "@/lib/brief-pdf-model";
-import { isValidElement } from "react";
+import { Children, type ReactNode, isValidElement } from "react";
 import { describe, expect, it } from "vitest";
 import { BriefPdfDocument } from "./brief-pdf-document";
 
@@ -42,4 +42,49 @@ describe("BriefPdfDocument", () => {
     });
     expect(() => BriefPdfDocument({ model: sparse })).not.toThrow();
   });
+
+  it("renders already-localized Spanish model labels", () => {
+    const spanish = buildBriefPdfModel({
+      brief: {
+        generatedAt: "2026-05-19T10:00:00.000Z",
+        status: "finalized",
+        summary: "Resumen de conducta — Biscuit",
+        version: 1,
+        locale: "es",
+      },
+      dog: {
+        name: "Biscuit",
+        breed: "Border Collie",
+        dateOfBirth: "2022-05-19",
+        size: "medium",
+        sex: "female",
+      },
+      now: "2026-05-19T12:00:00.000Z",
+    });
+
+    const text = collectText(BriefPdfDocument({ model: spanish })).replace(/\s+/g, " ");
+
+    expect(text).toContain("Resumen de conducta");
+    expect(text).toContain("Raza");
+    expect(text).toContain("Edad");
+    expect(text).toContain("Tamaño");
+    expect(text).toContain("Sexo");
+    expect(text).toContain("Generado 19 de mayo de 2026");
+    expect(text).not.toContain("Behavior Brief");
+    expect(text).not.toContain("Generated");
+  });
 });
+
+function collectText(node: ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(collectText).join(" ");
+  if (!isValidElement(node)) return "";
+  if (typeof node.type === "function") {
+    const Component = node.type as (props: unknown) => ReactNode;
+    return collectText(Component(node.props));
+  }
+
+  const props = node.props as { children?: ReactNode };
+  return Children.toArray(props.children).map(collectText).join(" ");
+}

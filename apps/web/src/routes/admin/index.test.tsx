@@ -1,3 +1,4 @@
+import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -15,18 +16,24 @@ const metrics = {
   eventsByDay: [{ day: "2026-05-01", name: "page.viewed", count: 12 }],
 };
 
-function renderDashboard(client?: QueryClient) {
+function renderDashboard(client?: QueryClient, locale: "en" | "es" = "en") {
+  localStorage.setItem("tc-locale", locale);
   const qc = client ?? new QueryClient();
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <AdminDashboard />
-      </MemoryRouter>
+      <LocaleProvider>
+        <MemoryRouter>
+          <AdminDashboard />
+        </MemoryRouter>
+      </LocaleProvider>
     </QueryClientProvider>,
   );
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  localStorage.clear();
+  vi.unstubAllGlobals();
+});
 
 it("renders the dashboard with KPI numbers", async () => {
   vi.stubGlobal(
@@ -56,4 +63,30 @@ it("shows error state when metrics fetch fails", async () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   renderDashboard(qc);
   await waitFor(() => expect(screen.getByText(/failed to load metrics/i)).toBeInTheDocument());
+});
+
+it("renders dashboard and panel system copy in Spanish", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify(metrics), { status: 200 })),
+      ),
+  );
+  renderDashboard(undefined, "es");
+
+  expect(
+    await screen.findByRole("heading", { name: "Panel de administración" }),
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText("Rango de fechas")).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Últimos 30 d" })).toBeInTheDocument();
+  expect(await screen.findByText("Usuarios totales")).toBeInTheDocument();
+  expect(screen.getByText("Usuarios activos")).toBeInTheDocument();
+  expect(screen.getByText("Altas en el tiempo")).toBeInTheDocument();
+  expect(screen.getByText("Embudo de activación")).toBeInTheDocument();
+  expect(screen.getByText("Uso de funciones")).toBeInTheDocument();
+  expect(screen.getByText("Sin eventos en el periodo.")).toBeInTheDocument();
+  expect(screen.getByText("Páginas principales")).toBeInTheDocument();
+  expect(screen.getByText("Eventos en el tiempo")).toBeInTheDocument();
 });

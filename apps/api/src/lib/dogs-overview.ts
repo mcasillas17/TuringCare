@@ -1,5 +1,6 @@
-import { avg, count, desc, eq, inArray, max } from "drizzle-orm";
+import { and, avg, count, desc, eq, inArray, max } from "drizzle-orm";
 import { db } from "../db";
+import { resolveLatestBriefRowsByKey } from "../db/latest-brief";
 import { briefs, dogs, journalEntries, trainingGoals, trainingSkills } from "../db/schema";
 
 export type DogSummary = {
@@ -10,6 +11,7 @@ export type DogSummary = {
   avgLevel: number | null;
   briefStatus: "draft" | "finalized" | null;
   briefVersion: number | null;
+  briefAmbiguous: boolean;
 };
 
 export type DogOverview = typeof dogs.$inferSelect & { summary: DogSummary };
@@ -22,6 +24,12 @@ export async function loadDogsOverview(ownerId: string): Promise<DogOverview[]> 
     .orderBy(desc(dogs.createdAt));
   const ids = rows.map((d) => d.id);
   if (ids.length === 0) return [];
+  const latestBriefVersions = db
+    .select({ dogId: briefs.dogId, maxVersion: max(briefs.version).as("max_version") })
+    .from(briefs)
+    .where(inArray(briefs.dogId, ids))
+    .groupBy(briefs.dogId)
+    .as("latest_brief_versions");
 
   const [journalAgg, goalAgg, skillAgg, briefRows] = await Promise.all([
     db
@@ -52,20 +60,27 @@ export async function loadDogsOverview(ownerId: string): Promise<DogOverview[]> 
         generatedAt: briefs.generatedAt,
       })
       .from(briefs)
+      .innerJoin(
+        latestBriefVersions,
+        and(
+          eq(briefs.dogId, latestBriefVersions.dogId),
+          eq(briefs.version, latestBriefVersions.maxVersion),
+        ),
+      )
       .where(inArray(briefs.dogId, ids))
-      .orderBy(desc(briefs.generatedAt)),
+      .orderBy(desc(briefs.version), desc(briefs.generatedAt), desc(briefs.id)),
   ]);
 
   const jMap = new Map(journalAgg.map((r) => [r.dogId, r]));
   const gMap = new Map(goalAgg.map((r) => [r.dogId, r]));
   const sMap = new Map(skillAgg.map((r) => [r.dogId, r]));
-  const bMap = new Map<string, (typeof briefRows)[number]>();
-  for (const b of briefRows) if (!bMap.has(b.dogId)) bMap.set(b.dogId, b); // ordered desc → first is latest
+  const latestBriefByDog = resolveLatestBriefRowsByKey(briefRows, (brief) => brief.dogId);
 
   return rows.map((d) => {
     const j = jMap.get(d.id);
     const s = sMap.get(d.id);
-    const b = bMap.get(d.id);
+    const briefResolution = latestBriefByDog.get(d.id);
+    const b = briefResolution?.kind === "found" ? briefResolution.brief : undefined;
     return {
       ...d,
       summary: {
@@ -76,6 +91,7 @@ export async function loadDogsOverview(ownerId: string): Promise<DogOverview[]> 
         avgLevel: s?.avg != null ? Number(Number(s.avg).toFixed(1)) : null,
         briefStatus: b?.status ?? null,
         briefVersion: b?.version ?? null,
+        briefAmbiguous: briefResolution?.kind === "conflict",
       },
     };
   });

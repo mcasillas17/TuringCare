@@ -1,3 +1,4 @@
+import type { Locale } from "@turingcare/i18n";
 import type { CurriculumExercise, CurriculumFallback, PracticeDimension } from "@turingcare/shared";
 import { findCurriculumSkill } from "../data/training-curriculum";
 
@@ -27,8 +28,9 @@ export function clampLevel(level: number): number {
 export function resolveCurriculumTarget(
   skillKey: string | null | undefined,
   level: number,
+  locale: Locale | string = "en",
 ): CurriculumTarget | null {
-  const skill = findCurriculumSkill(skillKey);
+  const skill = findCurriculumSkill(skillKey, locale);
   if (!skill) return null;
 
   const target = clampLevel(level);

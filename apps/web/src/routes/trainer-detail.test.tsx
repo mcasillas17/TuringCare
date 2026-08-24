@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const track = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/track", () => ({ track: (...a: unknown[]) => track(...a) }));
 
-let mockSession: { user: { id: string } } | null = null;
+let mockSession: { user: { id: unknown } } | null = null;
 vi.mock("@/lib/auth-client", () => ({
   useSession: () => ({ data: mockSession, isPending: false }),
 }));
@@ -138,6 +138,30 @@ describe("TrainerDetail", () => {
       screen.queryByRole("link", { name: /send my brief to this trainer/i }),
     ).not.toBeInTheDocument();
   });
+
+  it.each(["", "   ", 42])(
+    "shows only signed-out contact actions for the runtime-invalid session user id %j",
+    async (userId) => {
+      mockSession = { user: { id: userId } };
+      stubTrainer({
+        id: "t-invalid",
+        name: "Invalid Session View",
+        city: "Reno",
+        state: "NV",
+        email: "private@example.com",
+      });
+
+      renderDetail("t-invalid");
+
+      expect(await screen.findByRole("link", { name: /^sign up$/i })).toHaveAttribute(
+        "href",
+        "/register",
+      );
+      expect(
+        screen.queryByRole("link", { name: /send my brief to this trainer/i }),
+      ).not.toBeInTheDocument();
+    },
+  );
 
   it("authed: hides the 'Sign up to contact' CTA and shows the brief-send button", async () => {
     mockSession = { user: { id: "u1" } };

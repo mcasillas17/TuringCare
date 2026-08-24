@@ -36,7 +36,8 @@ vi.mock("@/lib/progress", () => ({
   useSetSessionEvidence: vi.fn(),
 }));
 vi.mock("@/lib/suggestion", () => ({
-  suggestionKey: (dogId: string, weekKey: string) => ["suggestion", dogId, weekKey],
+  suggestionKey: (dogId: string, weekKey: string, locale?: string) =>
+    locale ? ["suggestion", dogId, weekKey, locale] : ["suggestion", dogId, weekKey],
   useSuggestion: vi.fn(),
   useSuggestionAction: vi.fn(),
   useAdvancementDecision: vi.fn(),
@@ -178,7 +179,8 @@ function weekElement(
   );
 }
 
-function renderWeek() {
+function renderWeek(locale: "en" | "es" = "en") {
+  localStorage.setItem("tc-locale", locale);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return {
     ...render(weekElement(qc)),
@@ -188,8 +190,8 @@ function renderWeek() {
 
 function seedAuditedSuggestion(queryClient: QueryClient) {
   const weekKey = weekKeyOf(new Date());
-  queryClient.setQueryData(focusLib.focusKey("d1", weekKey), [sitFocus]);
-  queryClient.setQueryData(suggestionLib.suggestionKey("d1", weekKey), exerciseSuggestion);
+  queryClient.setQueryData(focusLib.focusKey("d1", weekKey, "en"), [sitFocus]);
+  queryClient.setQueryData(suggestionLib.suggestionKey("d1", weekKey, "en"), exerciseSuggestion);
 }
 
 const sitFocus: focusLib.FocusSkill = {
@@ -288,6 +290,8 @@ function deferred<T>() {
 }
 
 afterEach(() => {
+  localStorage.clear();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.resetAllMocks();
 });
@@ -399,7 +403,7 @@ describe("DogWeek", () => {
 
     expect(screen.getByRole("heading", { name: "Sit", level: 2 })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /Log Sit on/i })[0]).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Sit on .*: 1 sessions/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Sit on .*: 1 session/i }));
     expect(screen.getByRole("button", { name: /remove/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /log another/i })).toBeInTheDocument();
 
@@ -460,7 +464,9 @@ describe("DogWeek", () => {
     renderWeek();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Log Recall on 2026-08-10" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Log Recall on Monday, August 10, 2026" }),
+      );
     });
     const occurredAt = new Date(2026, 7, 10, 12, 0, 0);
     expect(logMutate).toHaveBeenCalledWith({
@@ -784,13 +790,14 @@ describe("DogWeek", () => {
       .mockResolvedValueOnce({ session: { id: "session-2" }, anchorRejected: null });
     renderWeek();
 
-    const logButtons = screen.getAllByRole("button", { name: /Log Sit on/i });
-    fireEvent.click(logButtons[0] as HTMLElement);
+    const logButton = screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement;
+    expect(logButton).toBeEnabled();
+    fireEvent.click(logButton);
     const tooHard = await screen.findByRole("button", { name: "Too hard" });
     fireEvent.click(tooHard);
     expect(tooHard).toHaveAttribute("aria-pressed", "true");
 
-    fireEvent.click(logButtons[1] as HTMLElement);
+    fireEvent.click(logButton);
 
     await waitFor(() => expect(logMutate).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("button", { name: "Too hard" })).toHaveAttribute(
@@ -822,12 +829,13 @@ describe("DogWeek", () => {
       .mockResolvedValueOnce({ session: { id: "session-2" }, anchorRejected: null });
     renderWeek();
 
-    const logButtons = screen.getAllByRole("button", { name: /Log Sit on/i });
-    fireEvent.click(logButtons[0] as HTMLElement);
+    const logButton = screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement;
+    expect(logButton).toBeEnabled();
+    fireEvent.click(logButton);
     fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
     fireEvent.click(screen.getByRole("button", { name: "Save response" }));
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
-    fireEvent.click(logButtons[1] as HTMLElement);
+    fireEvent.click(logButton);
     await waitFor(() => expect(logMutate).toHaveBeenCalledTimes(2));
 
     await act(async () => pendingEvidence.resolve({}));
@@ -972,7 +980,7 @@ describe("DogWeek", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement);
     await screen.findByRole("button", { name: "Went well" });
-    qc.setQueryData(suggestionLib.suggestionKey("d1", weekKeyOf(new Date())), {
+    qc.setQueryData(suggestionLib.suggestionKey("d1", weekKeyOf(new Date()), "en"), {
       ...exerciseSuggestion,
       dismissed: true,
     });
@@ -1034,11 +1042,50 @@ describe("DogWeek", () => {
     ]);
     renderWeek();
 
-    fireEvent.click(screen.getByRole("button", { name: /Sit on .*: 1 sessions/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Sit on .*: 1 session/i }));
     fireEvent.click(screen.getByRole("button", { name: /remove/i }));
 
     await waitFor(() =>
       expect(deleteMutate).toHaveBeenCalledWith({ skillId: "s1", sessionId: "session-1" }),
     );
+  });
+
+  it("localizes visual and screen-reader dates plus duration units in Spanish", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-20T18:00:00.000Z"));
+    vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US"] });
+    setup([
+      {
+        skillId: "s1",
+        name: "Recall",
+        goalId: "g1",
+        goalName: "Reliability",
+        position: 0,
+        currentLevel: 1,
+        dimensions: [],
+        contextualProgress: {
+          status: "ready",
+          summary: { strongestContext: null, nextPracticeAction: null, safety: null },
+        },
+        sessions: [
+          {
+            id: "session-1",
+            occurredAt: "2026-05-18T19:00:00.000Z",
+            durationMinutes: 12,
+          },
+        ],
+      },
+    ]);
+
+    renderWeek("es");
+
+    expect(screen.getByRole("button", { name: "18 may – 24 may" })).toBeInTheDocument();
+    const filledCell = screen.getByRole("button", {
+      name: "Recall el lunes, 18 de mayo de 2026: 1 sesión",
+    });
+    fireEvent.click(filledCell);
+    expect(screen.getByText(/12 minutos/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /2026-05-18/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/12m/)).not.toBeInTheDocument();
   });
 });

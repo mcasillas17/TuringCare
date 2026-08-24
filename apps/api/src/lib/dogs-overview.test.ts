@@ -77,6 +77,35 @@ describe("loadDogsOverview", () => {
       avgLevel: null,
       briefStatus: null,
       briefVersion: null,
+      briefAmbiguous: false,
+    });
+  });
+
+  it("uses the greatest per-dog Brief version even when timestamps arrive out of order", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await db.insert(briefs).values([
+      {
+        dogId: dog.id,
+        status: "finalized",
+        summary: "older version with later timestamp",
+        version: 1,
+        generatedAt: new Date("2026-06-11T10:00:00Z"),
+      },
+      {
+        dogId: dog.id,
+        status: "draft",
+        summary: "latest version",
+        version: 2,
+        generatedAt: new Date("2026-06-10T10:00:00Z"),
+      },
+    ]);
+
+    const overview = await loadDogsOverview(u.userId);
+    expect(overview.find((row) => row.id === dog.id)?.summary).toMatchObject({
+      briefStatus: "draft",
+      briefVersion: 2,
     });
   });
 

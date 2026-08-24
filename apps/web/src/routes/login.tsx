@@ -23,7 +23,7 @@ export function Login() {
       password: String(fd.get("password")),
     });
     setPending(false);
-    if (error) return toast.error(error.message ?? t("auth.loginFailed"));
+    if (error) return toast.error(t("auth.loginFailed"));
     // Full-load navigation (not react-router navigate): Better Auth refreshes the
     // useSession atom on a deferred timer after sign-in, so an in-app navigate to
     // the RequireAuth-gated /my would read a stale null session and bounce back to

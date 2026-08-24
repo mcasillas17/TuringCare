@@ -1,9 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useValidationMessage } from "@/i18n/validation";
+import { BriefRequestError, briefSendErrorMessageKey } from "@/lib/brief-errors";
+import { createBriefSendIdempotencyKey } from "@/lib/brief-idempotency";
 import { useBriefSends, useSendBrief } from "@/lib/brief-send";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type BriefSendInput, briefSendSchema } from "@turingcare/shared";
-import { useEffect } from "react";
+import { type BriefSendIntent, briefSendIntentSchema } from "@turingcare/shared";
+import { useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -11,23 +14,34 @@ const inputCls = "w-full rounded border border-silver bg-white px-3 py-2 text-sm
 
 export function SendPanel({
   dogId,
+  briefId,
   briefStatus,
   initialRecipient,
 }: {
   dogId: string;
+  briefId: string;
   briefStatus: "draft" | "finalized" | null;
   initialRecipient?: string;
 }) {
   const { t, locale } = useI18n();
+  const validationMessage = useValidationMessage();
   const send = useSendBrief(dogId);
-  const { data: sends } = useBriefSends(dogId);
+  const submission = useRef<{ intent: string; idempotencyKey: string } | undefined>(undefined);
+  const {
+    data: sends,
+    isError: sendsError,
+    isFetching: sendsFetching,
+    isLoading: sendsLoading,
+    refetch: refetchSends,
+  } = useBriefSends(dogId);
+  const sendHistoryReady = sends !== undefined && !sendsFetching && !sendsError;
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<BriefSendInput>({
-    resolver: zodResolver(briefSendSchema),
+  } = useForm<BriefSendIntent>({
+    resolver: zodResolver(briefSendIntentSchema),
     defaultValues: { recipient: initialRecipient ?? "" },
   });
 
@@ -41,14 +55,53 @@ export function SendPanel({
   if (briefStatus === null) return null;
 
   const onSubmit = handleSubmit(async (v) => {
+    // The history is the durable source of pending idempotency keys. Never
+    // mint a replacement key until that recovery read has succeeded.
+    if (!sendHistoryReady) return;
     try {
-      await send.mutateAsync(v);
+      const intent = JSON.stringify([briefId, v.recipient, v.message ?? null]);
+      if (submission.current?.intent !== intent) {
+        const recoverable = sends?.find(
+          (candidate) =>
+            candidate.status === "pending" &&
+            candidate.briefId === briefId &&
+            JSON.stringify([candidate.briefId, candidate.recipient, candidate.message ?? null]) ===
+              intent,
+        );
+        submission.current = {
+          intent,
+          idempotencyKey: recoverable?.id ?? createBriefSendIdempotencyKey(),
+        };
+      }
+      await send.mutateAsync({
+        ...v,
+        briefId,
+        idempotencyKey: submission.current.idempotencyKey,
+      });
+      submission.current = undefined;
       toast.success(t("briefSend.sent"));
       reset();
-    } catch {
-      toast.error(t("briefSend.sendFailed"));
+    } catch (error) {
+      if (error instanceof BriefRequestError && error.code === "idempotency_conflict") {
+        submission.current = undefined;
+      }
+      toast.error(t(briefSendErrorMessageKey(error)));
     }
   });
+
+  const retryPendingSend = async (pending: NonNullable<typeof sends>[number]) => {
+    try {
+      await send.mutateAsync({
+        briefId: pending.briefId,
+        recipient: pending.recipient,
+        message: pending.message,
+        idempotencyKey: pending.id,
+      });
+      toast.success(t("briefSend.sent"));
+    } catch (error) {
+      toast.error(t(briefSendErrorMessageKey(error)));
+    }
+  };
 
   const fmt = new Intl.DateTimeFormat(locale, { dateStyle: "medium" });
 
@@ -66,7 +119,9 @@ export function SendPanel({
             {...register("recipient")}
           />
           {errors.recipient && (
-            <span className="text-xs text-red-600">{errors.recipient.message}</span>
+            <span className="text-xs text-red-600">
+              {validationMessage(errors.recipient.message)}
+            </span>
           )}
         </label>
         <label className="block">
@@ -80,21 +135,59 @@ export function SendPanel({
             placeholder={t("briefSend.messagePh")}
             {...register("message", { setValueAs: (v) => v || undefined })}
           />
-          {errors.message && <span className="text-xs text-red-600">{errors.message.message}</span>}
+          {errors.message && (
+            <span className="text-xs text-red-600">
+              {validationMessage(errors.message.message)}
+            </span>
+          )}
         </label>
 
-        <Button type="submit" disabled={isSubmitting} className="w-full bg-slate text-cream">
+        <Button
+          type="submit"
+          disabled={isSubmitting || !sendHistoryReady}
+          className="w-full bg-slate text-cream"
+        >
           {isSubmitting ? t("briefSend.sending") : t("briefSend.send")}
         </Button>
       </form>
+
+      {(sendsLoading || (sendsFetching && !sendsError)) && (
+        <output className="text-sm text-slate-soft">{t("briefSend.historyLoading")}</output>
+      )}
+      {sendsError && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 text-sm text-slate-soft"
+        >
+          <span>{t("briefSend.historyLoadFailed")}</span>
+          <Button type="button" variant="outline" onClick={() => void refetchSends()}>
+            {t("briefSend.retry")}
+          </Button>
+        </div>
+      )}
 
       {sends && sends.length > 0 && (
         <div className="border-t border-silver pt-3">
           <h3 className="mb-2 text-sm font-medium text-slate">{t("briefSend.historyTitle")}</h3>
           <ul className="space-y-1">
             {sends.map((s) => (
-              <li key={s.id} className="text-sm text-slate-soft">
-                {s.recipient} — {fmt.format(new Date(String(s.sentAt)))}
+              <li key={s.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-soft">
+                  {s.recipient} —{" "}
+                  {s.status === "pending"
+                    ? t("briefSend.deliveryPending")
+                    : fmt.format(new Date(String(s.sentAt)))}
+                </span>
+                {s.status === "pending" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={send.isPending}
+                    onClick={() => void retryPendingSend(s)}
+                  >
+                    {send.isPending ? t("briefSend.retrying") : t("briefSend.retry")}
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

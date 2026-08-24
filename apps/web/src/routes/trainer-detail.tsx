@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useSession } from "@/lib/auth-client";
+import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { track } from "@/lib/track";
 import { useTrainer } from "@/lib/trainers";
 import { useEffect } from "react";
@@ -10,6 +11,7 @@ export function TrainerDetail() {
   const { t } = useI18n();
   const { id = "" } = useParams();
   const { data: session } = useSession();
+  const isAuthenticated = isNonemptySessionUserId(session?.user?.id);
   const { data: tr, isLoading, isError } = useTrainer(id);
   useEffect(() => {
     if (id) track("trainer.viewed", { id });
@@ -54,7 +56,7 @@ export function TrainerDetail() {
           </div>
         )}
       </div>
-      {tr.email && (
+      {isAuthenticated && tr.email && (
         <div className="pt-4">
           <Button asChild className="bg-slate text-cream">
             <Link to={`/my/brief?recipient=${encodeURIComponent(tr.email)}`}>
@@ -63,7 +65,7 @@ export function TrainerDetail() {
           </Button>
         </div>
       )}
-      {!session && (
+      {!isAuthenticated && (
         <div className="rounded border border-silver bg-white p-4">
           <p className="text-sm text-slate-soft">{t("trainersDir.signUpToContact")}</p>
           <Button asChild className="mt-2 bg-slate text-cream">

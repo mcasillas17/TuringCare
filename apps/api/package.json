@@ -16,6 +16,7 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:predeploy": "tsx src/db/migrate-predeploy.ts",
     "db:push": "drizzle-kit push",
     "telemetry:purge": "tsx src/telemetry/retention-cli.ts"
   },
@@ -24,6 +25,7 @@
     "@hono/zod-validator": "^0.4.0",
     "@react-pdf/renderer": "^4.1.0",
     "@sentry/node": "^10.69.0",
+    "@turingcare/i18n": "workspace:*",
     "@turingcare/shared": "workspace:*",
     "better-auth": "^1.1.0",
     "drizzle-orm": "^0.45.2",

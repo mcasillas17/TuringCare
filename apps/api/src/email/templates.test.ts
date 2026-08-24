@@ -23,4 +23,42 @@ describe("email templates", () => {
   it("the two templates have distinct subjects", () => {
     expect(verificationEmail(VERIFY_URL).subject).not.toBe(passwordResetEmail(VERIFY_URL).subject);
   });
+
+  it("declares the validated language on English authentication email HTML", () => {
+    expect(verificationEmail(VERIFY_URL, "en").html).toContain('<html lang="en">');
+    expect(passwordResetEmail(VERIFY_URL, "en").html).toContain('<html lang="en">');
+  });
+
+  it("declares the validated language on Spanish authentication email HTML", () => {
+    expect(verificationEmail(VERIFY_URL, "es").html).toContain('<html lang="es">');
+    expect(passwordResetEmail(VERIFY_URL, "es").html).toContain('<html lang="es">');
+  });
+
+  it("renders the verification email in Spanish", () => {
+    const out = verificationEmail(VERIFY_URL, "es");
+
+    expect(out.subject).toBe("Verifica tu correo de TuringCare");
+    expect(out.html).toContain("Confirma tu correo");
+    expect(out.html).toContain("Verificar correo");
+    expect(out.text).toContain("Confirma tu dirección de correo:");
+    expect(out.html).not.toContain("Confirm your email");
+  });
+
+  it("renders the password reset email in Spanish", () => {
+    const out = passwordResetEmail(VERIFY_URL, "es");
+
+    expect(out.subject).toBe("Restablece tu contraseña de TuringCare");
+    expect(out.html).toContain("Restablece tu contraseña");
+    expect(out.html).toContain("Restablecer contraseña");
+    expect(out.text).toContain("Restablece tu contraseña de TuringCare:");
+    expect(out.html).not.toContain("Reset your password");
+  });
+
+  it("escapes localized template URLs in HTML attributes and body text", () => {
+    const out = verificationEmail('https://example.com/verify?next="><script>x</script>', "es");
+
+    expect(out.html).not.toContain('"><script>x</script>');
+    expect(out.html).toContain("&quot;&gt;&lt;script&gt;x&lt;/script&gt;");
+    expect(out.text).toContain('https://example.com/verify?next="><script>x</script>');
+  });
 });

@@ -26,6 +26,7 @@ import {
 } from "@/lib/week";
 import { type FocusSkill, focusKey, useFocusWeek } from "@/lib/weekly-focus";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatDateInUtc } from "@turingcare/i18n";
 import type {
   AdvancementDecision,
   PracticeDimension,
@@ -138,6 +139,7 @@ export function DogWeek() {
       dogId: id,
       weekKey,
       currentWeekKey,
+      locale,
       skillId: pendingOutcome.skillId,
       suggestionId: pendingOutcome.suggestionId ?? undefined,
     }).status;
@@ -206,12 +208,13 @@ export function DogWeek() {
       dogId: id,
       weekKey,
       currentWeekKey,
+      locale,
       skillId,
     });
     const latestFocusSkill =
       auditedTarget?.focusSkill ??
       queryClient
-        .getQueryData<FocusSkill[]>(focusKey(id, weekKey))
+        .getQueryData<FocusSkill[]>(focusKey(id, weekKey, locale))
         ?.find((focus) => focus.skillId === skillId) ??
       focusSkill;
     const matchingSuggestion = auditedTarget?.suggestion ?? null;
@@ -248,6 +251,7 @@ export function DogWeek() {
             dogId: id,
             weekKey,
             currentWeekKey,
+            locale,
             skillId: target.skillId,
             suggestionId: originalAuditedSuggestionId,
           })
@@ -309,6 +313,7 @@ export function DogWeek() {
       dogId: id,
       weekKey,
       currentWeekKey,
+      locale,
       skillId: suggestion.skill.id,
       suggestionId: suggestion.suggestionId,
     });
@@ -336,7 +341,12 @@ export function DogWeek() {
     }
   };
 
-  const rangeLabel = `${days[0]?.toLocaleDateString(locale, { month: "short", day: "numeric" })} – ${days[6]?.toLocaleDateString(locale, { month: "short", day: "numeric" })}`;
+  const firstDay = days[0];
+  const lastDay = days[6];
+  const rangeLabel =
+    firstDay && lastDay
+      ? `${formatDateInUtc(locale, dayKey(firstDay), { month: "short", day: "numeric" }) ?? ""} – ${formatDateInUtc(locale, dayKey(lastDay), { month: "short", day: "numeric" }) ?? ""}`
+      : "";
 
   return (
     <div className="space-y-4">

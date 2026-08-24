@@ -99,13 +99,13 @@ export function BriefPdfDocument({ model }: { model: BriefPdfModel }) {
         <View style={styles.profileBlock}>
           <Text style={styles.dogName}>{model.dogName}</Text>
           <View style={styles.metaRow}>
-            {model.breed ? <Meta label="Breed" value={model.breed} /> : null}
-            {model.age ? <Meta label="Age" value={model.age} /> : null}
-            {model.size ? <Meta label="Size" value={model.size} /> : null}
-            {model.sex ? <Meta label="Sex" value={model.sex} /> : null}
+            {model.breed ? <Meta label={model.labels.breed} value={model.breed} /> : null}
+            {model.age ? <Meta label={model.labels.age} value={model.age} /> : null}
+            {model.size ? <Meta label={model.labels.size} value={model.size} /> : null}
+            {model.sex ? <Meta label={model.labels.sex} value={model.sex} /> : null}
           </View>
           <View style={{ marginTop: 6 }}>
-            <Text style={styles.statusPill}>{model.status}</Text>
+            <Text style={styles.statusPill}>{model.statusLabel}</Text>
           </View>
         </View>
 
@@ -116,7 +116,9 @@ export function BriefPdfDocument({ model }: { model: BriefPdfModel }) {
           <Text>
             {model.brandName} · v{model.version}
           </Text>
-          <Text>Generated {model.generatedAt}</Text>
+          <Text>
+            {model.labels.generated} {model.generatedAt}
+          </Text>
         </View>
       </Page>
     </Document>

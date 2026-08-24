@@ -2,6 +2,7 @@ import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BriefSendInput } from "@turingcare/shared";
 import { api } from "./api";
+import { readBriefRequestError } from "./brief-errors";
 
 const b = api.api.dogs[":id"].brief;
 
@@ -23,7 +24,7 @@ export function useSendBrief(dogId: string) {
   return useMutation({
     mutationFn: async (body: BriefSendInput) => {
       const res = await b.send.$post({ param: { id: dogId }, json: body });
-      if (!res.ok) throw new Error(res.status === 409 ? "not_finalized" : "send_failed");
+      if (!res.ok) throw await readBriefRequestError(res, "send", "send_failed");
       return (await res.json()).send;
     },
     onSuccess: () => {

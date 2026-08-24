@@ -3,23 +3,26 @@
 End-to-end deploy on every push to `main`:
 
 ```
-push main → ci → deploy-api (drain+migrate+deploy+ready) → deploy-web
+push main → ci → deploy-api (drain+full migrate+deploy+ready)
+                    → migrate (idempotent verification) → deploy-web
 ```
 
 - **Frontend** → Cloudflare Pages (`turingcare.dog`, `www.turingcare.dog`)
 - **Backend** → Fly.io (`api.turingcare.dog`)
 - **Database** → Supabase Postgres
 
-Production deploys are serialized. For schema-incompatible migrations, one
-bounded API job drains the old machines, migrates, deploys, restores the prior
-machine count, and verifies readiness without a runner gap between phases. If
-migration fails, the workflow restores the old release after the database
-rollback; if deployment or readiness fails after migration, it leaves the API
-drained for operator intervention rather than serving an incompatible release.
+Production deploys are serialized. One bounded API job drains the old machines,
+applies the complete committed migration history through `0026`, deploys, restores
+the prior machine count, and verifies readiness without a runner gap between phases.
+Before migration begins, a failure restores the old release. Once migration is
+attempted, any failure leaves the API drained for operator intervention because an
+earlier migration may already have committed; the workflow never guesses that the
+legacy schema is still safe. A separate migration job then idempotently verifies that
+the deployed release left no pending migration.
 The first deploy bootstraps one API machine when no prior machine exists. Health
 checks use the stable `turingcare-api.fly.dev` hostname, so custom-domain
 provisioning cannot block recovery. The web deploys only after the migrated API
-is healthy.
+is healthy and the migration tail has succeeded.
 
 > Nothing here is automated by the repo. Do every step below **once**, by hand,
 > before the first push to `main`. The workflows (`.github/workflows/ci.yml`,
@@ -53,11 +56,11 @@ The API package is `@turingcare/api` (pnpm filter name used everywhere below —
    - **URL-encode** the password if it contains `@ : / ? # [ ] %` (e.g.
      `@`→`%40`). Reset it at Settings → Database → Database password if unknown.
 3. This single value is used as `DATABASE_URL` in **both** the GitHub Actions
-   secret (for the `deploy-api` migration step) and the Fly secret (for the running API).
+   secret (for both production migration phases) and the Fly secret (for the running API).
    It is **not** committed anywhere — secrets only.
 
-No tables yet — the `deploy-api` job creates them from
-`apps/api/drizzle/` on the first deploy.
+No tables yet — the `deploy-api` and `migrate` jobs create them from
+`apps/api/drizzle/` in the phases documented below on the first deploy.
 
 ---
 
@@ -136,8 +139,10 @@ fly secrets set --app turingcare-api \
 
 ### Transactional email (Resend) — one-time setup
 
-Until these are done, production runs email in **log-only mode** (no crash, no
-mail). Deploy is not blocked by DNS propagation.
+Complete these steps before deploying. The production API now fails configuration
+validation when `RESEND_API_KEY` is absent or blank, preventing Brief, verification,
+or reset emails from being acknowledged without provider delivery. Local/CI no-key
+mode emits only a redacted diagnostic with no recipient or subject.
 
 1. Create a Resend account; create an API key.
 2. In Resend, add domain `send.turingcare.dog`. Add the generated **SPF**,
@@ -189,7 +194,7 @@ Repo → Settings → Secrets and variables → Actions → New repository secre
 
 | Secret | Value |
 |---|---|
-| `DATABASE_URL` | Supabase Session-pooler URL (used by the `deploy-api` migration step) |
+| `DATABASE_URL` | Supabase Session-pooler URL (used by both production migration phases) |
 | `FLY_API_TOKEN` | from `fly tokens create deploy` |
 | `CLOUDFLARE_API_TOKEN` | Pages-edit token |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
@@ -205,15 +210,56 @@ gh secret set CLOUDFLARE_ACCOUNT_ID
 
 ---
 
-## 6. First deploy
+## 6. Database rollout contract
 
-Push to `main`. `ci` → `deploy-api` (drain, migrate, deploy, readiness) →
-`deploy-web`. On success: API at the Fly app's `*.fly.dev`, frontend at the
-Pages `*.pages.dev`. Attach the real domains next.
+`main` owns the immutable `0013–0021` migration history. Localization and Brief
+concurrency/delivery migrations append to that history; never restore the old
+colliding `0013–0015` filenames or rewrite an already-applied migration.
+
+| Phase | Migration / action | Compatibility rule |
+|---|---|---|
+| Drained pre-deploy | Apply `0013–0021` | Personalized training, guided setup, contextual progress, and initial Brief-share privacy changes are schema-incompatible with the legacy API, so all old Fly machines stay drained. |
+| Drained pre-deploy | Apply `0022_panoramic_skullbuster` | Adds the `locale` enum, nullable `user.locale`, and non-null/default-English `briefs.locale`. |
+| Drained pre-deploy | Apply `0023_third_madripoor` | Repairs duplicate per-dog Brief versions under writer-blocking locks, then adds the `(dog_id, version)` unique constraint. |
+| Drained pre-deploy | Apply `0024_brief_share_telemetry_privacy` | Broadens `0021`'s cleanup to encoded/case-variant public Brief bearer paths and mislabeled client events. |
+| Drained pre-deploy | Apply `0025_petite_guardian` | Adds `brief_sends.delivered_at` and treats historical completed audits as delivered. |
+| Drained pre-deploy | Apply `0026_first_nitro` | Adds durable delivery claims and a fail-closed delete trigger for claimed sends. |
+| API | Deploy and verify `/ready` | Starts the locale-aware API with exact Brief binding, provider-idempotent retry recovery, and narrow legacy-payload compatibility. |
+| Verify | Run full `db:migrate` | Idempotently proves the complete history is installed; no post-deploy tail is expected. |
+| Web | Publish Cloudflare Pages | New clients require exact Brief and idempotency IDs; the already-deployed API keeps old tabs safe until this bundle replaces them. |
+
+`pnpm --filter @turingcare/api db:migrate:predeploy` builds a temporary migration
+set containing the complete journal. Its empty post-deploy allowlist is a fail-closed
+declaration that every current migration runs while the API is drained. When adding a
+later migration, explicitly classify its phase and update
+`apps/api/src/db/migrate-predeploy.ts` plus the rollout contract tests; do not assume the
+current all-predeploy classification remains safe.
+
+The API must deploy before the web. It accepts exact new-client Brief IDs and a narrow
+legacy `{ recipient, message }` payload. Legacy sends proceed only when one Brief version
+can be established; an existing canonical audit may be replayed only within that one version.
+Every multi-version ID-less request returns `client_upgrade_required` without provider I/O.
+Delivery claims older than
+30 seconds are retry-reclaimable with the same durable provider key, but the database
+trigger blocks deletion for every non-null claim regardless of age. Operators recover a
+stale or timestamp-less claim by retrying from the linked Brief screen, not by deleting
+the audit row or weakening the trigger.
+
+This release adds no locale environment variable or secret. Locale is a
+validated request, account, and artifact value; keep `.env.example`, GitHub
+secrets, and Fly secrets unchanged.
+
+## 7. First deploy
+
+Push to `main`. Watch the single serialized sequence through `ci`, `deploy-api`
+(drain, predeploy migrations, deploy, readiness), `migrate`, and `deploy-web`.
+Do not manually start a second rollout while it is running. On success: API at
+the Fly app's `*.fly.dev`, frontend at the Pages `*.pages.dev`. Attach the real
+domains next.
 
 ---
 
-## 7. Custom domains (after the first successful deploy)
+## 8. Custom domains (after the first successful deploy)
 
 ### API → `api.turingcare.dog` (Fly)
 
@@ -244,7 +290,7 @@ Verify end-to-end: open `https://turingcare.dog`, register, confirm you land on
 
 ---
 
-## 8. Rollback
+## 9. Rollback
 
 ### API (Fly)
 
@@ -256,6 +302,12 @@ fly deploy --app turingcare-api --image <previous-image-ref> --config apps/api/f
 Or Fly Dashboard → `turingcare-api` → **Monitoring → Releases →** select a
 previous release → **Rollback**. (Schema rollbacks are separate: write a new
 down migration; don't roll the API back past a schema change without it.)
+
+Do not restore an API that can write Brief versions by an unlocked read-max after
+`0023` is installed or one that cannot understand the delivery columns after `0025`/`0026`.
+Prefer a forward fix. A schema rollback must be a new, reviewed migration; do not drop the
+locale enum, either Brief uniqueness index, the claimed-send deletion guard, or attempt to
+reverse the historical telemetry cleanup in `0021`/`0024`.
 
 ### Frontend (Cloudflare Pages)
 

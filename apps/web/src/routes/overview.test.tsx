@@ -5,7 +5,10 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Overview } from "./overview";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  localStorage.clear();
+  vi.unstubAllGlobals();
+});
 
 function stub(
   over: unknown,
@@ -41,7 +44,8 @@ function stub(
   );
 }
 
-function setup() {
+function setup(locale: "en" | "es" = "en") {
+  localStorage.setItem("tc-locale", locale);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -149,6 +153,33 @@ describe("Overview", () => {
         screen.getByRole("heading", { name: /Generate your first Brief/i }),
       ).toBeInTheDocument(),
     );
+  });
+
+  it("localizes known Brief status and activity dates from explicit Spanish, not browser English", async () => {
+    vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US"] });
+    stub(
+      {
+        dogCount: 1,
+        journalEntryCount: 1,
+        latestBrief: { status: "finalized" },
+        recentActivity: [
+          {
+            dogName: "Biscuit",
+            behavior: "Esperó con calma",
+            occurredAt: "2026-05-19T00:30:00.000Z",
+          },
+        ],
+      },
+      [{ id: "d1", name: "Biscuit" }],
+    );
+
+    setup("es");
+
+    expect(await screen.findByText("Definitivo")).toBeInTheDocument();
+    expect(screen.getByText(/19 de mayo de 2026/)).toBeInTheDocument();
+    expect(screen.queryByText("finalized")).not.toBeInTheDocument();
+    expect(screen.queryByText(/2026-05-19/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/May 19/)).not.toBeInTheDocument();
   });
 
   it("redirects an eligible owner to guided setup", async () => {

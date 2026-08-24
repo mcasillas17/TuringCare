@@ -133,7 +133,7 @@ export function AppShell() {
             <div className="fixed inset-0 z-40 md:hidden">
               <button
                 type="button"
-                aria-label="Close menu"
+                aria-label={t("shell.close")}
                 className="absolute inset-0 bg-slate/40"
                 onClick={() => setDrawerOpen(false)}
               />

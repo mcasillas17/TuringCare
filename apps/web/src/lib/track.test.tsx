@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes, matchRoutes } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { PageViewTracker, pageViewPath } from "./track";
+import { PageViewTracker } from "./track";
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
@@ -30,74 +30,79 @@ it("posts a page.viewed event for the current path", async () => {
   expect(body).toEqual({ name: "page.viewed", props: { path: "/my" } });
 });
 
-it("redacts a public Brief token from page-view telemetry", () => {
+it.each([
+  "/b/fixture-share-segment",
+  "/B/fixture-share-segment",
+  "/%62/fixture-share-segment",
+  "/%42/fixture-share-segment",
+  "/b/fixture-share-segment/",
+  "/B/fixture-share-segment///",
+  "/%62/fixture-share-segment///",
+  "/b/fixture%2Fencoded-segment",
+  "/%42/fixture%2Fencoded-segment",
+  "/%62/fixture%",
+  "/%42/%ZZ",
+  "/b/fixture-share-segment?source=fixture",
+  "/B/fixture-share-segment///#fixture",
+])("normalizes the public Brief route before tracking %s", (pathname) => {
   render(
-    <MemoryRouter initialEntries={["/b/super-secret-token"]}>
+    <MemoryRouter initialEntries={[pathname]}>
       <PageViewTracker />
-      <Routes>
-        <Route path="/b/:token" element={<div>shared Brief</div>} />
-      </Routes>
     </MemoryRouter>,
   );
 
   const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
   const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
-  const serializedBody = firstCall[1].body as string;
-
-  expect(JSON.parse(serializedBody)).toEqual({
+  expect(JSON.parse(firstCall[1].body as string)).toEqual({
     name: "page.viewed",
     props: { path: "/b/:token" },
   });
-  expect(serializedBody).not.toContain("super-secret-token");
 });
 
-it("redacts a case-variant public Brief token from page-view telemetry", () => {
+it.each([
+  "/b",
+  "/b/",
+  "/b//",
+  "/b/fixture/child",
+  "/billing",
+  "//b/fixture",
+  "/%62",
+  "/%62/",
+  "/%62//",
+  "/%62/fixture/child",
+  "/%2562/fixture",
+  "/%61/fixture",
+  "/%6Z/fixture",
+  "/%2F%62/fixture",
+  "/%62%2Ffixture",
+  "//%62/fixture",
+])("does not over-redact unrelated path %s", (pathname) => {
   render(
-    <MemoryRouter initialEntries={["/B/super-secret-token"]}>
+    <MemoryRouter initialEntries={[pathname]}>
       <PageViewTracker />
-      <Routes>
-        <Route path="/b/:token" element={<div>shared Brief</div>} />
-      </Routes>
     </MemoryRouter>,
   );
 
   const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
   const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
-  const serializedBody = firstCall[1].body as string;
-
-  expect(JSON.parse(serializedBody)).toEqual({
+  expect(JSON.parse(firstCall[1].body as string)).toEqual({
     name: "page.viewed",
-    props: { path: "/b/:token" },
+    props: { path: pathname },
   });
-  expect(serializedBody).not.toContain("super-secret-token");
 });
 
-it.each(["/b/repeated-secret//", "/B/repeated-secret///"])(
-  "redacts a public Brief token with repeated trailing slashes from page-view telemetry for %s",
-  (pathname) => {
-    render(
-      <MemoryRouter initialEntries={[pathname]}>
-        <PageViewTracker />
-        <Routes>
-          <Route path="/b/:token" element={<div>shared Brief</div>} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-    const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
-    const serializedBody = firstCall[1].body as string;
-
-    expect(JSON.parse(serializedBody)).toEqual({
-      name: "page.viewed",
-      props: { path: "/b/:token" },
-    });
-    expect(serializedBody).not.toContain("repeated-secret");
-  },
-);
-
-it.each(["/b", "/b//x", "/b/x/y", "/billing"])("does not redact non-Brief path %s", (pathname) => {
-  expect(pageViewPath(pathname)).toBe(pathname);
+it.each([
+  ["/b/fixture", true],
+  ["/B/fixture", true],
+  ["/%62/fixture", true],
+  ["/%42/fixture", true],
+  ["/%2562/fixture", false],
+  ["/%61/fixture", false],
+  ["/%2F%62/fixture", false],
+  ["/%62%2Ffixture", false],
+  ["/%62/fixture/child", false],
+] as const)("characterizes React Router matching for encoded prefix %s", (pathname, matches) => {
+  expect(matchRoutes([{ path: "/b/:token" }], pathname) !== null).toBe(matches);
 });
 
 it("fires a new page.viewed on route change", async () => {

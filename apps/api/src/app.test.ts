@@ -64,6 +64,25 @@ describe("api", () => {
     expect(res.headers.get("Access-Control-Expose-Headers")).toContain("X-Request-ID");
   });
 
+  it("GET /health defaults Content-Language to en", async () => {
+    const res = await app.request("/health");
+    expect(res.headers.get("Content-Language")).toBe("en");
+  });
+
+  it("CORS allows X-TuringCare-Locale on preflight requests", async () => {
+    const res = await app.request("/health", {
+      method: "OPTIONS",
+      headers: {
+        Origin: env.FRONTEND_URL,
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "Content-Type, X-TuringCare-Locale",
+      },
+    });
+
+    expect(res.headers.get("Access-Control-Allow-Headers")).toContain("Content-Type");
+    expect(res.headers.get("Access-Control-Allow-Headers")).toContain("X-TuringCare-Locale");
+  });
+
   it("GET /health is never rate-limited", async () => {
     for (let i = 0; i < 50; i++) {
       const res = await app.request("/health");

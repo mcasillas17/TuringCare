@@ -53,4 +53,17 @@ describe("DirectoryLayout", () => {
     expect(screen.queryByTestId("app-shell")).not.toBeInTheDocument();
     expect(screen.queryByTestId("public-layout")).not.toBeInTheDocument();
   });
+
+  it.each(["", "   ", 42])(
+    "renders public chrome for the runtime-invalid session user id %j",
+    (userId) => {
+      mockUseSession.mockReturnValue({ data: { user: { id: userId } }, isPending: false } as never);
+
+      setup();
+
+      expect(screen.getByTestId("public-layout")).toBeInTheDocument();
+      expect(screen.getByTestId("page")).toBeInTheDocument();
+      expect(screen.queryByTestId("app-shell")).not.toBeInTheDocument();
+    },
+  );
 });

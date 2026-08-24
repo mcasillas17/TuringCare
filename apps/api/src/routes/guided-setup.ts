@@ -1,4 +1,4 @@
-import { zValidator } from "@hono/zod-validator";
+import type { Locale } from "@turingcare/i18n";
 import {
   type GuidedSetupActionType,
   type GuidedSetupCompletionReason,
@@ -33,6 +33,7 @@ import type { TransactionType } from "../lib/safety-lock";
 import { currentWeekKey, loadSuggestion } from "../lib/suggestion";
 import { applyTrainingTemplate } from "../lib/training-template-writes";
 import { type Vars, requireUser } from "../middleware/require-user";
+import { stableZValidator as zValidator } from "../middleware/validation";
 import { recordEvent } from "../telemetry/record-event";
 
 const guidedSetupTrainingTemplateKeys = new Set<string>(guidedSetupTrainingTemplateKeyValues);
@@ -373,7 +374,7 @@ function completionTelemetryProps(
   };
 }
 
-export const guidedSetupApp = new Hono<{ Variables: Vars }>()
+export const guidedSetupApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .use("*", requireUser)
   .get("/", async (c) => c.json(await loadStatus(c.get("userId"))))
   .post("/", zValidator("json", guidedSetupStartSchema), async (c) => {
@@ -576,7 +577,12 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
         return { kind: "invalid_template" } as const;
       }
 
-      const applied = await applyTrainingTemplate(tx, active.setup.dogId, input.templateKey);
+      const applied = await applyTrainingTemplate(
+        tx,
+        active.setup.dogId,
+        input.templateKey,
+        c.get("locale"),
+      );
       if (!applied) return { kind: "invalid_template" } as const;
       const skills = [...applied.skills].sort(
         (left, right) => left.position - right.position || left.id.localeCompare(right.id),
@@ -667,6 +673,7 @@ export const guidedSetupApp = new Hono<{ Variables: Vars }>()
           dogId: result.dogId,
           weekKey: input.weekKey,
           timezoneOffsetMinutes: input.timezoneOffsetMinutes,
+          locale: c.get("locale"),
         })
       : null;
     return c.json(

@@ -22,6 +22,7 @@ import {
 // Declared before the `user` table because `const` bindings must precede any
 // table that references the enum (userRoleEnum is used in user.role below).
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
+export const localeEnum = pgEnum("locale", ["en", "es"]);
 
 /* ---------- Better Auth core tables (adapter defaults) ---------- */
 
@@ -32,6 +33,7 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
   role: userRoleEnum("role").notNull().default("user"),
+  locale: localeEnum("locale"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -559,11 +561,13 @@ export const briefs = pgTable(
       .references(() => dogs.id, { onDelete: "cascade" }),
     generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
     status: briefStatusEnum("status").notNull().default("draft"),
+    locale: localeEnum("locale").notNull().default("en"),
     summary: text("summary").notNull(),
     version: integer("version").notNull().default(1),
     shareToken: text("share_token").unique(),
   },
   (t) => [
+    unique("briefs_dog_id_version_unique").on(t.dogId, t.version),
     uniqueIndex("briefs_one_active_share_per_dog_idx")
       .on(t.dogId)
       .where(sql`${t.shareToken} IS NOT NULL`),
@@ -578,6 +582,9 @@ export const briefSends = pgTable("brief_sends", {
   recipient: text("recipient").notNull(),
   message: text("message"),
   sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  deliveryClaimId: text("delivery_claim_id"),
+  deliveryClaimedAt: timestamp("delivery_claimed_at", { withTimezone: true }),
   sentByUserId: text("sent_by_user_id").references(() => user.id, { onDelete: "set null" }),
 });
 

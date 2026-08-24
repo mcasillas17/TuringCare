@@ -12,14 +12,20 @@ export class EmailSendError extends Error {
 /** Minimal seam over the Resend SDK so the provider is swappable + testable. */
 export interface ResendLike {
   emails: {
-    send(args: {
-      from: string;
-      to: string;
-      subject: string;
-      html: string;
-      text: string;
-      reply_to?: string;
-    }): Promise<{ data: unknown; error: unknown }>;
+    send(
+      args: {
+        from: string;
+        to: string;
+        subject: string;
+        html: string;
+        text: string;
+        reply_to?: string;
+      },
+      options?: { idempotencyKey?: string; signal?: AbortSignal },
+    ): Promise<{
+      data: unknown;
+      error: unknown;
+    }>;
   };
 }
 
@@ -29,12 +35,16 @@ export interface SendEmailArgs {
   html: string;
   text: string;
   replyTo?: string;
+  /** Provider-level key tying one external delivery to its database audit. */
+  idempotencyKey?: string;
 }
 
 export interface SendEmailDeps {
   client?: ResendLike;
   apiKey?: string;
   from?: string;
+  /** Hard network deadline; the default bounds request and provider resources. */
+  timeoutMs?: number;
   /** Optional capture callback. When provided, the email is recorded here
    *  instead of being sent via Resend (useful for tests / E2E mode). */
   capture?: ((args: SendEmailArgs) => void) | undefined;
@@ -42,8 +52,9 @@ export interface SendEmailDeps {
 
 /**
  * Deliver one transactional email. Provider-isolated. With no API key
- * (local/CI) it logs and resolves — no network, never throws. With a key it
- * sends via Resend and throws EmailSendError on any provider/transport failure.
+ * (local/CI only; production configuration rejects this state) it emits one
+ * redacted diagnostic and resolves without network I/O. With a key it sends via
+ * Resend and throws EmailSendError on any provider/transport failure.
  */
 export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): Promise<void> {
   if (!args.to.trim() || !args.subject.trim()) {
@@ -70,7 +81,7 @@ export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): 
   const from = deps.from ?? env.EMAIL_FROM;
 
   if (!apiKey) {
-    console.info("[email:dev]", { to: args.to, subject: args.subject });
+    console.info("[email:dev] delivery skipped: provider not configured");
     return;
   }
 
@@ -79,6 +90,11 @@ export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): 
   const client: ResendLike = deps.client ?? (new Resend(apiKey) as unknown as ResendLike);
 
   let result: { data: unknown; error: unknown };
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(new Error("email provider deadline exceeded")),
+    deps.timeoutMs ?? 10_000,
+  );
   try {
     const sendArgs: Parameters<ResendLike["emails"]["send"]>[0] = {
       from,
@@ -88,12 +104,17 @@ export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): 
       text: args.text,
     };
     if (args.replyTo) sendArgs.reply_to = args.replyTo;
-    result = await client.emails.send(sendArgs);
+    result = await client.emails.send(sendArgs, {
+      ...(args.idempotencyKey ? { idempotencyKey: args.idempotencyKey } : {}),
+      signal: controller.signal,
+    });
   } catch (cause) {
     throw new EmailSendError(
       `sendEmail: transport failure: ${cause instanceof Error ? cause.message : "unknown"}`,
       { cause },
     );
+  } finally {
+    clearTimeout(timeout);
   }
   if (result.error) {
     const e = result.error as { message?: string; statusCode?: number };

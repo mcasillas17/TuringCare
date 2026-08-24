@@ -175,8 +175,9 @@ the logged-in path via `vi.mock`; landing.test stays green for logged-out.
 
 ## 2026-05-19 — Transactional email provider (P1) — SHIPPED
 Security backlog P1. Provider-isolated `email/send-email.ts` (Resend SDK; only
-file importing it) with a log-only no-op fallback when `RESEND_API_KEY` is
-unset (local/CI never send, no network, never throw); `EmailSendError` chains
+file importing it) with a redacted no-network fallback when `RESEND_API_KEY` is
+unset outside production (local/CI never send; production now fails configuration
+validation); `EmailSendError` chains
 cause; body/identity guards. Pure `email/templates.ts`
 (verification + reset, inline-styled HTML + text, paste-link fallback). Better
 Auth `emailAndPassword.sendResetPassword` + `emailVerification`
@@ -1144,3 +1145,72 @@ Spanish UX copy, and public-route whitelist/privacy assertions.
 - Spec/plan: `docs/superpowers/specs/2026-08-22-brief-share-privacy-design.md`,
   `docs/superpowers/plans/2026-08-22-brief-share-privacy.md`
 - Commits: this branch (see `git log`).
+
+## 2026-08-23 — End-to-end English/Spanish localization — IMPLEMENTED, PR #70
+
+Replaced the frontend-only custom translation store with a shared, typed
+`@turingcare/i18n` workspace package backed by i18next. The React adapter uses
+`react-i18next` while preserving `LocaleProvider`, `useI18n()`, and typed message keys;
+the API consumes the same catalogs. Supported locales remain exactly `en` and `es`.
+Initial resolution is valid `tc-locale` → browser language → English, then a non-null
+authenticated `user.locale` takes precedence. A null account preference is seeded once,
+explicit switches persist locally and to the authenticated profile, `<html lang>` follows
+the active UI locale, and storage/profile/network failures retain a localized in-memory
+fallback rather than claiming a remote save.
+
+Added bounded Hono locale middleware and a shared web/auth request wrapper:
+`X-TuringCare-Locale` → weighted supported `Accept-Language` → English, with strict
+allowlisting, CORS support, and `Content-Language` responses. Curated training templates
+now use stable language-neutral keys with localized display fields; application persists
+the request-language text. Admin dashboards, forms, dates, units, validation feedback,
+and outstanding accessibility labels use the catalogs. Auth verification/reset email
+chrome follows the initiating validated request locale. Trainer/course records and all
+user-authored names, journals, goals, messages, descriptions, and contact data remain
+authored content and are not machine-translated.
+
+Behavior Briefs store the validated generation locale; their prose, UTC-stable generated
+date, enum/status chrome, owned/public views, email, and PDF remain in that language after
+UI changes. Review hardening serialized per-dog generation and lifecycle transitions,
+made ambiguous latest versions and drafts fail closed, repaired legacy duplicate versions
+before enforcing unique `(dog_id, version)` values, and made email delivery an intent-first,
+exact-version-bound protocol.
+
+Current clients provide a Brief ID and idempotency UUID. The API commits that durable audit
+before provider I/O, releases database locks, and passes the send UUID to the provider. A
+narrow rollout decoder keeps actual former `{ recipient, message }` tabs safe: one Brief can
+be bound and a canonical existing intent for that one version can be replayed. Every
+multi-version ID-less request returns localized refresh guidance without sending, even if
+recipient/message match an older audit, because those fields cannot identify the intended
+version. Single-version recovery remains stable across server-secret rotation and pre-rollout
+random audit IDs. Delivery claims coordinate retry takeover without
+ever weakening deletion protection; stale or timestamp-less claims require explicit recovery.
+Dog/account deletion and account-deletion races fail closed with localized links, the database
+trigger also protects raw cascades, and onboarding counts only confirmed deliveries.
+Production configuration now requires a non-empty Resend key, preventing provider-free sends
+from being recorded as delivered. Development/CI no-key mode retains its no-network behavior
+but logs neither recipient address nor subject.
+
+The production rollout preserves the running `production-deploy` workflow while preventing
+phase interleaving: CI → drain legacy API → full migrations through 0026 → deploy and verify
+the dual-protocol Fly API → idempotent migration verification → Cloudflare Pages. This
+API-first order protects old tabs before the exact-binding web appears. `Dockerfile.api`
+includes both shared workspace packages and the workflow builds and health-smokes the
+production image. There are no new locale secrets or environment variables.
+
+Privacy hardening prevents public Brief bearer tokens from entering analytics: browser and
+API telemetry normalize `/b/<token>` (including route-equivalent `%62`/`%42` prefixes) to
+`/b/:token`, admin aggregation canonicalizes historical rows, and a data-only migration
+cleans stored paths. Locale itself is not collected as telemetry. Public shares remain a
+strict finalized-Brief projection with no user ID, dog ID, or token in the response.
+
+GPT-5.6 Luna and GPT-5.6 Terra independently and repeatedly reviewed correctness,
+security/privacy, improvements, gaps, and coverage, including a complete pass after merging
+current `main`. Verified findings were fixed test-first. Both returned **no actionable
+feedback** on the same final code state after the durability, deletion, and rollout changes.
+Final fresh repository, full-migration, deployment-contract, and production-image evidence is
+recorded in PR #70.
+
+- Current guide: `docs/LOCALIZATION.md`
+- Spec/plan: `docs/superpowers/specs/2026-08-23-end-to-end-localization-design.md`,
+  `docs/superpowers/plans/2026-08-23-end-to-end-localization.md`
+- Published for review as [PR #70](https://github.com/mcasillas17/TuringCare/pull/70).

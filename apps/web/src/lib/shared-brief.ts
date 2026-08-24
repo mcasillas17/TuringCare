@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { Locale } from "@turingcare/i18n";
 import { api } from "./api";
 
 export type SharedBrief = {
@@ -7,6 +8,7 @@ export type SharedBrief = {
   status: string;
   version: number;
   generatedAt: string;
+  locale: Locale;
 };
 
 export function useSharedBrief(token: string) {

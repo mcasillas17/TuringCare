@@ -6,6 +6,10 @@
 languages always visible) into a compact, flag-only control that opens a small
 popover to switch language, on hover (desktop) or click/tap (all devices).
 
+> **Historical UI design:** The popover interaction remains a design record. The custom
+> client-only locale runtime assumed here was superseded by the 2026-08-23 shared/account
+> implementation; see `../../LOCALIZATION.md`.
+
 ---
 
 ## 1. Goal & scope

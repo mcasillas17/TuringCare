@@ -4,16 +4,21 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const signInEmailMock = vi.fn();
+const { signInEmailMock, toastErrorMock } = vi.hoisted(() => ({
+  signInEmailMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+}));
 vi.mock("@/lib/auth-client", () => ({
   signIn: { email: (...a: unknown[]) => signInEmailMock(...a) },
 }));
+vi.mock("sonner", () => ({ toast: { error: toastErrorMock } }));
 
 const { Login } = await import("./login");
 
 let assignMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   signInEmailMock.mockReset();
+  toastErrorMock.mockReset();
   assignMock = vi.fn();
   vi.stubGlobal("location", {
     assign: assignMock,
@@ -52,11 +57,16 @@ it("on successful login, does a full-load navigation to /my", async () => {
 });
 
 it("on login error, does not navigate", async () => {
-  signInEmailMock.mockResolvedValue({ data: null, error: { message: "bad" } });
+  signInEmailMock.mockResolvedValue({
+    data: null,
+    error: { message: "sensitive upstream login detail" },
+  });
   setup();
   await userEvent.type(screen.getByLabelText(/email/i), "u@example.com");
   await userEvent.type(screen.getByLabelText(/password/i), "wrong");
   await userEvent.click(screen.getByRole("button", { name: /^log in$/i }));
   expect(signInEmailMock).toHaveBeenCalledOnce();
   expect(assignMock).not.toHaveBeenCalled();
+  expect(toastErrorMock).toHaveBeenCalledWith("Login failed");
+  expect(toastErrorMock).not.toHaveBeenCalledWith(expect.stringContaining("sensitive"));
 });

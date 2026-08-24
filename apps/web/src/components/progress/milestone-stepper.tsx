@@ -1,7 +1,7 @@
 import { useI18n } from "@/i18n";
 import { LEVEL_KEYS, type ProgressSkill, useSetSkillLevel } from "@/lib/progress";
 import { findCatalogSkill, useTrainingCatalog } from "@/lib/training-catalog";
-import { dateLabel } from "@/lib/when";
+import { formatDateInUtc } from "@turingcare/i18n";
 
 const LEVELS = [1, 2, 3, 4, 5] as const;
 
@@ -13,7 +13,15 @@ export function MilestoneStepper({ dogId, skill }: { dogId: string; skill: Progr
   const current = skill.confidence;
   const dateFor = (level: number) => {
     const m = skill.milestones.find((x) => x.level === level);
-    return m ? dateLabel(m.reachedAt, new Date(), locale) : null;
+    if (!m) return null;
+    const reachedAt = new Date(m.reachedAt);
+    if (Number.isNaN(reachedAt.getTime())) return null;
+    const includeYear = reachedAt.getUTCFullYear() !== new Date().getUTCFullYear();
+    return formatDateInUtc(locale, reachedAt, {
+      day: "numeric",
+      month: "short",
+      year: includeYear ? "numeric" : undefined,
+    });
   };
   const descFor = (level: number) => {
     const catalogDesc = catalogSkill?.levels.find((l) => l.level === level)?.description;

@@ -37,11 +37,16 @@ function mockMe(role: string | undefined) {
   );
 }
 afterEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
 
-function setup(queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+function setup(
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  locale: "en" | "es" = "en",
+) {
+  localStorage.setItem("tc-locale", locale);
   return {
     queryClient,
     ...render(
@@ -85,6 +90,13 @@ describe("AppShell", () => {
     const chip = screen.getByRole("button", { name: "Language" });
     // The chip must come AFTER the Sign out button in document order.
     expect(signOut.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+  it("localizes the mobile drawer close label", async () => {
+    const user = userEvent.setup();
+    mockMe("user");
+    setup(undefined, "es");
+    await user.click(screen.getByRole("button", { name: "Menú" }));
+    expect(screen.getByRole("button", { name: "Cerrar menú" })).toBeInTheDocument();
   });
 
   it("clears owner caches before navigating after a successful sign out", async () => {

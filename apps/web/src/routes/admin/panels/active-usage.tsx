@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n";
 import {
   CartesianGrid,
   Line,
@@ -8,24 +9,38 @@ import {
   YAxis,
 } from "recharts";
 import type { Metrics } from "../use-metrics";
+import { formatAdminChartDate } from "./chart-date";
 
 export function ActiveUsage({
   active,
   kpis,
 }: { active: Metrics["active"]; kpis: Metrics["kpis"] }) {
+  const { locale, t } = useI18n();
+  const dateLabel = (dateBucket: unknown) => formatAdminChartDate(locale, dateBucket);
+
   return (
     <section className="rounded-lg border border-silver bg-white p-4">
-      <h2 className="mb-1 text-sm font-semibold uppercase text-slate-soft">Active users</h2>
+      <h2 className="mb-1 text-sm font-semibold uppercase text-slate-soft">
+        {t("admin.activeUsers")}
+      </h2>
       <p className="mb-3 text-xs text-slate-soft">
-        DAU {kpis.dau} · WAU {kpis.wau} · MAU {kpis.mau}
+        {t("admin.dailyActiveUsers")} {kpis.dau} · {t("admin.weeklyActiveUsers")} {kpis.wau} ·{" "}
+        {t("admin.monthlyActiveUsers")} {kpis.mau}
       </p>
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={active}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="day" fontSize={11} />
+          <XAxis dataKey="day" fontSize={11} tickFormatter={dateLabel} />
           <YAxis allowDecimals={false} fontSize={11} />
-          <Tooltip />
-          <Line type="monotone" dataKey="count" stroke="#c8893b" strokeWidth={2} dot={false} />
+          <Tooltip labelFormatter={dateLabel} />
+          <Line
+            type="monotone"
+            dataKey="count"
+            name={t("admin.activeUsers")}
+            stroke="#c8893b"
+            strokeWidth={2}
+            dot={false}
+          />
         </LineChart>
       </ResponsiveContainer>
     </section>

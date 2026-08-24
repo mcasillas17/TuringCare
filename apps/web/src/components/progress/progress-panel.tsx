@@ -19,8 +19,8 @@ import {
   useUpdateSkill,
 } from "@/lib/progress";
 import { findCatalogSkill, useTrainingCatalog } from "@/lib/training-catalog";
-import { dateLabel } from "@/lib/when";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { formatDateInUtc } from "@turingcare/i18n";
 import {
   type ExactPracticeContext,
   type PracticeDimension,
@@ -39,6 +39,11 @@ const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm te
 function sessionCountLabel(skill: ProgressSkill, t: ReturnType<typeof useI18n>["t"]) {
   const label = skill.sessionCount === 1 ? t("progress.session") : t("progress.sessions");
   return `${skill.sessionCount} ${label}`;
+}
+
+function formatProgressDate(value: string | null, locale: "en" | "es") {
+  if (!value) return null;
+  return formatDateInUtc(locale, value, { month: "short", day: "numeric" });
 }
 
 function getSessionDimensions(
@@ -253,9 +258,7 @@ function SkillCard({
   // PUT mutation returns a bare DB row without milestones/sessions, so reading it
   // here would crash the stepper/session list after a name edit.
   const displaySkill = skill;
-  const lastSession = displaySkill.lastSessionAt
-    ? dateLabel(displaySkill.lastSessionAt, new Date(), locale)
-    : null;
+  const lastSession = formatProgressDate(displaySkill.lastSessionAt, locale);
   const { data: catalog } = useTrainingCatalog();
   const catalogSkill = findCatalogSkill(catalog, displaySkill.catalogSkillKey);
   const contextualProgress = useContextualProgress(dogId, displaySkill.id, expanded);
@@ -496,7 +499,7 @@ function SessionList({
   skillId: string;
   sessions: ProgressSession[];
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const deleteSession = useDeleteSession(dogId);
 
   if (sessions.length === 0)
@@ -504,25 +507,38 @@ function SessionList({
 
   return (
     <ul className="space-y-1 border-t border-silver pt-2">
-      {sessions.map((session) => (
-        <li
-          key={session.id}
-          className="flex items-start justify-between gap-2 text-sm text-slate-soft"
-        >
-          <span>
-            {String(session.occurredAt).slice(0, 10)}
-            {session.durationMinutes != null ? ` · ${session.durationMinutes} min` : ""}
-            {session.notes ? ` · ${session.notes}` : ""}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => deleteSession.mutate({ skillId, sessionId: session.id })}
+      {sessions.map((session) => {
+        const sessionDate = formatDateInUtc(locale, session.occurredAt, {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        });
+        const duration =
+          session.durationMinutes == null
+            ? null
+            : t(session.durationMinutes === 1 ? "units.minuteOne" : "units.minuteOther", {
+                n: session.durationMinutes,
+              });
+        const details = [sessionDate, duration, session.notes].filter((detail): detail is string =>
+          Boolean(detail),
+        );
+
+        return (
+          <li
+            key={session.id}
+            className="flex items-start justify-between gap-2 text-sm text-slate-soft"
           >
-            {t("progress.removeSession")}
-          </Button>
-        </li>
-      ))}
+            <span>{details.join(" · ")}</span>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => deleteSession.mutate({ skillId, sessionId: session.id })}
+            >
+              {t("progress.removeSession")}
+            </Button>
+          </li>
+        );
+      })}
     </ul>
   );
 }

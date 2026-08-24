@@ -1,15 +1,16 @@
 import { z } from "zod";
+import { VALIDATION_MESSAGE_CODES } from "./validation";
 
 export const journalEntryKindValues = ["moment", "daily_checkin"] as const;
 export const journalTrendValues = ["better", "same", "harder"] as const;
 
-const noteSchema = z.string().trim().min(1, "Quick note is required").max(1000);
+const noteSchema = z.string().trim().min(1, VALIDATION_MESSAGE_CODES.quickNoteRequired).max(1000);
 const optionalText = z.string().trim().max(1000).nullable().optional();
 const optionalNonNegativeInteger = z.number().int().nonnegative().nullable().optional();
 const optionalIntensity = z.number().int().min(1).max(5).nullable().optional();
 
 const journalDetailsSchema = z.object({
-  occurredAt: z.string().min(1, "Date is required").optional(),
+  occurredAt: z.string().min(1, VALIDATION_MESSAGE_CODES.dateRequired).optional(),
   antecedent: optionalText,
   behavior: optionalText,
   consequence: optionalText,
@@ -32,7 +33,7 @@ export const journalDailyCheckInCreateSchema = z.object({
   kind: z.literal("daily_checkin"),
   note: noteSchema,
   trend: z.enum(journalTrendValues),
-  occurredAt: z.string().min(1, "Date is required").optional(),
+  occurredAt: z.string().min(1, VALIDATION_MESSAGE_CODES.dateRequired).optional(),
 });
 
 export const journalEntryCreateSchema = z.discriminatedUnion("kind", [
@@ -51,7 +52,7 @@ export const journalEntryUpdateSchema = journalDetailsSchema
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["trend"],
-        message: "Trend is only available for daily check-ins",
+        message: VALIDATION_MESSAGE_CODES.dailyCheckInTrendOnly,
       });
     }
   });

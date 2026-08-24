@@ -1,6 +1,7 @@
 import type { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { routePath } from "hono/route";
+import { invalidValidationResult, isMalformedJsonValidationError } from "../middleware/validation";
 import { logApiError } from "./log-error";
 import type { ApiEnv } from "./request-id";
 import { captureApiError } from "./sentry";
@@ -13,7 +14,9 @@ type Capture = typeof captureApiError;
  * without touching Sentry.
  *
  * Preserves the existing HTTP response contract:
- * - a 4xx `HTTPException` (validation, auth, not-found, rate-limit, ...) is
+ * - malformed JSON is collapsed to the same stable validation-code payload as
+ *   schema failures, without exposing parser prose;
+ * - every other 4xx `HTTPException` (auth, not-found, rate-limit, ...) is
  *   returned completely unchanged and is never captured;
  * - a 5xx `HTTPException` is returned completely unchanged, but IS captured;
  * - any other thrown value is an unexpected failure: it is captured once and
@@ -31,13 +34,19 @@ type Capture = typeof captureApiError;
  * sentry.ts). Each branch runs at most once per request, so a given failure
  * is never logged twice.
  */
-export function createMonitoringErrorHandler(
+export function createMonitoringErrorHandler(capture?: Capture): ErrorHandler<ApiEnv>;
+export function createMonitoringErrorHandler<E extends ApiEnv>(capture?: Capture): ErrorHandler<E>;
+export function createMonitoringErrorHandler<E extends ApiEnv>(
   capture: Capture = captureApiError,
-): ErrorHandler<ApiEnv> {
+): ErrorHandler<E> {
   return (err, c) => {
     const route = routePath(c) || "unmatched";
     const method = c.req.method;
     const requestId = c.get("requestId") ?? "unknown";
+
+    if (isMalformedJsonValidationError(err)) {
+      return c.json(invalidValidationResult(), 400);
+    }
 
     if (err instanceof HTTPException) {
       const res = err.getResponse();

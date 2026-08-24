@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useValidationMessage } from "@/i18n/validation";
 import { DIMENSION_CONFIG, OUTCOME_KEYS, SAFETY_SIGNAL_KEYS } from "@/lib/practice-options";
 import { useLogSession } from "@/lib/progress";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -58,6 +59,7 @@ export function SessionForm({
   onSaved?: () => void;
 }) {
   const { t } = useI18n();
+  const validationMessage = useValidationMessage();
   const logSession = useLogSession(dogId);
   const confirmationHelpId = useId();
   const dimensionsKey = dimensions.join("|");
@@ -203,7 +205,9 @@ export function SessionForm({
           {...register("occurredAt")}
         />
         {errors.occurredAt && (
-          <span className="text-xs text-red-600">{errors.occurredAt.message}</span>
+          <span className="text-xs text-red-600">
+            {validationMessage(errors.occurredAt.message)}
+          </span>
         )}
       </label>
       <label className="block">

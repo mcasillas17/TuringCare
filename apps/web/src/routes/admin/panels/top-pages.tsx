@@ -1,12 +1,16 @@
+import { useI18n } from "@/i18n";
 import type { Metrics } from "../use-metrics";
 
 export function TopPages({ topPages }: { topPages: Metrics["topPages"] }) {
+  const { t } = useI18n();
   const top = topPages[0]?.count || 1;
   return (
     <section className="rounded-lg border border-silver bg-white p-4">
-      <h2 className="mb-3 text-sm font-semibold uppercase text-slate-soft">Top pages</h2>
+      <h2 className="mb-3 text-sm font-semibold uppercase text-slate-soft">
+        {t("admin.topPages")}
+      </h2>
       {topPages.length === 0 ? (
-        <p className="text-sm text-slate-soft">No page views in range.</p>
+        <p className="text-sm text-slate-soft">{t("admin.noPageViewsInRange")}</p>
       ) : (
         <div className="space-y-2">
           {topPages.map((p) => (

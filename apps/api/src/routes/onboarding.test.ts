@@ -1,5 +1,8 @@
+import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
+import { db } from "../db";
+import { briefSends } from "../db/schema";
 import { type TestUser, createTestUser } from "../test-helpers";
 
 const validDog = {
@@ -112,15 +115,20 @@ describe("onboarding: GET /api/onboarding", () => {
       method: "POST",
       headers: u.authHeaders,
     });
-    await app.request(`/api/dogs/${dog.id}/brief`, {
+    const finalized = await app.request(`/api/dogs/${dog.id}/brief`, {
       method: "PUT",
       headers: u.authHeaders,
     });
+    const { brief } = (await finalized.json()) as { brief: { id: string } };
 
     await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "trainer@example.com" }),
+      body: JSON.stringify({
+        briefId: brief.id,
+        recipient: "trainer@example.com",
+        idempotencyKey: "95acbb6a-9189-4614-9a6e-c732efcc5d1d",
+      }),
     });
 
     const r = await app.request("/api/onboarding", { headers: u.authHeaders });
@@ -128,6 +136,45 @@ describe("onboarding: GET /api/onboarding", () => {
     expect(body.hasGoal).toBe(true);
     expect(body.hasFinalizedBrief).toBe(true);
     expect(body.hasSentBrief).toBe(true);
+  });
+
+  it("does not count a durable pending delivery as a sent Brief", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const created = await app.request("/api/dogs", {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify(validDog),
+    });
+    const { dog } = (await created.json()) as { dog: { id: string } };
+    await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+    const finalized = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "PUT",
+      headers: u.authHeaders,
+    });
+    const { brief } = (await finalized.json()) as { brief: { id: string } };
+    const [pending] = await db
+      .insert(briefSends)
+      .values({
+        briefId: brief.id,
+        recipient: "pending@example.com",
+        sentByUserId: u.userId,
+      })
+      .returning({ id: briefSends.id });
+    if (!pending) throw new Error("expected pending Brief send fixture");
+
+    const beforeDelivery = await app.request("/api/onboarding", { headers: u.authHeaders });
+    expect(((await beforeDelivery.json()) as OnboardingBody).hasSentBrief).toBe(false);
+
+    await db
+      .update(briefSends)
+      .set({ deliveredAt: new Date() })
+      .where(eq(briefSends.id, pending.id));
+    const afterDelivery = await app.request("/api/onboarding", { headers: u.authHeaders });
+    expect(((await afterDelivery.json()) as OnboardingBody).hasSentBrief).toBe(true);
   });
 
   it("owner isolation: another user's data doesn't leak", async () => {

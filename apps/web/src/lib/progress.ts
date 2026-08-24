@@ -1,4 +1,5 @@
 import { useTuring } from "@/components/turing/turing-context";
+import { useI18n } from "@/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   PracticeEvidenceInput,
@@ -67,8 +68,10 @@ export function invalidatePracticeDerivedData(
 }
 
 export function useProgress(dogId: string) {
+  const { locale } = useI18n();
+
   return useQuery({
-    queryKey: ["progress", dogId],
+    queryKey: ["progress", dogId, locale],
     enabled: !!dogId,
     queryFn: async (): Promise<ProgressGoal[]> => {
       const res = await dogProgress.$get({ param: { id: dogId } });

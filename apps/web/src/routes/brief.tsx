@@ -3,6 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { useI18n } from "@/i18n";
 import { useBrief, useGenerateBrief } from "@/lib/brief";
+import {
+  briefGeneratedLabel,
+  briefStatusLabel,
+  briefTitle,
+  normalizeBriefLocale,
+} from "@/lib/brief-chrome";
+import { isBriefVersionConflict } from "@/lib/brief-errors";
 import { useDogs } from "@/lib/dogs";
 import { type BriefWindow, briefWindows } from "@turingcare/shared";
 import { useEffect, useRef, useState } from "react";
@@ -10,7 +17,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 export function Brief() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { id: routeId } = useParams();
   const [params] = useSearchParams();
   const recipientParam = params.get("recipient") ?? undefined;
@@ -18,7 +25,7 @@ export function Brief() {
   const [picked, setPicked] = useState("");
   const dogId = routeId ?? picked ?? "";
   const [windowChoice, setWindowChoice] = useState<BriefWindow>("30d");
-  const { data: brief, isError } = useBrief(dogId);
+  const { data: brief, error: briefError, isError } = useBrief(dogId);
   const dog = dogs?.find((d) => d.id === dogId);
   const gen = useGenerateBrief(dogId);
   const [shareOpen, setShareOpen] = useState(false);
@@ -47,23 +54,8 @@ export function Brief() {
     all: t("brief.windowAll"),
   };
 
-  const generatedOn = brief
-    ? (() => {
-        const d = new Date(brief.generatedAt);
-        if (Number.isNaN(d.getTime())) return "";
-        return new Intl.DateTimeFormat(locale, {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        }).format(d);
-      })()
-    : "";
-
-  const statusLabel = brief
-    ? brief.status === "finalized"
-      ? t("brief.finalVersion", { version: brief.version })
-      : t("brief.draftVersion", { version: brief.version })
-    : "";
+  const generatedOn = brief ? briefGeneratedLabel(brief.generatedAt, brief.locale) : "";
+  const statusLabel = brief ? briefStatusLabel(brief.status, brief.version, brief.locale) : "";
 
   const generateSelectedBrief = async () => {
     try {
@@ -144,7 +136,15 @@ export function Brief() {
             </Button>
           )}
 
-          {isError && <p className="text-red-600">{t("brief.loadError")}</p>}
+          {isError && (
+            <p className="text-red-600">
+              {t(
+                isBriefVersionConflict(briefError, "load")
+                  ? "briefSend.versionConflict"
+                  : "brief.loadError",
+              )}
+            </p>
+          )}
 
           {!brief && !isError && (
             <section className="space-y-2 rounded-xl border border-silver bg-white p-6 text-center">
@@ -155,13 +155,16 @@ export function Brief() {
 
           {brief && (
             <>
-              <article className="brief-print overflow-hidden rounded-xl border border-silver bg-white text-sm text-slate">
+              <article
+                lang={normalizeBriefLocale(brief.locale)}
+                className="brief-print overflow-hidden rounded-xl border border-silver bg-white text-sm text-slate"
+              >
                 <header className="flex items-center justify-between border-b-2 border-copper px-5 py-3">
                   <span className="text-lg font-bold text-slate">
                     Turing<span className="text-copper">Care</span>
                   </span>
                   <span className="text-xs uppercase tracking-wide text-slate-soft">
-                    {t("brief.title")}
+                    {briefTitle(brief.locale)}
                   </span>
                 </header>
                 <div className="space-y-3 p-5">
@@ -176,7 +179,7 @@ export function Brief() {
                   <p className="whitespace-pre-wrap leading-relaxed text-slate">{brief.summary}</p>
                   {generatedOn && (
                     <p className="border-t border-silver pt-3 text-xs text-slate-soft">
-                      {t("brief.generatedOn", { date: generatedOn })}
+                      {generatedOn}
                     </p>
                   )}
                 </div>

@@ -1,4 +1,5 @@
 import { BrandMark } from "@/components/BrandMark";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useSignOut } from "@/lib/sign-out";
@@ -42,7 +43,7 @@ export function AdminShell() {
 
   const rail = (
     <nav
-      aria-label="Admin menu"
+      aria-label={t("admin.menu")}
       className={cn(
         "flex h-full flex-col gap-1 bg-slate p-2 text-cream",
         expanded ? "w-52" : "w-14",
@@ -50,7 +51,7 @@ export function AdminShell() {
     >
       <div className="mb-1 flex items-center gap-2 px-3 py-2">
         <span className="rounded bg-copper px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-          Admin
+          {t("admin.badge")}
         </span>
       </div>
       {ADMIN_NAV_ITEMS.map((i) => {
@@ -69,18 +70,18 @@ export function AdminShell() {
             }
           >
             <Icon className="size-5 shrink-0" />
-            {expanded && <span>{i.label}</span>}
+            {expanded && <span>{t(i.labelKey)}</span>}
           </NavLink>
         );
       })}
       <button
         type="button"
         onClick={toggleExpanded}
-        aria-label={expanded ? "Collapse menu" : "Expand menu"}
+        aria-label={expanded ? t("shell.collapse") : t("shell.expand")}
         className="mt-auto flex items-center gap-3 rounded px-3 py-2 text-sm text-cream/70 hover:bg-cream/10"
       >
         {expanded ? <PanelLeftClose className="size-5" /> : <PanelLeftOpen className="size-5" />}
-        {expanded && <span>Collapse</span>}
+        {expanded && <span>{t("shell.collapse")}</span>}
       </button>
     </nav>
   );
@@ -92,7 +93,7 @@ export function AdminShell() {
           <button
             type="button"
             className="md:hidden"
-            aria-label="Admin menu"
+            aria-label={t("admin.menu")}
             onClick={() => setDrawerOpen(true)}
           >
             <Menu className="size-6 text-slate" />
@@ -102,17 +103,17 @@ export function AdminShell() {
           </Link>
           <span className="hidden text-slate-soft sm:inline">·</span>
           <span className="hidden font-semibold text-slate sm:inline">
-            {current ? current.label : "Admin"}
+            {current ? t(current.labelKey) : t("admin.badge")}
           </span>
         </div>
         <div className="flex items-center gap-3">
           <Link
             to="/my"
-            aria-label="Back to app"
+            aria-label={t("admin.backToApp")}
             className="flex items-center gap-1.5 text-sm font-medium text-slate-soft hover:text-slate"
           >
             <ArrowLeft className="size-4 shrink-0" />
-            <span className="hidden sm:inline">Back to app</span>
+            <span className="hidden sm:inline">{t("admin.backToApp")}</span>
           </Link>
           <Button
             variant="outline"
@@ -127,6 +128,8 @@ export function AdminShell() {
           >
             {t("app.signOut")}
           </Button>
+          <span aria-hidden="true" className="h-5 w-px bg-silver/70" />
+          <LanguageToggle />
         </div>
       </header>
       <div className="flex flex-1">
@@ -135,7 +138,7 @@ export function AdminShell() {
           <div className="fixed inset-0 z-40 md:hidden">
             <button
               type="button"
-              aria-label="Close menu"
+              aria-label={t("shell.close")}
               className="absolute inset-0 bg-slate/40"
               onClick={() => setDrawerOpen(false)}
             />
@@ -143,7 +146,7 @@ export function AdminShell() {
           </div>
         )}
         <main className="flex-1 overflow-auto p-6">
-          <Suspense fallback={<p className="p-8">Loading…</p>}>
+          <Suspense fallback={<p className="p-8">{t("common.loading")}</p>}>
             <Outlet />
           </Suspense>
         </main>

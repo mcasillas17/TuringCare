@@ -9,6 +9,7 @@ const deleteUserMock = vi.fn();
 const signOutMock = vi.fn();
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
+const deletionReadinessMock = vi.fn();
 
 vi.mock("@/lib/auth-client", () => ({
   deleteUser: (...a: unknown[]) => deleteUserMock(...a),
@@ -16,6 +17,9 @@ vi.mock("@/lib/auth-client", () => ({
 }));
 vi.mock("sonner", () => ({
   toast: { success: toastSuccessMock, error: toastErrorMock },
+}));
+vi.mock("@/lib/profile", () => ({
+  getAccountDeletionReadiness: (...a: unknown[]) => deletionReadinessMock(...a),
 }));
 
 const { DeleteAccountButton } = await import("./delete-account-button");
@@ -25,6 +29,8 @@ beforeEach(() => {
   signOutMock.mockReset();
   toastSuccessMock.mockReset();
   toastErrorMock.mockReset();
+  deletionReadinessMock.mockReset();
+  deletionReadinessMock.mockResolvedValue({ status: "ready" });
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -137,4 +143,42 @@ it("On API failure stays expanded and toasts the error", async () => {
   expect(signOutMock).not.toHaveBeenCalled();
   // Still expanded.
   expect(screen.getByRole("textbox")).toBeInTheDocument();
+});
+
+it("links to Brief recovery instead of attempting blocked account deletion", async () => {
+  deletionReadinessMock.mockResolvedValue({
+    status: "brief_delivery_recovery_required",
+    dogId: "dog-1",
+  });
+  setup();
+  await userEvent.click(screen.getByRole("button", { name: /delete account/i }));
+  await userEvent.type(screen.getByRole("textbox"), "delete");
+  await userEvent.click(screen.getByRole("button", { name: /i understand/i }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(/needs confirmation/i);
+  expect(screen.getByRole("link", { name: /resolve pending delivery/i })).toHaveAttribute(
+    "href",
+    "/my/dogs/dog-1/brief",
+  );
+  expect(deleteUserMock).not.toHaveBeenCalled();
+  expect(toastErrorMock).not.toHaveBeenCalled();
+});
+
+it("recovers a delivery claim that races the readiness check and account deletion", async () => {
+  deletionReadinessMock
+    .mockResolvedValueOnce({ status: "ready" })
+    .mockResolvedValueOnce({ status: "brief_delivery_in_progress", dogId: "dog-race" });
+  deleteUserMock.mockResolvedValue({ data: null, error: { message: "delete failed" } });
+  setup();
+  await userEvent.click(screen.getByRole("button", { name: /delete account/i }));
+  await userEvent.type(screen.getByRole("textbox"), "delete");
+  await userEvent.click(screen.getByRole("button", { name: /i understand/i }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(/being delivered/i);
+  expect(screen.getByRole("link", { name: /resolve pending delivery/i })).toHaveAttribute(
+    "href",
+    "/my/dogs/dog-race/brief",
+  );
+  expect(deleteUserMock).toHaveBeenCalledOnce();
+  expect(toastErrorMock).not.toHaveBeenCalled();
 });

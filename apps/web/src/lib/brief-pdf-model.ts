@@ -6,11 +6,21 @@
  * @react-pdf imports so it is trivially unit-testable.
  */
 
+import {
+  type Locale,
+  type MessageKey,
+  createI18n,
+  formatDateInUtc,
+  isLocale,
+  translate,
+} from "@turingcare/i18n";
+
 export type BriefForPdf = {
   generatedAt: string;
   status: string;
   summary: string;
   version: number;
+  locale?: Locale;
 };
 
 export type DogForPdf = {
@@ -34,13 +44,40 @@ export type BriefPdfModel = {
   size: string | null;
   sex: string | null;
   status: string;
+  statusLabel: string;
   version: number;
   /** Localized/readable generated date string. */
   generatedAt: string;
   summary: string;
   /** Safe download filename, e.g. "behavior-brief-biscuit.pdf". */
   fileName: string;
+  labels: {
+    breed: string;
+    age: string;
+    size: string;
+    sex: string;
+    generated: string;
+  };
 };
+
+type PdfTranslator = (key: MessageKey, vars?: Record<string, string | number>) => string;
+
+const PDF_STATUS_KEYS = {
+  draft: "briefPdf.status.draft",
+  finalized: "briefPdf.status.finalized",
+} as const satisfies Record<string, MessageKey>;
+
+const PDF_SIZE_KEYS = {
+  small: "briefPdf.size.small",
+  medium: "briefPdf.size.medium",
+  large: "briefPdf.size.large",
+  giant: "briefPdf.size.giant",
+} as const satisfies Record<string, MessageKey>;
+
+const PDF_SEX_KEYS = {
+  male: "briefPdf.sex.male",
+  female: "briefPdf.sex.female",
+} as const satisfies Record<string, MessageKey>;
 
 function monthsBetween(from: Date, to: Date): number {
   let months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
@@ -48,10 +85,18 @@ function monthsBetween(from: Date, to: Date): number {
   return Math.max(0, months);
 }
 
-function ageLabel(dob: Date, now: Date): { years: number; label: string } {
+function ageLabel(dob: Date, now: Date, t: PdfTranslator): { years: number; label: string } {
   const months = monthsBetween(dob, now);
   const years = Math.floor(months / 12);
-  return years >= 1 ? { years, label: `${years} yr` } : { years: 0, label: `${months} mo` };
+  return years >= 1
+    ? {
+        years,
+        label: t(years === 1 ? "briefPdf.yearOne" : "briefPdf.yearOther", { value: years }),
+      }
+    : {
+        years: 0,
+        label: t(months === 1 ? "briefPdf.monthOne" : "briefPdf.monthOther", { value: months }),
+      };
 }
 
 function slug(name: string): string {
@@ -70,12 +115,14 @@ export function buildBriefPdfModel(input: {
   dog?: DogForPdf | null;
   /** Reference time for date formatting / age (injectable for tests). */
   now?: string | number | Date;
-  locale?: string;
 }): BriefPdfModel {
-  const { brief, dog, now, locale = "en" } = input;
+  const { brief, dog, now } = input;
+  const locale: Locale = isLocale(brief.locale) ? brief.locale : "en";
+  const i18n = createI18n(locale);
+  const t: PdfTranslator = (key, vars) => translate(i18n, key, vars);
   const refNow = now ? new Date(now) : new Date();
 
-  const dogName = dog?.name?.trim() || "Unknown";
+  const dogName = dog?.name?.trim() || t("briefPdf.unknownDogName");
   const breed = dog?.breed?.trim() ? dog.breed.trim() : null;
 
   let ageYears: number | null = null;
@@ -83,39 +130,55 @@ export function buildBriefPdfModel(input: {
   if (dog?.dateOfBirth) {
     const dob = new Date(dog.dateOfBirth);
     if (!Number.isNaN(dob.getTime())) {
-      const a = ageLabel(dob, refNow);
+      const a = ageLabel(dob, refNow, t);
       ageYears = a.years;
       age = a.label;
     }
   }
 
-  let generatedAt = brief.generatedAt;
-  const gen = new Date(brief.generatedAt);
-  if (!Number.isNaN(gen.getTime())) {
-    try {
-      generatedAt = new Intl.DateTimeFormat(locale, {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }).format(gen);
-    } catch {
-      generatedAt = gen.toISOString().slice(0, 10);
-    }
-  }
+  const generatedAt =
+    formatDateInUtc(locale, brief.generatedAt, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }) ?? brief.generatedAt;
 
   return {
     brandName: "TuringCare",
-    title: "Behavior Brief",
+    title: t("briefPdf.title"),
     dogName,
     breed,
     ageYears,
     age,
-    size: dog?.size?.trim() ? dog.size.trim() : null,
-    sex: dog?.sex?.trim() ? dog.sex.trim() : null,
+    size: dog?.size?.trim()
+      ? (() => {
+          const value = dog.size.trim();
+          const key = PDF_SIZE_KEYS[value as keyof typeof PDF_SIZE_KEYS];
+          return key ? t(key) : value;
+        })()
+      : null,
+    sex: dog?.sex?.trim()
+      ? (() => {
+          const value = dog.sex.trim();
+          const key = PDF_SEX_KEYS[value as keyof typeof PDF_SEX_KEYS];
+          return key ? t(key) : value;
+        })()
+      : null,
     status: brief.status,
+    statusLabel: (() => {
+      const key = PDF_STATUS_KEYS[brief.status as keyof typeof PDF_STATUS_KEYS];
+      return key ? t(key) : brief.status;
+    })(),
     version: brief.version,
     generatedAt,
     summary: brief.summary,
-    fileName: `behavior-brief-${slug(dogName)}.pdf`,
+    fileName: `${t("briefPdf.filenamePrefix")}-${slug(dogName)}.pdf`,
+    labels: {
+      breed: t("briefPdf.labels.breed"),
+      age: t("briefPdf.labels.age"),
+      size: t("briefPdf.labels.size"),
+      sex: t("briefPdf.labels.sex"),
+      generated: t("briefPdf.labels.generated"),
+    },
   };
 }

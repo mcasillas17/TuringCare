@@ -106,7 +106,12 @@ export const adminApp = new Hono<{ Variables: AdminVars }>()
       funnelRow("brief.generated"),
       db
         .execute<{ path: string; count: number }>(
-          sql`select coalesce(props->>'path', '(unknown)') as path, count(*)::int as count
+          sql`select case
+                       when coalesce(props->>'path', '') ~* '^/(b|%62|%42)/[^/?#]+/*([?#].*)?$'
+                         then '/b/:token'
+                       else coalesce(props->>'path', '(unknown)')
+                     end as path,
+                     count(*)::int as count
               from events
               where name = 'page.viewed' and created_at >= ${since}
               group by 1 order by 2 desc limit 10`,

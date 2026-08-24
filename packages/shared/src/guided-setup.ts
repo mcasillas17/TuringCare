@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { behaviorConcernSchema, dogProfileSchema } from "./dog";
 import { journalDailyCheckInCreateSchema } from "./journal";
+import { VALIDATION_MESSAGE_CODES } from "./validation";
 
 export const guidedSetupIntentValues = [
   "understand_behavior",
@@ -46,7 +47,7 @@ export const guidedSetupBehaviorActionSchema = behaviorConcernSchema
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["safetyConfirmed"],
-        message: "Safety confirmation is required",
+        message: VALIDATION_MESSAGE_CODES.safetyConfirmationRequired,
       });
     }
   });

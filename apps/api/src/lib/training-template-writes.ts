@@ -1,4 +1,5 @@
-import { trainingCatalog } from "../data/training-catalog";
+import type { Locale } from "@turingcare/i18n";
+import { getTrainingCatalog } from "../data/training-catalog";
 import { trainingGoals, trainingSkills } from "../db/schema";
 import type { TransactionType } from "./safety-lock";
 
@@ -6,8 +7,9 @@ export async function applyTrainingTemplate(
   executor: TransactionType,
   dogId: string,
   templateKey: string,
+  locale: Locale,
 ) {
-  const template = trainingCatalog.find((candidate) => candidate.key === templateKey);
+  const template = getTrainingCatalog(locale).find((candidate) => candidate.key === templateKey);
   if (!template) return null;
 
   const [goal] = await executor

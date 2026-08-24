@@ -4,6 +4,7 @@ import { trainingCatalog } from "./training-catalog";
 import {
   CURRICULUM_VERSION,
   findCurriculumSkill,
+  getTrainingCurriculum,
   skillDimensionMetadata,
   trainingCurriculum,
 } from "./training-curriculum";
@@ -109,6 +110,27 @@ describe("training curriculum metadata", () => {
         expect(skill.dimensions.length).toBeGreaterThanOrEqual(2);
       }
     }
+  });
+
+  it("localizes authored prose without changing reviewed progression metadata", () => {
+    const english = getTrainingCurriculum("en");
+    const spanish = getTrainingCurriculum("es");
+
+    expect(spanish[0]).toMatchObject({
+      key: "basic-manners",
+      name: "Modales básicos",
+    });
+    expect(spanish[0]?.skills[0]).toMatchObject({
+      key: "basic-manners.sit",
+      name: "Sentado",
+      dimensions: english[0]?.skills[0]?.dimensions,
+      levelSteps: english[0]?.skills[0]?.levelSteps,
+      levelStepStrategies: english[0]?.skills[0]?.levelStepStrategies,
+      baseEase: english[0]?.skills[0]?.baseEase,
+    });
+    expect(spanish[0]?.skills[0]?.levels[0]?.description).toBe(
+      "Se guía hasta sentarse con comida en una habitación tranquila",
+    );
   });
 
   it("finds a skill by key and returns undefined for unknown keys", () => {

@@ -1,6 +1,8 @@
 import { PublicLayout } from "@/components/PublicLayout";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { useSession } from "@/lib/auth-client";
+import { useSessionQueryReady } from "@/lib/session-query-boundary";
+import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { Outlet } from "react-router-dom";
 
 /**
@@ -19,8 +21,11 @@ import { Outlet } from "react-router-dom";
  */
 export function DirectoryLayout() {
   const { data: session, isPending } = useSession();
-  if (isPending) return null;
-  if (session) return <AppShell />;
+  const rawUserId = session?.user?.id;
+  const userId = isNonemptySessionUserId(rawUserId) ? rawUserId : null;
+  const identityReady = useSessionQueryReady(userId);
+  if (isPending || !identityReady) return null;
+  if (userId) return <AppShell />;
   return (
     <PublicLayout>
       <Outlet />

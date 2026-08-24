@@ -5,23 +5,27 @@ and the landing page phase. They are not bugs — they are the planned account-s
 roadmap. Tackle roughly in this priority order. Each item should go through the normal
 brainstorm → spec → plan → build flow.
 
-> **Reprioritized 2026-05-18.** Email verification + account recovery moved to the
-> top of the remaining roadmap. Driver: the admin portal grants access via the
+> **Updated 2026-08-23.** Transactional delivery and password recovery have shipped.
+> Enforced email verification remains the top account-security priority because the
+> admin portal grants access via the
 > `ADMIN_EMAILS` allowlist, and `resolveAdminRole` promotes any authenticated
 > account whose email matches. Because email verification is **not** enforced,
 > the allowlist's trust currently rests on email-to-account ownership being
 > assumed rather than proven — an allowlisted address with no account yet could
 > be registered by someone else and self-promote. Verification closes this for
-> admin *and* every other account. Password recovery is bundled because it
-> shares the same hard dependency (transactional email) and is a baseline
-> account-security expectation.
+> admin *and* every other account.
 
-## P1 — Transactional email provider
-- Hard dependency for P2 and P3 — must land first. No email is wired today
-  (explicitly out of session-1 scope).
-- Pick a provider, store credentials as Fly secrets, never in the repo.
+## Shipped — Transactional email and password recovery
 
-## P2 — Email verification
+- Resend delivery is wired through Fly secrets. Production fails startup when
+  `RESEND_API_KEY` is absent or blank; local/CI environments without a key emit only a fixed
+  redacted diagnostic and perform no delivery.
+- Better Auth password-reset email generation and the web forgot/reset-password routes are
+  implemented with localized English/Spanish chrome.
+- Verification emails are sent on sign-up, but account access is not yet conditioned on
+  verification. That remaining enforcement work is tracked below.
+
+## P1 — Enforce email verification
 - Set `requireEmailVerification` and add the verify-email flow.
 - **Security rationale:** until this lands, accounts are usable immediately with
   unverified addresses, so the `ADMIN_EMAILS` admin-bootstrap allowlist (and any
@@ -30,19 +34,14 @@ brainstorm → spec → plan → build flow.
 - Operational guard until shipped: only add already-registered, controlled
   accounts to `ADMIN_EMAILS`.
 
-## P3 — Password reset / account recovery
-- Better Auth password-reset flow (request + token + set-new-password).
-- Depends on P1 (transactional email). Baseline account-security expectation;
-  today a forgotten password = a permanently locked-out account.
-
-## P4 — Multi-factor auth (2FA)
+## P2 — Multi-factor auth (2FA)
 - Better Auth TOTP/2FA plugin for opt-in MFA.
 
-## P5 — Audit logging
+## P3 — Audit logging
 - Record auth events (login success/failure, password change, session revoke)
   for traceability.
 
-## P6 — Operational secret hygiene
+## P4 — Operational secret hygiene
 - Verify the production `BETTER_AUTH_SECRET` Fly secret is a real
   `openssl rand -base64 32` value, not the `.env.example` dev placeholder.
 - Periodic secret rotation policy (BETTER_AUTH_SECRET, DATABASE_URL).
@@ -89,3 +88,18 @@ brainstorm → spec → plan → build flow.
 - Minimum password length enforced server-side (8).
 - Admin access is promote-only via the server-side `ADMIN_EMAILS` allowlist
   (no client-settable role; `role` is `input:false` at sign-up).
+
+## Shipped — Brief delivery durability and deletion privacy (2026-08-23)
+
+- Brief sends persist an owner-scoped, exact-version intent before contacting the email
+  provider and reuse the durable send UUID as the provider idempotency key.
+- Delivery provider I/O runs outside database transactions. A bounded claim coordinates
+  retries; stale or timestamp-less claims are recoverable only through the same stored
+  intent, so server-secret rotation cannot change delivery identity.
+- A database trigger blocks deletion of every claimed send regardless of claim age. Dog and
+  account deletion expose localized active/recovery states instead of silently cascading
+  away evidence while provider outcome is uncertain.
+- Legacy web payloads remain rollout-compatible only when exactly one Brief version can be
+  established. Every multi-version ID-less request fails closed without sending because
+  recipient/message content cannot prove the tab's intended version.
+- The onboarding "shared" milestone counts only rows with confirmed `delivered_at`.

@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n";
 import { useState } from "react";
 import { ActiveUsage } from "./panels/active-usage";
 import { EventsOverTime } from "./panels/events-over-time";
@@ -11,16 +12,17 @@ import { useMetrics } from "./use-metrics";
 const RANGES = [7, 30, 90] as const;
 
 export function AdminDashboard() {
+  const { t } = useI18n();
   const [days, setDays] = useState<number>(30);
   const metrics = useMetrics(days);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate">Admin dashboard</h1>
+        <h1 className="text-2xl font-bold text-slate">{t("admin.dashboardTitle")}</h1>
         <div>
           <label htmlFor="range-select" className="sr-only">
-            Date range
+            {t("admin.dateRange")}
           </label>
           <select
             id="range-select"
@@ -30,7 +32,7 @@ export function AdminDashboard() {
           >
             {RANGES.map((r) => (
               <option key={r} value={r}>
-                Last {r}d
+                {t("admin.rangeLastDays", { days: r })}
               </option>
             ))}
           </select>
@@ -38,9 +40,9 @@ export function AdminDashboard() {
       </div>
 
       {metrics.isPending ? (
-        <p className="p-8">Loading metrics…</p>
+        <p className="p-8">{t("admin.loadingMetrics")}</p>
       ) : metrics.isError || !metrics.data ? (
-        <p className="p-8 text-red-600">Failed to load metrics.</p>
+        <p className="p-8 text-red-600">{t("admin.metricsLoadFailed")}</p>
       ) : (
         <>
           <KpiStrip kpis={metrics.data.kpis} />

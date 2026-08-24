@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { safetySignalValues } from "./practice-evidence";
+import { VALIDATION_MESSAGE_CODES } from "./validation";
 
 export const dogSize = z.enum(["small", "medium", "large", "giant"]);
 export const dogSex = z.enum(["male", "female"]);
@@ -7,7 +8,7 @@ export const dogSource = z.enum(["breeder", "rescue", "shelter", "other"]);
 export const vaccineStage = z.enum(["in_progress", "complete", "unknown"]);
 
 export const dogProfileSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100),
+  name: z.string().min(1, VALIDATION_MESSAGE_CODES.nameRequired).max(100),
   breed: z.string().min(1).max(100).nullable().optional(),
   dateOfBirth: z.string().date().nullable().optional(),
   size: dogSize,
@@ -25,14 +26,14 @@ export type DogProfile = z.infer<typeof dogProfileSchema>;
 export const concernSeverity = z.enum(["mild", "moderate", "severe"]);
 
 export const behaviorConcernSchema = z.object({
-  concern: z.string().min(1, "Concern is required").max(500),
+  concern: z.string().min(1, VALIDATION_MESSAGE_CODES.concernRequired).max(500),
   severity: concernSeverity,
   safetySignal: z.enum(safetySignalValues).nullable().optional(),
 });
 export type BehaviorConcernInput = z.infer<typeof behaviorConcernSchema>;
 
 export const trainingGoalSchema = z.object({
-  goal: z.string().min(1, "Goal is required").max(200),
+  goal: z.string().min(1, VALIDATION_MESSAGE_CODES.goalRequired).max(200),
 });
 export type TrainingGoalInput = z.infer<typeof trainingGoalSchema>;
 

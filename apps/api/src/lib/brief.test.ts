@@ -15,7 +15,7 @@ describe("composeBrief", () => {
           kind: "moment",
           behavior: "Barked",
           intensity: 4,
-          occurredAt: "2026-05-18T10:00:00.000Z",
+          occurredAt: "2026-05-18T00:30:00.000Z",
         },
         {
           note: "Recovered faster on walk",
@@ -32,6 +32,8 @@ describe("composeBrief", () => {
     expect(out).toContain("Calm greetings");
     expect(out).toContain("2 entries in the last 30 days");
     expect(out).toContain("average intensity 4.0");
+    expect(out).toContain("- May 18, 2026: Barked at delivery truck");
+    expect(out).not.toContain("- 2026-05-18:");
     expect(out).toContain("Barked at delivery truck");
     expect(out).toContain("Recovered faster on walk");
     expect(composeBrief({ dog, concerns: [], goals: [], entries: [], windowDays: 30 })).toBe(
@@ -64,7 +66,7 @@ describe("composeBrief", () => {
               lastSessionAt: "2026-05-22T10:00:00.000Z",
               lastNote: "held sit through a very long note that should stay readable",
               sessions: [],
-              milestones: [{ level: 3, reachedAt: "2026-06-03T10:00:00.000Z" }],
+              milestones: [{ level: 3, reachedAt: "2026-06-03T00:30:00.000Z" }],
             },
             {
               id: "s2",
@@ -142,7 +144,7 @@ describe("composeBrief", () => {
 
     expect(out).toContain("16 entries in the last 30 days");
     expect(out).toContain("Check-ins: 2 better, 1 same, 1 harder.");
-    const listed = out.split("\n").filter((line) => /^- \d{4}-\d{2}-\d{2}:/.test(line));
+    const listed = out.split("\n").filter((line) => /^- May \d{1,2}, 2026:/.test(line));
     expect(listed).toHaveLength(10);
   });
 
@@ -155,6 +157,97 @@ describe("composeBrief", () => {
       entries: [{ note: "solo moment", kind: "moment", occurredAt: "2026-05-20T10:00:00.000Z" }],
     });
     expect(out).toContain("1 entry (all time)");
+    expect(out).not.toContain("Check-ins:");
+  });
+
+  it("renders Spanish fixed prose, enum labels, plural branches, and dates", () => {
+    const out = composeBrief(
+      {
+        dog,
+        concerns: [{ concern: "Reactividad con correa", severity: "moderate" }],
+        goals: [{ goal: "Saludar con calma" }],
+        windowDays: 7,
+        entries: [
+          {
+            note: "Ladró al repartidor",
+            kind: "daily_checkin",
+            trend: "better",
+            intensity: null,
+            occurredAt: "2026-05-18T00:30:00.000Z",
+          },
+          {
+            note: "Paseo tranquilo",
+            kind: "daily_checkin",
+            trend: "same",
+            intensity: null,
+            occurredAt: "2026-05-17T10:00:00.000Z",
+          },
+        ],
+        progress: [
+          {
+            id: "g1",
+            goal: "Saludar con calma",
+            catalogGoalKey: null,
+            avgConfidence: 2,
+            skills: [
+              {
+                id: "s1",
+                name: "Esperar en la puerta",
+                confidence: 2,
+                position: 0,
+                catalogSkillKey: null,
+                sessionCount: 1,
+                firstSessionAt: "2026-05-01T10:00:00.000Z",
+                lastSessionAt: "2026-05-01T10:00:00.000Z",
+                lastNote: "se sentó al primer toque",
+                sessions: [],
+                milestones: [{ level: 2, reachedAt: "2026-06-03T00:30:00.000Z" }],
+              },
+            ],
+          },
+        ],
+      },
+      "es",
+    );
+
+    expect(out).toContain("Biscuit es una perra mediana Aussie.");
+    expect(out).toContain("Preocupaciones:");
+    expect(out).toContain("- Reactividad con correa (moderada)");
+    expect(out).toContain("Objetivos:");
+    expect(out).toContain("Diario: 2 entradas en los últimos 7 días");
+    expect(out).toContain("intensidad promedio no registrada");
+    expect(out).toContain("Registros diarios: 1 mejor, 1 igual, 0 más difícil.");
+    expect(out).not.toContain("Check-ins:");
+    expect(out).toContain("- 18 may 2026: Ladró al repartidor");
+    expect(out).toContain("Progreso de entrenamiento:");
+    expect(out).toContain("Aprendiendo (2.0/5)");
+    expect(out).toContain("Nivel 2: Aprendiendo (alcanzado 3 jun)");
+    expect(out).toContain("1 sesión");
+    expect(out).toContain('última: "se sentó al primer toque"');
+  });
+
+  it("uses Spanish singular and all-time branches", () => {
+    const out = composeBrief(
+      {
+        dog: { name: "Pancake", breed: null, size: "large", sex: "male" },
+        concerns: [],
+        goals: [],
+        windowDays: null,
+        entries: [
+          {
+            note: "Durmió durante la tormenta",
+            kind: "moment",
+            intensity: 2,
+            occurredAt: "2026-05-18T10:00:00.000Z",
+          },
+        ],
+      },
+      "es",
+    );
+
+    expect(out).toContain("Pancake es un perro grande.");
+    expect(out).toContain("- ninguna registrada");
+    expect(out).toContain("Diario: 1 entrada (todo el tiempo), intensidad promedio 2.0.");
     expect(out).not.toContain("Check-ins:");
   });
 });

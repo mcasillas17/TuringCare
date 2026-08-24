@@ -127,7 +127,14 @@ export function DogLayout() {
                     } catch (error) {
                       if (!isCurrentDeleteRequest(request)) return;
                       deleteRequestRef.current = null;
-                      if (error instanceof Error && error.message === "active_guided_setup") {
+                      if (
+                        error instanceof Error &&
+                        [
+                          "active_guided_setup",
+                          "brief_delivery_in_progress",
+                          "brief_delivery_recovery_required",
+                        ].includes(error.message)
+                      ) {
                         setConfirming(false);
                         setDeleteError(error.message);
                         return;
@@ -157,16 +164,31 @@ export function DogLayout() {
           </div>
         </div>
         {confirming && <p className="text-sm text-red-600">{t("dogHub.deleteConfirm")}</p>}
-        {deleteError === "active_guided_setup" && (
+        {(deleteError === "active_guided_setup" ||
+          deleteError === "brief_delivery_in_progress" ||
+          deleteError === "brief_delivery_recovery_required") && (
           <section
             role="alert"
             className="space-y-2 rounded border border-copper bg-cream p-3 text-sm text-slate"
           >
-            <p>{t("guidedSetup.activeDeleteExplanation")}</p>
+            <p>
+              {deleteError === "active_guided_setup"
+                ? t("guidedSetup.activeDeleteExplanation")
+                : deleteError === "brief_delivery_in_progress"
+                  ? t("dogs.deliveryInProgressDeleteExplanation")
+                  : t("dogs.deliveryRecoveryDeleteExplanation")}
+            </p>
             <div className="flex flex-wrap items-center gap-3">
-              <Link className="font-medium underline" to="/my/setup">
-                {t("guidedSetup.resumeBeforeDelete")}
-              </Link>
+              {deleteError === "active_guided_setup" && (
+                <Link className="font-medium underline" to="/my/setup">
+                  {t("guidedSetup.resumeBeforeDelete")}
+                </Link>
+              )}
+              {deleteError === "brief_delivery_recovery_required" && (
+                <Link className="font-medium underline" to={`/my/dogs/${dog.id}/brief`}>
+                  {t("dogs.resolveBriefDelivery")}
+                </Link>
+              )}
               <Button
                 type="button"
                 variant="outline"

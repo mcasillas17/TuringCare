@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { useValidationMessage } from "@/i18n/validation";
 import type { JournalEntry } from "@/lib/journal";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type JournalEntryUpdateInput, journalEntryUpdateSchema } from "@turingcare/shared";
@@ -26,6 +27,7 @@ type Props = {
 
 export function StructuredDetailsEditor({ entry, submitting, onSave, onCancel }: Props) {
   const { t } = useI18n();
+  const validationMessage = useValidationMessage();
   const isDailyCheckIn = entry.kind === "daily_checkin";
   const defaultValues: JournalEntryUpdateInput = isDailyCheckIn
     ? {
@@ -66,7 +68,7 @@ export function StructuredDetailsEditor({ entry, submitting, onSave, onCancel }:
   };
 
   const fieldError = (message: unknown) =>
-    message ? <span className="text-xs text-red-600">{String(message)}</span> : null;
+    message ? <span className="text-xs text-red-600">{validationMessage(message)}</span> : null;
 
   const optional = <span className="text-slate-soft"> ({t("journal.optional")})</span>;
 

@@ -1,6 +1,7 @@
 import { useI18n } from "@/i18n";
 import { dayKey } from "@/lib/week";
 import type { FocusSession, FocusSkill } from "@/lib/weekly-focus";
+import { formatDateInUtc } from "@turingcare/i18n";
 import { useState } from "react";
 
 type Props = {
@@ -27,7 +28,6 @@ export function WeekGrid({
   const { locale, t } = useI18n();
   const [open, setOpen] = useState<{ skillId: string; key: string } | null>(null);
   const todayKey = dayKey(today);
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: "short" });
 
   return (
     <div className="overflow-x-auto">
@@ -37,6 +37,8 @@ export function WeekGrid({
             <th className="p-2 text-left font-medium text-slate-soft"> </th>
             {days.map((d) => {
               const key = dayKey(d);
+              const weekdayLabel = formatDateInUtc(locale, key, { weekday: "short" }) ?? "";
+              const dayOfMonthLabel = formatDateInUtc(locale, key, { day: "numeric" }) ?? "";
               return (
                 <th
                   key={key}
@@ -44,8 +46,8 @@ export function WeekGrid({
                     key === todayKey ? "text-slate" : "text-slate-soft"
                   }`}
                 >
-                  {weekday.format(d)}
-                  <div className="text-xs">{d.getDate()}</div>
+                  {weekdayLabel}
+                  <div className="text-xs">{dayOfMonthLabel}</div>
                 </th>
               );
             })}
@@ -64,6 +66,13 @@ export function WeekGrid({
                 const isFuture = d.getTime() > today.getTime() && key !== todayKey;
                 const count = cellSessions.length;
                 const isOpen = open?.skillId === skill.skillId && open?.key === key;
+                const accessibleDay =
+                  formatDateInUtc(locale, key, {
+                    day: "numeric",
+                    month: "long",
+                    weekday: "long",
+                    year: "numeric",
+                  }) ?? "";
                 const isLogDisabled = isFuture || (count === 0 && logDisabled);
                 return (
                   <td key={key} className="relative p-1 text-center align-middle">
@@ -72,8 +81,12 @@ export function WeekGrid({
                       disabled={isLogDisabled}
                       aria-label={
                         count > 0
-                          ? t("week.cellFilled", { skill: skill.name, day: key, n: count })
-                          : t("week.cellLog", { skill: skill.name, day: key })
+                          ? t(count === 1 ? "week.cellFilledOne" : "week.cellFilledOther", {
+                              skill: skill.name,
+                              day: accessibleDay,
+                              n: count,
+                            })
+                          : t("week.cellLog", { skill: skill.name, day: accessibleDay })
                       }
                       onClick={() =>
                         count > 0
@@ -99,7 +112,14 @@ export function WeekGrid({
                                 hour: "numeric",
                                 minute: "2-digit",
                               })}
-                              {s.durationMinutes != null ? ` · ${s.durationMinutes}m` : ""}
+                              {s.durationMinutes != null
+                                ? ` · ${t(
+                                    s.durationMinutes === 1
+                                      ? "units.minuteOne"
+                                      : "units.minuteOther",
+                                    { n: s.durationMinutes },
+                                  )}`
+                                : ""}
                             </span>
                             <button
                               type="button"

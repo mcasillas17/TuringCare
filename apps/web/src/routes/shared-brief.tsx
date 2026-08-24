@@ -1,6 +1,7 @@
 import { BrandMark } from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
+import { briefVersionLabel, normalizeBriefLocale, sharedBriefTitle } from "@/lib/brief-chrome";
 import { useSharedBrief } from "@/lib/shared-brief";
 import { Suspense, lazy } from "react";
 import { useParams } from "react-router-dom";
@@ -23,7 +24,9 @@ export function SharedBrief() {
         <p className="p-4 text-slate-soft">{t("brief.shareUnavailable")}</p>
       ) : (
         <>
-          <h1 className="text-2xl font-bold text-slate">{t("brief.sharedTitle")}</h1>
+          <h1 lang={normalizeBriefLocale(data.locale)} className="text-2xl font-bold text-slate">
+            {sharedBriefTitle(data.locale)}
+          </h1>
           <div className="flex flex-wrap gap-2">
             <Suspense
               fallback={
@@ -38,14 +41,18 @@ export function SharedBrief() {
                   status: data.status,
                   version: data.version,
                   generatedAt: data.generatedAt,
+                  locale: data.locale,
                 }}
                 dog={{ name: data.dogName }}
               />
             </Suspense>
           </div>
-          <article className="brief-print whitespace-pre-wrap rounded border border-silver bg-white p-4 text-sm text-slate">
+          <article
+            lang={normalizeBriefLocale(data.locale)}
+            className="brief-print whitespace-pre-wrap rounded border border-silver bg-white p-4 text-sm text-slate"
+          >
             <div className="mb-2 font-semibold text-copper">
-              {t("brief.version")} {data.version}
+              {briefVersionLabel(data.locale)} {data.version}
             </div>
             {data.summary}
           </article>

@@ -1,4 +1,3 @@
-import { zValidator } from "@hono/zod-validator";
 import { loginSchema, registerSchema } from "@turingcare/shared";
 import { sql } from "drizzle-orm";
 import { Hono } from "hono";
@@ -8,7 +7,9 @@ import { auth } from "./auth";
 import { resolveAdminRole } from "./auth/admin-bootstrap";
 import { db } from "./db";
 import { env } from "./env";
+import { type LocaleEnv, localeMiddleware } from "./middleware/locale";
 import { globalRateLimit } from "./middleware/rate-limit";
+import { stableZValidator } from "./middleware/validation";
 import { createMonitoringAuthHandler } from "./monitoring/auth-handler";
 import { createMonitoringErrorHandler } from "./monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "./monitoring/request-id";
@@ -29,8 +30,9 @@ import { trainingApp } from "./routes/training";
 import { eventIngestSchema } from "./telemetry/events";
 import { recordEvent } from "./telemetry/record-event";
 
-const app = new Hono<ApiEnv>()
+const app = new Hono<ApiEnv & LocaleEnv>()
   .use("*", requestIdMiddleware)
+  .use("*", localeMiddleware)
   .use(
     "*",
     secureHeaders({
@@ -45,7 +47,7 @@ const app = new Hono<ApiEnv>()
     cors({
       origin: env.FRONTEND_URL,
       credentials: true,
-      allowHeaders: ["Content-Type"],
+      allowHeaders: ["Content-Type", "X-TuringCare-Locale"],
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       exposeHeaders: ["X-Request-ID"],
     }),
@@ -64,7 +66,9 @@ const app = new Hono<ApiEnv>()
           ds."type",
           ts."curriculum_version",
           tsa."action",
-          ap."status"
+          ap."status",
+          u."locale",
+          b."locale"
         from "weekly_focus" wf
         left join "focus_compatibility_weeks" fcw on false
         left join "legacy_focus_claims" lfc on false
@@ -73,6 +77,8 @@ const app = new Hono<ApiEnv>()
         left join "training_suggestions" ts on false
         left join "training_suggestion_actions" tsa on false
         left join "advancement_proposals" ap on false
+        left join "user" u on false
+        left join "briefs" b on false
         limit 0
       `);
       return c.json({ status: "ready" } as const);
@@ -87,10 +93,10 @@ const app = new Hono<ApiEnv>()
     const role = await resolveAdminRole(session.user);
     return c.json({ user: { ...session.user, role } });
   })
-  .post("/api/validate/register", zValidator("json", registerSchema), (c) =>
+  .post("/api/validate/register", stableZValidator("json", registerSchema), (c) =>
     c.json({ ok: true } as const),
   )
-  .post("/api/validate/login", zValidator("json", loginSchema), (c) =>
+  .post("/api/validate/login", stableZValidator("json", loginSchema), (c) =>
     c.json({ ok: true } as const),
   )
   .route("/api/dogs", dogsApp)
@@ -98,7 +104,7 @@ const app = new Hono<ApiEnv>()
   .route("/api/share", shareApp)
   .route("/api/onboarding", onboardingApp)
   .route("/api/guided-setup", guidedSetupApp)
-  .post("/api/events", zValidator("json", eventIngestSchema), async (c) => {
+  .post("/api/events", stableZValidator("json", eventIngestSchema), async (c) => {
     const { name, props } = c.req.valid("json");
     // Identity is resolved server-side from the auth cookie — never trusted
     // from the client. Anonymous (pre-auth, e.g. landing) is allowed.
@@ -125,7 +131,7 @@ const app = new Hono<ApiEnv>()
     createMonitoringAuthHandler((req) => auth.handler(req)),
   );
 
-app.onError(createMonitoringErrorHandler());
+app.onError(createMonitoringErrorHandler<ApiEnv & LocaleEnv>());
 
 export { app };
 export type AppType = typeof app;

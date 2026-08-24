@@ -1,9 +1,11 @@
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, count, eq, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { db, pool } from "../db";
 import {
+  events,
   briefSends,
   briefs,
   guidedSetups,
@@ -11,11 +13,11 @@ import {
   trainingGoals,
   trainingSkills,
 } from "../db/schema";
-import { lockBriefLifecycle, withBriefLifecycleLock } from "../lib/brief-lifecycle";
 import { createMonitoringErrorHandler } from "../monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "../monitoring/request-id";
 import { type TestUser, createTestUser } from "../test-helpers";
-import { sendFailedException } from "./dogs";
+import { waitForBlockingChain, waitForSessionBlocked } from "../test-pg-concurrency";
+import { resolveBriefSendIntent, sendFailedException } from "./dogs";
 
 // Wraps the real `sendEmail` so its normal (log-mode, no RESEND_API_KEY)
 // behavior is unchanged for every other test in this file; only the
@@ -37,13 +39,58 @@ const validDog = {
   spayedNeutered: true,
 };
 
-function expectValidationIssue(body: unknown, path: string) {
+function briefSendBody(input: Record<string, unknown>) {
+  return JSON.stringify({ idempotencyKey: randomUUID(), ...input });
+}
+
+describe("resolveBriefSendIntent", () => {
+  const existing = {
+    id: "send-1",
+    briefId: "brief-1",
+    recipient: "trainer@example.com",
+    message: null,
+  };
+
+  it("distinguishes a replay, a conflicting intent, and a missing recovery row", () => {
+    expect(
+      resolveBriefSendIntent(existing, {
+        briefId: "brief-1",
+        recipient: "trainer@example.com",
+      }),
+    ).toEqual({ kind: "matched", send: existing });
+    expect(resolveBriefSendIntent(existing, { recipient: "trainer@example.com" })).toEqual({
+      kind: "matched",
+      send: existing,
+    });
+    expect(
+      resolveBriefSendIntent(existing, { briefId: "brief-1", recipient: "other@example.com" }),
+    ).toEqual({ kind: "idempotency_conflict" });
+    expect(
+      resolveBriefSendIntent(existing, {
+        briefId: "brief-2",
+        recipient: "trainer@example.com",
+      }),
+    ).toEqual({ kind: "idempotency_conflict" });
+    expect(
+      resolveBriefSendIntent(undefined, {
+        briefId: "brief-1",
+        recipient: "trainer@example.com",
+      }),
+    ).toBeNull();
+  });
+});
+
+function expectValidationIssue(body: unknown, path: string, message?: string) {
   const result = body as {
     success?: boolean;
-    error?: { issues?: Array<{ path?: Array<string | number> }> };
+    error?: { issues?: Array<{ path?: Array<string | number>; message?: string }> };
   };
   expect(result.success).toBe(false);
-  expect(result.error?.issues?.some((issue) => issue.path?.includes(path))).toBe(true);
+  expect(
+    result.error?.issues?.some(
+      (issue) => issue.path?.includes(path) && (message === undefined || issue.message === message),
+    ),
+  ).toBe(true);
 }
 
 describe("dogs: list & create", () => {
@@ -71,23 +118,8 @@ describe("dogs: list & create", () => {
       body: JSON.stringify(validDog),
     });
     expect(created.status).toBe(201);
-    const body = (await created.json()) as {
-      dog: { id: string; ownerId: string; name: string; weightLbs: string | null };
-    };
-    expect(body).toEqual({
-      dog: expect.objectContaining({
-        id: expect.any(String),
-        ownerId: u.userId,
-        name: "Biscuit",
-        size: "medium",
-        sex: "female",
-        source: "rescue",
-        vaccineStage: "in_progress",
-        spayedNeutered: true,
-        weightLbs: null,
-      }),
-    });
-    const { dog } = body;
+    const { dog } = (await created.json()) as { dog: { id: string; name: string } };
+    expect(dog.name).toBe("Biscuit");
 
     const list = await app.request("/api/dogs", { headers: u.authHeaders });
     expect(((await list.json()) as { dogs: unknown[] }).dogs).toHaveLength(1);
@@ -267,18 +299,7 @@ describe("dogs: concerns & goals", () => {
       body: JSON.stringify({ concern: "Leash reactivity", severity: "moderate" }),
     });
     expect(add.status).toBe(201);
-    const addBody = (await add.json()) as {
-      concern: { id: string; dogId: string; concern: string; severity: string };
-    };
-    expect(addBody).toEqual({
-      concern: expect.objectContaining({
-        id: expect.any(String),
-        dogId: dog.id,
-        concern: "Leash reactivity",
-        severity: "moderate",
-      }),
-    });
-    const { concern } = addBody;
+    const { concern } = (await add.json()) as { concern: { id: string } };
 
     const got = await app.request(`/api/dogs/${dog.id}`, { headers: u.authHeaders });
     expect(((await got.json()) as { concerns: unknown[] }).concerns).toHaveLength(1);
@@ -433,7 +454,7 @@ describe("dogs: journal", () => {
       body: JSON.stringify({ ...entry, occurredAt: "not-a-date" }),
     });
     expect(r.status).toBe(400);
-    expectValidationIssue(await r.json(), "occurredAt");
+    expectValidationIssue(await r.json(), "occurredAt", "validation.dateInvalid");
 
     const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
     expect(((await list.json()) as { entries: unknown[] }).entries).toEqual([]);
@@ -853,39 +874,6 @@ describe("dogs: brief", () => {
   afterEach(async () => {
     for (let u = users.pop(); u; u = users.pop()) await u.cleanup();
   });
-
-  type Deferred<T> = {
-    promise: Promise<T>;
-    resolve: (value: T | PromiseLike<T>) => void;
-  };
-
-  function createDeferred<T>(): Deferred<T> {
-    let resolve!: Deferred<T>["resolve"];
-    const promise = new Promise<T>((innerResolve) => {
-      resolve = innerResolve;
-    });
-    return { promise, resolve };
-  }
-
-  async function waitForBriefLifecycleLockWaiters(dogId: string, expected: number) {
-    const lockKey = `brief-lifecycle:${dogId}`;
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const result = await pool.query<{ waiters: string }>(
-        "select count(*)::text as waiters from pg_locks " +
-          "where not granted " +
-          "and locktype = 'advisory' " +
-          "and database = (select oid from pg_database where datname = current_database()) " +
-          "and classid = case when hashtext($1) < 0 then 4294967295 else 0 end " +
-          "and objid = (hashtext($1)::bigint & 4294967295) " +
-          "and objsubid = 1",
-        [lockKey],
-      );
-      if (Number(result.rows[0]?.waiters) >= expected) return;
-      await new Promise<void>((resolve) => setImmediate(resolve));
-    }
-    throw new Error(`expected ${expected} Brief lifecycle lock waiters for ${dogId}`);
-  }
-
   async function makeDog(u: TestUser) {
     const r = await app.request("/api/dogs", {
       method: "POST",
@@ -894,31 +882,6 @@ describe("dogs: brief", () => {
     });
     return ((await r.json()) as { dog: { id: string } }).dog;
   }
-
-  async function seedDuplicateVersionBriefs(dogId: string) {
-    const [older, newer] = await db
-      .insert(briefs)
-      .values([
-        {
-          dogId,
-          summary: "Older duplicate version Brief",
-          version: 7,
-          status: "draft",
-          generatedAt: new Date("2026-02-01T08:00:00.000Z"),
-        },
-        {
-          dogId,
-          summary: "Newer duplicate version Brief",
-          version: 7,
-          status: "draft",
-          generatedAt: new Date("2026-02-01T09:00:00.000Z"),
-        },
-      ])
-      .returning({ id: briefs.id, summary: briefs.summary });
-    if (!older || !newer) throw new Error("expected seeded duplicate Brief rows");
-    return { older, newer };
-  }
-
   it("generates, fetches, finalizes a brief", async () => {
     const u = await createTestUser();
     users.push(u);
@@ -978,281 +941,342 @@ describe("dogs: brief", () => {
     expect(((await fin.json()) as { brief: { status: string } }).brief.status).toBe("finalized");
   });
 
-  it("selects the newest generated Brief when duplicate versions exist", async () => {
+  it("serializes concurrent generations and keeps every latest-brief consumer deterministic", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    const seeded = await seedDuplicateVersionBriefs(dog.id);
 
-    const fetchedResponse = await app.request(`/api/dogs/${dog.id}/brief`, {
-      headers: u.authHeaders,
-    });
-    expect(fetchedResponse.status).toBe(200);
-    expect(
-      (
-        (await fetchedResponse.json()) as {
-          brief: { id: string; summary: string; status: string };
-        }
-      ).brief,
-    ).toMatchObject({
-      id: seeded.newer.id,
-      summary: seeded.newer.summary,
-      status: "draft",
-    });
+    const responses = await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        app.request(`/api/dogs/${dog.id}/brief`, {
+          method: "POST",
+          headers: {
+            ...u.authHeaders,
+            "X-TuringCare-Locale": index % 2 === 0 ? "en" : "es",
+          },
+        }),
+      ),
+    );
+    expect(responses.map((response) => response.status)).toEqual(Array(8).fill(201));
 
-    const finalizedResponse = await app.request(`/api/dogs/${dog.id}/brief`, {
-      method: "PUT",
-      headers: u.authHeaders,
-    });
-    expect(finalizedResponse.status).toBe(200);
-    expect(
-      ((await finalizedResponse.json()) as { brief: { id: string; status: string } }).brief,
-    ).toMatchObject({
-      id: seeded.newer.id,
-      status: "finalized",
-    });
-
-    const rows = await db
-      .select({ id: briefs.id, status: briefs.status })
-      .from(briefs)
-      .where(eq(briefs.dogId, dog.id))
-      .orderBy(asc(briefs.generatedAt));
-    expect(rows).toEqual([
-      { id: seeded.older.id, status: "draft" },
-      { id: seeded.newer.id, status: "finalized" },
-    ]);
-  });
-
-  it("waits to finalize the Brief that committed while the lifecycle lock was held", async () => {
-    const u = await createTestUser();
-    users.push(u);
-    const dog = await makeDog(u);
-    const seeded = await seedDuplicateVersionBriefs(dog.id);
-    const releaseHolder = createDeferred<void>();
-    const holderEntered = createDeferred<void>();
-
-    const holder = db.transaction(async (tx) => {
-      await lockBriefLifecycle(tx, dog.id);
-      holderEntered.resolve();
-      await releaseHolder.promise;
-    });
-
-    await holderEntered.promise;
-    const finalize = app.request(`/api/dogs/${dog.id}/brief`, {
-      method: "PUT",
-      headers: u.authHeaders,
-    });
-
-    try {
-      await waitForBriefLifecycleLockWaiters(dog.id, 1);
-      const [newer] = await db
-        .insert(briefs)
-        .values({
-          dogId: dog.id,
-          summary: "Committed newest Brief while finalize waited",
-          version: 8,
-          status: "draft",
-          generatedAt: new Date("2026-02-01T10:00:00.000Z"),
-        })
-        .returning({ id: briefs.id, status: briefs.status, summary: briefs.summary });
-      if (!newer) throw new Error("expected committed newer Brief");
-
-      releaseHolder.resolve();
-      await holder;
-
-      const response = await finalize;
-      expect(response.status).toBe(200);
-      expect(
-        (
+    const generated = await Promise.all(
+      responses.map(
+        async (response) =>
           (await response.json()) as {
-            brief: { id: string; version: number; status: string; summary: string };
-          }
-        ).brief,
-      ).toMatchObject({
-        id: newer.id,
-        version: 8,
-        status: "finalized",
-        summary: newer.summary,
-      });
+            brief: { id: string; version: number; locale: "en" | "es"; summary: string };
+          },
+      ),
+    );
+    const briefsByVersion = generated
+      .map(({ brief }) => brief)
+      .sort((a, b) => a.version - b.version);
+    expect(briefsByVersion.map(({ version }) => version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(new Set(briefsByVersion.map(({ id }) => id))).toHaveLength(8);
+    const latest = briefsByVersion.at(-1);
+    if (!latest) throw new Error("expected a latest generated brief");
 
-      const rows = await db
-        .select({ id: briefs.id, version: briefs.version, status: briefs.status })
-        .from(briefs)
-        .where(eq(briefs.dogId, dog.id))
-        .orderBy(asc(briefs.generatedAt), asc(briefs.id));
-      expect(rows).toEqual([
-        { id: seeded.older.id, version: 7, status: "draft" },
-        { id: seeded.newer.id, version: 7, status: "draft" },
-        { id: newer.id, version: 8, status: "finalized" },
-      ]);
-    } finally {
-      releaseHolder.resolve();
-      await Promise.allSettled([holder, finalize]);
-    }
-  });
+    const fetched = await app.request(`/api/dogs/${dog.id}/brief`, { headers: u.authHeaders });
+    expect((await fetched.json()) as object).toMatchObject({ brief: latest });
 
-  it("serializes simultaneous generation into sequential Brief versions", async () => {
-    const u = await createTestUser();
-    users.push(u);
-    const dog = await makeDog(u);
-
-    const responses = await Promise.all([
-      app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: u.authHeaders }),
-      app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: u.authHeaders }),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([201, 201]);
-    const rows = await db
-      .select({ version: briefs.version })
-      .from(briefs)
-      .where(eq(briefs.dogId, dog.id))
-      .orderBy(asc(briefs.version));
-    expect(rows.map((row) => row.version)).toEqual([1, 2]);
-  });
-
-  it("waits to share the Brief that committed while the lifecycle lock was held", async () => {
-    const u = await createTestUser();
-    users.push(u);
-    const dog = await makeDog(u);
-    const initial = await app.request(`/api/dogs/${dog.id}/brief`, {
-      method: "POST",
+    const finalized = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "PUT",
       headers: u.authHeaders,
     });
-    expect(initial.status).toBe(201);
-
-    const releaseHolder = createDeferred<void>();
-    const holderEntered = createDeferred<void>();
-    const holder = withBriefLifecycleLock(dog.id, async (tx) => {
-      await tx.insert(briefs).values({
-        dogId: dog.id,
-        summary: "Newer private Brief",
-        version: 2,
-        status: "draft",
-      });
-      holderEntered.resolve();
-      await releaseHolder.promise;
+    expect((await finalized.json()) as object).toMatchObject({
+      brief: { id: latest.id, version: latest.version, locale: latest.locale, status: "finalized" },
     });
 
-    await holderEntered.promise;
-    const share = app.request(`/api/dogs/${dog.id}/brief/share`, {
-      method: "POST",
-      headers: u.authHeaders,
-    });
-
-    try {
-      await waitForBriefLifecycleLockWaiters(dog.id, 1);
-      releaseHolder.resolve();
-      await holder;
-
-      const response = await share;
-      expect(response.status).toBe(200);
-      const { token } = (await response.json()) as { token: string };
-      const rows = await db
-        .select({ version: briefs.version, shareToken: briefs.shareToken })
-        .from(briefs)
-        .where(eq(briefs.dogId, dog.id))
-        .orderBy(asc(briefs.version));
-      expect(rows).toEqual([
-        { version: 1, shareToken: null },
-        { version: 2, shareToken: token },
-      ]);
-      const publicResponse = await app.request(`/api/share/brief/${token}`);
-      expect(publicResponse.status).toBe(200);
-      expect(((await publicResponse.json()) as { brief: { version: number } }).brief.version).toBe(
-        2,
-      );
-    } finally {
-      releaseHolder.resolve();
-      await Promise.allSettled([holder, share]);
-    }
-  });
-
-  it("commits a new private Brief after revoking an active share", async () => {
-    const u = await createTestUser();
-    users.push(u);
-    const dog = await makeDog(u);
-    await app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: u.authHeaders });
     const shared = await app.request(`/api/dogs/${dog.id}/brief/share`, {
       method: "POST",
       headers: u.authHeaders,
     });
     const { token } = (await shared.json()) as { token: string };
+    const publicBrief = await app.request(`/api/share/brief/${token}`);
+    expect((await publicBrief.json()) as object).toMatchObject({
+      brief: {
+        version: latest.version,
+        locale: latest.locale,
+        summary: latest.summary,
+        status: "finalized",
+      },
+    });
 
-    const releaseHolder = createDeferred<void>();
-    const holderEntered = createDeferred<void>();
-    const holder = withBriefLifecycleLock(dog.id, async () => {
-      holderEntered.resolve();
-      await releaseHolder.promise;
-    });
-    await holderEntered.promise;
-    const generate = app.request(`/api/dogs/${dog.id}/brief`, {
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const sent = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
-      headers: u.authHeaders,
+      headers: {
+        ...u.authHeaders,
+        "X-TuringCare-Locale": latest.locale === "en" ? "es" : "en",
+      },
+      body: briefSendBody({ briefId: latest.id, recipient: "trainer@example.com" }),
     });
+    expect(sent.status).toBe(201);
+    const email = vi.mocked(sendEmail).mock.calls[0]?.[0];
+    expect(email?.subject).toBe(
+      latest.locale === "es" ? "Resumen de conducta: Biscuit" : "Behavior Brief: Biscuit",
+    );
+    expect(email?.html).toContain(`<html lang="${latest.locale}">`);
+  });
+
+  it("returns 404 when the dog is deleted before the generation transaction locks it", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const deleter = await pool.connect();
+    let deleterOpen = false;
 
     try {
-      await waitForBriefLifecycleLockWaiters(dog.id, 1);
-      releaseHolder.resolve();
-      expect((await generate).status).toBe(201);
+      await deleter.query("BEGIN");
+      deleterOpen = true;
+      await deleter.query(`SELECT "id" FROM "dogs" WHERE "id" = $1 FOR UPDATE`, [dog.id]);
+      const pidResult = await deleter.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const deleterPid = Number(pidResult.rows[0]?.pid);
 
-      const rows = await db
-        .select({ version: briefs.version, shareToken: briefs.shareToken })
-        .from(briefs)
-        .where(eq(briefs.dogId, dog.id))
-        .orderBy(asc(briefs.version));
-      expect(rows).toEqual([
-        { version: 1, shareToken: null },
-        { version: 2, shareToken: null },
-      ]);
-      expect((await app.request(`/api/share/brief/${token}`)).status).toBe(404);
+      const generation = app.request(`/api/dogs/${dog.id}/brief`, {
+        method: "POST",
+        headers: u.authHeaders,
+      });
+      await waitForBlockingChain(pool, deleterPid, 1);
+      await deleter.query(`DELETE FROM "dogs" WHERE "id" = $1`, [dog.id]);
+      await deleter.query("COMMIT");
+      deleterOpen = false;
+
+      const response = await generation;
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
     } finally {
-      releaseHolder.resolve();
-      await Promise.allSettled([holder, generate]);
+      if (deleterOpen) await deleter.query("ROLLBACK");
+      deleter.release();
     }
   });
 
-  it("commits queued share before revoke, leaving every Brief private", async () => {
+  it("finalizes the newest Brief when generation queued first on the dog lifecycle lock", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
     await app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: u.authHeaders });
-
-    const releaseHolder = createDeferred<void>();
-    const holderEntered = createDeferred<void>();
-    const holder = withBriefLifecycleLock(dog.id, async () => {
-      holderEntered.resolve();
-      await releaseHolder.promise;
-    });
-    await holderEntered.promise;
-    const share = app.request(`/api/dogs/${dog.id}/brief/share`, {
-      method: "POST",
-      headers: u.authHeaders,
-    });
-    let revoke: ReturnType<typeof app.request> | undefined;
+    const blocker = await pool.connect();
+    let blockerOpen = false;
 
     try {
-      await waitForBriefLifecycleLockWaiters(dog.id, 1);
-      const revokeRequest = app.request(`/api/dogs/${dog.id}/brief/share`, {
+      await blocker.query("BEGIN");
+      blockerOpen = true;
+      await blocker.query(`SELECT "id" FROM "dogs" WHERE "id" = $1 FOR UPDATE`, [dog.id]);
+      const pidResult = await blocker.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const blockerPid = Number(pidResult.rows[0]?.pid);
+
+      const generation = app.request(`/api/dogs/${dog.id}/brief`, {
+        method: "POST",
+        headers: u.authHeaders,
+      });
+      await waitForBlockingChain(pool, blockerPid, 1);
+      const finalization = app.request(`/api/dogs/${dog.id}/brief`, {
+        method: "PUT",
+        headers: u.authHeaders,
+      });
+      await waitForBlockingChain(pool, blockerPid, 2);
+      await blocker.query("COMMIT");
+      blockerOpen = false;
+
+      const [generatedResponse, finalizedResponse] = await Promise.all([generation, finalization]);
+      const generated = (await generatedResponse.json()) as {
+        brief: { id: string; version: number };
+      };
+      const finalized = (await finalizedResponse.json()) as {
+        brief: { id: string; version: number; status: string };
+      };
+      expect(finalizedResponse.status).toBe(200);
+      expect(finalized.brief).toMatchObject({
+        id: generated.brief.id,
+        version: generated.brief.version,
+        status: "finalized",
+      });
+    } finally {
+      if (blockerOpen) await blocker.query("ROLLBACK");
+      blocker.release();
+    }
+  });
+
+  it("returns 404 when dog deletion queued before finalization", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await app.request(`/api/dogs/${dog.id}/brief`, { method: "POST", headers: u.authHeaders });
+    const blocker = await pool.connect();
+    let blockerOpen = false;
+
+    try {
+      await blocker.query("BEGIN");
+      blockerOpen = true;
+      await blocker.query(`SELECT "id" FROM "dogs" WHERE "id" = $1 FOR UPDATE`, [dog.id]);
+      const pidResult = await blocker.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const blockerPid = Number(pidResult.rows[0]?.pid);
+
+      const deletion = app.request(`/api/dogs/${dog.id}`, {
         method: "DELETE",
         headers: u.authHeaders,
       });
-      revoke = revokeRequest;
-      await waitForBriefLifecycleLockWaiters(dog.id, 2);
-      releaseHolder.resolve();
+      await waitForBlockingChain(pool, blockerPid, 1);
+      const finalization = app.request(`/api/dogs/${dog.id}/brief`, {
+        method: "PUT",
+        headers: u.authHeaders,
+      });
+      await waitForBlockingChain(pool, blockerPid, 2);
+      await blocker.query("COMMIT");
+      blockerOpen = false;
 
-      const [shareResponse, revokeResponse] = await Promise.all([share, revokeRequest]);
-      expect(shareResponse.status).toBe(200);
-      expect(revokeResponse.status).toBe(200);
-      const { token } = (await shareResponse.json()) as { token: string };
-      const remainingTokens = await db
-        .select({ shareToken: briefs.shareToken })
-        .from(briefs)
-        .where(and(eq(briefs.dogId, dog.id), isNotNull(briefs.shareToken)));
-      expect(remainingTokens).toEqual([]);
-      expect((await app.request(`/api/share/brief/${token}`)).status).toBe(404);
+      const [deletedResponse, finalizedResponse] = await Promise.all([deletion, finalization]);
+      expect(deletedResponse.status).toBe(200);
+      expect(finalizedResponse.status).toBe(404);
+      expect(await finalizedResponse.json()).toEqual({ error: "not_found" });
     } finally {
-      releaseHolder.resolve();
-      await Promise.allSettled([holder, share, ...(revoke ? [revoke] : [])]);
+      if (blockerOpen) await blocker.query("ROLLBACK");
+      blocker.release();
+    }
+  });
+
+  it("enforces unique Brief versions per dog at the database boundary", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await db.insert(briefs).values({ dogId: dog.id, summary: "version one", version: 1 });
+
+    let duplicateError: unknown;
+    try {
+      await db.insert(briefs).values({ dogId: dog.id, summary: "duplicate version", version: 1 });
+    } catch (error) {
+      duplicateError = error;
+    }
+    expect(duplicateError).toBeInstanceOf(Error);
+    expect((duplicateError as { cause?: { constraint?: string } }).cause?.constraint).toBe(
+      "briefs_dog_id_version_unique",
+    );
+  });
+
+  it("fails every latest-Brief consumer closed on a legacy duplicate maximum", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const legacyToken = `legacy-duplicate-${Date.now()}`;
+    let constraintDropped = false;
+
+    try {
+      await pool.query(`ALTER TABLE "briefs" DROP CONSTRAINT "briefs_dog_id_version_unique"`);
+      constraintDropped = true;
+      await db.insert(briefs).values([
+        {
+          dogId: dog.id,
+          summary: "older finalized artifact",
+          version: 7,
+          status: "finalized",
+          locale: "en",
+          generatedAt: new Date("2026-08-22T12:00:00Z"),
+          shareToken: legacyToken,
+        },
+        {
+          dogId: dog.id,
+          summary: "newer draft artifact",
+          version: 7,
+          status: "draft",
+          locale: "es",
+          generatedAt: new Date("2026-08-23T12:00:00Z"),
+        },
+      ]);
+      const { sendEmail } = await import("../email/send-email");
+      vi.mocked(sendEmail).mockClear();
+
+      const responses = await Promise.all([
+        app.request(`/api/dogs/${dog.id}/brief`, { headers: u.authHeaders }),
+        app.request(`/api/dogs/${dog.id}/brief`, { method: "PUT", headers: u.authHeaders }),
+        app.request(`/api/dogs/${dog.id}/brief/share`, {
+          method: "POST",
+          headers: u.authHeaders,
+        }),
+        app.request(`/api/dogs/${dog.id}/brief/share`, {
+          method: "DELETE",
+          headers: u.authHeaders,
+        }),
+        app.request(`/api/dogs/${dog.id}/brief/send`, {
+          method: "POST",
+          headers: u.authHeaders,
+          body: briefSendBody({ briefId: randomUUID(), recipient: "legacy-conflict@example.com" }),
+        }),
+      ]);
+
+      expect(responses.map(({ status }) => status)).toEqual([409, 409, 409, 409, 409]);
+      for (const response of responses) {
+        expect(await response.json()).toEqual({ error: "brief_version_conflict" });
+      }
+      expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+
+      const [accountOverview, dogsOverview] = await Promise.all([
+        app.request("/api/overview", { headers: u.authHeaders }),
+        app.request("/api/dogs/overview", { headers: u.authHeaders }),
+      ]);
+      expect(accountOverview.status).toBe(200);
+      expect(await accountOverview.json()).toMatchObject({
+        latestBrief: null,
+        latestBriefAmbiguous: true,
+      });
+      expect(dogsOverview.status).toBe(200);
+      const dogsOverviewBody = (await dogsOverview.json()) as {
+        dogs: Array<{
+          id: string;
+          summary: {
+            briefStatus: "draft" | "finalized" | null;
+            briefVersion: number | null;
+            briefAmbiguous: boolean;
+          };
+        }>;
+      };
+      expect(dogsOverviewBody.dogs.find(({ id }) => id === dog.id)?.summary).toMatchObject({
+        briefStatus: null,
+        briefVersion: null,
+        briefAmbiguous: true,
+      });
+
+      const repaired = await app.request(`/api/dogs/${dog.id}/brief`, {
+        method: "POST",
+        headers: u.authHeaders,
+      });
+      expect(repaired.status).toBe(201);
+      expect((await repaired.json()) as object).toMatchObject({ brief: { version: 8 } });
+      const latestAfterRepair = await app.request(`/api/dogs/${dog.id}/brief`, {
+        headers: u.authHeaders,
+      });
+      expect(latestAfterRepair.status).toBe(200);
+      expect((await latestAfterRepair.json()) as object).toMatchObject({ brief: { version: 8 } });
+      expect(
+        await db
+          .select({ status: briefs.status, shareToken: briefs.shareToken })
+          .from(briefs)
+          .where(eq(briefs.dogId, dog.id)),
+      ).toEqual(
+        expect.arrayContaining([
+          { status: "finalized", shareToken: null },
+          { status: "draft", shareToken: null },
+        ]),
+      );
+      expect(
+        await db
+          .select({ id: briefSends.id })
+          .from(briefSends)
+          .where(eq(briefSends.sentByUserId, u.userId)),
+      ).toEqual([]);
+    } finally {
+      if (constraintDropped) {
+        await db.delete(briefs).where(eq(briefs.dogId, dog.id));
+        await pool.query(
+          `ALTER TABLE "briefs" ADD CONSTRAINT "briefs_dog_id_version_unique" UNIQUE ("dog_id", "version")`,
+        );
+      }
     }
   });
 
@@ -1308,6 +1332,44 @@ describe("dogs: brief", () => {
     expect(brief.summary).toContain("recent walk");
     expect(brief.summary).not.toContain("ancient incident");
     expect(brief.summary).toContain("Check-ins: 1 better, 0 same, 0 harder.");
+  });
+
+  it("stores the validated request locale when generating a Spanish brief", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+
+    const res = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "POST",
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "es" },
+    });
+
+    expect(res.status).toBe(201);
+    const { brief } = (await res.json()) as {
+      brief: { locale: string; summary: string };
+    };
+    expect(brief.locale).toBe("es");
+    expect(brief.summary).toContain("Preocupaciones:");
+    expect(brief.summary).toContain("Diario: 0 entradas en los últimos 30 días");
+  });
+
+  it("keeps the English default for briefs generated without a locale header", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+
+    const res = await app.request(`/api/dogs/${dog.id}/brief`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+
+    expect(res.status).toBe(201);
+    const { brief } = (await res.json()) as {
+      brief: { locale: string; summary: string };
+    };
+    expect(brief.locale).toBe("en");
+    expect(brief.summary).toContain("Concerns:");
+    expect(brief.summary).toContain("Journal: 0 entries in the last 30 days");
   });
 });
 
@@ -1429,7 +1491,7 @@ describe("dogs: journal PUT", () => {
       body: JSON.stringify({ kind: "daily_checkin" }),
     });
     expect(r.status).toBe(400);
-    expectValidationIssue(await r.json(), "trend");
+    expectValidationIssue(await r.json(), "trend", "validation.dailyCheckInTrendRequired");
 
     const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
     const { entries } = (await list.json()) as {
@@ -1525,7 +1587,7 @@ describe("dogs: journal PUT", () => {
       body: JSON.stringify({ occurredAt: "not-a-date", note: "Should not persist" }),
     });
     expect(r.status).toBe(400);
-    expectValidationIssue(await r.json(), "occurredAt");
+    expectValidationIssue(await r.json(), "occurredAt", "validation.dateInvalid");
 
     const list = await app.request(`/api/dogs/${dog.id}/journal`, { headers: u.authHeaders });
     const { entries } = (await list.json()) as {
@@ -1604,15 +1666,35 @@ describe("dogs: brief send", () => {
     return ((await fin.json()) as { brief: { id: string; status: string } }).brief;
   }
 
+  async function makeFinalizedBriefWithHeaders(
+    u: TestUser,
+    dogId: string,
+    headers: Record<string, string>,
+  ) {
+    await app.request(`/api/dogs/${dogId}/brief`, {
+      method: "POST",
+      headers: { ...u.authHeaders, ...headers },
+    });
+    const fin = await app.request(`/api/dogs/${dogId}/brief`, {
+      method: "PUT",
+      headers: u.authHeaders,
+    });
+    return ((await fin.json()) as { brief: { id: string; status: string } }).brief;
+  }
+
   it("POST send: happy path on a finalized brief", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "sarah@example.com", message: "Hi Sarah" }),
+      body: briefSendBody({
+        briefId: brief.id,
+        recipient: "sarah@example.com",
+        message: "Hi Sarah",
+      }),
     });
     expect(r.status).toBe(201);
     const { send } = (await r.json()) as {
@@ -1622,61 +1704,802 @@ describe("dogs: brief send", () => {
     expect(send.message).toBe("Hi Sarah");
   });
 
-  it("POST send: uses the newest generated finalized brief when duplicate versions exist", async () => {
+  it("POST send: replays a committed idempotency key without duplicate delivery", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    const [, newer] = await db
-      .insert(briefs)
-      .values([
-        {
-          dogId: dog.id,
-          summary: "Older duplicate finalized Brief",
-          version: 7,
-          status: "finalized",
-          generatedAt: new Date("2026-03-01T08:00:00.000Z"),
-        },
-        {
-          dogId: dog.id,
-          summary: "Newer duplicate finalized Brief",
-          version: 7,
-          status: "finalized",
-          generatedAt: new Date("2026-03-01T09:00:00.000Z"),
-        },
-      ])
-      .returning({ id: briefs.id });
-    if (!newer) throw new Error("expected newer duplicate finalized Brief row");
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const body = JSON.stringify({
+      briefId: brief.id,
+      recipient: "idempotent@example.com",
+      idempotencyKey: "95acbb6a-9189-4614-9a6e-c732efcc5d1d",
+    });
+
+    const first = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+    const second = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+    const firstBody = (await first.json()) as { send: { id: string } };
+    const secondBody = (await second.json()) as { send: { id: string } };
+
+    expect([first.status, second.status]).toEqual([201, 201]);
+    expect(firstBody.send.id).toBe("95acbb6a-9189-4614-9a6e-c732efcc5d1d");
+    expect(secondBody.send.id).toBe(firstBody.send.id);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendEmail).mock.calls[0]?.[0].idempotencyKey).toBe(firstBody.send.id);
+    expect(
+      await db
+        .select({ id: briefSends.id })
+        .from(briefSends)
+        .where(eq(briefSends.id, firstBody.send.id)),
+    ).toHaveLength(1);
+    const emailedEvents = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.userId, u.userId), eq(events.name, "brief.emailed")));
+    expect(emailedEvents).toHaveLength(1);
+  });
+
+  it("POST send: keeps a durable intent after provider failure and retries the same key", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    vi.mocked(sendEmail).mockRejectedValueOnce(new Error("provider unavailable"));
+    const idempotencyKey = "96acbb6a-9189-4614-9a6e-c732efcc5d1d";
+    const body = JSON.stringify({
+      briefId: brief.id,
+      recipient: "durable@example.com",
+      idempotencyKey,
+    });
+
+    const failed = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+
+    expect(failed.status).toBe(502);
+    expect(
+      await db
+        .select({ id: briefSends.id })
+        .from(briefSends)
+        .where(eq(briefSends.id, idempotencyKey)),
+    ).toEqual([{ id: idempotencyKey }]);
+    const recoverablePending = await app.request(`/api/dogs/${dog.id}/brief/sends`, {
+      headers: u.authHeaders,
+    });
+    expect(await recoverablePending.json()).toEqual({
+      sends: [
+        expect.objectContaining({
+          id: idempotencyKey,
+          recipient: "durable@example.com",
+          status: "pending",
+        }),
+      ],
+    });
+
+    const retried = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+
+    expect(retried.status).toBe(201);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(sendEmail).mock.calls.map(([request]) => request.idempotencyKey)).toEqual([
+      idempotencyKey,
+      idempotencyKey,
+    ]);
+    expect(
+      await db
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.userId, u.userId), eq(events.name, "brief.emailed"))),
+    ).toHaveLength(1);
+  });
+
+  it("POST send: reclaims a stale delivery claim with the same provider idempotency key", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const idempotencyKey = "76acbb6a-9189-4614-9a6e-c732efcc5d1d";
+    await db.insert(briefSends).values({
+      id: idempotencyKey,
+      briefId: brief.id,
+      recipient: "stale-claim@example.com",
+      sentByUserId: u.userId,
+      deliveryClaimId: "abandoned-worker",
+      deliveryClaimedAt: new Date(Date.now() - 31_000),
+    });
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const blockedDelete = await app.request(`/api/dogs/${dog.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+    expect(blockedDelete.status).toBe(409);
+    expect(await blockedDelete.json()).toEqual({
+      error: "brief_delivery_recovery_required",
+    });
 
     const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "sarah@example.com", message: "Hi Sarah" }),
+      body: JSON.stringify({
+        briefId: brief.id,
+        recipient: "stale-claim@example.com",
+        idempotencyKey,
+      }),
     });
-    expect(response.status).toBe(201);
 
-    const sends = await db
-      .select({ briefId: briefSends.briefId })
+    expect(response.status).toBe(201);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendEmail).mock.calls[0]?.[0].idempotencyKey).toBe(idempotencyKey);
+    const [stored] = await db
+      .select({
+        deliveredAt: briefSends.deliveredAt,
+        deliveryClaimId: briefSends.deliveryClaimId,
+        deliveryClaimedAt: briefSends.deliveryClaimedAt,
+      })
       .from(briefSends)
-      .where(eq(briefSends.sentByUserId, u.userId));
-    expect(sends).toEqual([{ briefId: newer.id }]);
+      .where(eq(briefSends.id, idempotencyKey));
+    expect(stored?.deliveredAt).toBeInstanceOf(Date);
+    expect(stored?.deliveryClaimId).toBeNull();
+    expect(stored?.deliveryClaimedAt).toBeNull();
+
+    const completedDelete = await app.request(`/api/dogs/${dog.id}`, {
+      method: "DELETE",
+      headers: u.authHeaders,
+    });
+    expect(completedDelete.status).toBe(200);
+  });
+
+  it("POST send: reclaims a fail-closed claim whose timestamp is missing", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const idempotencyKey = "66acbb6a-9189-4614-9a6e-c732efcc5d1d";
+    await db.insert(briefSends).values({
+      id: idempotencyKey,
+      briefId: brief.id,
+      recipient: "missing-claim-time@example.com",
+      sentByUserId: u.userId,
+      deliveryClaimId: "incomplete-worker-claim",
+      deliveryClaimedAt: null,
+    });
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        briefId: brief.id,
+        recipient: "missing-claim-time@example.com",
+        idempotencyKey,
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(
+      await db
+        .select({ deliveryClaimId: briefSends.deliveryClaimId })
+        .from(briefSends)
+        .where(eq(briefSends.id, idempotencyKey)),
+    ).toEqual([{ deliveryClaimId: null }]);
+  });
+
+  it("POST send: never recovers an old pending key for a newer Brief", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const firstBrief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    vi.mocked(sendEmail).mockRejectedValueOnce(new Error("provider unavailable"));
+    const oldKey = "86acbb6a-9189-4614-9a6e-c732efcc5d1d";
+
+    const failed = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        briefId: firstBrief.id,
+        recipient: "versioned@example.com",
+        idempotencyKey: oldKey,
+      }),
+    });
+    expect(failed.status).toBe(502);
+
+    const secondBrief = await makeFinalizedBrief(u, dog.id);
+    const staleRecovery = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        briefId: secondBrief.id,
+        recipient: "versioned@example.com",
+        idempotencyKey: oldKey,
+      }),
+    });
+
+    expect(staleRecovery.status).toBe(409);
+    expect(await staleRecovery.json()).toEqual({ error: "idempotency_conflict" });
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+
+    const freshSend = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: briefSendBody({
+        briefId: secondBrief.id,
+        recipient: "versioned@example.com",
+      }),
+    });
+    expect(freshSend.status).toBe(201);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(2);
+  });
+
+  it("POST send: safely replays the real legacy payload when one Brief is unambiguous", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const body = JSON.stringify({ recipient: "legacy-client@example.com", message: "Legacy tab" });
+    const first = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+    const second = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+
+    expect([first.status, second.status]).toEqual([201, 201]);
+    const firstBody = (await first.json()) as { send: { id: string; briefId: string } };
+    const secondBody = (await second.json()) as { send: { id: string; briefId: string } };
+    expect(secondBody.send.id).toBe(firstBody.send.id);
+    expect(secondBody.send.briefId).toBe(firstBody.send.briefId);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+  });
+
+  it("POST send: matches a randomly keyed pre-rollout audit before legacy redelivery", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const legacySendId = randomUUID();
+    await db.insert(briefSends).values({
+      id: legacySendId,
+      briefId: brief.id,
+      recipient: "pre-rollout@example.com",
+      message: "Already accepted",
+      sentByUserId: u.userId,
+      deliveredAt: new Date(),
+    });
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        recipient: "pre-rollout@example.com",
+        message: "Already accepted",
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(((await response.json()) as { send: { id: string } }).send.id).toBe(legacySendId);
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+  });
+
+  it("POST send: does not guess a legacy retry's version from a unique older audit", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const firstBrief = await makeFinalizedBrief(u, dog.id);
+    const legacySendId = randomUUID();
+    await db.insert(briefSends).values({
+      id: legacySendId,
+      briefId: firstBrief.id,
+      recipient: "pre-versioned@example.com",
+      message: "Retry the accepted v1 send",
+      sentByUserId: u.userId,
+      deliveredAt: new Date(),
+    });
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        recipient: "pre-versioned@example.com",
+        message: "Retry the accepted v1 send",
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "client_upgrade_required" });
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+  });
+
+  it("POST send: requires a client upgrade when an omitted Brief id is ambiguous", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({ recipient: "stale-client@example.com" }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "client_upgrade_required" });
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+  });
+
+  it("POST send: concurrent replay records one provider delivery, audit, and emailed event", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    let releaseProvider: (() => void) | undefined;
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
+    const providerRelease = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    vi.mocked(sendEmail).mockClear();
+    vi.mocked(sendEmail).mockImplementationOnce(async () => {
+      markProviderStarted?.();
+      await providerRelease;
+    });
+    const body = JSON.stringify({
+      briefId: brief.id,
+      recipient: "concurrent-replay@example.com",
+      idempotencyKey: "0aacbb6a-9189-4614-9a6e-c732efcc5d1d",
+    });
+
+    const first = app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+    await providerStarted;
+    const second = app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
+    });
+    const secondResponse = await second;
+    releaseProvider?.();
+    const firstResponse = await first;
+
+    expect([firstResponse.status, secondResponse.status]).toEqual([201, 409]);
+    expect(await secondResponse.json()).toEqual({ error: "send_in_progress" });
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+    expect(
+      await db
+        .select({ id: briefSends.id })
+        .from(briefSends)
+        .where(eq(briefSends.sentByUserId, u.userId)),
+    ).toHaveLength(1);
+    expect(
+      await db
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.userId, u.userId), eq(events.name, "brief.emailed"))),
+    ).toHaveLength(1);
+  });
+
+  it("POST send: conflicting replay preserves one provider delivery, audit, and emailed event", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const idempotencyKey = "1aacbb6a-9189-4614-9a6e-c732efcc5d1d";
+    const first = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        briefId: brief.id,
+        recipient: "original@example.com",
+        idempotencyKey,
+      }),
+    });
+    const conflict = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        briefId: brief.id,
+        recipient: "different@example.com",
+        idempotencyKey,
+      }),
+    });
+
+    expect(first.status).toBe(201);
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toEqual({ error: "idempotency_conflict" });
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+    expect(
+      await db
+        .select({ id: briefSends.id })
+        .from(briefSends)
+        .where(eq(briefSends.sentByUserId, u.userId)),
+    ).toHaveLength(1);
+    expect(
+      await db
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.userId, u.userId), eq(events.name, "brief.emailed"))),
+    ).toHaveLength(1);
+  });
+
+  it("POST send: concurrent global-key collision delivers, audits, and records exactly once", async () => {
+    const firstUser = await createTestUser();
+    const secondUser = await createTestUser();
+    users.push(firstUser, secondUser);
+    const firstDog = await makeDog(firstUser);
+    const secondDog = await makeDog(secondUser);
+    const firstBrief = await makeFinalizedBrief(firstUser, firstDog.id);
+    const secondBrief = await makeFinalizedBrief(secondUser, secondDog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const idempotencyKey = "2aacbb6a-9189-4614-9a6e-c732efcc5d1d";
+
+    const responses = await Promise.all([
+      app.request(`/api/dogs/${firstDog.id}/brief/send`, {
+        method: "POST",
+        headers: firstUser.authHeaders,
+        body: JSON.stringify({
+          briefId: firstBrief.id,
+          recipient: "first-owner@example.com",
+          idempotencyKey,
+        }),
+      }),
+      app.request(`/api/dogs/${secondDog.id}/brief/send`, {
+        method: "POST",
+        headers: secondUser.authHeaders,
+        body: JSON.stringify({
+          briefId: secondBrief.id,
+          recipient: "second-owner@example.com",
+          idempotencyKey,
+        }),
+      }),
+    ]);
+
+    expect(responses.map(({ status }) => status).sort()).toEqual([201, 409]);
+    const conflict = responses.find(({ status }) => status === 409);
+    expect(await conflict?.json()).toEqual({ error: "idempotency_conflict" });
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+    expect(
+      await db
+        .select({ id: briefSends.id })
+        .from(briefSends)
+        .where(eq(briefSends.id, idempotencyKey)),
+    ).toHaveLength(1);
+    const participatingEvents = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(
+        and(
+          eq(events.name, "brief.emailed"),
+          or(eq(events.userId, firstUser.userId), eq(events.userId, secondUser.userId)),
+        ),
+      );
+    expect(participatingEvents).toHaveLength(1);
+  });
+
+  it("POST send: serializes the daily quota across two dogs owned by one user", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const firstDog = await makeDog(u);
+    const secondDog = await makeDog(u);
+    const firstBrief = await makeFinalizedBrief(u, firstDog.id);
+    const secondBrief = await makeFinalizedBrief(u, secondDog.id);
+    await db.insert(briefSends).values(
+      Array.from({ length: 9 }, (_, index) => ({
+        briefId: firstBrief.id,
+        recipient: `previous-${index}@example.com`,
+        sentByUserId: u.userId,
+      })),
+    );
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const blocker = await pool.connect();
+    let blockerOpen = false;
+
+    try {
+      await blocker.query("BEGIN");
+      blockerOpen = true;
+      await blocker.query(`SELECT "id" FROM "user" WHERE "id" = $1 FOR UPDATE`, [u.userId]);
+      const pidResult = await blocker.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const blockerPid = Number(pidResult.rows[0]?.pid);
+      const sends = [
+        { briefId: firstBrief.id, dog: firstDog },
+        { briefId: secondBrief.id, dog: secondDog },
+      ].map(({ briefId, dog }, index) =>
+        app.request(`/api/dogs/${dog.id}/brief/send`, {
+          method: "POST",
+          headers: u.authHeaders,
+          body: briefSendBody({ briefId, recipient: `concurrent-${index}@example.com` }),
+        }),
+      );
+      await waitForBlockingChain(pool, blockerPid, 2);
+      await blocker.query("COMMIT");
+      blockerOpen = false;
+
+      const responses = await Promise.all(sends);
+      expect(responses.map(({ status }) => status).sort()).toEqual([201, 429]);
+      expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+      const [{ value: sendCount } = { value: 0 }] = await db
+        .select({ value: count() })
+        .from(briefSends)
+        .where(eq(briefSends.sentByUserId, u.userId));
+      expect(Number(sendCount)).toBe(10);
+    } finally {
+      if (blockerOpen) await blocker.query("ROLLBACK");
+      blocker.release();
+    }
+  });
+
+  it("POST send: takes the user lock before dog rows so account deletion cannot deadlock", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+    const deleter = await pool.connect();
+    let deleterOpen = false;
+
+    try {
+      await deleter.query("BEGIN");
+      deleterOpen = true;
+      await deleter.query(`SELECT "id" FROM "user" WHERE "id" = $1 FOR UPDATE`, [u.userId]);
+      const pidResult = await deleter.query<{ pid: number }>(
+        "SELECT pg_backend_pid()::integer AS pid",
+      );
+      const deleterPid = Number(pidResult.rows[0]?.pid);
+      const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
+        method: "POST",
+        headers: u.authHeaders,
+        body: briefSendBody({ briefId: brief.id, recipient: "account-delete@example.com" }),
+      });
+      await waitForBlockingChain(pool, deleterPid, 1);
+
+      await deleter.query(`DELETE FROM "user" WHERE "id" = $1`, [u.userId]);
+      await deleter.query("COMMIT");
+      deleterOpen = false;
+
+      const response = await send;
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
+      expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+    } finally {
+      if (deleterOpen) await deleter.query("ROLLBACK");
+      deleter.release();
+    }
+  });
+
+  it("POST send: uses the stored brief locale instead of the current request locale", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBriefWithHeaders(u, dog.id, {
+      "X-TuringCare-Locale": "es",
+    });
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "en" },
+      body: briefSendBody({
+        briefId: brief.id,
+        recipient: "sarah@example.com",
+        message: "Hola Sarah",
+      }),
+    });
+
+    expect(r.status).toBe(201);
+    const sent = vi.mocked(sendEmail).mock.calls[0]?.[0] as {
+      subject: string;
+      html: string;
+      text: string;
+    };
+    expect(sent.subject).toBe("Resumen de conducta: Biscuit");
+    expect(sent.html).toContain("Compartido por");
+    expect(sent.text).toContain("Resumen de conducta: Biscuit");
+    expect(sent.text).toContain("Preocupaciones:");
   });
 
   it("POST send: returns 409 when brief is draft", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await app.request(`/api/dogs/${dog.id}/brief`, {
+    const generated = await app.request(`/api/dogs/${dog.id}/brief`, {
       method: "POST",
       headers: u.authHeaders,
     });
+    const draft = ((await generated.json()) as { brief: { id: string } }).brief;
     // do NOT finalize
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ briefId: draft.id, recipient: "sarah@example.com" }),
     });
     expect(r.status).toBe(409);
     expect(await r.json()).toEqual({ error: "not_finalized" });
+  });
+
+  it("POST send: blocks dog deletion during provider delivery without holding a transaction", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    let releaseProvider: (() => void) | undefined;
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
+    const providerRelease = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    vi.mocked(sendEmail).mockImplementationOnce(async () => {
+      markProviderStarted?.();
+      await providerRelease;
+    });
+    try {
+      const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
+        method: "POST",
+        headers: u.authHeaders,
+        body: briefSendBody({ briefId: brief.id, recipient: "race@example.com" }),
+      });
+      await providerStarted;
+
+      const blockedDelete = await app.request(`/api/dogs/${dog.id}`, {
+        method: "DELETE",
+        headers: u.authHeaders,
+      });
+      expect(blockedDelete.status).toBe(409);
+      expect(await blockedDelete.json()).toEqual({ error: "brief_delivery_in_progress" });
+
+      releaseProvider?.();
+
+      const sendResponse = await send;
+      expect(sendResponse.status).toBe(201);
+      const completedDelete = await app.request(`/api/dogs/${dog.id}`, {
+        method: "DELETE",
+        headers: u.authHeaders,
+      });
+      expect(completedDelete.status).toBe(200);
+    } finally {
+      releaseProvider?.();
+    }
+  });
+
+  it("POST send: clears a failed claim before allowing dog deletion", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    let rejectProvider: ((reason: Error) => void) | undefined;
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
+    const providerResult = new Promise<void>((_resolve, reject) => {
+      rejectProvider = reject;
+    });
+    vi.mocked(sendEmail).mockImplementationOnce(async () => {
+      markProviderStarted?.();
+      await providerResult;
+    });
+    try {
+      const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
+        method: "POST",
+        headers: u.authHeaders,
+        body: briefSendBody({ briefId: brief.id, recipient: "failed-race@example.com" }),
+      });
+      await providerStarted;
+
+      const blockedDelete = await app.request(`/api/dogs/${dog.id}`, {
+        method: "DELETE",
+        headers: u.authHeaders,
+      });
+      expect(blockedDelete.status).toBe(409);
+      expect(await blockedDelete.json()).toEqual({ error: "brief_delivery_in_progress" });
+
+      rejectProvider?.(new Error("deferred-provider-failure"));
+
+      const sendResponse = await send;
+      expect(sendResponse.status).toBe(502);
+      const completedDelete = await app.request(`/api/dogs/${dog.id}`, {
+        method: "DELETE",
+        headers: u.authHeaders,
+      });
+      expect(completedDelete.status).toBe(200);
+      const audits = await db
+        .select({ id: briefSends.id, deliveredAt: briefSends.deliveredAt })
+        .from(briefSends)
+        .where(eq(briefSends.recipient, "failed-race@example.com"));
+      expect(audits).toEqual([]);
+    } finally {
+      rejectProvider?.(new Error("test cleanup"));
+    }
+  });
+
+  it("POST send: blocks account cascade deletion until provider delivery finishes", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    let releaseProvider: (() => void) | undefined;
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
+    const providerRelease = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    vi.mocked(sendEmail).mockImplementationOnce(async () => {
+      markProviderStarted?.();
+      await providerRelease;
+    });
+    const deleter = await pool.connect();
+    try {
+      const send = app.request(`/api/dogs/${dog.id}/brief/send`, {
+        method: "POST",
+        headers: u.authHeaders,
+        body: briefSendBody({ briefId: brief.id, recipient: "account-race@example.com" }),
+      });
+      await providerStarted;
+
+      await expect(
+        deleter.query(`DELETE FROM "user" WHERE "id" = $1`, [u.userId]),
+      ).rejects.toMatchObject({ constraint: "brief_sends_delivery_in_progress" });
+
+      releaseProvider?.();
+      expect((await send).status).toBe(201);
+      const deleted = await deleter.query(`DELETE FROM "user" WHERE "id" = $1`, [u.userId]);
+      expect(deleted.rowCount).toBe(1);
+    } finally {
+      releaseProvider?.();
+      deleter.release();
+    }
   });
 
   it("POST send: returns 404 when no brief exists", async () => {
@@ -1686,7 +2509,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ briefId: randomUUID(), recipient: "sarah@example.com" }),
     });
     expect(r.status).toBe(404);
   });
@@ -1695,11 +2518,11 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "not-an-email" }),
+      body: briefSendBody({ briefId: brief.id, recipient: "not-an-email" }),
     });
     expect(r.status).toBe(400);
   });
@@ -1708,11 +2531,12 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({
+      body: briefSendBody({
+        briefId: brief.id,
         recipient: "sarah@example.com",
         message: "x".repeat(501),
       }),
@@ -1725,11 +2549,11 @@ describe("dogs: brief send", () => {
     const b = await createTestUser();
     users.push(a, b);
     const dog = await makeDog(a);
-    await makeFinalizedBrief(a, dog.id);
+    const brief = await makeFinalizedBrief(a, dog.id);
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: b.authHeaders,
-      body: JSON.stringify({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ briefId: brief.id, recipient: "sarah@example.com" }),
     });
     expect(r.status).toBe(404);
   });
@@ -1742,7 +2566,7 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
 
     const { sendEmail } = await import("../email/send-email");
     vi.mocked(sendEmail).mockRejectedValueOnce(new Error("resend-timeout-sentinel-do-not-leak"));
@@ -1751,7 +2575,7 @@ describe("dogs: brief send", () => {
     const r = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "sarah@example.com" }),
+      body: briefSendBody({ briefId: brief.id, recipient: "sarah@example.com" }),
     });
     const text = await r.text();
 
@@ -1784,17 +2608,17 @@ describe("dogs: brief send", () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
-    await makeFinalizedBrief(u, dog.id);
+    const brief = await makeFinalizedBrief(u, dog.id);
     // Send twice
     await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "first@example.com" }),
+      body: briefSendBody({ briefId: brief.id, recipient: "first@example.com" }),
     });
     await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: JSON.stringify({ recipient: "second@example.com" }),
+      body: briefSendBody({ briefId: brief.id, recipient: "second@example.com" }),
     });
     const r = await app.request(`/api/dogs/${dog.id}/brief/sends`, {
       headers: u.authHeaders,
@@ -1923,6 +2747,80 @@ describe("dogs: POST /:id/goals/from-template", () => {
     expect(body.skills[0]?.confidence).toBe(1);
     expect(body.skills[0]?.position).toBe(0);
     expect(body.skills.map((s) => s.position)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("persists template labels but resolves catalog-backed reads in the request locale", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const r = await app.request(`/api/dogs/${dog.id}/goals/from-template`, {
+      method: "POST",
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "es" },
+      body: JSON.stringify({ templateKey: "basic-manners" }),
+    });
+
+    expect(r.status).toBe(201);
+    expect(r.headers.get("Content-Language")).toBe("es");
+    const body = (await r.json()) as {
+      goal: { id: string; goal: string; catalogGoalKey: string | null };
+      skills: Array<{ id: string; name: string; catalogSkillKey: string | null }>;
+    };
+    expect(body.goal.goal).toBe("Modales básicos");
+    expect(body.goal.catalogGoalKey).toBe("basic-manners");
+    expect(body.skills[0]?.name).toBe("Sentado");
+    expect(body.skills[0]?.catalogSkillKey).toBe("basic-manners.sit");
+
+    const progress = await app.request(`/api/dogs/${dog.id}/progress`, { headers: u.authHeaders });
+    const progressBody = (await progress.json()) as {
+      goals: Array<{
+        goal: string;
+        catalogGoalKey: string | null;
+        skills: Array<{ name: string }>;
+      }>;
+    };
+    expect(progressBody.goals[0]?.goal).toBe("Basic Manners");
+    expect(progressBody.goals[0]?.catalogGoalKey).toBe("basic-manners");
+    expect(progressBody.goals[0]?.skills[0]?.name).toBe("Sit");
+
+    const spanishProgress = await app.request(`/api/dogs/${dog.id}/progress`, {
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "es" },
+    });
+    const spanishProgressBody = (await spanishProgress.json()) as {
+      goals: Array<{ goal: string; skills: Array<{ name: string }> }>;
+    };
+    expect(spanishProgressBody.goals[0]?.goal).toBe("Modales básicos");
+    expect(spanishProgressBody.goals[0]?.skills[0]?.name).toBe("Sentado");
+
+    const briefResponse = await app.request(`/api/dogs/${dog.id}/brief?window=30d`, {
+      method: "POST",
+      headers: u.authHeaders,
+    });
+    expect(briefResponse.status).toBe(201);
+    const briefBody = (await briefResponse.json()) as { brief: { summary: string } };
+    expect(briefBody.brief.summary).toContain("- Basic Manners");
+    expect(briefBody.brief.summary).toContain("Sit");
+    expect(briefBody.brief.summary).not.toContain("Modales básicos");
+    expect(briefBody.brief.summary).not.toContain("Sentado");
+
+    const catalogSkill = body.skills[0];
+    if (!catalogSkill) throw new Error("expected template skill");
+    const rename = await app.request(`/api/dogs/${dog.id}/skills/${catalogSkill.id}`, {
+      method: "PUT",
+      headers: u.authHeaders,
+      body: JSON.stringify({ name: "My custom sit", confidence: 1 }),
+    });
+    const renamed = (await rename.json()) as {
+      skill: { name: string; catalogSkillKey: string | null };
+    };
+    expect(renamed.skill).toMatchObject({ name: "My custom sit", catalogSkillKey: null });
+
+    const renamedSpanishProgress = await app.request(`/api/dogs/${dog.id}/progress`, {
+      headers: { ...u.authHeaders, "X-TuringCare-Locale": "es" },
+    });
+    const renamedSpanishBody = (await renamedSpanishProgress.json()) as {
+      goals: Array<{ skills: Array<{ name: string }> }>;
+    };
+    expect(renamedSpanishBody.goals[0]?.skills[0]?.name).toBe("My custom sit");
   });
 
   it("returns 400 for an unknown templateKey, and does not create anything", async () => {

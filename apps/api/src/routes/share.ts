@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { briefs, dogs } from "../db/schema";
@@ -13,10 +13,11 @@ export const shareApp = new Hono().get("/brief/:token", async (c) => {
       status: briefs.status,
       version: briefs.version,
       generatedAt: briefs.generatedAt,
+      locale: briefs.locale,
     })
     .from(briefs)
     .innerJoin(dogs, eq(briefs.dogId, dogs.id))
-    .where(eq(briefs.shareToken, c.req.param("token")))
+    .where(and(eq(briefs.shareToken, c.req.param("token")), eq(briefs.status, "finalized")))
     .limit(1);
   if (!row) return c.json({ error: "not_found" } as const, 404);
   return c.json({ brief: row });

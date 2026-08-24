@@ -1175,7 +1175,7 @@ describe("GuidedSetup", () => {
 
   it("shows a localized loading and load-failure state", () => {
     mocks.useGuidedSetup.mockReturnValue({ isLoading: true, isError: false });
-    render(
+    const view = render(
       <LocaleProvider>
         <MemoryRouter>
           <GuidedSetup />
@@ -1191,7 +1191,7 @@ describe("GuidedSetup", () => {
       data: undefined,
       refetch,
     });
-    render(
+    view.rerender(
       <LocaleProvider>
         <MemoryRouter>
           <GuidedSetup />

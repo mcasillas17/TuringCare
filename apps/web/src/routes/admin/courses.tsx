@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useI18n } from "@/i18n";
+import type { MessageKey } from "@/i18n/types";
 import { type CourseInput, courseAgeGroups, courseFormats } from "@turingcare/shared";
 import { type FormEvent, useState } from "react";
 import {
@@ -44,6 +46,21 @@ const EMPTY: FormState = {
   isOnline: false,
   coursePageUrl: "",
 };
+
+const FORMAT_LABEL_KEYS = {
+  group: "courses.formatGroup",
+  workshop: "courses.formatWorkshop",
+  seminar: "courses.formatSeminar",
+  private: "courses.formatPrivate",
+  drop_in: "courses.formatDropIn",
+} satisfies Record<(typeof courseFormats)[number], MessageKey>;
+
+const AGE_GROUP_LABEL_KEYS = {
+  puppy: "courses.agePuppy",
+  adolescent: "courses.ageAdolescent",
+  adult: "courses.ageAdult",
+  any: "courses.ageAny",
+} satisfies Record<(typeof courseAgeGroups)[number], MessageKey>;
 
 /** Split a comma-separated input into a trimmed, non-empty string array. */
 function parseList(raw: string): string[] {
@@ -106,6 +123,7 @@ function fromCourse(c: Course): FormState {
 }
 
 export function AdminCourses() {
+  const { t } = useI18n();
   const list = useAdminCourses();
   const create = useCreateCourse();
   const update = useUpdateCourse();
@@ -141,23 +159,43 @@ export function AdminCourses() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <h1 className="text-2xl font-bold text-slate">Courses</h1>
+      <h1 className="text-2xl font-bold text-slate">{t("admin.coursesTitle")}</h1>
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-lg border border-silver bg-white p-4">
-        <h2 className="font-semibold">{editingId ? "Edit course" : "Add a course"}</h2>
+        <h2 className="font-semibold">
+          {editingId ? t("admin.editCourseTitle") : t("admin.addCourseTitle")}
+        </h2>
         <div className="grid gap-4 md:grid-cols-2">
           <Field
             id="organizationName"
-            label="Organization"
+            label={t("admin.organization")}
             value={form.organizationName}
             onChange={set("organizationName")}
             required
           />
-          <Field id="name" label="Name" value={form.name} onChange={set("name")} required />
-          <Field id="city" label="City" value={form.city} onChange={set("city")} required />
-          <Field id="state" label="State" value={form.state} onChange={set("state")} required />
+          <Field
+            id="name"
+            label={t("admin.name")}
+            value={form.name}
+            onChange={set("name")}
+            required
+          />
+          <Field
+            id="city"
+            label={t("admin.city")}
+            value={form.city}
+            onChange={set("city")}
+            required
+          />
+          <Field
+            id="state"
+            label={t("admin.state")}
+            value={form.state}
+            onChange={set("state")}
+            required
+          />
           <div className="space-y-1">
-            <Label htmlFor="format">Format</Label>
+            <Label htmlFor="format">{t("admin.format")}</Label>
             <select
               id="format"
               className="w-full rounded-md border bg-background px-3 py-2 text-sm"
@@ -166,13 +204,13 @@ export function AdminCourses() {
             >
               {courseFormats.map((f) => (
                 <option key={f} value={f}>
-                  {f}
+                  {t(FORMAT_LABEL_KEYS[f])}
                 </option>
               ))}
             </select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ageGroup">Age group</Label>
+            <Label htmlFor="ageGroup">{t("admin.ageGroup")}</Label>
             <select
               id="ageGroup"
               className="w-full rounded-md border bg-background px-3 py-2 text-sm"
@@ -181,47 +219,52 @@ export function AdminCourses() {
             >
               {courseAgeGroups.map((a) => (
                 <option key={a} value={a}>
-                  {a}
+                  {t(AGE_GROUP_LABEL_KEYS[a])}
                 </option>
               ))}
             </select>
           </div>
-          <Field id="ageRange" label="Age range" value={form.ageRange} onChange={set("ageRange")} />
+          <Field
+            id="ageRange"
+            label={t("admin.ageRange")}
+            value={form.ageRange}
+            onChange={set("ageRange")}
+          />
           <Field
             id="durationWeeks"
-            label="Duration (weeks)"
+            label={t("admin.durationWeeks")}
             type="number"
             value={form.durationWeeks}
             onChange={set("durationWeeks")}
           />
           <Field
             id="sessionMinutes"
-            label="Session (minutes)"
+            label={t("admin.sessionMinutes")}
             type="number"
             value={form.sessionMinutes}
             onChange={set("sessionMinutes")}
           />
           <Field
             id="prerequisites"
-            label="Prerequisites"
+            label={t("admin.prerequisites")}
             value={form.prerequisites}
             onChange={set("prerequisites")}
           />
           <Field
             id="skillsTaught"
-            label="Skills taught (comma-separated)"
+            label={t("admin.skillsTaught")}
             value={form.skillsTaught}
             onChange={set("skillsTaught")}
           />
           <Field
             id="description"
-            label="Description"
+            label={t("admin.description")}
             value={form.description}
             onChange={set("description")}
           />
           <Field
             id="coursePageUrl"
-            label="Course page URL"
+            label={t("admin.coursePageUrl")}
             value={form.coursePageUrl}
             onChange={set("coursePageUrl")}
           />
@@ -232,39 +275,39 @@ export function AdminCourses() {
               checked={form.isOnline}
               onChange={(e) => setForm((f) => ({ ...f, isOnline: e.target.checked }))}
             />
-            <Label htmlFor="isOnline">Online</Label>
+            <Label htmlFor="isOnline">{t("admin.online")}</Label>
           </div>
         </div>
         <div className="flex gap-2">
           <Button type="submit" disabled={pending}>
-            {editingId ? "Save changes" : "Add course"}
+            {editingId ? t("admin.saveChanges") : t("admin.addCourse")}
           </Button>
           {editingId ? (
             <Button type="button" variant="outline" onClick={resetForm}>
-              Cancel
+              {t("admin.cancel")}
             </Button>
           ) : null}
         </div>
         {create.isError || update.isError ? (
-          <p className="text-sm text-red-600">Could not save the course. Try again.</p>
+          <p className="text-sm text-red-600">{t("admin.couldNotSaveCourse")}</p>
         ) : null}
       </form>
 
       <section className="space-y-2">
-        <h2 className="font-semibold text-slate">Courses</h2>
+        <h2 className="font-semibold text-slate">{t("admin.coursesTitle")}</h2>
         {list.isPending ? (
-          <p className="text-slate-soft">Loading courses…</p>
+          <p className="text-slate-soft">{t("admin.loadingCourses")}</p>
         ) : list.isError ? (
-          <p className="text-red-600">Failed to load courses.</p>
+          <p className="text-red-600">{t("admin.coursesLoadFailed")}</p>
         ) : list.data && list.data.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border border-silver bg-white">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-silver text-left text-xs uppercase tracking-wide text-slate-soft">
-                  <th className="px-3 py-2 font-medium">Name</th>
-                  <th className="px-3 py-2 font-medium">Organization</th>
-                  <th className="px-3 py-2 font-medium">Location</th>
-                  <th className="px-3 py-2 text-right font-medium">Actions</th>
+                  <th className="px-3 py-2 font-medium">{t("admin.name")}</th>
+                  <th className="px-3 py-2 font-medium">{t("admin.organization")}</th>
+                  <th className="px-3 py-2 font-medium">{t("admin.location")}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t("admin.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -283,7 +326,7 @@ export function AdminCourses() {
                           size="sm"
                           onClick={() => startEdit(c)}
                         >
-                          Edit
+                          {t("admin.edit")}
                         </Button>
                         <Button
                           type="button"
@@ -292,7 +335,7 @@ export function AdminCourses() {
                           disabled={remove.isPending}
                           onClick={() => remove.mutate(c.id)}
                         >
-                          Delete
+                          {t("admin.delete")}
                         </Button>
                       </div>
                     </td>
@@ -302,7 +345,7 @@ export function AdminCourses() {
             </table>
           </div>
         ) : (
-          <p className="text-slate-soft">No courses yet. Add one above.</p>
+          <p className="text-slate-soft">{t("admin.coursesEmpty")}</p>
         )}
       </section>
     </div>

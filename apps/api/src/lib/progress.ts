@@ -1,4 +1,6 @@
+import type { Locale } from "@turingcare/i18n";
 import { asc, desc, eq, inArray } from "drizzle-orm";
+import { createTrainingCatalogLabelResolver } from "../data/training-catalog";
 import { db } from "../db";
 import { practiceSessions, skillMilestones, trainingGoals, trainingSkills } from "../db/schema";
 
@@ -38,7 +40,11 @@ export type ProgressOverview = {
   goals: ProgressGoal[];
 };
 
-export async function loadProgress(dogId: string): Promise<ProgressOverview> {
+export async function loadProgress(
+  dogId: string,
+  locale: Locale = "en",
+): Promise<ProgressOverview> {
+  const labels = createTrainingCatalogLabelResolver(locale);
   const goals = await db
     .select()
     .from(trainingGoals)
@@ -103,7 +109,7 @@ export async function loadProgress(dogId: string): Promise<ProgressOverview> {
     const existing = skillsByGoal.get(skill.goalId) ?? [];
     existing.push({
       id: skill.id,
-      name: skill.name,
+      name: labels.resolveSkillName(skill.catalogSkillKey, skill.name),
       confidence: skill.confidence,
       position: skill.position,
       catalogSkillKey: skill.catalogSkillKey,
@@ -130,7 +136,7 @@ export async function loadProgress(dogId: string): Promise<ProgressOverview> {
             );
       return {
         id: goal.id,
-        goal: goal.goal,
+        goal: labels.resolveGoalName(goal.catalogGoalKey, goal.goal),
         catalogGoalKey: goal.catalogGoalKey,
         avgConfidence,
         skills: goalSkills,

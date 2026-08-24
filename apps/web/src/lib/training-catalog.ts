@@ -1,13 +1,16 @@
 import { useTuring } from "@/components/turing/turing-context";
+import { useI18n } from "@/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CatalogSkill, CatalogTemplate } from "@turingcare/shared";
-import { api } from "./api";
+import { api, localeFetch } from "./api";
 
 const training = api.api.training;
 
 export function useTrainingCatalog() {
+  const { locale } = useI18n();
+
   return useQuery({
-    queryKey: ["training-catalog"],
+    queryKey: ["training-catalog", locale],
     staleTime: 60 * 60 * 1000, // catalog rarely changes
     queryFn: async (): Promise<CatalogTemplate[]> => {
       const res = await training.templates.$get();
@@ -42,11 +45,7 @@ export function useApplyTemplate(dogId: string) {
   const { celebrate } = useTuring();
   return useMutation({
     mutationFn: async (templateKey: string) => {
-      // POST /:id/goals/from-template parses its body manually (no zValidator)
-      // so the typed hc client doesn't expose a `json:` input. Raw fetch is
-      // the intentional fallback; the route's manual parse preserves the
-      // 404-before-400 ownership-check ordering established in PR #38.
-      const res = await fetch(
+      const res = await localeFetch(
         `${import.meta.env.VITE_API_URL || ""}/api/dogs/${dogId}/goals/from-template`,
         {
           method: "POST",

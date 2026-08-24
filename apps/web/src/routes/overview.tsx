@@ -2,9 +2,15 @@ import { OnboardingChecklist } from "@/components/onboarding/checklist";
 import { useI18n } from "@/i18n";
 import { useGuidedSetup } from "@/lib/guided-setup";
 import { useOverview } from "@/lib/overview";
+import { type MessageKey, formatDateInUtc } from "@turingcare/i18n";
 import { Link, Navigate } from "react-router-dom";
 
 type FirstRunStage = "new" | "noEntries" | "noBrief" | "ready";
+
+const OVERVIEW_BRIEF_STATUS_KEYS = {
+  draft: "brief.draft",
+  finalized: "brief.finalized",
+} as const satisfies Record<string, MessageKey>;
 
 function deriveStage(
   dogCount: number,
@@ -18,7 +24,7 @@ function deriveStage(
 }
 
 export function Overview() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const { data: o, isLoading, isError } = useOverview();
   const {
     data: guidedSetup,
@@ -81,7 +87,14 @@ export function Overview() {
         <div className="rounded border border-silver bg-white p-4">
           <div className="text-slate-soft text-sm">{t("overview.statBrief")}</div>
           <div className="text-lg font-bold text-copper">
-            {o.latestBrief ? o.latestBrief.status : t("overview.noBrief")}
+            {o.latestBrief
+              ? (() => {
+                  const status = o.latestBrief.status;
+                  const statusKey =
+                    OVERVIEW_BRIEF_STATUS_KEYS[status as keyof typeof OVERVIEW_BRIEF_STATUS_KEYS];
+                  return statusKey ? t(statusKey) : status;
+                })()
+              : t("overview.noBrief")}
           </div>
         </div>
       </div>
@@ -116,12 +129,21 @@ export function Overview() {
               <p className="text-slate-soft">{t("overview.noActivity")}</p>
             ) : (
               <ul className="rounded border border-silver bg-white p-3 text-sm">
-                {o.recentActivity.map((a, idx) => (
-                  <li key={`${a.dogName}-${a.occurredAt}-${idx}`}>
-                    <span className="font-medium text-slate">{a.dogName}</span>: {a.behavior}{" "}
-                    <span className="text-slate-soft">· {a.occurredAt.slice(0, 10)}</span>
-                  </li>
-                ))}
+                {o.recentActivity.map((a, idx) => {
+                  const activityDate = formatDateInUtc(locale, a.occurredAt, {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  });
+                  return (
+                    <li key={`${a.dogName}-${a.occurredAt}-${idx}`}>
+                      <span className="font-medium text-slate">{a.dogName}</span>: {a.behavior}
+                      {activityDate ? (
+                        <span className="text-slate-soft"> · {activityDate}</span>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>

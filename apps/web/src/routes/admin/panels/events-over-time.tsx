@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import {
@@ -13,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import type { Metrics } from "../use-metrics";
+import { formatAdminChartDate } from "./chart-date";
 import { CATEGORIES, type Category } from "./event-category";
 import { buildSeries } from "./events-series";
 
@@ -45,6 +47,7 @@ function Segmented<T extends string>({
 }
 
 export function EventsOverTime({ eventsByDay }: { eventsByDay: Metrics["eventsByDay"] }) {
+  const { locale, t } = useI18n();
   const [breakdown, setBreakdown] = useState<Breakdown>("total");
   const [granularity, setGranularity] = useState<Granularity>("day");
   const [hidden, setHidden] = useState<Set<Category>>(new Set());
@@ -54,6 +57,10 @@ export function EventsOverTime({ eventsByDay }: { eventsByDay: Metrics["eventsBy
     [eventsByDay, granularity, hidden],
   );
   const visible = CATEGORIES.filter((c) => !hidden.has(c.key));
+  const categoryLabels = Object.fromEntries(
+    CATEGORIES.map((c) => [c.key, t(c.labelKey)]),
+  ) as Record<Category, string>;
+  const dateLabel = (dateBucket: unknown) => formatAdminChartDate(locale, dateBucket);
 
   function toggle(cat: Category) {
     setHidden((prev) => {
@@ -67,22 +74,24 @@ export function EventsOverTime({ eventsByDay }: { eventsByDay: Metrics["eventsBy
   return (
     <section className="rounded-lg border border-silver bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold uppercase text-slate-soft">Events over time</h2>
+        <h2 className="text-sm font-semibold uppercase text-slate-soft">
+          {t("admin.eventsOverTime")}
+        </h2>
         <div className="flex items-center gap-2">
           <Segmented
             value={breakdown}
             onChange={setBreakdown}
             options={[
-              ["total", "Total"],
-              ["byType", "By type"],
+              ["total", t("admin.total")],
+              ["byType", t("admin.byType")],
             ]}
           />
           <Segmented
             value={granularity}
             onChange={setGranularity}
             options={[
-              ["day", "Day"],
-              ["week", "Week"],
+              ["day", t("admin.day")],
+              ["week", t("admin.week")],
             ]}
           />
         </div>
@@ -106,7 +115,7 @@ export function EventsOverTime({ eventsByDay }: { eventsByDay: Metrics["eventsBy
                 className="size-2.5 rounded-full"
                 style={{ backgroundColor: on ? c.color : "#c9d4dd" }}
               />
-              {c.label}
+              {categoryLabels[c.key]}
             </button>
           );
         })}
@@ -116,12 +125,13 @@ export function EventsOverTime({ eventsByDay }: { eventsByDay: Metrics["eventsBy
         {breakdown === "total" ? (
           <AreaChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="bucket" fontSize={11} />
+            <XAxis dataKey="bucket" fontSize={11} tickFormatter={dateLabel} />
             <YAxis allowDecimals={false} fontSize={11} />
-            <Tooltip />
+            <Tooltip labelFormatter={dateLabel} />
             <Area
               type="monotone"
               dataKey="total"
+              name={t("admin.totalEvents")}
               stroke="#c8893b"
               fill="#c8893b"
               fillOpacity={0.2}
@@ -131,12 +141,18 @@ export function EventsOverTime({ eventsByDay }: { eventsByDay: Metrics["eventsBy
         ) : (
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="bucket" fontSize={11} />
+            <XAxis dataKey="bucket" fontSize={11} tickFormatter={dateLabel} />
             <YAxis allowDecimals={false} fontSize={11} />
-            <Tooltip />
+            <Tooltip labelFormatter={dateLabel} />
             <Legend />
             {visible.map((c) => (
-              <Bar key={c.key} dataKey={c.key} name={c.label} stackId="events" fill={c.color} />
+              <Bar
+                key={c.key}
+                dataKey={c.key}
+                name={categoryLabels[c.key]}
+                stackId="events"
+                fill={c.color}
+              />
             ))}
           </BarChart>
         )}

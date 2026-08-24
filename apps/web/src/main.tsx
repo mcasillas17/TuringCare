@@ -5,6 +5,8 @@ import { DogLayout } from "@/components/dog-layout";
 import { GuidedSetupLayout } from "@/components/guided-setup/guided-setup-layout";
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/i18n";
+import { LocaleAccountBoundary } from "@/i18n/locale-account-bridge";
+import { SessionQueryBoundary } from "@/lib/session-query-boundary";
 import { PageViewTracker } from "@/lib/track";
 import { RequireAdmin } from "@/routes/admin/require-admin";
 import { Brief } from "@/routes/brief";
@@ -57,86 +59,90 @@ createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <LocaleProvider>
-        <BrowserRouter>
-          <PageViewTracker />
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route
-              path="/login"
-              element={
-                <RedirectIfAuthed>
-                  <Login />
-                </RedirectIfAuthed>
-              }
-            />
-            <Route
-              path="/register"
-              element={
-                <RedirectIfAuthed>
-                  <Register />
-                </RedirectIfAuthed>
-              }
-            />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/b/:token" element={<SharedBrief />} />
-            <Route element={<DirectoryLayout />}>
-              <Route path="/trainers" element={<Trainers />} />
-              <Route path="/trainers/:id" element={<TrainerDetail />} />
-              <Route path="/courses" element={<Courses />} />
-              <Route path="/courses/:id" element={<CourseDetail />} />
-            </Route>
-            <Route
-              element={
-                <RequireAuth>
-                  <GuidedSetupLayout />
-                </RequireAuth>
-              }
-            >
-              <Route path="/my/setup" element={<GuidedSetup />} />
-              <Route path="/my/setup/new" element={<GuidedSetup allowNewDog />} />
-            </Route>
-            <Route
-              element={
-                <RequireAuth>
-                  <AppShell />
-                </RequireAuth>
-              }
-            >
-              <Route path="/my" element={<Overview />} />
-              <Route path="/my/dogs" element={<DogsList />} />
-              <Route path="/my/dogs/new" element={<DogForm mode="create" />} />
-              <Route path="/my/dogs/:id" element={<DogLayout />}>
-                <Route index element={<Navigate to="journal" replace />} />
-                <Route path="journal" element={<DogJournal />} />
-                <Route path="training" element={<DogTraining />} />
-                <Route path="brief" element={<Brief />} />
-                <Route path="week" element={<DogWeek />} />
-                <Route path="edit" element={<DogForm mode="edit" />} />
-              </Route>
-              <Route path="/my/journal" element={<Journal />} />
-              <Route path="/my/brief" element={<Brief />} />
-              <Route path="/my/profile" element={<Profile />} />
-              <Route path="/my/settings" element={<Settings />} />
-            </Route>
-            <Route
-              path="/admin"
-              element={
-                <RequireAdmin>
-                  <AdminShell />
-                </RequireAdmin>
-              }
-            >
-              <Route index element={<AdminDashboard />} />
-              <Route path="trainers" element={<AdminTrainers />} />
-              <Route path="courses" element={<AdminCourses />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-        <Toaster />
+        <SessionQueryBoundary>
+          <LocaleAccountBoundary>
+            <BrowserRouter>
+              <PageViewTracker />
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                <Route
+                  path="/login"
+                  element={
+                    <RedirectIfAuthed>
+                      <Login />
+                    </RedirectIfAuthed>
+                  }
+                />
+                <Route
+                  path="/register"
+                  element={
+                    <RedirectIfAuthed>
+                      <Register />
+                    </RedirectIfAuthed>
+                  }
+                />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/b/:token" element={<SharedBrief />} />
+                <Route element={<DirectoryLayout />}>
+                  <Route path="/trainers" element={<Trainers />} />
+                  <Route path="/trainers/:id" element={<TrainerDetail />} />
+                  <Route path="/courses" element={<Courses />} />
+                  <Route path="/courses/:id" element={<CourseDetail />} />
+                </Route>
+                <Route
+                  element={
+                    <RequireAuth>
+                      <GuidedSetupLayout />
+                    </RequireAuth>
+                  }
+                >
+                  <Route path="/my/setup" element={<GuidedSetup />} />
+                  <Route path="/my/setup/new" element={<GuidedSetup allowNewDog />} />
+                </Route>
+                <Route
+                  element={
+                    <RequireAuth>
+                      <AppShell />
+                    </RequireAuth>
+                  }
+                >
+                  <Route path="/my" element={<Overview />} />
+                  <Route path="/my/dogs" element={<DogsList />} />
+                  <Route path="/my/dogs/new" element={<DogForm mode="create" />} />
+                  <Route path="/my/dogs/:id" element={<DogLayout />}>
+                    <Route index element={<Navigate to="journal" replace />} />
+                    <Route path="journal" element={<DogJournal />} />
+                    <Route path="training" element={<DogTraining />} />
+                    <Route path="brief" element={<Brief />} />
+                    <Route path="week" element={<DogWeek />} />
+                    <Route path="edit" element={<DogForm mode="edit" />} />
+                  </Route>
+                  <Route path="/my/journal" element={<Journal />} />
+                  <Route path="/my/brief" element={<Brief />} />
+                  <Route path="/my/profile" element={<Profile />} />
+                  <Route path="/my/settings" element={<Settings />} />
+                </Route>
+                <Route
+                  path="/admin"
+                  element={
+                    <RequireAdmin>
+                      <AdminShell />
+                    </RequireAdmin>
+                  }
+                >
+                  <Route index element={<AdminDashboard />} />
+                  <Route path="trainers" element={<AdminTrainers />} />
+                  <Route path="courses" element={<AdminCourses />} />
+                </Route>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </LocaleAccountBoundary>
+          <Toaster />
+        </SessionQueryBoundary>
       </LocaleProvider>
     </QueryClientProvider>
   </StrictMode>,

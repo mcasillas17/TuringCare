@@ -29,75 +29,71 @@ describe("telemetry events allowlist", () => {
     ).toBe(true);
   });
 
-  it("redacts a public Brief token from page-view props while preserving other props", () => {
+  it.each([
+    "/b/fixture-share-segment",
+    "/B/fixture-share-segment",
+    "/%62/fixture-share-segment",
+    "/%42/fixture-share-segment",
+    "/b/fixture-share-segment/",
+    "/B/fixture-share-segment///",
+    "/%62/fixture-share-segment///",
+    "/b/fixture%2Fencoded-segment",
+    "/%42/fixture%2Fencoded-segment",
+    "/%62/fixture%",
+    "/%42/%ZZ",
+    "/b/fixture-share-segment?source=fixture",
+    "/B/fixture-share-segment///#fixture",
+  ])("normalizes a public Brief path from an untrusted client for %s", (path) => {
     expect(
       eventIngestSchema.parse({
         name: "page.viewed",
-        props: { path: "/b/super-secret", other: "kept" },
+        props: { path, source: "fixture" },
       }),
     ).toEqual({
       name: "page.viewed",
-      props: { path: "/b/:token", other: "kept" },
+      props: { path: "/b/:token", source: "fixture" },
     });
   });
 
-  it("redacts case-variant public Brief paths while preserving other props", () => {
+  it.each([
+    "/b",
+    "/b/",
+    "/b//",
+    "/b/fixture/child",
+    "/b/fixture/child?source=fixture",
+    "/billing",
+    "//b/fixture",
+    "/%62",
+    "/%62/",
+    "/%62//",
+    "/%62/fixture/child",
+    "/%2562/fixture",
+    "/%61/fixture",
+    "/%6Z/fixture",
+    "/%2F%62/fixture",
+    "/%62%2Ffixture",
+    "//%62/fixture",
+  ])("preserves unrelated path %s", (path) => {
     expect(
       eventIngestSchema.parse({
         name: "page.viewed",
-        props: { path: "/B/super-secret", other: "kept" },
+        props: { path, source: "fixture" },
       }),
     ).toEqual({
       name: "page.viewed",
-      props: { path: "/b/:token", other: "kept" },
-    });
-    expect(
-      eventIngestSchema.parse({
-        name: "page.viewed",
-        props: { path: "/B/super-secret/", other: "kept" },
-      }),
-    ).toEqual({
-      name: "page.viewed",
-      props: { path: "/b/:token", other: "kept" },
-    });
-  });
-
-  it.each(["/b/repeated-secret//", "/B/repeated-secret///"])(
-    "redacts repeated trailing slash Brief paths while preserving other props for %s",
-    (path) => {
-      expect(
-        eventIngestSchema.parse({
-          name: "page.viewed",
-          props: { path, other: "kept" },
-        }),
-      ).toEqual({
-        name: "page.viewed",
-        props: { path: "/b/:token", other: "kept" },
-      });
-    },
-  );
-
-  it("preserves ordinary page-view paths", () => {
-    expect(
-      eventIngestSchema.parse({
-        name: "page.viewed",
-        props: { path: "/my", other: "kept" },
-      }),
-    ).toEqual({
-      name: "page.viewed",
-      props: { path: "/my", other: "kept" },
+      props: { path, source: "fixture" },
     });
   });
 
-  it.each(["/b", "/b//x", "/b/x/y", "/billing"])("preserves non-Brief path %s", (path) => {
+  it("normalizes a public Brief path even when a malicious client relabels the event", () => {
     expect(
       eventIngestSchema.parse({
-        name: "page.viewed",
-        props: { path, other: "kept" },
+        name: "trainer.viewed",
+        props: { path: "/%62/fixture-share-segment" },
       }),
     ).toEqual({
-      name: "page.viewed",
-      props: { path, other: "kept" },
+      name: "trainer.viewed",
+      props: { path: "/b/:token" },
     });
   });
 

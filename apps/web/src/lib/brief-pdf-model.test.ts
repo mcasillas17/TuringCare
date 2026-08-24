@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildBriefPdfModel } from "./brief-pdf-model";
 
 const baseBrief = {
@@ -8,7 +8,15 @@ const baseBrief = {
   status: "draft" as const,
   summary: "Behavior Brief — Biscuit\nConcerns: separation anxiety.",
   version: 2,
+  locale: "en" as const,
 };
+
+const currentUiLocaleIsNotPdfModelInput = {
+  brief: baseBrief,
+  // @ts-expect-error PDF chrome is determined by the stored Brief locale, not the current UI.
+  locale: "es",
+} satisfies Parameters<typeof buildBriefPdfModel>[0];
+void currentUiLocaleIsNotPdfModelInput;
 
 const baseDog = {
   id: "d1",
@@ -18,6 +26,10 @@ const baseDog = {
   size: "medium",
   sex: "female",
 };
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("buildBriefPdfModel", () => {
   it("maps brief + dog fields into the PDF model", () => {
@@ -68,6 +80,24 @@ describe("buildBriefPdfModel", () => {
     expect(m.generatedAt).not.toBe(baseBrief.generatedAt);
   });
 
+  it.each([
+    ["en", "May 22, 2026"],
+    ["es", "22 de mayo de 2026"],
+  ] as const)(
+    "keeps a near-midnight UTC generated date stable in the %s PDF",
+    (locale, expected) => {
+      vi.stubEnv("TZ", "America/Los_Angeles");
+
+      const model = buildBriefPdfModel({
+        brief: { ...baseBrief, generatedAt: "2026-05-22T00:30:00.000Z", locale },
+        dog: baseDog,
+        now: "2026-05-22T12:00:00.000Z",
+      });
+
+      expect(model.generatedAt).toBe(expected);
+    },
+  );
+
   it("handles missing optional dog fields gracefully", () => {
     const m = buildBriefPdfModel({
       brief: baseBrief,
@@ -91,6 +121,16 @@ describe("buildBriefPdfModel", () => {
     expect(m.age).toBeNull();
   });
 
+  it("localizes the missing-dog fallback from the stored Spanish Brief locale", () => {
+    const m = buildBriefPdfModel({
+      brief: { ...baseBrief, locale: "es" },
+      dog: undefined,
+      now: "2026-05-19T12:00:00.000Z",
+    });
+
+    expect(m.dogName).toBe("Desconocido");
+  });
+
   it("produces a safe filename slug from the dog name", () => {
     const m = buildBriefPdfModel({
       brief: baseBrief,
@@ -98,5 +138,39 @@ describe("buildBriefPdfModel", () => {
       now: "2026-05-19T12:00:00.000Z",
     });
     expect(m.fileName).toBe("behavior-brief-mr-waffles-good-boy.pdf");
+  });
+
+  it("uses the stored Spanish brief locale for labels, filename, date, and enum values", () => {
+    const m = buildBriefPdfModel({
+      brief: { ...baseBrief, locale: "es", status: "finalized" },
+      dog: baseDog,
+      now: "2026-05-19T12:00:00.000Z",
+    });
+
+    expect(m.title).toBe("Resumen de conducta");
+    expect(m.fileName).toBe("resumen-conducta-biscuit.pdf");
+    expect(m.generatedAt).toBe("19 de mayo de 2026");
+    expect(m.statusLabel).toBe("Definitivo");
+    expect(m.age).toBe("4 años");
+    expect(m.size).toBe("Mediano");
+    expect(m.sex).toBe("Hembra");
+    expect(m.labels).toEqual({
+      breed: "Raza",
+      age: "Edad",
+      size: "Tamaño",
+      sex: "Sexo",
+      generated: "Generado",
+    });
+  });
+
+  it("defaults a legacy Brief without a stored locale to English", () => {
+    const m = buildBriefPdfModel({
+      brief: { ...baseBrief, locale: undefined },
+      dog: baseDog,
+      now: "2026-05-19T12:00:00.000Z",
+    });
+
+    expect(m.title).toBe("Behavior Brief");
+    expect(m.generatedAt).toBe("May 19, 2026");
   });
 });

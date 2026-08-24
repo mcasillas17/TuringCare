@@ -1,26 +1,78 @@
 import { describe, expect, it } from "vitest";
 import { briefGenerateSchema, briefSendSchema } from "./brief";
 
+const idempotencyKey = "95acbb6a-9189-4614-9a6e-c732efcc5d1d";
+const briefId = "85acbb6a-9189-4614-9a6e-c732efcc5d1d";
+
 describe("briefSendSchema", () => {
+  it("requires an idempotency key so retries cannot duplicate delivery", () => {
+    expect(briefSendSchema.safeParse({ briefId, recipient: "sarah@example.com" }).success).toBe(
+      false,
+    );
+  });
+
+  it("requires the exact Brief id so a stale client cannot send a newer version", () => {
+    expect(
+      briefSendSchema.safeParse({ recipient: "sarah@example.com", idempotencyKey }).success,
+    ).toBe(false);
+  });
+
   it("accepts a valid email + optional message", () => {
     expect(
-      briefSendSchema.safeParse({ recipient: "sarah@example.com", message: "Hi" }).success,
+      briefSendSchema.safeParse({
+        briefId,
+        recipient: "sarah@example.com",
+        message: "Hi",
+        idempotencyKey,
+      }).success,
     ).toBe(true);
   });
   it("accepts message null / undefined / missing", () => {
-    expect(briefSendSchema.safeParse({ recipient: "a@b.co" }).success).toBe(true);
-    expect(briefSendSchema.safeParse({ recipient: "a@b.co", message: null }).success).toBe(true);
-    expect(briefSendSchema.safeParse({ recipient: "a@b.co", message: undefined }).success).toBe(
-      true,
-    );
+    expect(
+      briefSendSchema.safeParse({ briefId, recipient: "a@b.co", idempotencyKey }).success,
+    ).toBe(true);
+    expect(
+      briefSendSchema.safeParse({ briefId, recipient: "a@b.co", message: null, idempotencyKey })
+        .success,
+    ).toBe(true);
+    expect(
+      briefSendSchema.safeParse({
+        briefId,
+        recipient: "a@b.co",
+        message: undefined,
+        idempotencyKey,
+      }).success,
+    ).toBe(true);
+  });
+  it("accepts a UUID idempotency key and rejects malformed keys", () => {
+    expect(
+      briefSendSchema.safeParse({
+        briefId,
+        recipient: "a@b.co",
+        idempotencyKey,
+      }).success,
+    ).toBe(true);
+    expect(
+      briefSendSchema.safeParse({ briefId, recipient: "a@b.co", idempotencyKey: "not-a-uuid" })
+        .success,
+    ).toBe(false);
   });
   it("rejects invalid email", () => {
-    expect(briefSendSchema.safeParse({ recipient: "not-an-email" }).success).toBe(false);
-    expect(briefSendSchema.safeParse({ recipient: "" }).success).toBe(false);
+    expect(
+      briefSendSchema.safeParse({ briefId, recipient: "not-an-email", idempotencyKey }).success,
+    ).toBe(false);
+    expect(briefSendSchema.safeParse({ briefId, recipient: "", idempotencyKey }).success).toBe(
+      false,
+    );
   });
   it("rejects message > 500 chars", () => {
     expect(
-      briefSendSchema.safeParse({ recipient: "a@b.co", message: "x".repeat(501) }).success,
+      briefSendSchema.safeParse({
+        briefId,
+        recipient: "a@b.co",
+        message: "x".repeat(501),
+        idempotencyKey,
+      }).success,
     ).toBe(false);
   });
 });

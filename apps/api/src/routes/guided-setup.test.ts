@@ -156,10 +156,11 @@ async function createTrainingAction(
     weekKey: string;
     timezoneOffsetMinutes: number;
   },
+  locale?: "en" | "es",
 ) {
   return app.request("/api/guided-setup/action/training", {
     method: "POST",
-    headers: user.authHeaders,
+    headers: locale ? { ...user.authHeaders, "X-TuringCare-Locale": locale } : user.authHeaders,
     body: JSON.stringify(input),
   });
 }
@@ -1691,6 +1692,36 @@ describe("guided setup lifecycle", () => {
       },
     ]);
     expect(JSON.stringify(await trainingActionEvents(user.userId))).not.toContain(validDog.name);
+  });
+
+  it("returns localized training content and suggestion prose in Spanish", async () => {
+    const user = await createTestUser();
+    users.push(user);
+
+    const started = await startSetup(user);
+    const setup = ((await started.json()) as SetupBody).setup;
+    expect((await saveIntent(user, setup.id, "train_skill")).status).toBe(200);
+
+    const response = await createTrainingAction(
+      user,
+      {
+        setupId: setup.id,
+        templateKey: "basic-manners",
+        weekKey: currentWeekKey(new Date(), 0),
+        timezoneOffsetMinutes: 0,
+      },
+      "es",
+    );
+    expect(response.status).toBe(201);
+
+    const body = (await response.json()) as {
+      goal: { goal: string };
+      suggestion: { primary: { exercise: string } | null };
+    };
+    expect(body.goal.goal).toBe("Modales básicos");
+    expect(body.suggestion.primary?.exercise).toBe(
+      "Se guía hasta sentarse con comida en una habitación tranquila",
+    );
   });
 
   it("does not duplicate suggestion telemetry on an immediate training replay", async () => {

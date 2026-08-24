@@ -10,5 +10,7 @@ export * from "./contextual-progress";
 export * from "./progress";
 export * from "./suggestion";
 export * from "./profile";
+export * from "./telemetry";
 export * from "./trainer";
 export * from "./training-catalog";
+export * from "./validation";

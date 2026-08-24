@@ -1,3 +1,4 @@
+import { normalizeTelemetryPagePath } from "@turingcare/shared";
 import { z } from "zod";
 
 /** Every event name the system may record (server- or client-emitted). */
@@ -49,18 +50,12 @@ const scalar = z.union([z.string(), z.number(), z.boolean()]);
 type EventProp = z.infer<typeof scalar>;
 type EventProps = Record<string, EventProp>;
 
-const publicBriefPath = /^\/b\/[^/]+\/*$/i;
-
 export function normalizeEventProps(
-  name: (typeof CLIENT_EVENTS)[number],
+  _name: (typeof CLIENT_EVENTS)[number],
   props: EventProps,
 ): EventProps {
   const path = props.path;
-  if (name !== "page.viewed" || typeof path !== "string" || !publicBriefPath.test(path)) {
-    return props;
-  }
-
-  return { ...props, path: "/b/:token" };
+  return typeof path === "string" ? { ...props, path: normalizeTelemetryPagePath(path) } : props;
 }
 
 /** Validated, privacy-safe ingest payload: scalar-only props, size-capped. */

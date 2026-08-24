@@ -12,6 +12,10 @@ appear, consistently, as the **last (rightmost) element of the top-right corner
 on every screen** — including the two admin screens that lack it today. No API,
 no DB, no new dependencies, no persistence changes.
 
+> **Historical UI design:** The admin-English and client-only persistence statements below
+> describe the May implementation context. Admin system copy and account locale persistence
+> are now localized/shared; see `../../LOCALIZATION.md`.
+
 ## Goal
 
 The language control should sit all the way in the top-right corner of **every**

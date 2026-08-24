@@ -1,13 +1,17 @@
+import { useI18n } from "@/i18n";
 import type { Metrics } from "../use-metrics";
 
 export function FeatureUsage({ eventVolume }: { eventVolume: Metrics["eventVolume"] }) {
+  const { t } = useI18n();
   const rows = eventVolume.filter((e) => e.name !== "page.viewed");
   const top = rows[0]?.count || 1;
   return (
     <section className="rounded-lg border border-silver bg-white p-4">
-      <h2 className="mb-3 text-sm font-semibold uppercase text-slate-soft">Feature usage</h2>
+      <h2 className="mb-3 text-sm font-semibold uppercase text-slate-soft">
+        {t("admin.featureUsage")}
+      </h2>
       {rows.length === 0 ? (
-        <p className="text-sm text-slate-soft">No events in range.</p>
+        <p className="text-sm text-slate-soft">{t("admin.noEventsInRange")}</p>
       ) : (
         <div className="space-y-2">
           {rows.map((e) => (

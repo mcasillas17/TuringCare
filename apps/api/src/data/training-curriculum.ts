@@ -1,5 +1,6 @@
+import type { Locale } from "@turingcare/i18n";
 import type { CatalogSkill, CatalogTemplate, SkillDimensionMetadata } from "@turingcare/shared";
-import { trainingCatalog } from "./training-catalog";
+import { getTrainingCatalog, type trainingCatalog } from "./training-catalog";
 
 /**
  * Bumped whenever authored level prose or the metadata below changes meaning.
@@ -250,19 +251,34 @@ function enrichSkill(templateKey: string, skill: AuthoredSkill): CatalogSkill {
   return { ...skill, ...metadata };
 }
 
-/** The authored catalog enriched with progression metadata. */
-export const trainingCurriculum: CatalogTemplate[] = trainingCatalog.map((template) => ({
-  key: template.key,
-  name: template.name,
-  description: template.description,
-  skills: template.skills.map((skill) => enrichSkill(template.key, skill)),
-}));
+/** The locale-specific authored catalog enriched with language-neutral progression metadata. */
+export function getTrainingCurriculum(locale: Locale | string = "en"): CatalogTemplate[] {
+  return getTrainingCatalog(locale).map((template) => ({
+    key: template.key,
+    name: template.name,
+    description: template.description,
+    skills: template.skills.map((skill) => enrichSkill(template.key, skill)),
+  }));
+}
 
-const curriculumByKey = new Map<string, CatalogSkill>(
-  trainingCurriculum.flatMap((template) => template.skills.map((skill) => [skill.key, skill])),
-);
+/** Compatibility export used by server-side rules, which operate on stable keys. */
+export const trainingCurriculum: CatalogTemplate[] = getTrainingCurriculum("en");
 
-export function findCurriculumSkill(key: string | null | undefined): CatalogSkill | undefined {
+const curriculumByLocale = {
+  en: new Map<string, CatalogSkill>(
+    trainingCurriculum.flatMap((template) => template.skills.map((skill) => [skill.key, skill])),
+  ),
+  es: new Map<string, CatalogSkill>(
+    getTrainingCurriculum("es").flatMap((template) =>
+      template.skills.map((skill) => [skill.key, skill]),
+    ),
+  ),
+} satisfies Record<Locale, Map<string, CatalogSkill>>;
+
+export function findCurriculumSkill(
+  key: string | null | undefined,
+  locale: Locale | string = "en",
+): CatalogSkill | undefined {
   if (!key) return undefined;
-  return curriculumByKey.get(key);
+  return curriculumByLocale[locale === "es" ? "es" : "en"].get(key);
 }

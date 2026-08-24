@@ -8,13 +8,15 @@ FROM node:22-slim AS base
 RUN corepack enable
 WORKDIR /app
 
-# Install workspace deps (incl. tsx + the @turingcare/shared link).
+# Install workspace deps (incl. tsx and the shared/i18n workspace links).
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
+COPY packages/i18n/package.json packages/i18n/
 COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
 RUN pnpm install --frozen-lockfile
 
 # App source.
+COPY packages/i18n packages/i18n
 COPY packages/shared packages/shared
 COPY apps/api apps/api
 

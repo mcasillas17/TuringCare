@@ -1,6 +1,7 @@
-import { randomBytes } from "node:crypto";
-import { zValidator } from "@hono/zod-validator";
+import { randomBytes, randomUUID } from "node:crypto";
+import type { Locale } from "@turingcare/i18n";
 import {
+  VALIDATION_MESSAGE_CODES,
   advancementDecisionSchema,
   behaviorConcernSchema,
   briefGenerateSchema,
@@ -21,13 +22,15 @@ import {
   trainingGoalSchema,
   trainingSkillSchema,
 } from "@turingcare/shared";
-import { and, count, desc, eq, gte, isNotNull, isNull, lt, max, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNotNull, isNull, lt, max, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import { createTrainingCatalogLabelResolver } from "../data/training-catalog";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
+import { resolveLatestBriefRows } from "../db/latest-brief";
 import { findOwnedDog } from "../db/owned-dog";
 import { findOwnedSkill } from "../db/owned-skill";
 import {
@@ -51,7 +54,6 @@ import { env } from "../env";
 import { decideAdvancementProposal } from "../lib/advancement";
 import { createBehaviorConcern } from "../lib/behavior-concern-writes";
 import { composeBrief } from "../lib/brief";
-import { withBriefLifecycleLock } from "../lib/brief-lifecycle";
 import { loadContextualProgress } from "../lib/contextual-progress-data";
 import { createDog } from "../lib/dog-writes";
 import { loadDogsOverview } from "../lib/dogs-overview";
@@ -77,6 +79,7 @@ import { setSkillLevel } from "../lib/skill-level";
 import { currentWeekKey, loadSuggestion, recordSuggestionAction } from "../lib/suggestion";
 import { applyTrainingTemplate } from "../lib/training-template-writes";
 import { type Vars, requireUser } from "../middleware/require-user";
+import { stableZValidator } from "../middleware/validation";
 import { recordEvent } from "../telemetry/record-event";
 
 const invalidJournalField = (path: "occurredAt" | "trend", message: string) =>
@@ -232,7 +235,29 @@ export function sendFailedException(c: Context, cause: unknown): HTTPException {
   return new HTTPException(502, { res: c.json({ error: "send_failed" } as const, 502), cause });
 }
 
-export const dogsApp = new Hono<{ Variables: Vars }>()
+export function resolveBriefSendIntent<
+  T extends { briefId: string; recipient: string; message: string | null },
+>(
+  existing: T | undefined,
+  intent: { briefId?: string; recipient: string; message?: string | null },
+) {
+  if (!existing) return null;
+  return (intent.briefId === undefined || existing.briefId === intent.briefId) &&
+    existing.recipient === intent.recipient &&
+    existing.message === (intent.message ?? null)
+    ? ({ kind: "matched", send: existing } as const)
+    : ({ kind: "idempotency_conflict" } as const);
+}
+
+// New clients are statically required to send briefId by briefSendSchema. The
+// route keeps a narrow legacy decoder so an already-open pre-rollout tab can
+// send only when the intended Brief is unambiguous.
+const briefSendRequestSchema = briefSendSchema.partial({
+  briefId: true,
+  idempotencyKey: true,
+});
+
+export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .use("*", requireUser)
   .get("/", async (c) => {
     const rows = await db
@@ -242,7 +267,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .orderBy(desc(dogs.createdAt));
     return c.json({ dogs: rows });
   })
-  .post("/", zValidator("json", dogProfileSchema), async (c) => {
+  .post("/", stableZValidator("json", dogProfileSchema), async (c) => {
     const dog = await createDog(db, c.get("userId"), c.req.valid("json"));
     await recordEvent("dog.created", { userId: c.get("userId") });
     return c.json({ dog }, 201);
@@ -257,9 +282,17 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       db.select().from(behaviorConcerns).where(eq(behaviorConcerns.dogId, dog.id)),
       db.select().from(trainingGoals).where(eq(trainingGoals.dogId, dog.id)),
     ]);
-    return c.json({ dog, concerns, goals });
+    const labels = createTrainingCatalogLabelResolver(c.get("locale"));
+    return c.json({
+      dog,
+      concerns,
+      goals: goals.map((goal) => ({
+        ...goal,
+        goal: labels.resolveGoalName(goal.catalogGoalKey, goal.goal),
+      })),
+    });
   })
-  .put("/:id", zValidator("json", dogProfileSchema), async (c) => {
+  .put("/:id", stableZValidator("json", dogProfileSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { weightLbs, ...body } = c.req.valid("json");
@@ -297,6 +330,21 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
           .limit(1);
         if (activeGuidedSetup) return { kind: "active_guided_setup" } as const;
 
+        const claimedDeliveries = await tx
+          .select({
+            recoveryRequired: sql<boolean>`${briefSends.deliveryClaimedAt} IS NULL OR ${briefSends.deliveryClaimedAt} < clock_timestamp() - interval '30 seconds'`,
+          })
+          .from(briefSends)
+          .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
+          .where(and(eq(briefs.dogId, dog.id), isNotNull(briefSends.deliveryClaimId)))
+          .for("update");
+        if (claimedDeliveries.some(({ recoveryRequired }) => !recoveryRequired)) {
+          return { kind: "brief_delivery_in_progress" } as const;
+        }
+        if (claimedDeliveries.length > 0) {
+          return { kind: "brief_delivery_recovery_required" } as const;
+        }
+
         const [deleted] = await tx
           .delete(dogs)
           .where(eq(dogs.id, dog.id))
@@ -307,15 +355,24 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       if (result.kind === "active_guided_setup") {
         return c.json({ error: "active_guided_setup" } as const, 409);
       }
+      if (result.kind === "brief_delivery_in_progress") {
+        return c.json({ error: "brief_delivery_in_progress" } as const, 409);
+      }
+      if (result.kind === "brief_delivery_recovery_required") {
+        return c.json({ error: "brief_delivery_recovery_required" } as const, 409);
+      }
     } catch (error) {
       if (hasConstraint(error, "guided_setups_active_dog_required")) {
         return c.json({ error: "active_guided_setup" } as const, 409);
+      }
+      if (hasConstraint(error, "brief_sends_delivery_in_progress")) {
+        return c.json({ error: "brief_delivery_in_progress" } as const, 409);
       }
       throw error;
     }
     return c.json({ ok: true } as const);
   })
-  .post("/:id/concerns", zValidator("json", behaviorConcernSchema), async (c) => {
+  .post("/:id/concerns", stableZValidator("json", behaviorConcernSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { concern, reportedSignals } = await db.transaction((tx) =>
@@ -339,7 +396,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       );
     return c.json({ ok: true } as const);
   })
-  .post("/:id/goals", zValidator("json", trainingGoalSchema), async (c) => {
+  .post("/:id/goals", stableZValidator("json", trainingGoalSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const body = c.req.valid("json");
@@ -354,11 +411,13 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     });
     return c.json({ goal }, 201);
   })
-  .post("/:id/goals/from-template", zValidator("json", goalFromTemplateSchema), async (c) => {
+  .post("/:id/goals/from-template", stableZValidator("json", goalFromTemplateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { templateKey } = c.req.valid("json");
-    const applied = await db.transaction((tx) => applyTrainingTemplate(tx, dog.id, templateKey));
+    const applied = await db.transaction((tx) =>
+      applyTrainingTemplate(tx, dog.id, templateKey, c.get("locale")),
+    );
     if (!applied) return c.json({ error: "invalid_template" } as const, 400);
     const { goal, skills } = applied;
 
@@ -379,7 +438,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   .get("/:id/progress", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    return c.json(await loadProgress(dog.id));
+    return c.json(await loadProgress(dog.id, c.get("locale")));
   })
   .get("/:id/skills/:skillId/contextual-progress", async (c) => {
     const dogId = c.req.param("id");
@@ -405,7 +464,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       }
       await next();
     },
-    zValidator("json", contextualProgressEventSchema),
+    stableZValidator("json", contextualProgressEventSchema),
     async (c) => {
       const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
       if (!dog) return c.json({ error: "not_found" } as const, 404);
@@ -438,7 +497,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       return c.json({ ok: true } as const, 202);
     },
   )
-  .post("/:id/goals/:goalId/skills", zValidator("json", trainingSkillSchema), async (c) => {
+  .post("/:id/goals/:goalId/skills", stableZValidator("json", trainingSkillSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const [goal] = await db
@@ -462,7 +521,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!skill) throw new Error("failed to create skill");
     return c.json({ skill }, 201);
   })
-  .put("/:id/skills/:skillId", zValidator("json", trainingSkillSchema), async (c) => {
+  .put("/:id/skills/:skillId", stableZValidator("json", trainingSkillSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
@@ -471,13 +530,13 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     // by PUT .../level so milestone history can't be bypassed.
     const [updated] = await db
       .update(trainingSkills)
-      .set({ name: c.req.valid("json").name })
+      .set({ name: c.req.valid("json").name, catalogSkillKey: null })
       .where(eq(trainingSkills.id, skill.id))
       .returning();
     if (!updated) throw new Error("failed to update skill");
     return c.json({ skill: updated });
   })
-  .put("/:id/skills/:skillId/level", zValidator("json", skillLevelSchema), async (c) => {
+  .put("/:id/skills/:skillId/level", stableZValidator("json", skillLevelSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const skill = await findOwnedSkill(c.get("userId"), dog.id, c.req.param("skillId"));
@@ -507,7 +566,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   })
   .post(
     "/:id/skills/:skillId/sessions",
-    zValidator("json", practiceSessionApiSchema),
+    stableZValidator("json", practiceSessionApiSchema),
     async (c) => {
       const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
       if (!dog) return c.json({ error: "not_found" } as const, 404);
@@ -665,7 +724,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   )
   .patch(
     "/:id/skills/:skillId/sessions/:sessionId/evidence",
-    zValidator("json", practiceEvidenceSchema),
+    stableZValidator("json", practiceEvidenceSchema),
     async (c) => {
       const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
       if (!dog) return c.json({ error: "not_found" } as const, 404);
@@ -862,7 +921,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
-  .get("/:id/focus", zValidator("query", focusWeekCompatSchema), async (c) => {
+  .get("/:id/focus", stableZValidator("query", focusWeekCompatSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const input = c.req.valid("query");
@@ -892,10 +951,11 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       week.weekKey,
       week.timezoneOffsetMinutes,
       week.weekEndTimezoneOffsetMinutes,
+      c.get("locale"),
     );
     return c.json(data);
   })
-  .post("/:id/focus", zValidator("json", focusAddCompatSchema), async (c) => {
+  .post("/:id/focus", stableZValidator("json", focusAddCompatSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const body = c.req.valid("json");
@@ -924,7 +984,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     });
     return c.json({ focus: result.focus }, result.kind === "created" ? 201 : 200);
   })
-  .delete("/:id/focus/:skillId", zValidator("query", focusRemoveCompatSchema), async (c) => {
+  .delete("/:id/focus/:skillId", stableZValidator("query", focusRemoveCompatSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const input = c.req.valid("query");
@@ -960,7 +1020,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     if (!deleted) return c.json({ error: "not_found" } as const, 404);
     return c.json({ ok: true } as const);
   })
-  .get("/:id/suggestion", zValidator("query", suggestionQuerySchema), async (c) => {
+  .get("/:id/suggestion", stableZValidator("query", suggestionQuerySchema), async (c) => {
     const dogId = c.req.param("id");
     if (!uuidSchema.safeParse(dogId).success) {
       return c.json({ error: "not_found" } as const, 404);
@@ -976,12 +1036,13 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       dogId: dog.id,
       weekKey,
       timezoneOffsetMinutes,
+      locale: c.get("locale"),
     });
     return c.json({ suggestion });
   })
   .post(
     "/:id/suggestions/:suggestionId/actions",
-    zValidator("json", suggestionActionSchema),
+    stableZValidator("json", suggestionActionSchema),
     async (c) => {
       const dogId = c.req.param("id");
       if (!uuidSchema.safeParse(dogId).success) {
@@ -1008,7 +1069,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   )
   .post(
     "/:id/advancement-proposals/:proposalId/decision",
-    zValidator("json", advancementDecisionSchema),
+    stableZValidator("json", advancementDecisionSchema),
     async (c) => {
       const dogId = c.req.param("id");
       if (!uuidSchema.safeParse(dogId).success) {
@@ -1060,7 +1121,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       .orderBy(desc(journalEntries.occurredAt));
     return c.json({ entries });
   })
-  .post("/:id/journal", zValidator("json", journalEntryCreateSchema), async (c) => {
+  .post("/:id/journal", stableZValidator("json", journalEntryCreateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const b = c.req.valid("json");
@@ -1069,7 +1130,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
       entry = await db.transaction((tx) => createJournalEntry(tx, dog.id, b));
     } catch (error) {
       if (error instanceof InvalidJournalOccurredAtError) {
-        return c.json(invalidJournalField("occurredAt", "Invalid date"), 400);
+        return c.json(invalidJournalField("occurredAt", VALIDATION_MESSAGE_CODES.dateInvalid), 400);
       }
       throw error;
     }
@@ -1079,7 +1140,7 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     });
     return c.json({ entry }, 201);
   })
-  .put("/:id/journal/:entryId", zValidator("json", journalEntryUpdateSchema), async (c) => {
+  .put("/:id/journal/:entryId", stableZValidator("json", journalEntryUpdateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const b = c.req.valid("json");
@@ -1144,10 +1205,13 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     });
 
     if (result.kind === "invalid_occurred_at") {
-      return c.json(invalidJournalField("occurredAt", "Invalid date"), 400);
+      return c.json(invalidJournalField("occurredAt", VALIDATION_MESSAGE_CODES.dateInvalid), 400);
     }
     if (result.kind === "missing_trend") {
-      return c.json(invalidJournalField("trend", "Trend is required for daily check-ins"), 400);
+      return c.json(
+        invalidJournalField("trend", VALIDATION_MESSAGE_CODES.dailyCheckInTrendRequired),
+        400,
+      );
     }
     if (result.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
     return c.json({ entry: result.entry });
@@ -1166,64 +1230,106 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
   .get("/:id/brief", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const [brief] = await db
-      .select()
-      .from(briefs)
-      .where(eq(briefs.dogId, dog.id))
-      .orderBy(...latestBriefOrder)
-      .limit(1);
-    return c.json({ brief: brief ?? null });
-  })
-  .post("/:id/brief/share", async (c) => {
-    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
-    if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const token = await withBriefLifecycleLock(dog.id, async (tx) => {
-      const [latest] = await tx
+    const latest = resolveLatestBriefRows(
+      await db
         .select()
         .from(briefs)
         .where(eq(briefs.dogId, dog.id))
         .orderBy(...latestBriefOrder)
-        .limit(1);
-      if (!latest) return null;
-      if (latest.shareToken) return latest.shareToken;
+        .limit(2),
+    );
+    if (latest.kind === "conflict") {
+      return c.json({ error: "brief_version_conflict" } as const, 409);
+    }
+    return c.json({ brief: latest.kind === "found" ? latest.brief : null });
+  })
+  .post("/:id/brief/share", async (c) => {
+    const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
+    if (!dog) return c.json({ error: "not_found" } as const, 404);
+    const result = await db.transaction(async (tx) => {
+      const [lockedDog] = await tx
+        .select({ id: dogs.id })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
+        .for("update");
+      if (!lockedDog) return { kind: "not_found" } as const;
+
+      const latest = resolveLatestBriefRows(
+        await tx
+          .select()
+          .from(briefs)
+          .where(eq(briefs.dogId, lockedDog.id))
+          .orderBy(...latestBriefOrder)
+          .limit(2)
+          .for("update"),
+      );
+      if (latest.kind !== "found") {
+        return latest.kind === "conflict" ? latest : ({ kind: "no_brief" } as const);
+      }
+      if (latest.brief.status !== "finalized") return { kind: "not_finalized" } as const;
+      if (latest.brief.shareToken) {
+        return { kind: "shared", token: latest.brief.shareToken } as const;
+      }
 
       await tx
         .update(briefs)
         .set({ shareToken: null })
-        .where(and(eq(briefs.dogId, dog.id), isNotNull(briefs.shareToken)));
+        .where(and(eq(briefs.dogId, lockedDog.id), isNotNull(briefs.shareToken)));
       const generatedToken = randomBytes(18).toString("base64url");
       const [updated] = await tx
         .update(briefs)
         .set({ shareToken: generatedToken })
-        .where(eq(briefs.id, latest.id))
+        .where(eq(briefs.id, latest.brief.id))
         .returning({ shareToken: briefs.shareToken });
-      if (!updated?.shareToken) throw new Error("failed to share Brief");
-      return updated.shareToken;
+      if (updated?.shareToken !== generatedToken) throw new Error("failed to share Brief");
+      return { kind: "shared", token: generatedToken } as const;
     });
-    if (!token) return c.json({ error: "no_brief" } as const, 404);
+    if (result.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
+    if (result.kind === "no_brief") return c.json({ error: "no_brief" } as const, 404);
+    if (result.kind === "conflict") {
+      return c.json({ error: "brief_version_conflict" } as const, 409);
+    }
+    if (result.kind === "not_finalized") {
+      return c.json({ error: "not_finalized" } as const, 409);
+    }
     await recordEvent("brief.shared", { userId: c.get("userId") });
-    return c.json({ token, url: `${env.FRONTEND_URL}/b/${token}` });
+    return c.json({ token: result.token, url: `${env.FRONTEND_URL}/b/${result.token}` });
   })
   .delete("/:id/brief/share", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const hasBrief = await withBriefLifecycleLock(dog.id, async (tx) => {
-      const [brief] = await tx
-        .select({ id: briefs.id })
-        .from(briefs)
-        .where(eq(briefs.dogId, dog.id))
-        .limit(1);
-      if (!brief) return false;
+    const result = await db.transaction(async (tx) => {
+      const [lockedDog] = await tx
+        .select({ id: dogs.id })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
+        .for("update");
+      if (!lockedDog) return { kind: "not_found" } as const;
+      const latest = resolveLatestBriefRows(
+        await tx
+          .select({ id: briefs.id, version: briefs.version })
+          .from(briefs)
+          .where(eq(briefs.dogId, lockedDog.id))
+          .orderBy(...latestBriefOrder)
+          .limit(2)
+          .for("update"),
+      );
+      if (latest.kind !== "found") return latest;
       await tx
         .update(briefs)
         .set({ shareToken: null })
-        .where(and(eq(briefs.dogId, dog.id), isNotNull(briefs.shareToken)));
-      return true;
+        .where(and(eq(briefs.dogId, lockedDog.id), isNotNull(briefs.shareToken)));
+      return { kind: "revoked" } as const;
     });
-    if (!hasBrief) return c.json({ error: "not_found" } as const, 404);
+    if (result.kind === "missing" || result.kind === "not_found") {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    if (result.kind === "conflict") {
+      return c.json({ error: "brief_version_conflict" } as const, 409);
+    }
     return c.json({ ok: true } as const);
   })
-  .post("/:id/brief", zValidator("query", briefGenerateSchema), async (c) => {
+  .post("/:id/brief", stableZValidator("query", briefGenerateSchema), async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
     const { window } = c.req.valid("query");
@@ -1232,140 +1338,384 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
     const journalWhere = cutoff
       ? and(eq(journalEntries.dogId, dog.id), gte(journalEntries.occurredAt, cutoff))
       : eq(journalEntries.dogId, dog.id);
-    const [concerns, goals, entries, progress] = await Promise.all([
+    const [concerns, entries, progress] = await Promise.all([
       db.select().from(behaviorConcerns).where(eq(behaviorConcerns.dogId, dog.id)),
-      db.select().from(trainingGoals).where(eq(trainingGoals.dogId, dog.id)),
       db.select().from(journalEntries).where(journalWhere),
-      loadProgress(dog.id),
+      loadProgress(dog.id, c.get("locale")),
     ]);
-    const summary = composeBrief({
-      dog: { name: dog.name, breed: dog.breed, size: dog.size, sex: dog.sex },
-      concerns: concerns.map((x) => ({ concern: x.concern, severity: x.severity })),
-      goals: goals.map((x) => ({ goal: x.goal })),
-      entries: entries.map((e) => ({
-        note: e.note,
-        kind: e.kind,
-        trend: e.trend,
-        behavior: e.behavior,
-        antecedent: e.antecedent,
-        consequence: e.consequence,
-        intensity: e.intensity,
-        occurredAt: e.occurredAt.toISOString(),
-      })),
-      windowDays,
-      progress: progress.goals,
-    });
-    const brief = await withBriefLifecycleLock(dog.id, async (tx) => {
+    const locale = c.get("locale");
+    const summary = composeBrief(
+      {
+        dog: { name: dog.name, breed: dog.breed, size: dog.size, sex: dog.sex },
+        concerns: concerns.map((x) => ({ concern: x.concern, severity: x.severity })),
+        goals: progress.goals.map((goal) => ({ goal: goal.goal })),
+        entries: entries.map((e) => ({
+          note: e.note,
+          kind: e.kind,
+          trend: e.trend,
+          behavior: e.behavior,
+          antecedent: e.antecedent,
+          consequence: e.consequence,
+          intensity: e.intensity,
+          occurredAt: e.occurredAt.toISOString(),
+        })),
+        windowDays,
+        progress: progress.goals,
+      },
+      locale,
+    );
+    const brief = await db.transaction(async (tx) => {
+      const [lockedDog] = await tx
+        .select({ id: dogs.id })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
+        .for("update");
+      if (!lockedDog) return null;
       await tx
         .update(briefs)
         .set({ shareToken: null })
-        .where(and(eq(briefs.dogId, dog.id), isNotNull(briefs.shareToken)));
+        .where(and(eq(briefs.dogId, lockedDog.id), isNotNull(briefs.shareToken)));
       const [latest] = await tx
         .select({ version: briefs.version })
         .from(briefs)
-        .where(eq(briefs.dogId, dog.id))
+        .where(eq(briefs.dogId, lockedDog.id))
         .orderBy(...latestBriefOrder)
         .limit(1);
       const [inserted] = await tx
         .insert(briefs)
-        .values({ dogId: dog.id, summary, version: (latest?.version ?? 0) + 1, status: "draft" })
+        .values({
+          dogId: lockedDog.id,
+          locale,
+          summary,
+          version: (latest?.version ?? 0) + 1,
+          status: "draft",
+        })
         .returning();
       if (!inserted) throw new Error("failed to generate Brief");
       return inserted;
     });
+    if (!brief) return c.json({ error: "not_found" } as const, 404);
     await recordEvent("brief.generated", { userId: c.get("userId"), props: { window } });
     return c.json({ brief }, 201);
   })
   .put("/:id/brief", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
-    const brief = await withBriefLifecycleLock(dog.id, async (tx) => {
-      const [latest] = await tx
-        .select()
-        .from(briefs)
-        .where(eq(briefs.dogId, dog.id))
-        .orderBy(...latestBriefOrder)
-        .limit(1);
-      if (!latest) return null;
-
+    const result = await db.transaction(async (tx) => {
+      const [lockedDog] = await tx
+        .select({ id: dogs.id })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, c.get("userId"))))
+        .for("update");
+      if (!lockedDog) return null;
+      const latest = resolveLatestBriefRows(
+        await tx
+          .select()
+          .from(briefs)
+          .where(eq(briefs.dogId, lockedDog.id))
+          .orderBy(...latestBriefOrder)
+          .limit(2)
+          .for("update"),
+      );
+      if (latest.kind !== "found") return latest;
       const [updated] = await tx
         .update(briefs)
         .set({ status: "finalized" })
-        .where(eq(briefs.id, latest.id))
+        .where(and(eq(briefs.id, latest.brief.id), eq(briefs.dogId, lockedDog.id)))
         .returning();
       if (!updated) throw new Error("failed to finalize Brief");
-      return updated;
+      return { kind: "finalized", brief: updated } as const;
     });
-    if (!brief) return c.json({ error: "not_found" } as const, 404);
+    if (!result || result.kind === "missing") {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    if (result.kind === "conflict") {
+      return c.json({ error: "brief_version_conflict" } as const, 409);
+    }
     await recordEvent("brief.finalized", { userId: c.get("userId") });
-    return c.json({ brief });
+    return c.json({ brief: result.brief });
   })
-  .post("/:id/brief/send", zValidator("json", briefSendSchema), async (c) => {
+  .post("/:id/brief/send", stableZValidator("json", briefSendRequestSchema), async (c) => {
     const userId = c.get("userId");
     const dog = await findOwnedDog(userId, c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
 
-    // Per-user send-rate guard: max 10 brief emails per 24 hours to limit
-    // abuse of the app's verified sender domain.
     const windowStart = new Date(Date.now() - 86_400_000);
-    const [sendCount] = await db
-      .select({ value: count() })
-      .from(briefSends)
-      .where(and(eq(briefSends.sentByUserId, userId), gte(briefSends.sentAt, windowStart)));
-    if ((sendCount?.value ?? 0) >= 10) {
-      return c.json({ error: "send_rate_limited" } as const, 429);
-    }
+    const body = c.req.valid("json");
+    const prepared = await db.transaction(async (tx) => {
+      const [owner] = await tx
+        .select({ id: user.id, email: user.email, name: user.name })
+        .from(user)
+        .where(eq(user.id, userId))
+        .for("update");
+      if (!owner) return { kind: "not_found" } as const;
+      const [lockedDog] = await tx
+        .select({ id: dogs.id, name: dogs.name })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, userId)))
+        .for("update");
+      if (!lockedDog) return { kind: "not_found" } as const;
 
-    const [brief] = await db
-      .select()
-      .from(briefs)
-      .where(eq(briefs.dogId, dog.id))
-      .orderBy(...latestBriefOrder)
-      .limit(1);
-    if (!brief) return c.json({ error: "not_found" } as const, 404);
-    if (brief.status !== "finalized") {
+      const loadExistingSend = async (idempotencyKey: string) => {
+        const [existing] = await tx
+          .select({
+            id: briefSends.id,
+            briefId: briefSends.briefId,
+            recipient: briefSends.recipient,
+            message: briefSends.message,
+            sentAt: briefSends.sentAt,
+            deliveredAt: briefSends.deliveredAt,
+            sentByUserId: briefSends.sentByUserId,
+            briefSummary: briefs.summary,
+            briefLocale: briefs.locale,
+          })
+          .from(briefSends)
+          .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
+          .where(
+            and(
+              eq(briefSends.id, idempotencyKey),
+              eq(briefSends.sentByUserId, userId),
+              eq(briefs.dogId, lockedDog.id),
+            ),
+          )
+          .limit(1);
+        return existing;
+      };
+      const prepareMatchedIntent = (
+        existing: NonNullable<Awaited<ReturnType<typeof loadExistingSend>>>,
+      ) => {
+        const send = {
+          id: existing.id,
+          briefId: existing.briefId,
+          recipient: existing.recipient,
+          message: existing.message,
+          sentAt: existing.sentAt,
+          deliveredAt: existing.deliveredAt,
+          sentByUserId: existing.sentByUserId,
+        };
+        if (existing.deliveredAt) return { kind: "replayed", send } as const;
+        const email = renderBriefEmail(
+          {
+            dogName: lockedDog.name,
+            ownerName: owner.name ?? owner.email,
+            message: existing.message,
+            summary: existing.briefSummary,
+          },
+          existing.briefLocale,
+        );
+        return { kind: "pending", send, email, replyTo: owner.email } as const;
+      };
+      const loadLegacyIntentSend = async (briefId: string) => {
+        const [existing] = await tx
+          .select({
+            id: briefSends.id,
+            briefId: briefSends.briefId,
+            recipient: briefSends.recipient,
+            message: briefSends.message,
+            sentAt: briefSends.sentAt,
+            deliveredAt: briefSends.deliveredAt,
+            sentByUserId: briefSends.sentByUserId,
+            briefSummary: briefs.summary,
+            briefLocale: briefs.locale,
+          })
+          .from(briefSends)
+          .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
+          .where(
+            and(
+              eq(briefSends.briefId, briefId),
+              eq(briefSends.sentByUserId, userId),
+              eq(briefSends.recipient, body.recipient),
+              body.message == null
+                ? isNull(briefSends.message)
+                : eq(briefSends.message, body.message),
+            ),
+          )
+          .orderBy(desc(briefSends.sentAt), desc(briefSends.id))
+          .limit(1);
+        return existing;
+      };
+      const existingResult = body.idempotencyKey
+        ? resolveBriefSendIntent(await loadExistingSend(body.idempotencyKey), body)
+        : null;
+      if (existingResult?.kind === "idempotency_conflict") return existingResult;
+      if (existingResult?.kind === "matched") return prepareMatchedIntent(existingResult.send);
+
+      const latestRows = await tx
+        .select()
+        .from(briefs)
+        .where(eq(briefs.dogId, lockedDog.id))
+        .orderBy(...latestBriefOrder)
+        .limit(2)
+        .for("update");
+      if (body.briefId === undefined && latestRows.length > 1) {
+        return { kind: "client_upgrade_required" } as const;
+      }
+      const latest = resolveLatestBriefRows(latestRows);
+      if (latest.kind === "missing") return { kind: "not_found" } as const;
+      if (latest.kind === "conflict") return latest;
+      const brief = latest.brief;
+      if (body.briefId !== undefined && body.briefId !== brief.id) {
+        return { kind: "conflict" } as const;
+      }
+      if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
+
+      if (!body.idempotencyKey) {
+        const legacyReplay = await loadLegacyIntentSend(brief.id);
+        if (legacyReplay) return prepareMatchedIntent(legacyReplay);
+      }
+      const sendId = body.idempotencyKey ?? randomUUID();
+
+      const [sendCount] = await tx
+        .select({ value: count() })
+        .from(briefSends)
+        .where(and(eq(briefSends.sentByUserId, userId), gte(briefSends.sentAt, windowStart)));
+      if ((sendCount?.value ?? 0) >= 10) return { kind: "rate_limited" } as const;
+
+      const email = renderBriefEmail(
+        {
+          dogName: lockedDog.name,
+          ownerName: owner.name ?? owner.email,
+          message: body.message ?? null,
+          summary: brief.summary,
+        },
+        brief.locale,
+      );
+      const [send] = await tx
+        .insert(briefSends)
+        .values({
+          id: sendId,
+          briefId: brief.id,
+          recipient: body.recipient,
+          message: body.message ?? null,
+          sentByUserId: userId,
+        })
+        .onConflictDoNothing({ target: briefSends.id })
+        .returning();
+      if (!send) {
+        const collision = resolveBriefSendIntent(await loadExistingSend(sendId), body);
+        return collision?.kind === "matched"
+          ? prepareMatchedIntent(collision.send)
+          : ({ kind: "idempotency_conflict" } as const);
+      }
+      return { kind: "pending", send, email, replyTo: owner.email } as const;
+    });
+    if (prepared.kind === "not_found") return c.json({ error: "not_found" } as const, 404);
+    if (prepared.kind === "not_finalized") {
       return c.json({ error: "not_finalized" } as const, 409);
     }
+    if (prepared.kind === "conflict") {
+      return c.json({ error: "brief_version_conflict" } as const, 409);
+    }
+    if (prepared.kind === "rate_limited") {
+      return c.json({ error: "send_rate_limited" } as const, 429);
+    }
+    if (prepared.kind === "idempotency_conflict") {
+      return c.json({ error: "idempotency_conflict" } as const, 409);
+    }
+    if (prepared.kind === "client_upgrade_required") {
+      return c.json({ error: "client_upgrade_required" } as const, 409);
+    }
+    if (prepared.kind === "replayed") return c.json({ send: prepared.send }, 201);
 
-    const [owner] = await db
-      .select({ email: user.email, name: user.name })
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1);
-    if (!owner) return c.json({ error: "not_found" } as const, 404);
+    const deliveryClaimId = randomBytes(16).toString("hex");
+    const deliveryClaim = await db.transaction(async (tx) => {
+      const [owner] = await tx
+        .select({ id: user.id })
+        .from(user)
+        .where(eq(user.id, userId))
+        .for("update")
+        .limit(1);
+      if (!owner) return { kind: "not_found" } as const;
+      const [lockedDog] = await tx
+        .select({ id: dogs.id })
+        .from(dogs)
+        .where(and(eq(dogs.id, dog.id), eq(dogs.ownerId, userId)))
+        .for("update")
+        .limit(1);
+      if (!lockedDog) return { kind: "not_found" } as const;
 
-    const body = c.req.valid("json");
-    const email = renderBriefEmail({
-      dogName: dog.name,
-      ownerName: owner.name ?? owner.email,
-      message: body.message ?? null,
-      summary: brief.summary,
+      const [claimed] = await tx
+        .update(briefSends)
+        .set({ deliveryClaimId, deliveryClaimedAt: sql`clock_timestamp()` })
+        .where(
+          and(
+            eq(briefSends.id, prepared.send.id),
+            eq(briefSends.sentByUserId, userId),
+            isNull(briefSends.deliveredAt),
+            or(
+              isNull(briefSends.deliveryClaimId),
+              isNull(briefSends.deliveryClaimedAt),
+              lt(briefSends.deliveryClaimedAt, sql`clock_timestamp() - interval '30 seconds'`),
+            ),
+          ),
+        )
+        .returning();
+      if (claimed) return { kind: "claimed", send: claimed } as const;
+
+      const [existing] = await tx
+        .select()
+        .from(briefSends)
+        .where(and(eq(briefSends.id, prepared.send.id), eq(briefSends.sentByUserId, userId)))
+        .limit(1);
+      if (!existing) return { kind: "not_found" } as const;
+      return existing.deliveredAt
+        ? ({ kind: "replayed", send: existing } as const)
+        : ({ kind: "in_progress" } as const);
     });
+    if (deliveryClaim.kind === "not_found") {
+      return c.json({ error: "not_found" } as const, 404);
+    }
+    if (deliveryClaim.kind === "replayed") return c.json({ send: deliveryClaim.send }, 201);
+    if (deliveryClaim.kind === "in_progress") {
+      return c.json({ error: "send_in_progress" } as const, 409);
+    }
 
     try {
       await sendEmail({
-        to: body.recipient,
-        replyTo: owner.email,
-        subject: email.subject,
-        html: email.html,
-        text: email.text,
+        to: prepared.send.recipient,
+        replyTo: prepared.replyTo,
+        subject: prepared.email.subject,
+        html: prepared.email.html,
+        text: prepared.email.text,
+        idempotencyKey: prepared.send.id,
       });
-    } catch (err) {
-      throw sendFailedException(c, err);
+    } catch (error) {
+      await db
+        .update(briefSends)
+        .set({ deliveryClaimId: null, deliveryClaimedAt: null })
+        .where(
+          and(eq(briefSends.id, prepared.send.id), eq(briefSends.deliveryClaimId, deliveryClaimId)),
+        );
+      throw sendFailedException(c, error);
     }
 
     const [send] = await db
-      .insert(briefSends)
-      .values({
-        briefId: brief.id,
-        recipient: body.recipient,
-        message: body.message ?? null,
-        sentByUserId: userId,
-      })
+      .update(briefSends)
+      .set({ deliveredAt: new Date(), deliveryClaimId: null, deliveryClaimedAt: null })
+      .where(
+        and(
+          eq(briefSends.id, prepared.send.id),
+          eq(briefSends.sentByUserId, userId),
+          isNull(briefSends.deliveredAt),
+          eq(briefSends.deliveryClaimId, deliveryClaimId),
+        ),
+      )
       .returning();
+    if (send) {
+      await recordEvent("brief.emailed", { userId });
+      return c.json({ send }, 201);
+    }
 
-    await recordEvent("brief.emailed", { userId });
-    return c.json({ send }, 201);
+    const [replayed] = await db
+      .select()
+      .from(briefSends)
+      .where(and(eq(briefSends.id, prepared.send.id), eq(briefSends.sentByUserId, userId)))
+      .limit(1);
+    if (!replayed) throw new Error("Brief send disappeared during claimed delivery");
+    if (!replayed.deliveredAt) {
+      return c.json({ error: "send_in_progress" } as const, 409);
+    }
+    return c.json({ send: replayed }, 201);
   })
   .get("/:id/brief/sends", async (c) => {
     const dog = await findOwnedDog(c.get("userId"), c.req.param("id"));
@@ -1378,11 +1728,17 @@ export const dogsApp = new Hono<{ Variables: Vars }>()
         recipient: briefSends.recipient,
         message: briefSends.message,
         sentAt: briefSends.sentAt,
+        deliveredAt: briefSends.deliveredAt,
       })
       .from(briefSends)
       .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
       .where(eq(briefs.dogId, dog.id))
       .orderBy(desc(briefSends.sentAt));
 
-    return c.json({ sends });
+    return c.json({
+      sends: sends.map(({ deliveredAt, ...send }) => ({
+        ...send,
+        status: deliveredAt ? ("delivered" as const) : ("pending" as const),
+      })),
+    });
   });

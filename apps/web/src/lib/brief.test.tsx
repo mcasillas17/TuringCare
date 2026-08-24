@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -38,7 +38,14 @@ vi.mock("./api", () => ({
   },
 }));
 
-import { useFinalizeBrief, useGenerateBrief, useRevokeShare, useShareBrief } from "./brief";
+import {
+  useBrief,
+  useFinalizeBrief,
+  useGenerateBrief,
+  useRevokeShare,
+  useShareBrief,
+} from "./brief";
+import type { BriefRequestError } from "./brief-errors";
 
 const briefKey = ["brief", "dog-1"] as const;
 
@@ -83,6 +90,14 @@ function ok<T>(body: T) {
   return { ok: true, json: async () => body };
 }
 
+function conflictResponse() {
+  return {
+    ok: false,
+    status: 409,
+    json: async () => ({ error: "brief_version_conflict" }),
+  };
+}
+
 function expectBriefInvalidation(invalidateQueries: unknown) {
   expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: briefKey });
 }
@@ -90,6 +105,49 @@ function expectBriefInvalidation(invalidateQueries: unknown) {
 afterEach(() => vi.clearAllMocks());
 
 describe("Brief mutation cache updates", () => {
+  it("preserves a stable conflict code, status, and load context", async () => {
+    getBrief.mockResolvedValue(conflictResponse());
+    const queryClient = makeQueryClient();
+    const { result } = renderHook(() => useBrief("dog-1"), {
+      wrapper: makeWrapper(queryClient),
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toMatchObject({
+      code: "brief_version_conflict",
+      status: 409,
+      context: "load",
+    });
+  });
+
+  it.each([
+    ["generate", generateBrief, () => useGenerateBrief("dog-1"), "30d"],
+    ["finalize", finalizeBrief, () => useFinalizeBrief("dog-1"), undefined],
+    ["share", shareBrief, () => useShareBrief("dog-1"), undefined],
+    ["revoke", revokeShare, () => useRevokeShare("dog-1"), undefined],
+  ] as const)(
+    "preserves a stable conflict through the %s mutation",
+    async (context, request, hook, input) => {
+      request.mockResolvedValue(conflictResponse());
+      const queryClient = makeQueryClient();
+      const { result } = renderHook(
+        hook as unknown as () => { mutateAsync: (value?: unknown) => Promise<unknown> },
+        { wrapper: makeWrapper(queryClient) },
+      );
+      let error: BriefRequestError | undefined;
+
+      await act(async () => {
+        try {
+          await result.current.mutateAsync(input);
+        } catch (caught) {
+          error = caught as BriefRequestError;
+        }
+      });
+
+      expect(error).toMatchObject({ code: "brief_version_conflict", status: 409, context });
+    },
+  );
+
   it("replaces the cached draft Brief with the returned finalized Brief", async () => {
     finalizeBrief.mockResolvedValue(ok({ brief: finalizedBrief }));
     const queryClient = makeQueryClient();

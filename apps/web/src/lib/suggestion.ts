@@ -1,3 +1,4 @@
+import { useI18n } from "@/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdvancementDecision, SuggestionAction, TrainingSuggestion } from "@turingcare/shared";
 import { api } from "./api";
@@ -10,8 +11,10 @@ export { suggestionKey } from "./suggestion-key";
 const dogsApi = api.api.dogs[":id"];
 
 export function useSuggestion(dogId: string, weekKey: string, timezoneOffsetMinutes: number) {
+  const { locale } = useI18n();
+
   return useQuery({
-    queryKey: suggestionKey(dogId, weekKey),
+    queryKey: suggestionKey(dogId, weekKey, locale),
     enabled: !!dogId && weekKey === weekKeyAtOffset(new Date(), timezoneOffsetMinutes),
     queryFn: async (): Promise<TrainingSuggestion> => {
       const res = await dogsApi.suggestion.$get({

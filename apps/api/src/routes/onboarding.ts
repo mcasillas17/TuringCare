@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { briefSends, briefs, dogs, journalEntries, trainingGoals } from "../db/schema";
@@ -46,7 +46,7 @@ export const onboardingApp = new Hono<{ Variables: Vars }>()
         .select({ id: briefSends.id })
         .from(briefSends)
         .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
-        .where(inArray(briefs.dogId, dogIds))
+        .where(and(inArray(briefs.dogId, dogIds), isNotNull(briefSends.deliveredAt)))
         .limit(1),
     ]);
 
