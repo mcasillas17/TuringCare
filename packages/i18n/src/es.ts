@@ -1211,6 +1211,7 @@ export const es = {
     versionConflict: "Hay más de una versión reciente del resumen. Genera una nueva versión.",
     idempotencyConflict:
       "Este intento de envío ya se usó con otros datos. Revisa e inténtalo de nuevo.",
+    clientUpgradeRequired: "Actualiza esta página antes de enviar el Resumen.",
     sendInProgress: "Este envío ya está en curso. Revisa el historial antes de reintentar.",
     rateLimited: "Alcanzaste el límite diario de envíos. Inténtalo más tarde.",
     sent: "Enviado",

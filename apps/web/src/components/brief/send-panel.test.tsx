@@ -106,6 +106,7 @@ describe("SendPanel", () => {
       "idempotency_conflict",
       "Este intento de envío ya se usó con otros datos. Revisa e inténtalo de nuevo.",
     ],
+    ["client_upgrade_required", "Actualiza esta página antes de enviar el Resumen."],
     ["send_in_progress", "Este envío ya está en curso. Revisa el historial antes de reintentar."],
     ["send_rate_limited", "Alcanzaste el límite diario de envíos. Inténtalo más tarde."],
   ])("renders the Spanish message for stable send code %s", async (code, message) => {

@@ -5,6 +5,7 @@ describe("readBriefRequestError", () => {
   it.each([
     ["brief_version_conflict", 409],
     ["idempotency_conflict", 409],
+    ["client_upgrade_required", 409],
     ["send_in_progress", 409],
     ["send_rate_limited", 429],
     ["not_finalized", 409],

@@ -28,6 +28,20 @@ export function DeleteAccountButton() {
     setDeletionBlock(null);
   }
 
+  async function recoverDeletionBlock() {
+    try {
+      const readiness = await getAccountDeletionReadiness();
+      if (readiness.status !== "ready") {
+        setDeletionBlock(readiness);
+        return true;
+      }
+    } catch {
+      // The original deletion failure remains authoritative when the recovery
+      // read is also unavailable.
+    }
+    return false;
+  }
+
   async function onConfirm() {
     setSubmitting(true);
     setDeletionBlock(null);
@@ -48,11 +62,13 @@ export function DeleteAccountButton() {
       result = await deleteUser({});
     } catch {
       setSubmitting(false);
+      if (await recoverDeletionBlock()) return;
       toast.error(t("settings.deleteFailed"));
       return;
     }
     if (result?.error) {
       setSubmitting(false);
+      if (await recoverDeletionBlock()) return;
       toast.error(t("settings.deleteFailed"));
       return;
     }

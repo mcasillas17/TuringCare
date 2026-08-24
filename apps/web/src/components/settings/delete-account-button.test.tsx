@@ -163,3 +163,22 @@ it("links to Brief recovery instead of attempting blocked account deletion", asy
   expect(deleteUserMock).not.toHaveBeenCalled();
   expect(toastErrorMock).not.toHaveBeenCalled();
 });
+
+it("recovers a delivery claim that races the readiness check and account deletion", async () => {
+  deletionReadinessMock
+    .mockResolvedValueOnce({ status: "ready" })
+    .mockResolvedValueOnce({ status: "brief_delivery_in_progress", dogId: "dog-race" });
+  deleteUserMock.mockResolvedValue({ data: null, error: { message: "delete failed" } });
+  setup();
+  await userEvent.click(screen.getByRole("button", { name: /delete account/i }));
+  await userEvent.type(screen.getByRole("textbox"), "delete");
+  await userEvent.click(screen.getByRole("button", { name: /i understand/i }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(/being delivered/i);
+  expect(screen.getByRole("link", { name: /resolve pending delivery/i })).toHaveAttribute(
+    "href",
+    "/my/dogs/dog-race/brief",
+  );
+  expect(deleteUserMock).toHaveBeenCalledOnce();
+  expect(toastErrorMock).not.toHaveBeenCalled();
+});

@@ -239,15 +239,20 @@ export function resolveBriefSendIntent<
   T extends { briefId: string; recipient: string; message: string | null },
 >(
   existing: T | undefined,
-  intent: { briefId: string; recipient: string; message?: string | null },
+  intent: { briefId?: string; recipient: string; message?: string | null },
 ) {
   if (!existing) return null;
-  return existing.briefId === intent.briefId &&
+  return (intent.briefId === undefined || existing.briefId === intent.briefId) &&
     existing.recipient === intent.recipient &&
     existing.message === (intent.message ?? null)
     ? ({ kind: "matched", send: existing } as const)
     : ({ kind: "idempotency_conflict" } as const);
 }
+
+// New clients are statically required to send briefId by briefSendSchema. The
+// route keeps a narrow legacy decoder so an already-open pre-rollout tab can
+// send only when the intended Brief is unambiguous.
+const briefSendRequestSchema = briefSendSchema.partial({ briefId: true });
 
 export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .use("*", requireUser)
@@ -1427,7 +1432,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     await recordEvent("brief.finalized", { userId: c.get("userId") });
     return c.json({ brief: result.brief });
   })
-  .post("/:id/brief/send", stableZValidator("json", briefSendSchema), async (c) => {
+  .post("/:id/brief/send", stableZValidator("json", briefSendRequestSchema), async (c) => {
     const userId = c.get("userId");
     const dog = await findOwnedDog(userId, c.req.param("id"));
     if (!dog) return c.json({ error: "not_found" } as const, 404);
@@ -1501,19 +1506,23 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       if (existingResult?.kind === "idempotency_conflict") return existingResult;
       if (existingResult?.kind === "matched") return prepareMatchedIntent(existingResult.send);
 
-      const latest = resolveLatestBriefRows(
-        await tx
-          .select()
-          .from(briefs)
-          .where(eq(briefs.dogId, lockedDog.id))
-          .orderBy(...latestBriefOrder)
-          .limit(2)
-          .for("update"),
-      );
+      const latestRows = await tx
+        .select()
+        .from(briefs)
+        .where(eq(briefs.dogId, lockedDog.id))
+        .orderBy(...latestBriefOrder)
+        .limit(2)
+        .for("update");
+      if (body.briefId === undefined && latestRows.length > 1) {
+        return { kind: "client_upgrade_required" } as const;
+      }
+      const latest = resolveLatestBriefRows(latestRows);
       if (latest.kind === "missing") return { kind: "not_found" } as const;
       if (latest.kind === "conflict") return latest;
       const brief = latest.brief;
-      if (body.briefId !== brief.id) return { kind: "conflict" } as const;
+      if (body.briefId !== undefined && body.briefId !== brief.id) {
+        return { kind: "conflict" } as const;
+      }
       if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
 
       const [sendCount] = await tx
@@ -1564,6 +1573,9 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
     if (prepared.kind === "idempotency_conflict") {
       return c.json({ error: "idempotency_conflict" } as const, 409);
     }
+    if (prepared.kind === "client_upgrade_required") {
+      return c.json({ error: "client_upgrade_required" } as const, 409);
+    }
     if (prepared.kind === "replayed") return c.json({ send: prepared.send }, 201);
 
     const deliveryClaimId = randomBytes(16).toString("hex");
@@ -1593,6 +1605,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
             isNull(briefSends.deliveredAt),
             or(
               isNull(briefSends.deliveryClaimId),
+              isNull(briefSends.deliveryClaimedAt),
               lt(briefSends.deliveryClaimedAt, sql`clock_timestamp() - interval '30 seconds'`),
             ),
           ),

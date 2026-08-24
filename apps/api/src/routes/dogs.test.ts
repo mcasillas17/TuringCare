@@ -58,6 +58,10 @@ describe("resolveBriefSendIntent", () => {
         recipient: "trainer@example.com",
       }),
     ).toEqual({ kind: "matched", send: existing });
+    expect(resolveBriefSendIntent(existing, { recipient: "trainer@example.com" })).toEqual({
+      kind: "matched",
+      send: existing,
+    });
     expect(
       resolveBriefSendIntent(existing, { briefId: "brief-1", recipient: "other@example.com" }),
     ).toEqual({ kind: "idempotency_conflict" });
@@ -1863,6 +1867,40 @@ describe("dogs: brief send", () => {
     expect(completedDelete.status).toBe(200);
   });
 
+  it("POST send: reclaims a fail-closed claim whose timestamp is missing", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const brief = await makeFinalizedBrief(u, dog.id);
+    const idempotencyKey = "66acbb6a-9189-4614-9a6e-c732efcc5d1d";
+    await db.insert(briefSends).values({
+      id: idempotencyKey,
+      briefId: brief.id,
+      recipient: "missing-claim-time@example.com",
+      sentByUserId: u.userId,
+      deliveryClaimId: "incomplete-worker-claim",
+      deliveryClaimedAt: null,
+    });
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: JSON.stringify({
+        briefId: brief.id,
+        recipient: "missing-claim-time@example.com",
+        idempotencyKey,
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(
+      await db
+        .select({ deliveryClaimId: briefSends.deliveryClaimId })
+        .from(briefSends)
+        .where(eq(briefSends.id, idempotencyKey)),
+    ).toEqual([{ deliveryClaimId: null }]);
+  });
+
   it("POST send: never recovers an old pending key for a newer Brief", async () => {
     const u = await createTestUser();
     users.push(u);
@@ -1911,7 +1949,25 @@ describe("dogs: brief send", () => {
     expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(2);
   });
 
-  it("POST send: rejects a stale client that omits the Brief id after a newer version exists", async () => {
+  it("POST send: accepts a legacy client only when one Brief makes its intent unambiguous", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: briefSendBody({ recipient: "legacy-client@example.com" }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
+  });
+
+  it("POST send: requires a client upgrade when an omitted Brief id is ambiguous", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
@@ -1926,8 +1982,8 @@ describe("dogs: brief send", () => {
       body: briefSendBody({ recipient: "stale-client@example.com" }),
     });
 
-    expect(response.status).toBe(400);
-    expectValidationIssue(await response.json(), "briefId");
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "client_upgrade_required" });
     expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
   });
 

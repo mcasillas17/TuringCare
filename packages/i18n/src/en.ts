@@ -1187,6 +1187,7 @@ export const en = {
     versionConflict: "There is more than one latest Brief version. Generate a new version.",
     idempotencyConflict:
       "This send attempt was already used with different details. Review it and try again.",
+    clientUpgradeRequired: "Refresh this page before sending the Brief.",
     sendInProgress: "This delivery is already in progress. Check history before retrying.",
     rateLimited: "You've reached the daily send limit. Try again later.",
     sent: "Sent",

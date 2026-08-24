@@ -4,6 +4,7 @@ export const BRIEF_ERROR_CODES = [
   "send_failed",
   "brief_version_conflict",
   "idempotency_conflict",
+  "client_upgrade_required",
   "send_in_progress",
   "send_rate_limited",
 ] as const;
@@ -76,6 +77,7 @@ export type BriefSendMessageKey =
   | "briefSend.notFound"
   | "briefSend.versionConflict"
   | "briefSend.idempotencyConflict"
+  | "briefSend.clientUpgradeRequired"
   | "briefSend.sendInProgress"
   | "briefSend.rateLimited"
   | "briefSend.sendFailed";
@@ -91,6 +93,8 @@ export function briefSendErrorMessageKey(error: unknown): BriefSendMessageKey {
       return "briefSend.versionConflict";
     case "idempotency_conflict":
       return "briefSend.idempotencyConflict";
+    case "client_upgrade_required":
+      return "briefSend.clientUpgradeRequired";
     case "send_in_progress":
       return "briefSend.sendInProgress";
     case "send_rate_limited":
