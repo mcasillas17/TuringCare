@@ -790,13 +790,14 @@ describe("DogWeek", () => {
       .mockResolvedValueOnce({ session: { id: "session-2" }, anchorRejected: null });
     renderWeek();
 
-    const logButtons = screen.getAllByRole("button", { name: /Log Sit on/i });
-    fireEvent.click(logButtons[0] as HTMLElement);
+    const logButton = screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement;
+    expect(logButton).toBeEnabled();
+    fireEvent.click(logButton);
     const tooHard = await screen.findByRole("button", { name: "Too hard" });
     fireEvent.click(tooHard);
     expect(tooHard).toHaveAttribute("aria-pressed", "true");
 
-    fireEvent.click(logButtons[1] as HTMLElement);
+    fireEvent.click(logButton);
 
     await waitFor(() => expect(logMutate).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("button", { name: "Too hard" })).toHaveAttribute(
@@ -828,12 +829,13 @@ describe("DogWeek", () => {
       .mockResolvedValueOnce({ session: { id: "session-2" }, anchorRejected: null });
     renderWeek();
 
-    const logButtons = screen.getAllByRole("button", { name: /Log Sit on/i });
-    fireEvent.click(logButtons[0] as HTMLElement);
+    const logButton = screen.getAllByRole("button", { name: /Log Sit on/i })[0] as HTMLElement;
+    expect(logButton).toBeEnabled();
+    fireEvent.click(logButton);
     fireEvent.click(await screen.findByRole("button", { name: "Went well" }));
     fireEvent.click(screen.getByRole("button", { name: "Save response" }));
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
-    fireEvent.click(logButtons[1] as HTMLElement);
+    fireEvent.click(logButton);
     await waitFor(() => expect(logMutate).toHaveBeenCalledTimes(2));
 
     await act(async () => pendingEvidence.resolve({}));
