@@ -118,8 +118,9 @@ is intentionally narrower than the shared schema:
 - With one Brief version, the request binds to that exact row.
 - With multiple versions, an unbound legacy request returns `client_upgrade_required` and
   sends nothing.
-- A retry first matches the canonical stored owner/Brief/recipient/message intent, so a
-  pre-rollout random audit UUID or server-secret rotation cannot cause redelivery.
+- A retry first matches a unique canonical stored owner/Brief/recipient/message intent across
+  the dog's versions, so a pre-rollout random audit UUID or server-secret rotation cannot cause
+  redelivery. More than one matching audit is still ambiguous and fails without sending.
 - An active delivery claim returns `send_in_progress`. A claim with a missing timestamp or
   older than 30 seconds can be reclaimed only by retrying that same durable intent; the
   provider still receives the original send UUID.
