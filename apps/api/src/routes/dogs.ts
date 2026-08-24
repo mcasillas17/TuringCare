@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import type { Locale } from "@turingcare/i18n";
 import {
   VALIDATION_MESSAGE_CODES,
@@ -252,7 +252,25 @@ export function resolveBriefSendIntent<
 // New clients are statically required to send briefId by briefSendSchema. The
 // route keeps a narrow legacy decoder so an already-open pre-rollout tab can
 // send only when the intended Brief is unambiguous.
-const briefSendRequestSchema = briefSendSchema.partial({ briefId: true });
+const briefSendRequestSchema = briefSendSchema.partial({
+  briefId: true,
+  idempotencyKey: true,
+});
+
+function legacyBriefSendIdempotencyKey(input: {
+  userId: string;
+  dogId: string;
+  briefId: string;
+  recipient: string;
+  message: string | null;
+}) {
+  const digest = createHmac("sha256", env.BETTER_AUTH_SECRET)
+    .update(
+      JSON.stringify([input.userId, input.dogId, input.briefId, input.recipient, input.message]),
+    )
+    .digest("hex");
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+}
 
 export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
   .use("*", requireUser)
@@ -1453,7 +1471,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         .for("update");
       if (!lockedDog) return { kind: "not_found" } as const;
 
-      const loadExistingSend = async () => {
+      const loadExistingSend = async (idempotencyKey: string) => {
         const [existing] = await tx
           .select({
             id: briefSends.id,
@@ -1470,7 +1488,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
           .innerJoin(briefs, eq(briefSends.briefId, briefs.id))
           .where(
             and(
-              eq(briefSends.id, body.idempotencyKey),
+              eq(briefSends.id, idempotencyKey),
               eq(briefSends.sentByUserId, userId),
               eq(briefs.dogId, lockedDog.id),
             ),
@@ -1502,7 +1520,9 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         );
         return { kind: "pending", send, email, replyTo: owner.email } as const;
       };
-      const existingResult = resolveBriefSendIntent(await loadExistingSend(), body);
+      const existingResult = body.idempotencyKey
+        ? resolveBriefSendIntent(await loadExistingSend(body.idempotencyKey), body)
+        : null;
       if (existingResult?.kind === "idempotency_conflict") return existingResult;
       if (existingResult?.kind === "matched") return prepareMatchedIntent(existingResult.send);
 
@@ -1525,6 +1545,21 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
       }
       if (brief.status !== "finalized") return { kind: "not_finalized" } as const;
 
+      const sendId =
+        body.idempotencyKey ??
+        legacyBriefSendIdempotencyKey({
+          userId,
+          dogId: lockedDog.id,
+          briefId: brief.id,
+          recipient: body.recipient,
+          message: body.message ?? null,
+        });
+      if (!body.idempotencyKey) {
+        const legacyReplay = resolveBriefSendIntent(await loadExistingSend(sendId), body);
+        if (legacyReplay?.kind === "idempotency_conflict") return legacyReplay;
+        if (legacyReplay?.kind === "matched") return prepareMatchedIntent(legacyReplay.send);
+      }
+
       const [sendCount] = await tx
         .select({ value: count() })
         .from(briefSends)
@@ -1540,7 +1575,6 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         },
         brief.locale,
       );
-      const sendId = body.idempotencyKey;
       const [send] = await tx
         .insert(briefSends)
         .values({
@@ -1553,7 +1587,7 @@ export const dogsApp = new Hono<{ Variables: Vars & { locale: Locale } }>()
         .onConflictDoNothing({ target: briefSends.id })
         .returning();
       if (!send) {
-        const collision = resolveBriefSendIntent(await loadExistingSend(), body);
+        const collision = resolveBriefSendIntent(await loadExistingSend(sendId), body);
         return collision?.kind === "matched"
           ? prepareMatchedIntent(collision.send)
           : ({ kind: "idempotency_conflict" } as const);

@@ -1949,7 +1949,7 @@ describe("dogs: brief send", () => {
     expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(2);
   });
 
-  it("POST send: accepts a legacy client only when one Brief makes its intent unambiguous", async () => {
+  it("POST send: safely replays the real legacy payload when one Brief is unambiguous", async () => {
     const u = await createTestUser();
     users.push(u);
     const dog = await makeDog(u);
@@ -1957,13 +1957,23 @@ describe("dogs: brief send", () => {
     const { sendEmail } = await import("../email/send-email");
     vi.mocked(sendEmail).mockClear();
 
-    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+    const body = JSON.stringify({ recipient: "legacy-client@example.com", message: "Legacy tab" });
+    const first = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: briefSendBody({ recipient: "legacy-client@example.com" }),
+      body,
+    });
+    const second = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body,
     });
 
-    expect(response.status).toBe(201);
+    expect([first.status, second.status]).toEqual([201, 201]);
+    const firstBody = (await first.json()) as { send: { id: string; briefId: string } };
+    const secondBody = (await second.json()) as { send: { id: string; briefId: string } };
+    expect(secondBody.send.id).toBe(firstBody.send.id);
+    expect(secondBody.send.briefId).toBe(firstBody.send.briefId);
     expect(vi.mocked(sendEmail)).toHaveBeenCalledTimes(1);
   });
 
@@ -1979,7 +1989,7 @@ describe("dogs: brief send", () => {
     const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
       method: "POST",
       headers: u.authHeaders,
-      body: briefSendBody({ recipient: "stale-client@example.com" }),
+      body: JSON.stringify({ recipient: "stale-client@example.com" }),
     });
 
     expect(response.status).toBe(409);
