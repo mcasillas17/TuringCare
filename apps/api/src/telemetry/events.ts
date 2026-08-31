@@ -63,7 +63,7 @@ export const eventIngestSchema = z
   .object({
     name: z.enum(CLIENT_EVENTS),
     props: z
-      .record(scalar)
+      .record(z.string(), scalar)
       .default({})
       .refine((p) => Buffer.byteLength(JSON.stringify(p), "utf8") <= 1024, "props too large"),
   })

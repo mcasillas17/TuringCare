@@ -2,7 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { normalizeValidationMessageCode } from "@turingcare/shared";
 import type { ValidationTargets } from "hono";
 import { HTTPException } from "hono/http-exception";
-import type { ZodSchema, z } from "zod";
+import type { ZodType } from "zod";
 
 const MALFORMED_JSON_HTTP_MESSAGE = "Malformed JSON in request body";
 
@@ -23,17 +23,23 @@ export function invalidValidationResult() {
   } as const;
 }
 
-export const stableZValidator = <
-  T extends ZodSchema<unknown, z.ZodTypeDef, unknown>,
-  Target extends keyof ValidationTargets,
->(
+export const stableZValidator = <T extends ZodType, Target extends keyof ValidationTargets>(
   target: Target,
   schema: T,
 ) =>
-  zValidator(target, schema, (result) => {
+  zValidator(target, schema, (result, c): Response | undefined => {
     if (result.success) return;
 
-    for (const issue of result.error.issues) {
-      issue.message = normalizeValidationMessageCode(issue.message);
-    }
+    return c.json(
+      {
+        success: false,
+        error: {
+          issues: result.error.issues.map((issue) => ({
+            ...issue,
+            message: normalizeValidationMessageCode(issue.message),
+          })),
+        },
+      },
+      400,
+    );
   });
