@@ -124,12 +124,13 @@ async function setup() {
 const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 
 async function waitForAdvisoryLockWaiter() {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
     const result = await pool.query<{ waiting: boolean }>(
       "select exists (select 1 from pg_locks where locktype = 'advisory' and not granted and database = (select oid from pg_database where datname = current_database())) as waiting",
     );
     if (result.rows[0]?.waiting) return;
-    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
   }
   throw new Error("timed out waiting for an advisory lock waiter");
 }
