@@ -4,7 +4,7 @@
 # the project uses moduleResolution "Bundler" (extensionless relative imports)
 # and @turingcare/shared is consumed as TypeScript source, neither of which
 # Node's native ESM loader can run. tsx transpiles + resolves both correctly.
-FROM node:22-slim AS base
+FROM node:26-slim AS base
 RUN corepack enable
 WORKDIR /app
 
