@@ -27,7 +27,7 @@
     "@sentry/node": "^10.69.0",
     "@turingcare/i18n": "workspace:*",
     "@turingcare/shared": "workspace:*",
-    "better-auth": "^1.1.0",
+    "better-auth": "~1.6.30",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.34",
     "pg": "^8.13.0",
@@ -40,6 +40,6 @@
     "drizzle-kit": "^0.31.10",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "vitest": "^3.2.7"
   }
 }
