@@ -8,3 +8,16 @@ allowBuilds:
   msw: false
   sharp: false
   workerd: false
+
+# Advisory overrides. Both parents pin a vulnerable version and have no fixed
+# release available, so the version is forced here.
+#   vite    - vitest's peer resolution stays on 6.4.2, which is inside the
+#             `<= 6.4.2` range of GHSA (server.fs.deny bypass). apps/web already
+#             declares ^6.4.3; this pulls the vitest-side copy up to match.
+#   esbuild - drizzle-kit 0.31.10 (latest) still depends on the deprecated
+#             @esbuild-kit/esm-loader, which pins esbuild 0.18.x, inside the
+#             `<= 0.24.2` advisory range. Scoped to that parent only so the
+#             other esbuild copies are untouched.
+overrides:
+  vite: ^6.4.3
+  '@esbuild-kit/core-utils>esbuild': ^0.25.12
