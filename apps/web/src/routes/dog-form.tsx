@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import type { z } from "zod";
 
 const inputCls = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
 
@@ -24,7 +25,7 @@ export function DogForm({ mode }: { mode: "create" | "edit" }) {
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<DogProfile>({
+  } = useForm<z.input<typeof dogProfileSchema>, unknown, DogProfile>({
     resolver: zodResolver(dogProfileSchema),
     defaultValues: { spayedNeutered: false },
   });

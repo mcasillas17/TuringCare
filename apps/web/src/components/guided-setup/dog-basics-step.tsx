@@ -12,6 +12,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { type DogProfile, type GuidedSetupRecord, dogProfileSchema } from "@turingcare/shared";
 import { useState } from "react";
 import { type FieldError, useForm } from "react-hook-form";
+import type { z } from "zod";
 
 type DogBasicsStepProps = {
   onStarted: (setup: GuidedSetupRecord | null) => void;
@@ -32,7 +33,7 @@ export function DogBasicsStep({ onStarted }: DogBasicsStepProps) {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<DogProfile>({
+  } = useForm<z.input<typeof dogProfileSchema>, unknown, DogProfile>({
     resolver: zodResolver(dogProfileSchema),
     defaultValues: {
       size: "medium",
