@@ -285,7 +285,7 @@ Pages manages these DNS records automatically (apex + `www`, proxied/orange is
 fine for Pages).
 
 Verify end-to-end: open `https://turingcare.dog`, register, confirm you land on
-`/app` (session cookie set on `.turingcare.dog`, accepted cross-subdomain by
+`/my/setup` (session cookie set on `.turingcare.dog`, accepted cross-subdomain by
 `api.turingcare.dog`).
 
 ---

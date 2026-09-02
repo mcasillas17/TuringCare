@@ -1,9 +1,12 @@
 # Security Hardening — Planned (Next Phases)
 
+This file tracks security-specific details. The canonical cross-functional priority order and
+public-beta status live in [`ROADMAP.md`](ROADMAP.md).
+
 These were **consciously deferred** during session-1 scope (scaffolding/auth/deploy)
 and the landing page phase. They are not bugs — they are the planned account-security
-roadmap. Tackle roughly in this priority order. Each item should go through the normal
-brainstorm → spec → plan → build flow.
+backlog. Prioritize them within the gates defined by the canonical roadmap. Each item should go
+through the normal brainstorm → spec → plan → build flow.
 
 > **Updated 2026-08-23.** Transactional delivery and password recovery have shipped.
 > Enforced email verification remains the top account-security priority because the

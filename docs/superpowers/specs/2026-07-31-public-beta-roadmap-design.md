@@ -1,5 +1,8 @@
 # TuringCare Public Beta Roadmap Design
 
+> **Historical strategy record.** Current status and delivery order are maintained in
+> [`docs/ROADMAP.md`](../../ROADMAP.md).
+
 ## Goal
 
 Prepare TuringCare for a public beta with an initial cohort of 10–20 dog owners,
