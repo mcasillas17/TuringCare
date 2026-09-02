@@ -35,7 +35,7 @@ pnpm dev                                   # api :3001, web :3000
 > like `direnv` to automate it). Alternative one-offs:
 > `DATABASE_URL=... pnpm --filter @turingcare/api db:push`.
 
-Open http://localhost:3000, register an account, and you land on `/app`.
+Open http://localhost:3000, register an account, and you land on `/my/setup`.
 
 ## Architecture
 
@@ -210,10 +210,13 @@ account:
 Do not commit credentials; configure them in **Settings → Secrets and
 variables → Actions**.
 
-## What's next
+## Roadmap
 
-- Dog profile photos (storage + upload + thumbnail on cards/brief).
-- Production smoke + mobile QA on `turingcare.dog` before the first round of
-  real-user testing.
-- Security backlog (password reset is shipped; email verification, 2FA, etc.) —
-  see [`docs/SECURITY-BACKLOG.md`](docs/SECURITY-BACKLOG.md).
+The canonical delivery order and current public-beta status live in
+[`docs/ROADMAP.md`](docs/ROADMAP.md). The immediate gates are enforced email ownership,
+complete production monitoring, a measured backup/restore drill, in-app feedback, cohort
+analytics, and release-candidate QA before Guided Today and beta recruitment.
+
+Account-security details remain in
+[`docs/SECURITY-BACKLOG.md`](docs/SECURITY-BACKLOG.md); dated design documents under
+`docs/superpowers/specs/` preserve historical decisions rather than acting as competing roadmaps.
