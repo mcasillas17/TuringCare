@@ -7,7 +7,9 @@ they can share with a trainer.
 
 ## Prerequisites
 
-- Node 22 (`.nvmrc` provided; the repo also runs on Node 24)
+- Node 22 for local development and CI (`.nvmrc` provided). The deployed API
+  image currently uses Node 26; [`docs/ROADMAP.md`](docs/ROADMAP.md) tracks the
+  production-monitoring runtime mismatch this creates.
 - pnpm 11 (`corepack enable` recommended)
 - Docker (for local Postgres)
 
@@ -18,7 +20,7 @@ git clone https://github.com/mcasillas17/TuringCare.git
 cd TuringCare
 pnpm install
 cp .env.example .env
-docker compose up -d --wait                # Postgres 16 on :5432 (waits for healthy)
+docker compose up -d --wait                # Postgres 18 on :5432 (waits for healthy)
 set -a && . ./.env && set +a               # export env for this shell
 pnpm --filter @turingcare/api db:push      # apply the schema
 pnpm dev                                   # api :3001, web :3000
@@ -39,7 +41,8 @@ Open http://localhost:3000, register an account, and you land on `/my/setup`.
 
 ## Architecture
 
-- **apps/api** — Hono on Node 22 (`@hono/node-server`), Drizzle ORM, Better Auth
+- **apps/api** — Hono (`@hono/node-server`) on Node 22 locally/in CI and
+  currently Node 26 in the production image, with Drizzle ORM and Better Auth
   (email/password, Postgres sessions, httpOnly cookies). Exports `AppType` for
   end-to-end-typed RPC.
 - **apps/web** — Vite + React 19, Tailwind v4 (CSS-first), shadcn/ui, TanStack Query,
@@ -106,11 +109,10 @@ contracts, content boundaries, failure/privacy behavior, and instructions for ad
 
 Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highlights:
 
-- **Owner-scoped dog profiles** organized as a hub-and-spoke experience: a thin
-  Overview hub (`/my/dogs/:id`) with at-a-glance metrics + concerns, and focused
-  Journal / Training / Brief spokes under a shared layout (sticky banner + tabs).
-  Training covers goals, skills (collapsed per-skill detail), and per-skill
-  practice sessions.
+- **Owner-scoped dog profiles** organized as a shared dog workspace:
+  `/my/dogs/:id` opens the journal and provides focused Journal / Training /
+  Brief / This Week tabs under a shared layout. Training covers goals, skills
+  (collapsed per-skill detail), and per-skill practice sessions.
 - **Behavior journal** — quick-capture moments (note + optional 1-5 intensity
   slider) and daily check-ins (note + better/same/harder trend). Structured ABC
   fields stay as optional enrichment.
@@ -139,8 +141,9 @@ Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highligh
 
 ## Developer verification
 
-Use Node 22 (the CI and production runtime) and a migrated local Postgres database. The
-main repository gates are:
+Use Node 22 (the local and CI runtime) and a migrated local Postgres database. The
+production image currently runs Node 26; the roadmap tracks reconciliation with
+the monitoring support contract. The main repository gates are:
 
 ```bash
 nvm use
@@ -218,5 +221,4 @@ complete production monitoring, a measured backup/restore drill, in-app feedback
 analytics, and release-candidate QA before Guided Today and beta recruitment.
 
 Account-security details remain in
-[`docs/SECURITY-BACKLOG.md`](docs/SECURITY-BACKLOG.md); dated design documents under
-`docs/superpowers/specs/` preserve historical decisions rather than acting as competing roadmaps.
+[`docs/SECURITY-BACKLOG.md`](docs/SECURITY-BACKLOG.md).
