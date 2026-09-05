@@ -27,6 +27,12 @@ const NUMERIC_PROJECT_ID = /^[0-9]+$/;
  * non-empty, purely numeric final path segment (the Sentry project ID).
  */
 function isValidDsn(value: string): boolean {
+  // Match the pinned SDK's public-key/host grammar before calling init: its
+  // parser prints the raw DSN on a mismatch. Never accept passwords, query
+  // strings, fragments, or encoded credentials in this configuration.
+  if (!/^https:\/\/\w+@(?:[\w.-]+|\[[\da-fA-F:]+\])(?::\d+)?\/(?:[\w.~-]+\/)*\d+$/.test(value)) {
+    return false;
+  }
   let url: URL;
   try {
     url = new URL(value);

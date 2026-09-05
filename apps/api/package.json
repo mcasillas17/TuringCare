@@ -9,9 +9,10 @@
     ".": "./src/app.ts"
   },
   "scripts": {
-    "dev": "tsx watch --import ./src/instrument.ts src/index.ts",
+    "dev": "tsx watch --unhandled-rejections=strict --import ./src/instrument.ts src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
+    "start": "tsx --unhandled-rejections=strict --import ./src/instrument.ts src/index.ts",
+    "monitoring:diagnostic": "tsx --unhandled-rejections=strict --import ./src/instrument.ts src/monitoring/diagnostic.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",

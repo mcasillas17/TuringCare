@@ -72,6 +72,17 @@ describe("resolveMonitoringConfig", () => {
     expect(result.enabled).toBe(false);
   });
 
+  it.each([
+    "https://email%40sentinel@example.invalid/1",
+    "https://key:credential@example.invalid/1",
+    "https://key@example.invalid/1?secret=credential",
+    "https://key@example.invalid/1#credential",
+  ])("rejects SDK-incompatible or credential-bearing DSNs without echoing values", (dsn) => {
+    const result = resolveMonitoringConfig({ ...complete, dsn });
+    expect(result.enabled).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(dsn);
+  });
+
   it("rejects a plain http DSN (HTTPS only)", () => {
     const result = resolveMonitoringConfig({
       ...complete,

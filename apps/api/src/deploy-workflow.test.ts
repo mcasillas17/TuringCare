@@ -25,6 +25,7 @@ describe("production deployment protocol", () => {
     expect(deployApi).toContain("flyctl scale count 0");
     expect(deployApi).toContain("db:migrate:predeploy");
     expect(deployApi).toContain("flyctl deploy");
+    expect(deployApi).toContain('SENTRY_RELEASE="$GITHUB_SHA"');
     expect(deployApi).toContain("/ready");
     expect(migrate).toContain("needs: deploy-api");
     expect(migrate).toContain("db:migrate");
@@ -41,11 +42,20 @@ describe("production deployment protocol", () => {
     expect(deployWeb).not.toContain("needs: ci");
   });
 
-  it("smoke-tests the production API image before rollout", async () => {
-    const workflow = await readFile(deployWorkflowUrl, "utf8");
+  it.each(["ci", "deploy"])("gates %s on the monitoring-enabled production image", async (name) => {
+    const workflow = await readFile(
+      new URL(`../../../.github/workflows/${name}.yml`, import.meta.url),
+      "utf8",
+    );
     const ci = workflow.match(/\n {2}ci:\n(?<body>[\s\S]*?)(?=\n {2}[a-z][\w-]*:\n)/)?.groups?.body;
 
     expect(ci).toContain("docker build --file Dockerfile.api");
     expect(ci).toContain("scripts/smoke-api-image.sh");
+
+    const smoke = await readFile(
+      new URL("../../../scripts/smoke-api-image.sh", import.meta.url),
+      "utf8",
+    );
+    expect(smoke).toContain("smoke-api-monitoring-image.sh");
   });
 });
