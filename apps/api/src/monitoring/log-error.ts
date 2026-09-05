@@ -13,7 +13,7 @@
 // sanitize-event.ts#classifyExceptionValue). The raw error message, stack
 // trace, thrown value, and any request/response body are never logged.
 
-import { classifyExceptionValue } from "./sanitize-event";
+import { classifyExceptionValue, sanitizeApiErrorTags } from "./sanitize-event";
 
 export interface ApiErrorLogMeta {
   requestId: string;
@@ -37,11 +37,17 @@ function errorTypeOf(error: unknown): string | undefined {
  * single failure is never logged twice.
  */
 export function logApiError(error: unknown, meta: ApiErrorLogMeta): void {
-  console.error("[monitoring] unexpected server error", {
-    requestId: meta.requestId,
+  const tags = sanitizeApiErrorTags({
+    request_id: meta.requestId,
     route: meta.route,
     method: meta.method,
     status: meta.status,
+  });
+  console.error("[monitoring] unexpected server error", {
+    requestId: tags?.request_id,
+    route: tags?.route,
+    method: tags?.method,
+    status: tags?.status,
     errorType: classifyExceptionValue(errorTypeOf(error)),
   });
 }

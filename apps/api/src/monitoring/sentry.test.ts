@@ -43,7 +43,7 @@ vi.mock("@sentry/node", () => ({
 const VALID: Record<string, string> = {
   SENTRY_DSN: "https://publickey123@o12345.ingest.sentry.io/6789",
   SENTRY_ENVIRONMENT: "production",
-  SENTRY_RELEASE: "v1.2.3-abcdef0",
+  SENTRY_RELEASE: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 };
 
 function stubEnabledEnv(): void {
@@ -182,7 +182,7 @@ describe("initializeApiMonitoring", () => {
   it("logs a '[monitoring] '-prefixed warning and stays disabled on a malformed configuration", async () => {
     vi.stubEnv("SENTRY_DSN", "not-a-valid-dsn");
     vi.stubEnv("SENTRY_ENVIRONMENT", "production");
-    vi.stubEnv("SENTRY_RELEASE", "v1.2.3-abcdef0");
+    vi.stubEnv("SENTRY_RELEASE", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const { initializeApiMonitoring, isApiMonitoringEnabled } = await loadSentryModule();
 

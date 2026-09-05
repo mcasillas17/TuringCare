@@ -327,7 +327,7 @@ at an isolated HTTPS sink, including startup/process failures and bounded flushi
 
 Optional Fly monitoring configuration is `SENTRY_DSN` (API project) and
 `SENTRY_ENVIRONMENT=production`. The API deploy command sets `SENTRY_RELEASE` to
-`GITHUB_SHA`; a stale Fly secret with that name must be removed during an approved
+`GITHUB_SHA` (the required full lowercase 40-character commit SHA); a stale Fly secret with that name must be removed during an approved
 cutover so it cannot override the running release. Unconfigured or unavailable
 monitoring fails open with fixed warnings; fatal application failures still exit 1.
 Production `RESEND_API_KEY` enforcement remains mandatory.

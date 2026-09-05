@@ -171,7 +171,9 @@ is built and boot-smoked in PR CI and the post-merge deployment gate.
 ### API error monitoring
 
 The API preserves `tsx` startup with `src/instrument.ts` preloaded. Monitoring is
-network-free when unconfigured; configured capture is supported only on Node 22.
+network-free when unconfigured; configured capture is supported only on Node 22
+with a full 40-character Git SHA release. The API generates fresh request IDs and
+returns them in `X-Request-ID`; client-supplied IDs are never copied into monitoring.
 The image gate uses the real SDK and an isolated local HTTPS sink to verify sanitized
 request/startup/process events, flush failures, and exit behavior:
 

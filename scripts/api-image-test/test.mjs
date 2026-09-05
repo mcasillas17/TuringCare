@@ -10,7 +10,7 @@ assert.match(process.version, /^v22\./, "production image must use the supported
 assert(command.includes("--import") && command.includes("./src/instrument.ts"));
 assert(command.includes("--unhandled-rejections=strict"));
 assert.equal(command.at(-1), "src/index.ts");
-const release = "image-smoke-synthetic-release";
+const release = "a".repeat(40);
 const envelopes = [];
 let responseMode = "accept";
 const sink = createServer(
@@ -61,11 +61,11 @@ const baseEnv = {
 };
 const configured = { SENTRY_DSN: dsn, SENTRY_ENVIRONMENT: "production", SENTRY_RELEASE: release };
 const poison = "/app/apps/api/image-tests/privacy-poison.mjs";
-function diagnostic(mode, poisoned = false) {
+function diagnostic(mode, processor) {
   return [
     command[0],
     ...command.slice(1, -1),
-    ...(poisoned ? ["--import", poison] : []),
+    ...(processor ? ["--import", processor] : []),
     "src/monitoring/diagnostic.ts",
     mode,
   ];
@@ -102,7 +102,10 @@ async function run(args, env, expectedCode) {
   const result = await launch(args, env).done;
   assert.equal(result.signal, null, result.output);
   assert.equal(result.code, expectedCode, result.output);
-  assert(!result.output.includes("-sentinel"), "private data in process output");
+  assert(
+    !/-sentinel|OwnerPrivateToken123|OWNERSECRET/.test(result.output),
+    "private data in process output",
+  );
   return result.output;
 }
 
@@ -135,7 +138,10 @@ async function boot(env) {
 }
 
 function checkEvent(raw, route, method, fatal = false, extension = ".ts") {
-  assert(!raw.includes("-sentinel"), "private sentinel escaped the sanitizer");
+  assert(
+    !/-sentinel|OwnerPrivateToken123|OWNERSECRET/.test(raw),
+    "private sentinel escaped the sanitizer",
+  );
   const lines = raw.trim().split("\n");
   const header = JSON.parse(lines[0]);
   const item = JSON.parse(lines[1]);
@@ -198,6 +204,7 @@ try {
     { ...configured, SENTRY_DSN: "https://email%40sentinel@example.invalid/1" },
     2,
   );
+  await run(diagnostic("status"), { ...configured, SENTRY_RELEASE: "OwnerPrivateToken123" }, 2);
   await boot(configured);
   assert.match(await run(diagnostic("status"), configured, 0), /"enabled":true/);
   assert.equal(envelopes.length, 0);
@@ -221,7 +228,7 @@ try {
 
   for (const mode of ["request", "startup", "uncaught", "rejection"]) {
     const before = envelopes.length;
-    const output = await run(diagnostic(mode, true), configured, mode === "request" ? 0 : 1);
+    const output = await run(diagnostic(mode, poison), configured, mode === "request" ? 0 : 1);
     assert.equal(envelopes.length - before, 1, `one real event for ${mode}`);
     const route =
       mode === "request" ? "/operator-diagnostic" : mode === "startup" ? "startup" : "process";
@@ -239,6 +246,32 @@ try {
       assert.equal(result.delivery, "unconfirmed");
     }
     console.log(`PASS ${mode}: sanitized TLS envelope received, source stack, flush, exit`);
+  }
+
+  {
+    const before = envelopes.length;
+    await run(
+      diagnostic("request", "/app/apps/api/image-tests/metadata-poison.mjs"),
+      configured,
+      0,
+    );
+    assert.equal(envelopes.length - before, 1);
+    const raw = envelopes[before];
+    assert(
+      !/-sentinel|OwnerPrivateToken123|OWNERSECRET/.test(raw),
+      "private identifier escaped in approved metadata",
+    );
+    const event = JSON.parse(raw.trim().split("\n")[2]);
+    assert.match(event.event_id, /^[a-f0-9]{32}$/);
+    for (const key of ["tags", "release", "environment", "platform", "timestamp", "request"])
+      assert.equal(event[key], undefined, key);
+    assert.notEqual(event.level, "OwnerPrivateToken123");
+    assert(
+      event.exception.values.every(
+        (error) => error.type === "Error" && error.value === "Unexpected application error",
+      ),
+    );
+    console.log("PASS identifier-shaped private values excluded from approved event metadata");
   }
 
   for (const mode of ["uncaught", "rejection"]) {

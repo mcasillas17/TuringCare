@@ -12,6 +12,7 @@ import { builtinModules } from "node:module";
 import { isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ErrorEvent, EventHint, Exception, StackFrame } from "@sentry/node";
+import { isApiMonitoringRelease } from "./config";
 
 // Only shipped workspace source locations are diagnostic metadata. A custom
 // Error.stack can forge arbitrary filenames; syntax/prefix checks alone are
@@ -51,20 +52,35 @@ function isLineNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
-/** The only tag keys ever forwarded to Sentry. */
-const ALLOWED_TAGS = ["application", "route", "method", "status", "request_id"] as const;
+// Only routes obtained from Hono's registered templates may leave the process.
+// This set grows only with code-defined routes encountered by the middleware,
+// never with raw URLs, parameter values, or SDK event fields.
+const MONITORING_ROUTES = new Set(["startup", "process", "unmatched"]);
+export function registerApiMonitoringRoutes(routes: readonly { path: string }[]): void {
+  for (const route of routes) MONITORING_ROUTES.add(route.path);
+}
 
 /**
- * Matches short, all-caps HTTP-method-shaped tokens: current standard verbs
- * (GET, POST, PATCH, DELETE, OPTIONS, ...) as well as the planned `MANUAL`
- * diagnostic pseudo-method. Anything else (non-strings, lowercase, or
- * free-form content) is rejected so `request.method` can never carry
- * arbitrary application/owner content.
+ * Fixed HTTP methods and diagnostic categories. An uppercase identifier is
+ * not inherently safe: arbitrary client methods can contain private content.
  */
-const SAFE_METHOD = /^[A-Z]{3,16}$/;
+const SAFE_METHODS = new Set([
+  "GET",
+  "HEAD",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "OPTIONS",
+  "CONNECT",
+  "TRACE",
+  "MANUAL",
+  "STARTUP",
+  "PROCESS",
+]);
 
 function isSafeMethod(value: unknown): value is string {
-  return typeof value === "string" && SAFE_METHOD.test(value);
+  return typeof value === "string" && SAFE_METHODS.has(value);
 }
 
 /** The only debug image fields ever forwarded: enough to symbolicate stack frames. */
@@ -111,17 +127,28 @@ function sanitizeDebugMeta(
   return images.length > 0 ? ({ images } as ErrorEvent["debug_meta"]) : undefined;
 }
 
-/**
- * Matches short, code-identifier-shaped strings (e.g. exception/mechanism
- * type names like `TypeError` or `onunhandledrejection`). Used to allow a
- * small amount of structural information through while rejecting anything
- * that could be (or contain) free-form application/owner content.
- */
-const SAFE_IDENTIFIER = /^[A-Za-z][A-Za-z0-9_$.]{0,63}$/;
-
-function isSafeIdentifier(value: unknown): value is string {
-  return typeof value === "string" && SAFE_IDENTIFIER.test(value);
-}
+// Exception and mechanism names can be overwritten by application data.
+// Only these fixed runtime/framework classifications carry diagnostic meaning.
+const EXCEPTION_TYPES = new Set([
+  "Error",
+  "EvalError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "TypeError",
+  "URIError",
+  "AggregateError",
+  "HTTPException",
+  "ZodError",
+]);
+const MECHANISM_TYPES = new Set([
+  "generic",
+  "chained",
+  "onuncaughtexception",
+  "onunhandledrejection",
+  "auto.core.node.onuncaughtexception",
+  "auto.core.node.onunhandledrejection",
+]);
 
 /**
  * Classifies a (possibly unsafe/attacker- or application-controlled)
@@ -129,18 +156,18 @@ function isSafeIdentifier(value: unknown): value is string {
  * is never forwarded: only a short, generic sentence is ever sent to Sentry.
  */
 export function classifyExceptionValue(type: string | undefined): string {
-  return isSafeIdentifier(type) ? `Unexpected ${type}` : "Unexpected application error";
+  return type && EXCEPTION_TYPES.has(type) ? `Unexpected ${type}` : "Unexpected application error";
 }
 
 /** The sanitized exception `type` field itself must also be safe. */
 function sanitizeExceptionType(type: string | undefined): string {
-  return isSafeIdentifier(type) ? type : "Error";
+  return type && EXCEPTION_TYPES.has(type) ? type : "Error";
 }
 
 function sanitizeMechanism(mechanism: Exception["mechanism"]): Exception["mechanism"] | undefined {
   if (!mechanism) return undefined;
   const sanitized: NonNullable<Exception["mechanism"]> = {
-    type: isSafeIdentifier(mechanism.type) ? mechanism.type : "generic",
+    type: MECHANISM_TYPES.has(mechanism.type) ? mechanism.type : "generic",
   };
   if (typeof mechanism.handled === "boolean") sanitized.handled = mechanism.handled;
   if (typeof mechanism.synthetic === "boolean") sanitized.synthetic = mechanism.synthetic;
@@ -177,18 +204,28 @@ function sanitizeException(exception: Exception): Exception {
   return sanitized;
 }
 
-/** A tag value is only ever forwarded when it is a plain string or number. */
-function isSafeTagValue(value: unknown): value is string | number {
-  return typeof value === "string" || typeof value === "number";
-}
-
-function sanitizeTags(tags: ErrorEvent["tags"]): ErrorEvent["tags"] | undefined {
+/** Shared event/log metadata contract; approved keys alone do not make values safe. */
+export function sanitizeApiErrorTags(tags: ErrorEvent["tags"]): ErrorEvent["tags"] | undefined {
   if (!tags) return undefined;
   const sanitized: NonNullable<ErrorEvent["tags"]> = {};
-  for (const key of ALLOWED_TAGS) {
-    const value = tags[key];
-    if (key in tags && isSafeTagValue(value)) sanitized[key] = value;
+  if (tags.application === "api") sanitized.application = "api";
+  if (typeof tags.route === "string" && MONITORING_ROUTES.has(tags.route)) {
+    sanitized.route = tags.route;
   }
+  if (isSafeMethod(tags.method)) sanitized.method = tags.method;
+  const status = tags.status;
+  if (
+    (typeof status === "number" && Number.isInteger(status) && status >= 500 && status <= 599) ||
+    (typeof status === "string" && /^5[0-9]{2}$/.test(status))
+  )
+    sanitized.status = status;
+  const requestId = tags.request_id;
+  if (
+    typeof requestId === "string" &&
+    (/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(requestId) ||
+      ["startup", "process", "unknown"].includes(requestId))
+  )
+    sanitized.request_id = requestId;
   return Object.keys(sanitized).length > 0 ? sanitized : undefined;
 }
 
@@ -203,14 +240,20 @@ export function sanitizeApiEvent(event: ErrorEvent, _hint: EventHint): ErrorEven
 
     // Operational metadata: identifies/dates/environments the event without
     // carrying any application or owner content.
-    if (event.event_id !== undefined) sanitized.event_id = event.event_id;
-    if (event.timestamp !== undefined) sanitized.timestamp = event.timestamp;
-    if (event.platform !== undefined) sanitized.platform = event.platform;
-    if (event.level !== undefined) sanitized.level = event.level;
-    if (event.release !== undefined) sanitized.release = event.release;
-    if (event.environment !== undefined) sanitized.environment = event.environment;
+    if (typeof event.event_id === "string" && /^[a-f0-9]{32}$/.test(event.event_id))
+      sanitized.event_id = event.event_id;
+    if (
+      typeof event.timestamp === "number" &&
+      Number.isFinite(event.timestamp) &&
+      event.timestamp > 0
+    )
+      sanitized.timestamp = event.timestamp;
+    if (event.platform === "node") sanitized.platform = "node";
+    if (event.level === "error" || event.level === "fatal") sanitized.level = event.level;
+    if (isApiMonitoringRelease(event.release)) sanitized.release = event.release;
+    if (event.environment === "production") sanitized.environment = "production";
 
-    const tags = sanitizeTags(event.tags);
+    const tags = sanitizeApiErrorTags(event.tags);
     if (tags) sanitized.tags = tags;
 
     if (event.exception?.values) {

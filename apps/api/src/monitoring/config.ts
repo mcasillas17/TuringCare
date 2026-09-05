@@ -15,7 +15,10 @@ export type MonitoringSource = {
   release?: string;
 };
 
-const MIN_RELEASE_LENGTH = 7;
+/** The API deployment identifies releases with the full Git commit SHA. */
+export function isApiMonitoringRelease(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{40}$/.test(value);
+}
 
 /** A Sentry DSN's trailing path segment is always its numeric project ID. */
 const NUMERIC_PROJECT_ID = /^[0-9]+$/;
@@ -73,7 +76,7 @@ export function resolveMonitoringConfig(
   const invalid: string[] = [];
   if (!dsn || !isValidDsn(dsn)) invalid.push(varNames.dsn);
   if (environment !== "production") invalid.push(varNames.environment);
-  if (!release || release.length < MIN_RELEASE_LENGTH) invalid.push(varNames.release);
+  if (!isApiMonitoringRelease(release)) invalid.push(varNames.release);
 
   if (invalid.length === 0) {
     return { enabled: true, dsn, environment: "production", release };

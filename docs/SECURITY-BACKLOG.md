@@ -111,7 +111,9 @@ through the normal brainstorm → spec → plan → build flow.
 
 The T2 API image and SDK support guard agree on Node 22. Isolated diagnostics and the
 real-SDK image gate retain fail-open monitoring and fatal application exit semantics.
-The sanitizer validates source locations/debug IDs and excludes credentials, cookies,
+The sanitizer validates source locations/debug IDs and fixed metadata contracts. Request IDs
+are server-generated, routes are registered templates, and release values are full Git SHAs.
+It excludes credentials, cookies,
 request bodies, email addresses, owner content, raw exception values, and Brief bearer
 tokens. No public crash route, auth bypass, email bypass, or database migration is added.
 

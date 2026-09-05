@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createMiddleware } from "hono/factory";
+import { matchedRoutes } from "hono/route";
+import { registerApiMonitoringRoutes } from "./sanitize-event";
 
 /**
  * Hono `Env` shared by the whole API: every route and downstream middleware
@@ -8,17 +10,10 @@ import { createMiddleware } from "hono/factory";
 export type ApiEnv = { Variables: { requestId: string } };
 
 /**
- * Accepted inbound `X-Request-ID` shape: an opaque, ASCII token 8-64
- * characters long. Anything else (too short, too long, or containing
- * characters outside this set, e.g. an email address) is never trusted
- * verbatim — it is replaced with a generated ID instead.
- */
-const VALID_REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
-
-/**
- * Correlates a request across logs, Sentry, and the client. Preserves a
- * well-formed inbound `X-Request-ID` (e.g. propagated by an upstream proxy or
- * a retried client request) and otherwise generates a fresh one. The final ID
+ * Correlates a request across logs, Sentry, and the client with a fresh
+ * server-generated UUID. An inbound ID can contain a credential or Brief
+ * token even when it looks like an opaque ID or UUID, so it is never copied.
+ * The final ID
  * is always echoed back on the response — in a `finally`, so it lands even
  * when a downstream handler throws — after the rest of the chain runs, so a
  * failed request can still be looked up by its ID.
@@ -32,8 +27,9 @@ const VALID_REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
  * in the new Error.
  */
 export const requestIdMiddleware = createMiddleware<ApiEnv>(async (c, next) => {
-  const inbound = c.req.header("X-Request-ID");
-  const id = inbound && VALID_REQUEST_ID.test(inbound) ? inbound : randomUUID();
+  // These are Hono's registered templates, never the URL or parameter values.
+  registerApiMonitoringRoutes(matchedRoutes(c));
+  const id = randomUUID();
   c.set("requestId", id);
   try {
     await next();

@@ -25,8 +25,13 @@ getGlobalScope().addEventProcessor((event) => {
     ],
   };
   for (const exception of event.exception?.values ?? []) {
+    exception.type = "OwnerPrivateToken123";
     exception.value = "raw-exception-sentinel";
-    exception.mechanism = { ...exception.mechanism, data: { secret: "credential-sentinel" } };
+    exception.mechanism = {
+      ...exception.mechanism,
+      type: "OwnerPrivateToken123",
+      data: { secret: "credential-sentinel" },
+    };
     exception.stacktrace?.frames?.push(
       {
         filename: "owner-email-sentinel@example.invalid",

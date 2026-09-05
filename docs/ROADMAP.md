@@ -166,7 +166,8 @@ serving endpoint. Initialization/capture failures remain fail-open, while applic
 remain fatal. A future runtime bump must update the support contract and re-prove the image gate.
 
 **Telemetry and privacy:** Deny-by-default sanitization retains bounded operational metadata,
-canonical existing source locations, and validated debug IDs. It excludes owner content, raw
+registered route templates, server-generated request IDs, full commit SHAs, canonical existing
+source locations, fixed exception classifications, and validated debug IDs. It excludes owner content, raw
 exception values, credentials, cookies, bodies, email addresses, and public Brief tokens. See the
 [API monitoring runbook and diagram](runbooks/api-monitoring.md).
 

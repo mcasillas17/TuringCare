@@ -1224,7 +1224,9 @@ recorded in PR #70.
   synthetic diagnostics require no database or email delivery.
 - Initialization/capture failures remain fail-open. Transport rejection, missing acknowledgement,
   and bounded flush failures are reported without raw values; fatal application failures retain
-  exit 1. Source locations and debug IDs are validated before event emission.
+  exit 1. Source locations, debug IDs, release SHAs, and fixed metadata categories are validated
+  before event emission. Correlation IDs are server-generated; client-supplied IDs are replaced,
+  and route metadata comes only from registered templates.
 - Added the [API monitoring runbook and diagram](runbooks/api-monitoring.md). Approved production
   deployment and request/process Sentry event references remain pending under
   [#98](https://github.com/mcasillas17/TuringCare/issues/98). Local/CI envelopes do not prove deployed
