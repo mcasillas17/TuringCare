@@ -16,11 +16,12 @@ docker run --detach --name "$container_name" --network host \
   --env BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}" \
   --env BETTER_AUTH_URL="${BETTER_AUTH_URL:-http://localhost:$port}" \
   --env FRONTEND_URL="${FRONTEND_URL:-http://localhost:3000}" \
-  --env RESEND_API_KEY="${RESEND_API_KEY:-re_smoke_health_only}" \
+  --env RESEND_API_KEY="re_smoke_health_only" \
   "$image" >/dev/null
 
 for _attempt in $(seq 1 30); do
   if curl --fail --silent --show-error "http://127.0.0.1:$port/health" >/dev/null; then
+    "$(dirname "$0")/smoke-api-monitoring-image.sh" "$image"
     exit 0
   fi
   if ! docker inspect --format '{{.State.Running}}' "$container_name" | grep -qx true; then

@@ -88,7 +88,8 @@ by hand — just confirm them:
   `primary_region = 'iad'`, `internal_port = 3001`, `[env] PORT = '3001'`, and
   `[build] dockerfile = '../../Dockerfile.api'`. **Change `primary_region` if
   you want a different region.**
-- **`Dockerfile.api`** (repo root, build context = repo root) — runs the API
+- **`Dockerfile.api`** (repo root, build context = repo root) — uses **Node 22** to
+  match `.nvmrc`, CI, and the Sentry support guard. It runs the API
   with **`tsx`**, not `tsc` + `node dist`. This is deliberate and required: the
   project uses `moduleResolution: "Bundler"` (extensionless relative imports)
   and `@turingcare/shared` is consumed as TypeScript source — Node's native ESM
@@ -482,6 +483,31 @@ The selected web release must support the enforcing API's explicit confirmation 
 recovery endpoints. Do not restore the old soft-banner-only bundle.
 
 ---
+
+## 10. API monitoring runtime and acceptance
+
+Node 22 restores the existing API monitoring support contract. Keep `tsx`, its
+`src/instrument.ts` preload, and strict rejection handling. A future runtime/SDK
+change must pass the real-SDK production-image gate; health alone is insufficient.
+Both PR CI and the post-merge deployment gate now require real sanitized envelopes
+at an isolated HTTPS sink, including startup/process failures and bounded flushing.
+
+Optional Fly monitoring configuration is `SENTRY_DSN` (API project) and
+`SENTRY_ENVIRONMENT=production`. The API deploy command sets `SENTRY_RELEASE` to
+`GITHUB_SHA` (the required full lowercase 40-character commit SHA); a stale Fly secret with that name must be removed during an approved
+cutover so it cannot override the running release. Unconfigured or unavailable
+monitoring fails open with fixed warnings; fatal application failures still exit 1.
+Production `RESEND_API_KEY` enforcement remains mandatory.
+
+Follow the [API monitoring runbook and startup/capture diagram](docs/runbooks/api-monitoring.md)
+for exact isolated diagnostic commands, enablement, failure results, and rollback
+constraints. Diagnostics never add an HTTP crash endpoint or terminate the serving
+API. Deployment, secret changes, and real Sentry diagnostics require separate operator
+authorization. **Production request/process capture proof remains pending under #98.**
+Passing PR CI is distinct from the production CD workflow, which runs after merge.
+Rolling back to a Node 26 image restores the known disabled-monitoring condition;
+prefer a validated Node 22 image or a forward fix while preserving the schema,
+auth, Resend, and Brief safeguards in the rollback section above.
 
 ## Quick reference
 

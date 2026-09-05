@@ -4,14 +4,10 @@
 # the project uses moduleResolution "Bundler" (extensionless relative imports)
 # and @turingcare/shared is consumed as TypeScript source, neither of which
 # Node's native ESM loader can run. tsx transpiles + resolves both correctly.
-FROM node:26-slim AS base
+FROM node:22-slim AS base
 
-# Node 25 unbundled corepack, so the node:26-slim image no longer ships it and
-# a bare `corepack enable` fails with "corepack: not found" (exit 127). Install
-# it explicitly rather than installing pnpm directly: corepack reads the
-# `packageManager` field in package.json, so the pnpm version stays pinned in
-# exactly one place instead of being duplicated here and drifting.
-RUN npm install -g corepack@latest && corepack enable
+# Corepack reads packageManager so the pnpm version has one source of truth.
+RUN corepack enable
 
 # corepack prompts before downloading a package manager it has not seen; that
 # prompt would hang a non-interactive build.
@@ -35,4 +31,4 @@ ENV NODE_ENV=production
 WORKDIR /app/apps/api
 EXPOSE 3001
 # Binds 0.0.0.0:$PORT (default 3001) via @hono/node-server.
-CMD ["pnpm", "exec", "tsx", "--import", "./src/instrument.ts", "src/index.ts"]
+CMD ["pnpm", "exec", "tsx", "--unhandled-rejections=strict", "--import", "./src/instrument.ts", "src/index.ts"]

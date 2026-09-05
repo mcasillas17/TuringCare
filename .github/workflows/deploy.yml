@@ -53,7 +53,7 @@ jobs:
         run: pnpm -r build
       - name: Build production API image
         run: docker build --file Dockerfile.api --tag turingcare-api:ci .
-      - name: Smoke production API image
+      - name: Smoke production API image and monitoring
         run: scripts/smoke-api-image.sh turingcare-api:ci
 
   # Drain the schema-incompatible legacy API, apply the complete ordered
@@ -123,7 +123,7 @@ jobs:
           # after earlier entries committed, so the legacy API is never restored.
           migration_attempted=1
           pnpm --filter @turingcare/api db:migrate:predeploy
-          flyctl deploy --remote-only --config apps/api/fly.toml
+          flyctl deploy --remote-only --config apps/api/fly.toml --env SENTRY_RELEASE="$GITHUB_SHA"
           flyctl scale count "$target_count" --yes --app turingcare-api
           curl --fail --retry 12 --retry-delay 5 --retry-all-errors https://turingcare-api.fly.dev/ready
           trap - EXIT INT TERM

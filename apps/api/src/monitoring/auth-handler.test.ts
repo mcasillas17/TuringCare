@@ -121,12 +121,15 @@ describe("createMonitoringAuthHandler", () => {
   it("carries the current request's correlation ID into the captured metadata", async () => {
     const handler = vi.fn(async () => new Response(SENTINEL, { status: 500 }));
     const capture = vi.fn();
-    await buildApp(handler, capture).request("/api/auth/sign-in", {
+    const response = await buildApp(handler, capture).request("/api/auth/sign-in", {
       method: "POST",
       headers: { "X-Request-ID": "test-request-id-12345678" },
     });
 
-    expect(capture.mock.calls[0]?.[1]).toMatchObject({ requestId: "test-request-id-12345678" });
+    expect(capture.mock.calls[0]?.[1]).toMatchObject({
+      requestId: response.headers.get("X-Request-ID"),
+    });
+    expect(response.headers.get("X-Request-ID")).not.toBe("test-request-id-12345678");
   });
 
   it("invokes the underlying handler with the original request and never reads its body itself", async () => {

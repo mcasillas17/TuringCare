@@ -1,9 +1,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { logApiError } from "./log-error";
+import { registerApiMonitoringRoutes } from "./sanitize-event";
+registerApiMonitoringRoutes([{ path: "/api/dogs/:id" }]);
 
-const META = { requestId: "req-1", route: "/api/dogs/:id", method: "GET", status: 500 };
+const META = {
+  requestId: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
+  route: "/api/dogs/:id",
+  method: "GET",
+  status: 500,
+};
 
 describe("logApiError", () => {
+  it("does not log identifier-shaped private metadata or custom exception names", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    class OwnerPrivateToken123 extends Error {}
+    logApiError(new OwnerPrivateToken123(), {
+      requestId: "OwnerPrivateToken123",
+      route: "/OwnerPrivateToken123",
+      method: "OWNERSECRET",
+      status: 500,
+    });
+    const serialized = JSON.stringify(errorSpy.mock.calls);
+    expect(serialized).not.toContain("OwnerPrivateToken123");
+    expect(serialized).not.toContain("OWNERSECRET");
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

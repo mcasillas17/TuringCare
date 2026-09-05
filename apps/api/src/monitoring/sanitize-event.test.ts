@@ -1,9 +1,15 @@
 import type { ErrorEvent, EventHint } from "@sentry/node";
 import { describe, expect, it } from "vitest";
-import { classifyExceptionValue, sanitizeApiBreadcrumb, sanitizeApiEvent } from "./sanitize-event";
+import {
+  classifyExceptionValue,
+  registerApiMonitoringRoutes,
+  sanitizeApiBreadcrumb,
+  sanitizeApiEvent,
+} from "./sanitize-event";
 
 const SENTINEL = "OWNER-CONTENT-DO-NOT-SEND";
 const hint: EventHint = {};
+registerApiMonitoringRoutes([{ path: "/patients/:id" }]);
 
 /** Minimal, otherwise-empty ErrorEvent to extend in individual tests. */
 function baseEvent(overrides: Partial<ErrorEvent> = {}): ErrorEvent {
@@ -16,13 +22,49 @@ function assertNoSentinel(value: unknown): void {
 }
 
 describe("sanitizeApiEvent", () => {
+  it("drops private identifier-shaped values in every retained metadata field", () => {
+    const privateText = "OwnerPrivateToken123";
+    const result = sanitizeApiEvent(
+      baseEvent({
+        event_id: privateText,
+        timestamp: privateText as unknown as number,
+        platform: privateText,
+        level: privateText as ErrorEvent["level"],
+        release: privateText,
+        environment: privateText,
+        tags: {
+          application: privateText,
+          route: `/api/dogs/${privateText}`,
+          method: "OWNERSECRET",
+          status: privateText,
+          request_id: privateText,
+        },
+        request: { method: "OWNERSECRET" },
+        exception: {
+          values: [{ type: privateText, value: privateText, mechanism: { type: privateText } }],
+        },
+      }),
+      hint,
+    );
+    expect(result).toEqual({
+      type: undefined,
+      exception: {
+        values: [
+          { type: "Error", value: "Unexpected application error", mechanism: { type: "generic" } },
+        ],
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(privateText);
+    expect(JSON.stringify(result)).not.toContain("OWNERSECRET");
+  });
+
   it("drops every field not on the explicit allowlist", () => {
     const event = baseEvent({
       event_id: "3c1b8f2a4d5e4c6f9a0b1c2d3e4f5061",
       timestamp: 1_700_000_000,
       level: "error",
       platform: "node",
-      release: "api@1.4.2",
+      release: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       environment: "production",
       message: SENTINEL,
       logentry: { message: SENTINEL },
@@ -44,7 +86,7 @@ describe("sanitizeApiEvent", () => {
         route: "/patients/:id",
         method: "POST",
         status: "500",
-        request_id: "req-123",
+        request_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
         unapproved: SENTINEL,
         another_bad_tag: SENTINEL,
       },
@@ -63,14 +105,14 @@ describe("sanitizeApiEvent", () => {
       timestamp: 1_700_000_000,
       level: "error",
       platform: "node",
-      release: "api@1.4.2",
+      release: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       environment: "production",
       tags: {
         application: "api",
         route: "/patients/:id",
         method: "POST",
         status: "500",
-        request_id: "req-123",
+        request_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
       },
       request: { method: "POST" },
     });
@@ -84,7 +126,7 @@ describe("sanitizeApiEvent", () => {
         route: true as unknown as string,
         method: null as unknown as string,
         status: [SENTINEL] as unknown as string,
-        request_id: "req-123",
+        request_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
       },
     });
 
@@ -92,7 +134,7 @@ describe("sanitizeApiEvent", () => {
 
     expect(result).toEqual({
       type: undefined,
-      tags: { request_id: "req-123" },
+      tags: { request_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead" },
     });
     assertNoSentinel(result);
   });
@@ -172,11 +214,11 @@ describe("sanitizeApiEvent", () => {
 
     expect(result?.exception?.values).toEqual([
       {
-        type: "PayloadTooLargeError",
-        value: "Unexpected PayloadTooLargeError",
+        type: "Error",
+        value: "Unexpected application error",
         mechanism: { type: "chained", handled: true },
         stacktrace: {
-          frames: [{ filename: "provider-client.js", function: "sendEmail", lineno: 12 }],
+          frames: [{ lineno: 12 }],
         },
       },
       {
@@ -184,7 +226,7 @@ describe("sanitizeApiEvent", () => {
         value: "Unexpected HTTPException",
         mechanism: { type: "generic", handled: true },
         stacktrace: {
-          frames: [{ filename: "dogs.ts", function: "sendFailedException", lineno: 71 }],
+          frames: [{ lineno: 71 }],
         },
       },
     ]);
@@ -288,10 +330,74 @@ describe("sanitizeApiEvent", () => {
     assertNoSentinel(result);
   });
 
+  it("drops forged stack and debug strings, including unknown source-shaped filenames", () => {
+    const result = sanitizeApiEvent(
+      baseEvent({
+        debug_meta: { images: [{ type: "sourcemap", code_file: SENTINEL, debug_id: SENTINEL }] },
+        exception: {
+          values: [
+            {
+              type: "Error",
+              stacktrace: {
+                frames: [
+                  {
+                    filename: SENTINEL,
+                    abs_path: SENTINEL,
+                    function: SENTINEL,
+                    module: SENTINEL,
+                    debug_id: SENTINEL,
+                  },
+                  { filename: "apps/api/src/owner-content-sentinel.ts", lineno: 1 },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+      hint,
+    );
+    assertNoSentinel(result);
+    expect(result?.exception?.values?.[0]?.stacktrace?.frames).toEqual([{}, { lineno: 1 }]);
+    expect(JSON.stringify(result)).not.toContain("owner-content-sentinel");
+  });
+
+  it("canonicalizes actual source URLs and preserves fixed Node runtime locations", () => {
+    const result = sanitizeApiEvent(
+      baseEvent({
+        exception: {
+          values: [
+            {
+              stacktrace: {
+                frames: [
+                  { filename: new URL("../index.ts", import.meta.url).href, lineno: 1 },
+                  { filename: "node:net", lineno: 10 },
+                  { filename: `node:internal/${SENTINEL}`, lineno: 11 },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+      hint,
+    );
+    expect(result?.exception?.values?.[0]?.stacktrace?.frames).toEqual([
+      { filename: "apps/api/src/index.ts", lineno: 1 },
+      { filename: "node:net", lineno: 10 },
+      { filename: "node:internal", lineno: 11 },
+    ]);
+    assertNoSentinel(result);
+  });
+
   it("preserves debug_meta symbolication data and safe stack frame fields, dropping source content", () => {
     const event = baseEvent({
       debug_meta: {
-        images: [{ type: "sourcemap", code_file: "app.js", debug_id: "abc-123" }],
+        images: [
+          {
+            type: "sourcemap",
+            code_file: "apps/api/src/index.ts",
+            debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
+          },
+        ],
       },
       exception: {
         values: [
@@ -301,14 +407,14 @@ describe("sanitizeApiEvent", () => {
             stacktrace: {
               frames: [
                 {
-                  filename: "app.js",
+                  filename: "apps/api/src/index.ts",
                   abs_path: "/srv/app.js",
                   module: "app",
                   function: "handler",
                   lineno: 42,
                   colno: 7,
                   in_app: true,
-                  debug_id: "abc-123",
+                  debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
                   context_line: SENTINEL,
                   pre_context: [SENTINEL],
                   post_context: [SENTINEL],
@@ -324,18 +430,21 @@ describe("sanitizeApiEvent", () => {
     const result = sanitizeApiEvent(event, hint);
 
     expect(result?.debug_meta).toEqual({
-      images: [{ type: "sourcemap", code_file: "app.js", debug_id: "abc-123" }],
+      images: [
+        {
+          type: "sourcemap",
+          code_file: "apps/api/src/index.ts",
+          debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
+        },
+      ],
     });
     expect(result?.exception?.values?.[0]?.stacktrace?.frames).toEqual([
       {
-        filename: "app.js",
-        abs_path: "/srv/app.js",
-        module: "app",
-        function: "handler",
+        filename: "apps/api/src/index.ts",
         lineno: 42,
         colno: 7,
         in_app: true,
-        debug_id: "abc-123",
+        debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
       },
     ]);
     assertNoSentinel(result);
@@ -346,8 +455,8 @@ describe("sanitizeApiEvent", () => {
       images: [
         {
           type: "sourcemap",
-          code_file: "app.js",
-          debug_id: "abc-123",
+          code_file: "apps/api/src/index.ts",
+          debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
           extra_image_field: SENTINEL,
         },
       ],
@@ -358,7 +467,13 @@ describe("sanitizeApiEvent", () => {
     const result = sanitizeApiEvent(event, hint);
 
     expect(result?.debug_meta).toEqual({
-      images: [{ type: "sourcemap", code_file: "app.js", debug_id: "abc-123" }],
+      images: [
+        {
+          type: "sourcemap",
+          code_file: "apps/api/src/index.ts",
+          debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
+        },
+      ],
     });
     expect(result?.debug_meta).not.toBe(originalDebugMeta);
     expect(result?.debug_meta?.images).not.toBe(originalDebugMeta?.images);
@@ -379,7 +494,7 @@ describe("sanitizeApiEvent", () => {
     expect(sanitizeApiEvent(nonObjectImage, hint)?.debug_meta).toBeUndefined();
   });
 
-  it("forwards request.method only when it is a safe uppercase HTTP-method-shaped token", () => {
+  it("forwards request.method only when it is a fixed HTTP or diagnostic method", () => {
     expect(sanitizeApiEvent(baseEvent({ request: { method: "MANUAL" } }), hint)?.request).toEqual({
       method: "MANUAL",
     });
@@ -389,6 +504,7 @@ describe("sanitizeApiEvent", () => {
       null,
       undefined,
       "get",
+      "OWNERSECRET",
       "PO",
       `${SENTINEL}`,
       `POST-${SENTINEL}`,
@@ -415,9 +531,10 @@ describe("sanitizeApiEvent", () => {
 });
 
 describe("classifyExceptionValue", () => {
-  it("returns Unexpected <Type> for safe identifier-shaped types", () => {
+  it("returns Unexpected <Type> only for fixed runtime/framework classifications", () => {
     expect(classifyExceptionValue("TypeError")).toBe("Unexpected TypeError");
-    expect(classifyExceptionValue("Custom_Error$1")).toBe("Unexpected Custom_Error$1");
+    expect(classifyExceptionValue("HTTPException")).toBe("Unexpected HTTPException");
+    expect(classifyExceptionValue("Custom_Error$1")).toBe("Unexpected application error");
   });
 
   it("returns a generic message for unsafe or missing types", () => {

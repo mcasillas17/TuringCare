@@ -1217,3 +1217,20 @@ No T1 schema migration or bypass flag was introduced. Authorized aggregate inven
 genuine admin/smoke ownership preparation, API-first deployment and recorded production
 evidence remain required. The cutover runbook and state diagram are in
 [`DEPLOY.md`](../DEPLOY.md#6a-verified-email-ownership-cutover).
+
+## 2026-09-05 — API monitoring runtime and image evidence (T2)
+
+- Aligned the API image and package support contract with Node 22 while retaining `tsx`,
+  early instrumentation, and TypeScript-source workspace imports.
+- Added operator-only request/startup/process diagnostics and real-SDK HTTPS envelope
+  checks to PR CI and the deployment image gate. Test containers have no external network;
+  synthetic diagnostics require no database or email delivery.
+- Initialization/capture failures remain fail-open. Transport rejection, missing acknowledgement,
+  and bounded flush failures are reported without raw values; fatal application failures retain
+  exit 1. Source locations, debug IDs, release SHAs, and fixed metadata categories are validated
+  before event emission. Correlation IDs are server-generated; client-supplied IDs are replaced,
+  and route metadata comes only from registered templates.
+- Added the [API monitoring runbook and diagram](runbooks/api-monitoring.md). Approved production
+  deployment and request/process Sentry event references remain pending under
+  [#98](https://github.com/mcasillas17/TuringCare/issues/98). Local/CI envelopes do not prove deployed
+  capture; browser monitoring and email-ownership enforcement remain separate work.

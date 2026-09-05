@@ -4,10 +4,19 @@ import { type MonitoringSource, readApiMonitoringConfig, resolveMonitoringConfig
 const complete: MonitoringSource = {
   dsn: "https://publickey123@o12345.ingest.sentry.io/6789",
   environment: "production",
-  release: "v1.2.3-abcdef0",
+  release: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 };
 
 describe("resolveMonitoringConfig", () => {
+  it.each(["OwnerPrivateToken123", "720c524", "v1.2.3-abcdef0", "f".repeat(41)])(
+    "rejects a release that is not a full commit SHA without logging it",
+    (release) => {
+      const result = resolveMonitoringConfig({ ...complete, release });
+      expect(result.enabled).toBe(false);
+      expect(JSON.stringify(result)).not.toContain(release);
+    },
+  );
+
   it("is disabled and silent when all fields are blank", () => {
     expect(resolveMonitoringConfig({})).toEqual({ enabled: false });
     expect(resolveMonitoringConfig({ dsn: "", environment: "", release: "" })).toEqual({
@@ -72,6 +81,17 @@ describe("resolveMonitoringConfig", () => {
     expect(result.enabled).toBe(false);
   });
 
+  it.each([
+    "https://email%40sentinel@example.invalid/1",
+    "https://key:credential@example.invalid/1",
+    "https://key@example.invalid/1?secret=credential",
+    "https://key@example.invalid/1#credential",
+  ])("rejects SDK-incompatible or credential-bearing DSNs without echoing values", (dsn) => {
+    const result = resolveMonitoringConfig({ ...complete, dsn });
+    expect(result.enabled).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(dsn);
+  });
+
   it("rejects a plain http DSN (HTTPS only)", () => {
     const result = resolveMonitoringConfig({
       ...complete,
@@ -114,13 +134,13 @@ describe("resolveMonitoringConfig", () => {
     }
   });
 
-  it("is enabled with a release of exactly the minimum length (7 characters)", () => {
-    const result = resolveMonitoringConfig({ ...complete, release: "720c524" });
+  it("trims surrounding whitespace from a full commit SHA", () => {
+    const result = resolveMonitoringConfig({ ...complete, release: ` ${complete.release} ` });
     expect(result).toEqual({
       enabled: true,
       dsn: complete.dsn,
       environment: "production",
-      release: "720c524",
+      release: complete.release,
     });
   });
 });

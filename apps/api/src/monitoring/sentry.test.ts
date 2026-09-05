@@ -1,3 +1,4 @@
+import type { NodeOptions } from "@sentry/node";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // `@sentry/node` is never allowed to touch the network in tests: every
@@ -9,7 +10,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // and order, not just by length.
 const sentryMocks = vi.hoisted(() => ({
   captureException: vi.fn(() => "mock-event-id"),
-  init: vi.fn(),
+  init: vi.fn((_options: NodeOptions) => ({})),
+  isEnabled: vi.fn(() => true),
+  getClient: vi.fn(() => undefined),
+  makeNodeTransport: vi.fn(),
   flush: vi.fn(async () => true),
   dedupeIntegration: vi.fn(() => ({ name: "Dedupe" }) as const),
   eventFiltersIntegration: vi.fn(() => ({ name: "EventFilters" }) as const),
@@ -24,6 +28,9 @@ const sentryMocks = vi.hoisted(() => ({
 vi.mock("@sentry/node", () => ({
   captureException: sentryMocks.captureException,
   init: sentryMocks.init,
+  isEnabled: sentryMocks.isEnabled,
+  getClient: sentryMocks.getClient,
+  makeNodeTransport: sentryMocks.makeNodeTransport,
   flush: sentryMocks.flush,
   dedupeIntegration: sentryMocks.dedupeIntegration,
   eventFiltersIntegration: sentryMocks.eventFiltersIntegration,
@@ -36,7 +43,7 @@ vi.mock("@sentry/node", () => ({
 const VALID: Record<string, string> = {
   SENTRY_DSN: "https://publickey123@o12345.ingest.sentry.io/6789",
   SENTRY_ENVIRONMENT: "production",
-  SENTRY_RELEASE: "v1.2.3-abcdef0",
+  SENTRY_RELEASE: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 };
 
 function stubEnabledEnv(): void {
@@ -158,10 +165,24 @@ describe("captureApiStartupFailure", () => {
 });
 
 describe("initializeApiMonitoring", () => {
+  it("fails open with a fixed warning when SDK initialization throws", async () => {
+    stubEnabledEnv();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    sentryMocks.init.mockImplementationOnce(() => {
+      throw new Error("credential-sentinel@example.invalid");
+    });
+    const { initializeApiMonitoring, isApiMonitoringEnabled } = await loadSentryModule();
+    expect(() => initializeApiMonitoring("v22.4.0")).not.toThrow();
+    expect(isApiMonitoringEnabled()).toBe(false);
+    expect(warn).toHaveBeenCalledWith("[monitoring] initialization failed; monitoring disabled");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("credential-sentinel");
+    warn.mockRestore();
+  });
+
   it("logs a '[monitoring] '-prefixed warning and stays disabled on a malformed configuration", async () => {
     vi.stubEnv("SENTRY_DSN", "not-a-valid-dsn");
     vi.stubEnv("SENTRY_ENVIRONMENT", "production");
-    vi.stubEnv("SENTRY_RELEASE", "v1.2.3-abcdef0");
+    vi.stubEnv("SENTRY_RELEASE", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const { initializeApiMonitoring, isApiMonitoringEnabled } = await loadSentryModule();
 
@@ -212,7 +233,9 @@ describe("initializeApiMonitoring", () => {
     // after `loadSentryModule`'s `vi.resetModules()` so this resolves to the
     // same cached `sanitize-event` module instance `sentry.ts` imported.
     const { sanitizeApiBreadcrumb, sanitizeApiEvent } = await import("./sanitize-event");
-    expect(initArg?.beforeSend).toBe(sanitizeApiEvent);
+    expect(initArg?.beforeSend?.({ type: undefined, event_id: "synthetic" }, {})).toEqual(
+      sanitizeApiEvent({ type: undefined, event_id: "synthetic" }, {}),
+    );
     expect(initArg?.beforeBreadcrumb).toBe(sanitizeApiBreadcrumb);
 
     // Each integration factory is called exactly once, with the correct
@@ -225,9 +248,10 @@ describe("initializeApiMonitoring", () => {
     expect(sentryMocks.linkedErrorsIntegration).toHaveBeenCalledTimes(1);
     expect(sentryMocks.linkedErrorsIntegration).toHaveBeenCalledWith();
     expect(sentryMocks.onUncaughtExceptionIntegration).toHaveBeenCalledTimes(1);
-    expect(sentryMocks.onUnhandledRejectionIntegration).toHaveBeenCalledTimes(1);
-    expect(sentryMocks.onUnhandledRejectionIntegration).toHaveBeenCalledWith({
-      mode: "strict",
+    expect(sentryMocks.onUnhandledRejectionIntegration).not.toHaveBeenCalled();
+    expect(sentryMocks.onUncaughtExceptionIntegration).toHaveBeenCalledWith({
+      exitEvenIfOtherHandlersAreRegistered: true,
+      onFatalError: expect.any(Function),
     });
     expect(initArg?.integrations).toEqual([
       { name: "Dedupe" },
@@ -235,7 +259,7 @@ describe("initializeApiMonitoring", () => {
       { name: "FunctionToString" },
       { name: "LinkedErrors" },
       { name: "OnUncaughtException" },
-      { name: "OnUnhandledRejection", options: { mode: "strict" } },
+      { name: "ApiUnhandledRejection", setup: expect.any(Function) },
     ]);
   });
 });
@@ -285,7 +309,57 @@ describe("isSupportedMonitoringNodeMajor", () => {
     expect(isSupportedMonitoringNodeMajor("v22.4.0")).toBe(true);
     expect(isSupportedMonitoringNodeMajor("22.4.0")).toBe(true);
     expect(isSupportedMonitoringNodeMajor("v24.0.0")).toBe(false);
+    expect(isSupportedMonitoringNodeMajor("v26.5.0")).toBe(false);
     expect(isSupportedMonitoringNodeMajor("v20.11.0")).toBe(false);
     expect(sentryMocks.init).not.toHaveBeenCalled();
+  });
+});
+
+describe("monitoring failure results", () => {
+  const meta = { route: "/diagnostic", method: "GET", status: 500, requestId: "synthetic-id" };
+
+  it("does not let a capture exception replace an application response", async () => {
+    stubEnabledEnv();
+    const api = await loadSentryModule();
+    api.initializeApiMonitoring("v22.4.0");
+    sentryMocks.captureException.mockImplementationOnce(() => {
+      throw new Error("private");
+    });
+    expect(api.captureApiError(new Error("synthetic"), meta)).toBeUndefined();
+  });
+
+  it("reports failed startup capture without attempting to flush", async () => {
+    stubEnabledEnv();
+    const api = await loadSentryModule();
+    api.initializeApiMonitoring("v22.4.0");
+    sentryMocks.captureException.mockImplementationOnce(() => {
+      throw new Error("private");
+    });
+    expect(await api.captureApiStartupFailure(new Error("synthetic"))).toBe(false);
+    expect(sentryMocks.flush).not.toHaveBeenCalled();
+  });
+
+  it.each([false, "reject"])("reports an unsuccessful flush: %s", async (result) => {
+    stubEnabledEnv();
+    const api = await loadSentryModule();
+    api.initializeApiMonitoring("v22.4.0");
+    if (result === "reject") sentryMocks.flush.mockRejectedValueOnce(new Error("private"));
+    else sentryMocks.flush.mockResolvedValueOnce(false);
+    expect(await api.captureApiStartupFailure(new Error("synthetic"))).toBe(false);
+  });
+
+  it("bounds a flush promise that never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      stubEnabledEnv();
+      const api = await loadSentryModule();
+      api.initializeApiMonitoring("v22.4.0");
+      sentryMocks.flush.mockImplementationOnce(() => new Promise(() => undefined));
+      const result = api.flushApiMonitoring();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(await result).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

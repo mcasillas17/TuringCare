@@ -128,3 +128,18 @@ session-expiry tuning remain separate work below.
   established. Every multi-version ID-less request fails closed without sending because
   recipient/message content cannot prove the tab's intended version.
 - The onboarding "shared" milestone counts only rows with confirmed `delivered_at`.
+
+## Implemented — API monitoring privacy; production acceptance pending
+
+The T2 API image and SDK support guard agree on Node 22. Isolated diagnostics and the
+real-SDK image gate retain fail-open monitoring and fatal application exit semantics.
+The sanitizer validates source locations/debug IDs and fixed metadata contracts. Request IDs
+are server-generated, routes are registered templates, and release values are full Git SHAs.
+It excludes credentials, cookies,
+request bodies, email addresses, owner content, raw exception values, and Brief bearer
+tokens. No public crash route, auth bypass, email bypass, or database migration is added.
+
+Production request/process capture still requires approved running-release evidence in
+[#98](https://github.com/mcasillas17/TuringCare/issues/98); see the
+[operator runbook](runbooks/api-monitoring.md). Browser monitoring remains T3. This does
+not change the separate email-ownership enforcement backlog.

@@ -1,6 +1,8 @@
 import { Hono } from "hono";
+import { routePath } from "hono/route";
 import { describe, expect, it } from "vitest";
 import { type ApiEnv, requestIdMiddleware } from "./request-id";
+import { sanitizeApiEvent } from "./sanitize-event";
 
 function buildApp() {
   return new Hono<ApiEnv>()
@@ -9,13 +11,44 @@ function buildApp() {
 }
 
 describe("requestIdMiddleware", () => {
-  it("preserves a well-formed inbound X-Request-ID", async () => {
+  it("retains the registered route template and generated correlation ID without copying URL parameters", async () => {
+    const app = new Hono<ApiEnv>()
+      .use("*", requestIdMiddleware)
+      .get("/api/share/:token", (c) =>
+        c.json(
+          sanitizeApiEvent(
+            { type: undefined, tags: { route: routePath(c), request_id: c.get("requestId") } },
+            {},
+          ),
+        ),
+      );
+    const response = await app.request("/api/share/OwnerPrivateToken123", {
+      headers: { "X-Request-ID": "OwnerPrivateToken123" },
+    });
+    const event = await response.json();
+    expect(event).toEqual({
+      tags: { route: "/api/share/:token", request_id: response.headers.get("X-Request-ID") },
+    });
+    expect(JSON.stringify(event)).not.toContain("OwnerPrivateToken123");
+  });
+
+  it.each(["OwnerPrivateToken123", "e5d938bf-65c0-4a79-b19e-e3c46091fead"])(
+    "does not echo client content even when it looks like an opaque ID or UUID",
+    async (inbound) => {
+      const app = buildApp();
+      const response = await app.request("/x", { headers: { "X-Request-ID": inbound } });
+      expect(response.headers.get("X-Request-ID")).not.toBe(inbound);
+      expect(JSON.stringify(await response.json())).not.toContain(inbound);
+    },
+  );
+
+  it("replaces even a well-formed inbound X-Request-ID with a server-generated ID", async () => {
     const app = buildApp();
     const res = await app.request("/x", { headers: { "X-Request-ID": "abcd1234-valid-req-id" } });
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("X-Request-ID")).toBe("abcd1234-valid-req-id");
-    expect(await res.json()).toEqual({ requestId: "abcd1234-valid-req-id" });
+    expect(res.headers.get("X-Request-ID")).not.toBe("abcd1234-valid-req-id");
+    expect(await res.json()).toEqual({ requestId: res.headers.get("X-Request-ID") });
   });
 
   it("replaces an invalid, email-like inbound ID with a generated one", async () => {
@@ -61,6 +94,6 @@ describe("requestIdMiddleware", () => {
     const body = (await res.json()) as { requestId: string };
 
     expect(body.requestId).toBe(res.headers.get("X-Request-ID"));
-    expect(body.requestId).toBe("matches-in-handler-1");
+    expect(body.requestId).not.toBe("matches-in-handler-1");
   });
 });

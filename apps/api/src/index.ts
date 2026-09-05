@@ -19,14 +19,10 @@ async function main(): Promise<void> {
 }
 
 function fail(error: unknown): void {
-  console.error("API failed to start:", error);
-  captureApiStartupFailure(error)
-    .catch((captureError: unknown) => {
-      console.error("Failed to report the startup failure to monitoring:", captureError);
-    })
-    .finally(() => {
-      process.exit(1);
-    });
+  console.error("[monitoring] API failed to start; exiting with status 1");
+  captureApiStartupFailure(error).finally(() => {
+    process.exit(1);
+  });
 }
 
 main().catch(fail);

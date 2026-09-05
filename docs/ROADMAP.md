@@ -49,7 +49,7 @@ separate outcome and does not substitute for weekly training activity.
 | Critical owner journey | Complete foundation | Desktop and Pixel 7 journeys cover denied access before explicit email confirmation, verified sign-in, guided setup, journaling, training, progress and Brief sharing. | Keep coverage current and complete final post-T8 release-candidate QA. |
 | Production smoke | Partial | Scheduled and post-deploy checks cover API health, landing, directories, sign-in, verified-account state, and the authenticated shell. | Add one stable authenticated owner-domain read and keep it running while the remaining gates land. |
 | Email ownership | Partial - implementation ready | Verified-only owner/admin gates, passive email landing with explicit confirmation, and en/es no-session/legacy recovery are implemented. | Authorized aggregate inventory, controlled admin/smoke ownership preparation, production cutover and recorded evidence remain blocking. |
-| Production monitoring | Ineffective in production - P0 | API request IDs, privacy-safe sanitization, capture adapters, and web configuration parsing are shipped. | The production image runs Node 26 while the API guard enables Sentry only on Node 22, so API capture is disabled. Browser capture, React recovery, hidden source maps, alerts, diagnostics, and rollout evidence are also missing. |
+| Production monitoring | Partial - production acceptance pending, P0 | API image and support contract use Node 22; request IDs, sanitization, capture adapters, isolated API diagnostics, and real-SDK image gates are implemented. Web configuration parsing exists. | Approved running-release request/process capture is still unproven (#98). Browser capture, React recovery, hidden source maps, alerts, and browser diagnostics remain T3. |
 | Backup and restore | Not started | The recovery design and implementation plan are committed. | Add the provider-confirmed runbook and verifier, then complete a measured isolated restore drill. |
 | In-app feedback | Not started | A feedback email link exists. | Add a privacy-bounded form, server persistence, durable prompt suppression, admin triage, and non-blocking milestone prompts. |
 | Beta analytics | Partial | First-party lifecycle events, DAU/WAU/MAU, event totals, and an admin dashboard are shipped. | Add signup cohorts, target-aligned activation and week-2/week-4 retention, distinct-owner lifecycle views, and actual trainer/course outbound-click events. |
@@ -174,33 +174,39 @@ enter telemetry. Application redirects contain only safe paths and bounded displ
 
 ### T2 - Restore API monitoring runtime truth
 
-**Status:** Not started - P0 operational gate.
+**Status:** Partial - Node 22 implementation and image coverage delivered; approved production
+capture remains pending. [Issue #98](https://github.com/mcasillas17/TuringCare/issues/98) stays open.
 
 **Goal:** Make API error capture effective in the production runtime before relying on monitoring
 or running the restore drill.
 
-**Current conflict:** `Dockerfile.api` uses `node:26-slim`, while
-`apps/api/src/monitoring/sentry.ts` deliberately leaves monitoring disabled for every Node major
-other than 22.
+**Implemented:** The API image now matches Node 22 in `.nvmrc`, CI, package engines, and the
+monitoring support guard. `tsx` and TypeScript-source workspace imports remain intact. The prior
+Node 26 image was reproduced with valid synthetic configuration and monitoring disabled; mocked
+adapter tests and unconfigured health smoke did not detect that failure.
 
-**Implementation seams:**
+The real-SDK image gate now checks initialization, sanitized request/startup/process envelopes,
+flush/transport failures, disabled configuration, production Resend startup enforcement, and fatal
+exit behavior. It runs in PR CI and the deployment gate against an isolated TLS sink with no
+external network. An operator CLI uses an in-memory request or its own process, without adding a
+serving endpoint. Initialization/capture failures remain fail-open, while application failures
+remain fatal. A future runtime bump must update the support contract and re-prove the image gate.
 
-- Default to restoring the production image to Node 22 so it matches `.nvmrc`, CI, and the
-  monitoring support contract. Keep Node 26 only if a reproducible image test proves
-  `@sentry/node` plus the current `tsx` runtime boots, captures, flushes, and exits correctly.
-- Update `Dockerfile.api`, `apps/api/src/monitoring/sentry.ts` and tests, the production image smoke,
-  and runtime documentation as one change.
-- Add an operator-only, content-free diagnostic path from the existing monitoring plan.
+**Telemetry and privacy:** Deny-by-default sanitization retains bounded operational metadata,
+registered route templates, server-generated request IDs, full commit SHAs, canonical existing
+source locations, fixed exception classifications, and validated debug IDs. It excludes owner content, raw
+exception values, credentials, cookies, bodies, email addresses, and public Brief tokens. See the
+[API monitoring runbook and diagram](runbooks/api-monitoring.md).
 
-**Telemetry and privacy:** Preserve the existing deny-by-default event sanitizer. Diagnostics may
-contain release, normalized route, status, and request ID only.
+**Remaining acceptance:** Obtain operator approval, identify/deploy the approved release and image,
+then run one controlled request and one controlled process diagnostic from that running image.
+Verify both in the API Sentry project with the exact release and sanitized metadata, and attach the
+approval, image/runtime proof, CI/CD results, and sanitized event references to #98. Local envelopes,
+HTTP acknowledgement, an event ID, or passing PR CI do not prove deployed capture. T2's hard gate
+remains open until this evidence exists; the live restore drill must still wait.
 
-**Tests and exit:** Build and boot-smoke the exact production image, deploy it, trigger controlled
-request and process diagnostic events, and record that each reaches the API Sentry project with the
-expected release and sanitized metadata. Exit only when the running release, not a local mock,
-proves capture.
-
-**Non-goals:** Performance tracing, session replay, or broad auto-instrumentation.
+**Non-goals:** Browser monitoring (T3/#99), auth enforcement (T1/#97), performance tracing, session
+replay, broad auto-instrumentation, or unrelated runtime/module-system upgrades.
 
 ### T3 - Finish browser monitoring and monitoring operations
 
