@@ -232,6 +232,9 @@ pnpm --filter @turingcare/web exec vitest run src/routes/verify-email.test.tsx s
 
 On a busy development host, `pnpm test --maxWorkers=2` runs the same complete suite with
 bounded concurrency; it does not skip tests.
+CI and predeploy validation additionally run workspace suites sequentially so independent
+test pools do not starve database/subprocess checks. The equivalent local command is
+`pnpm -r --workspace-concurrency=1 test --maxWorkers=2`.
 
 ## Browser tests
 
