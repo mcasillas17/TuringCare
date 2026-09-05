@@ -1,10 +1,8 @@
 # TuringCare — Project Log
 
-Chronological record of shipped phases. One entry per phase: what changed, the
-commit range, and where the design/plan live. Newest at the bottom.
-
-Each phase also has a committed design spec (`docs/superpowers/specs/`) and
-implementation plan (`docs/superpowers/plans/`); this log is the index.
+Chronological record of implemented and shipped phases, with rollout status and linked
+feature guidance. Newest at the bottom. Historical entries also link their original
+design and implementation records.
 
 ---
 
@@ -1203,14 +1201,40 @@ API telemetry normalize `/b/<token>` (including route-equivalent `%62`/`%42` pre
 cleans stored paths. Locale itself is not collected as telemetry. Public shares remain a
 strict finalized-Brief projection with no user ID, dog ID, or token in the response.
 
-GPT-5.6 Luna and GPT-5.6 Terra independently and repeatedly reviewed correctness,
-security/privacy, improvements, gaps, and coverage, including a complete pass after merging
-current `main`. Verified findings were fixed test-first. Both returned **no actionable
-feedback** on the same final code state after the durability, deletion, and rollout changes.
-Final fresh repository, full-migration, deployment-contract, and production-image evidence is
-recorded in PR #70.
+Repository, full-migration, deployment-contract, and production-image evidence is recorded
+in PR #70.
 
 - Current guide: `docs/LOCALIZATION.md`
 - Spec/plan: `docs/superpowers/specs/2026-08-23-end-to-end-localization-design.md`,
   `docs/superpowers/plans/2026-08-23-end-to-end-localization.md`
 - Published for review as [PR #70](https://github.com/mcasillas17/TuringCare/pull/70).
+
+## 2026-09-05 — Verified email ownership — IMPLEMENTED, PRODUCTION CUTOVER PENDING
+
+Accounts now require explicit email ownership before verified sign-in and owner/admin
+access. Existing unverified sessions and persisted admin roles are independently gated;
+owner records and roles are retained while users verify. `/me`, public directories,
+finalized public Brief links, password recovery and sign-out remain usable.
+
+The public English/Spanish verification screen supports signup without a session and
+legacy sessions. Opening an email link only stages an encrypted, short-lived receipt;
+the user explicitly confirms before signing in. Scanner visits cannot enable an account,
+verification does not switch accounts, and invalid/expired links have recovery guidance.
+Credential-proven resend reports provider acceptance or failure honestly, with durable
+limits and accessible cooldowns. Token-free navigation handles throttles, and stalled
+status checks reach a bounded retry state.
+
+Session and locale boundaries preserve drafts during benign refreshes, clear private
+state on real authorization changes, and retain language across fresh-browser and
+storage-denied continuation. Production test-email capture is rejected. Counter cleanup
+is bounded and concurrency-safe, with PostgreSQL 16/18 coverage. Existing owner
+isolation, Brief delivery idempotency and pending-send deletion protections are unchanged.
+
+T1-T11 now have assigned issues and linked dependencies. T1 is tracked in
+[#97](https://github.com/mcasillas17/TuringCare/issues/97); this does not complete the
+other roadmap features or the remaining production gates.
+
+No T1 schema migration or bypass flag was introduced. Authorized aggregate inventory,
+genuine admin/smoke ownership preparation, API-first deployment and recorded production
+evidence remain required. The cutover runbook and state diagram are in
+[`DEPLOY.md`](../DEPLOY.md#6a-verified-email-ownership-cutover).
