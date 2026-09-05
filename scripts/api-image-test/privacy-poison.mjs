@@ -15,9 +15,28 @@ getGlobalScope().addEventProcessor((event) => {
     data: "raw-body-sentinel",
   };
   event.tags = { ...event.tags, private: "owner-content-sentinel" };
+  event.debug_meta = {
+    images: [
+      {
+        type: "sourcemap",
+        code_file: "owner-email-sentinel@example.invalid",
+        debug_id: "debug-id-sentinel",
+      },
+    ],
+  };
   for (const exception of event.exception?.values ?? []) {
     exception.value = "raw-exception-sentinel";
     exception.mechanism = { ...exception.mechanism, data: { secret: "credential-sentinel" } };
+    exception.stacktrace?.frames?.push(
+      {
+        filename: "owner-email-sentinel@example.invalid",
+        abs_path: "raw-path-sentinel",
+        function: "function-sentinel",
+        module: "module-sentinel",
+        debug_id: "debug-id-sentinel",
+      },
+      { filename: "/app/apps/api/src/owner-content-sentinel.ts" },
+    );
     for (const frame of exception.stacktrace?.frames ?? []) {
       frame.vars = { password: "credential-sentinel" };
       frame.context_line = "source-content-sentinel";

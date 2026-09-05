@@ -7,7 +7,49 @@
 // of fields below. Anything not copied here is dropped, including fields
 // added to future Sentry SDK versions.
 
+import { realpathSync, statSync } from "node:fs";
+import { builtinModules } from "node:module";
+import { isAbsolute, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ErrorEvent, EventHint, Exception, StackFrame } from "@sentry/node";
+
+// Only shipped workspace source locations are diagnostic metadata. A custom
+// Error.stack can forge arbitrary filenames; syntax/prefix checks alone are
+// insufficient. Probe only these code directories, never application data.
+const BUILTIN_MODULES = new Set(builtinModules.map((name) => `node:${name.replace(/^node:/, "")}`));
+const SOURCE_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
+const SOURCE_PATH =
+  /^(?:apps\/api|packages\/(?:shared|i18n))\/src\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.tsx?$/;
+const DEBUG_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+function safeSourceFilename(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > 512) return undefined;
+  if (BUILTIN_MODULES.has(value)) return value;
+  if (value.startsWith("node:internal/")) return "node:internal";
+  try {
+    let path = value;
+    if (path.startsWith("file:")) {
+      const url = new URL(path);
+      if (url.search || url.hash) return undefined;
+      path = fileURLToPath(url);
+    }
+    const normalized = isAbsolute(path) ? relative(SOURCE_ROOT, path) : path;
+    if (!SOURCE_PATH.test(normalized)) return undefined;
+    const absolute = resolve(SOURCE_ROOT, normalized);
+    if (realpathSync(absolute) !== absolute || !statSync(absolute).isFile()) return undefined;
+    return normalized;
+  } catch {
+    return undefined;
+  }
+}
+
+function isDebugId(value: unknown): value is string {
+  return typeof value === "string" && DEBUG_ID.test(value);
+}
+
+function isLineNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
 
 /** The only tag keys ever forwarded to Sentry. */
 const ALLOWED_TAGS = ["application", "route", "method", "status", "request_id"] as const;
@@ -42,9 +84,10 @@ function sanitizeDebugImage(image: unknown): SanitizedDebugImage | null {
   if (typeof image !== "object" || image === null) return null;
   const raw = image as Record<string, unknown>;
   const sanitized: SanitizedDebugImage = {};
-  if (typeof raw.type === "string") sanitized.type = raw.type;
-  if (typeof raw.code_file === "string") sanitized.code_file = raw.code_file;
-  if (typeof raw.debug_id === "string") sanitized.debug_id = raw.debug_id;
+  if (raw.type === "sourcemap") sanitized.type = raw.type;
+  const file = safeSourceFilename(raw.code_file);
+  if (file) sanitized.code_file = file;
+  if (isDebugId(raw.debug_id)) sanitized.debug_id = raw.debug_id;
   return Object.keys(sanitized).length > 0 ? sanitized : null;
 }
 
@@ -99,22 +142,22 @@ function sanitizeMechanism(mechanism: Exception["mechanism"]): Exception["mechan
   const sanitized: NonNullable<Exception["mechanism"]> = {
     type: isSafeIdentifier(mechanism.type) ? mechanism.type : "generic",
   };
-  if (mechanism.handled !== undefined) sanitized.handled = mechanism.handled;
-  if (mechanism.synthetic !== undefined) sanitized.synthetic = mechanism.synthetic;
+  if (typeof mechanism.handled === "boolean") sanitized.handled = mechanism.handled;
+  if (typeof mechanism.synthetic === "boolean") sanitized.synthetic = mechanism.synthetic;
   return sanitized;
 }
 
 /** Preserves only the stack frame fields needed for triage/symbolication. */
 function sanitizeStackFrame(frame: StackFrame): StackFrame {
   const sanitized: StackFrame = {};
-  if (frame.filename !== undefined) sanitized.filename = frame.filename;
-  if (frame.abs_path !== undefined) sanitized.abs_path = frame.abs_path;
-  if (frame.module !== undefined) sanitized.module = frame.module;
-  if (frame.function !== undefined) sanitized.function = frame.function;
-  if (frame.lineno !== undefined) sanitized.lineno = frame.lineno;
-  if (frame.colno !== undefined) sanitized.colno = frame.colno;
-  if (frame.in_app !== undefined) sanitized.in_app = frame.in_app;
-  if (frame.debug_id !== undefined) sanitized.debug_id = frame.debug_id;
+  const file = safeSourceFilename(frame.filename) ?? safeSourceFilename(frame.abs_path);
+  if (file) sanitized.filename = file;
+  // Function/module names and absolute paths are forgeable strings; filename
+  // plus position retains useful source diagnosis without forwarding them.
+  if (isLineNumber(frame.lineno)) sanitized.lineno = frame.lineno;
+  if (isLineNumber(frame.colno)) sanitized.colno = frame.colno;
+  if (typeof frame.in_app === "boolean") sanitized.in_app = frame.in_app;
+  if (isDebugId(frame.debug_id)) sanitized.debug_id = frame.debug_id;
   return sanitized;
 }
 

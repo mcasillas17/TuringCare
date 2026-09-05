@@ -167,7 +167,8 @@ function checkEvent(raw, route, method, fatal = false, extension = ".ts") {
   assert(event.exception.values.length > 0);
   const frames = event.exception.values.flatMap((error) => error.stacktrace?.frames ?? []);
   assert(
-    frames.some((frame) => frame.filename?.endsWith(extension) && frame.lineno > 0),
+    extension === null ||
+      frames.some((frame) => frame.filename?.endsWith(extension) && frame.lineno > 0),
     "diagnosable source stack survives",
   );
   for (const exception of event.exception.values) {
@@ -248,7 +249,7 @@ try {
       1,
     );
     assert.equal(envelopes.length - before, 1);
-    const event = checkEvent(envelopes[before], "process", "PROCESS", true, ".mjs");
+    const event = checkEvent(envelopes[before], "process", "PROCESS", true, null);
     assert.equal(event.exception.values.length, 2, "both raw error and linked cause sanitized");
     console.log(`PASS ${mode}: raw exception and cause excluded from transport and stderr`);
   }

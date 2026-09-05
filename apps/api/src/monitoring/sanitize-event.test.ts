@@ -176,7 +176,7 @@ describe("sanitizeApiEvent", () => {
         value: "Unexpected PayloadTooLargeError",
         mechanism: { type: "chained", handled: true },
         stacktrace: {
-          frames: [{ filename: "provider-client.js", function: "sendEmail", lineno: 12 }],
+          frames: [{ lineno: 12 }],
         },
       },
       {
@@ -184,7 +184,7 @@ describe("sanitizeApiEvent", () => {
         value: "Unexpected HTTPException",
         mechanism: { type: "generic", handled: true },
         stacktrace: {
-          frames: [{ filename: "dogs.ts", function: "sendFailedException", lineno: 71 }],
+          frames: [{ lineno: 71 }],
         },
       },
     ]);
@@ -288,10 +288,74 @@ describe("sanitizeApiEvent", () => {
     assertNoSentinel(result);
   });
 
+  it("drops forged stack and debug strings, including unknown source-shaped filenames", () => {
+    const result = sanitizeApiEvent(
+      baseEvent({
+        debug_meta: { images: [{ type: "sourcemap", code_file: SENTINEL, debug_id: SENTINEL }] },
+        exception: {
+          values: [
+            {
+              type: "Error",
+              stacktrace: {
+                frames: [
+                  {
+                    filename: SENTINEL,
+                    abs_path: SENTINEL,
+                    function: SENTINEL,
+                    module: SENTINEL,
+                    debug_id: SENTINEL,
+                  },
+                  { filename: "apps/api/src/owner-content-sentinel.ts", lineno: 1 },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+      hint,
+    );
+    assertNoSentinel(result);
+    expect(result?.exception?.values?.[0]?.stacktrace?.frames).toEqual([{}, { lineno: 1 }]);
+    expect(JSON.stringify(result)).not.toContain("owner-content-sentinel");
+  });
+
+  it("canonicalizes actual source URLs and preserves fixed Node runtime locations", () => {
+    const result = sanitizeApiEvent(
+      baseEvent({
+        exception: {
+          values: [
+            {
+              stacktrace: {
+                frames: [
+                  { filename: new URL("../index.ts", import.meta.url).href, lineno: 1 },
+                  { filename: "node:net", lineno: 10 },
+                  { filename: `node:internal/${SENTINEL}`, lineno: 11 },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+      hint,
+    );
+    expect(result?.exception?.values?.[0]?.stacktrace?.frames).toEqual([
+      { filename: "apps/api/src/index.ts", lineno: 1 },
+      { filename: "node:net", lineno: 10 },
+      { filename: "node:internal", lineno: 11 },
+    ]);
+    assertNoSentinel(result);
+  });
+
   it("preserves debug_meta symbolication data and safe stack frame fields, dropping source content", () => {
     const event = baseEvent({
       debug_meta: {
-        images: [{ type: "sourcemap", code_file: "app.js", debug_id: "abc-123" }],
+        images: [
+          {
+            type: "sourcemap",
+            code_file: "apps/api/src/index.ts",
+            debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
+          },
+        ],
       },
       exception: {
         values: [
@@ -301,14 +365,14 @@ describe("sanitizeApiEvent", () => {
             stacktrace: {
               frames: [
                 {
-                  filename: "app.js",
+                  filename: "apps/api/src/index.ts",
                   abs_path: "/srv/app.js",
                   module: "app",
                   function: "handler",
                   lineno: 42,
                   colno: 7,
                   in_app: true,
-                  debug_id: "abc-123",
+                  debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
                   context_line: SENTINEL,
                   pre_context: [SENTINEL],
                   post_context: [SENTINEL],
@@ -324,18 +388,21 @@ describe("sanitizeApiEvent", () => {
     const result = sanitizeApiEvent(event, hint);
 
     expect(result?.debug_meta).toEqual({
-      images: [{ type: "sourcemap", code_file: "app.js", debug_id: "abc-123" }],
+      images: [
+        {
+          type: "sourcemap",
+          code_file: "apps/api/src/index.ts",
+          debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
+        },
+      ],
     });
     expect(result?.exception?.values?.[0]?.stacktrace?.frames).toEqual([
       {
-        filename: "app.js",
-        abs_path: "/srv/app.js",
-        module: "app",
-        function: "handler",
+        filename: "apps/api/src/index.ts",
         lineno: 42,
         colno: 7,
         in_app: true,
-        debug_id: "abc-123",
+        debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
       },
     ]);
     assertNoSentinel(result);
@@ -346,8 +413,8 @@ describe("sanitizeApiEvent", () => {
       images: [
         {
           type: "sourcemap",
-          code_file: "app.js",
-          debug_id: "abc-123",
+          code_file: "apps/api/src/index.ts",
+          debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
           extra_image_field: SENTINEL,
         },
       ],
@@ -358,7 +425,13 @@ describe("sanitizeApiEvent", () => {
     const result = sanitizeApiEvent(event, hint);
 
     expect(result?.debug_meta).toEqual({
-      images: [{ type: "sourcemap", code_file: "app.js", debug_id: "abc-123" }],
+      images: [
+        {
+          type: "sourcemap",
+          code_file: "apps/api/src/index.ts",
+          debug_id: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
+        },
+      ],
     });
     expect(result?.debug_meta).not.toBe(originalDebugMeta);
     expect(result?.debug_meta?.images).not.toBe(originalDebugMeta?.images);
