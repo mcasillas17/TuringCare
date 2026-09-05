@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { format } from "node:util";
 import { createEmailVerificationToken } from "better-auth/api";
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -589,6 +590,25 @@ describe("verified email ownership enforcement", () => {
       env.E2E_TEST_MODE = previous;
       env.RESEND_API_KEY = key;
     }
+  });
+
+  it("unexpected native auth failures never log raw credentials or database parameters", async () => {
+    const fixture = await createTestUser();
+    cleanups.push(fixture.cleanup);
+    const context = await auth.$context;
+    const sentinel = `private-auth-params ${fixture.email} session-token-secret`;
+    vi.spyOn(context.internalAdapter, "createSession").mockRejectedValue(new Error(sentinel));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await app.request("/api/auth/sign-in/email", {
+      method: "POST",
+      headers: fixture.authHeaders,
+      body: JSON.stringify({ email: fixture.email, password: fixture.password }),
+    });
+    expect(result.status).toBe(500);
+    expect(context.internalAdapter.createSession).toHaveBeenCalled();
+    expect(log).toHaveBeenCalled();
+    expect(log.mock.calls.map((args) => format(...args)).join("\n")).not.toContain(sentinel);
+    expect(await result.text()).not.toContain(sentinel);
   });
 
   it("the actual password-reset endpoint retains its server-side rate limit", async () => {

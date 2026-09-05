@@ -35,6 +35,15 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   basePath: "/api/auth",
   trustedOrigins: [env.FRONTEND_URL],
+  // Route unexpected failures through Hono's privacy-safe error handler instead
+  // of Better Call's raw exception logger (database errors can contain tokens).
+  onAPIError: { throw: true },
+  logger: {
+    log: (level) => {
+      if (level === "error") console.error("[auth] request_failed");
+      else if (level === "warn") console.warn("[auth] request_warning");
+    },
+  },
   session: { cookieCache: { enabled: false } },
   emailAndPassword: {
     enabled: true,
