@@ -37,9 +37,11 @@ Prioritize the remaining account-security work within the canonical roadmap gate
 - HMAC counter keys do not store addresses. Bounded indexed cleanup scales with new
   credential pairs; per-page commits preserve active/native counters. Daily maintenance
   queues through ordinary contention and fails visibly on prolonged/incomplete work.
-- Passive staging uses the global request net. Throttled email navigation is token-free;
-  programmatic callers retain 429. Production credential/send/confirm actions require
-  trusted Fly IP metadata; session reads and sign-out remain recoverable.
+- Passive staging uses the global request net. Throttled canonical verification GETs
+  with a document destination or no fetch-destination metadata receive token-free 303
+  recovery redirects; explicitly non-navigation requests retain JSON 429. Production
+  credential/send/confirm actions require trusted Fly IP metadata; session reads and
+  sign-out remain recoverable.
 - Production rejects `E2E_TEST_MODE`, and capture/outbox code independently refuses it.
   Unexpected auth diagnostics are sanitized; no raw tokens, credentials or provider
   payloads are logged.

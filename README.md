@@ -168,9 +168,9 @@ Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highligh
 - **Behavior Brief** — deterministic text + PDF (`@react-pdf/renderer`), windowed
   by 7/30/90 days or all-time, includes a daily-check-in trend tally. Email a
   finalized brief to any recipient; create a public share link.
-- **Public trainer + course directories** with scrape protection (list strips
-  contact info; detail requires auth). Seeded with real Seattle-area trainers
-  and Seattle Humane courses.
+- **Public trainer + course directories** — trainer details are public, but email/phone
+  require verified access and are always hidden in trainer lists. Course lists and
+  details are public. Seeded with real Seattle-area trainers and Seattle Humane courses.
 - **Onboarding checklist** on `/my` — 5-step path (add dog → log 3 moments →
   set a goal → finalize a brief → share with a trainer), live-computed.
 - **Curated training curriculum** — opt-in templates that pre-populate a goal

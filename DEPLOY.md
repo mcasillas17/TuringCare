@@ -317,10 +317,11 @@ verification. Automated link scans and subresource loads cannot verify an accoun
 Re-confirming a valid link is idempotent; verification never automatically creates a
 session or switches the active account. Expired receipts or links have a recovery path.
 
-Rate-limited email navigations redirect to a token-free recovery screen with the
-advertised wait; programmatic callers still receive 429. The user can reopen the email
-link afterward. Stalled verification-status checks reach retry feedback after eight
-seconds instead of waiting indefinitely.
+Rate-limited canonical verification GETs with a document destination or absent
+`Sec-Fetch-Dest` receive a token-free 303 recovery redirect with the advertised wait.
+Explicitly non-navigation verification requests retain JSON 429. The user can reopen the
+email link afterward. Stalled verification-status checks reach retry feedback after eight seconds
+instead of waiting indefinitely.
 
 A user without a session supplies email and password to request another link; a legacy
 session supplies its own identity. This permits useful provider-failure feedback without
