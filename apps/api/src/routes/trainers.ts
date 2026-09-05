@@ -41,7 +41,7 @@ export const trainersApp = new Hono<{ Variables: OptionalVars }>()
       .from(trainers)
       .where(eq(trainers.id, c.req.param("id")));
     if (!trainer) return c.json({ error: "not_found" } as const, 404);
-    // Detail reveals contact ONLY to authenticated users.
+    // Detail reveals contact ONLY to verified authenticated users.
     return c.json({
       trainer: c.get("userId") ? trainer : { ...trainer, email: null, phone: null },
     });

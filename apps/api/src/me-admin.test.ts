@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { app } from "./app";
-import { auth } from "./auth";
 import { resolveAdminRole } from "./auth/admin-bootstrap";
 import { db } from "./db";
 import { user } from "./db/schema";
+import { createTestUser } from "./test-helpers";
 
 const adminEmail = `me_adm_${Date.now()}@example.com`;
 const plainEmail = `me_usr_${Date.now()}@example.com`;
@@ -15,12 +15,7 @@ afterAll(async () => {
 });
 
 async function signInCookie(email: string) {
-  await auth.api.signUpEmail({ body: { name: "Me", email, password: "password-123" } });
-  const res = await auth.api.signInEmail({
-    body: { email, password: "password-123" },
-    asResponse: true,
-  });
-  return res.headers.get("set-cookie") ?? "";
+  return (await createTestUser({ email })).authHeaders.cookie ?? "";
 }
 
 describe("GET /me surfaces effective role", () => {
@@ -44,7 +39,7 @@ describe("GET /me surfaces effective role", () => {
 
 it("self-heals: resolveAdminRole promotes an allowlisted user in the real DB", async () => {
   const email = `me_heal_${Date.now()}@example.com`;
-  await auth.api.signUpEmail({ body: { name: "Heal", email, password: "password-123" } });
+  await createTestUser({ email });
   const [before] = await db
     .select({ id: user.id, role: user.role })
     .from(user)
@@ -54,7 +49,7 @@ it("self-heals: resolveAdminRole promotes an allowlisted user in the real DB", a
   if (!before) throw new Error("expected user row after sign-up");
 
   const role = await resolveAdminRole(
-    { id: before.id, email, role: before.role },
+    { id: before.id, email, role: before.role, emailVerified: true },
     { adminEmails: [email.toLowerCase()] },
   );
   expect(role).toBe("admin");

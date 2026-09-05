@@ -1,9 +1,9 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { app } from "./app";
-import { auth } from "./auth";
 import { db } from "./db";
 import { events, user } from "./db/schema";
+import { createTestUser } from "./test-helpers";
 
 describe("POST /api/events", () => {
   it("rejects an event name not on the client allowlist", async () => {
@@ -91,16 +91,11 @@ describe("POST /api/events", () => {
 
   it("attributes an authenticated page.viewed to the user + session", async () => {
     const email = `evtr_${Date.now()}@example.com`;
-    await auth.api.signUpEmail({ body: { name: "EvtR", email, password: "password-123" } });
-    const signIn = await auth.api.signInEmail({
-      body: { email, password: "password-123" },
-      asResponse: true,
-    });
-    const cookie = signIn.headers.get("set-cookie") ?? "";
+    const fixture = await createTestUser({ email });
     const path = `/auth-${Date.now()}`;
     const res = await app.request("/api/events", {
       method: "POST",
-      headers: { "Content-Type": "application/json", cookie },
+      headers: fixture.authHeaders,
       body: JSON.stringify({ name: "page.viewed", props: { path } }),
     });
     expect(res.status).toBe(202);

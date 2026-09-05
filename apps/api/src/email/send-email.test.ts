@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EmailSendError, type ResendLike, sendEmail } from "./send-email";
+import { EmailSendError, type ResendLike, sendEmail as deliverEmail } from "./send-email";
+
+// These unit tests exercise the provider seam, not the integration outbox.
+// Explicit injection takes precedence over global test capture configuration.
+const sendEmail: typeof deliverEmail = (args, deps) =>
+  deliverEmail(args, { capture: undefined, ...deps });
 
 const ARGS = { to: "u@example.com", subject: "Hi", html: "<p>hi</p>", text: "hi" };
 
