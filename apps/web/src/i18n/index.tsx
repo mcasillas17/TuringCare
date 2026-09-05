@@ -29,6 +29,16 @@ export function detectInitialLocale(): Locale {
     /* storage unavailable */
   }
 
+  // Seed a fresh browser from the email's exact en/es hint without replacing
+  // a local selection. Verified account preferences still apply afterward.
+  if (
+    typeof window !== "undefined" &&
+    ["/verify-email", "/login", "/register"].includes(window.location.pathname)
+  ) {
+    const lang = new URLSearchParams(window.location.search).get("lang");
+    if (isLocale(lang)) return lang;
+  }
+
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
   const languages = nav?.languages?.length ? nav.languages : [nav?.language ?? ""];
 

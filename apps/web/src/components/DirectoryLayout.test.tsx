@@ -33,10 +33,23 @@ afterEach(() => vi.clearAllMocks());
 
 describe("DirectoryLayout", () => {
   it("renders the app shell when signed in", () => {
-    mockUseSession.mockReturnValue({ data: { user: { id: "u1" } }, isPending: false } as never);
+    mockUseSession.mockReturnValue({
+      data: { user: { id: "u1", emailVerified: true } },
+      isPending: false,
+    } as never);
     setup();
     expect(screen.getByTestId("app-shell")).toBeInTheDocument();
     expect(screen.queryByTestId("public-layout")).not.toBeInTheDocument();
+  });
+
+  it("keeps public browsing public for legacy unverified sessions", () => {
+    mockUseSession.mockReturnValue({
+      data: { user: { id: "u1", emailVerified: false } },
+      isPending: false,
+    } as never);
+    setup();
+    expect(screen.getByTestId("public-layout")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-shell")).not.toBeInTheDocument();
   });
 
   it("renders the public layout (with the page) when anonymous", () => {

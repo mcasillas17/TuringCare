@@ -29,10 +29,15 @@ function mockMe(role: string | undefined) {
     "fetch",
     vi.fn(
       async () =>
-        new Response(JSON.stringify({ user: { id: "u1", name: "A", email: "a@b.c", role } }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify({
+            user: { id: "u1", name: "A", email: "a@b.c", role, emailVerified: true },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
     ),
   );
 }

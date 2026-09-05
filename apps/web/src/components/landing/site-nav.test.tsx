@@ -4,12 +4,19 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { sessionState } = vi.hoisted(() => ({
-  sessionState: { userId: "u1" as unknown },
+  sessionState: { userId: "u1" as unknown, emailVerified: true },
 }));
 
 vi.mock("@/lib/auth-client", () => ({
   useSession: () => ({
-    data: { user: { id: sessionState.userId, name: "Miguel", email: "m@example.com" } },
+    data: {
+      user: {
+        id: sessionState.userId,
+        name: "Miguel",
+        email: "m@example.com",
+        emailVerified: sessionState.emailVerified,
+      },
+    },
     isPending: false,
   }),
   signOut: vi.fn(),
@@ -19,6 +26,7 @@ import { SiteNav } from "./site-nav";
 
 beforeEach(() => {
   sessionState.userId = "u1";
+  sessionState.emailVerified = true;
 });
 
 afterEach(() => {
@@ -26,6 +34,21 @@ afterEach(() => {
 });
 
 describe("SiteNav (logged in)", () => {
+  it("offers verification, not owner navigation, for a legacy unverified session", () => {
+    sessionState.emailVerified = false;
+    render(
+      <LocaleProvider>
+        <MemoryRouter>
+          <SiteNav />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+    expect(screen.getByRole("link", { name: "Verify your email" })).toHaveAttribute(
+      "href",
+      "/verify-email?next=%2F&lang=en",
+    );
+    expect(screen.queryByRole("link", { name: /open app/i })).not.toBeInTheDocument();
+  });
   it("renders 'Open app' and hides Log in / Get started when a session exists", () => {
     render(
       <LocaleProvider>

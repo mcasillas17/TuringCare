@@ -6,29 +6,43 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n";
 import { signIn } from "@/lib/auth-client";
+import { authPagePath, isEmailUnverifiedCode } from "@/lib/auth-navigation";
+import { safeAuthReturnPath } from "@turingcare/shared";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 export function Login() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const [params] = useSearchParams();
+  const next = safeAuthReturnPath(params.get("next"));
   const [pending, setPending] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     setPending(true);
-    const { error } = await signIn.email({
-      email: String(fd.get("email")),
-      password: String(fd.get("password")),
-    });
-    setPending(false);
-    if (error) return toast.error(t("auth.loginFailed"));
-    // Full-load navigation (not react-router navigate): Better Auth refreshes the
-    // useSession atom on a deferred timer after sign-in, so an in-app navigate to
-    // the RequireAuth-gated /my would read a stale null session and bounce back to
-    // /login. A document load re-initializes the session from the now-set cookie.
-    window.location.assign("/my");
+    try {
+      const { error } = await signIn.email({
+        email: String(fd.get("email")),
+        password: String(fd.get("password")),
+      });
+      if (error) {
+        if (isEmailUnverifiedCode(error.code)) {
+          window.location.assign(authPagePath("/verify-email", next, locale));
+          return;
+        }
+        toast.error(t("auth.loginFailed"));
+        return;
+      }
+      // Own the only navigation: Better Auth auto-redirects if given callbackURL.
+      // A document load also reinitializes its deferred session atom.
+      window.location.assign(next);
+    } catch {
+      toast.error(t("auth.loginFailed"));
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -62,12 +76,12 @@ export function Login() {
                 {t("auth.forgotLink")}
               </Link>
             </div>
-            <Button type="submit" disabled={pending} className="w-full">
+            <Button type="submit" disabled={pending} aria-busy={pending} className="w-full">
               {pending ? t("auth.loginPending") : t("auth.loginSubmit")}
             </Button>
             <p className="text-sm text-muted-foreground">
               {t("auth.noAccount")}{" "}
-              <Link className="underline" to="/register">
+              <Link className="underline" to={authPagePath("/register", next, locale)}>
                 {t("auth.registerLink")}
               </Link>
             </p>

@@ -9,6 +9,35 @@ type Messages<T = En> = {
 };
 
 export const es = {
+  verification: {
+    accessError: "No pudimos comprobar tu acceso. Inténtalo de nuevo.",
+    title: "Verifica tu correo",
+    body: "Antes de usar tu cuenta, abre el enlace de verificación en tu correo. Si no lo ves, revisa la carpeta de spam o solicita un nuevo enlace abajo.",
+    credentialsHelp:
+      "Tu contraseña solo se usa para solicitar un nuevo enlace, no para verificar tu correo. Esta página no la guarda.",
+    resend: "Solicitar un nuevo enlace",
+    pending: "Solicitando enlace…",
+    accepted:
+      "Solicitud aceptada. Revisa tu bandeja de entrada y la carpeta de spam. La entrega no está confirmada.",
+    invalidCredentials: "No se pudieron confirmar el correo y la contraseña.",
+    credentialsRequired: "Ingresa tu correo y contraseña para solicitar un nuevo enlace.",
+    sendFailed: "No pudimos enviar un enlace de verificación. Inténtalo de nuevo.",
+    rateLimited: "Demasiadas solicitudes. Espera antes de solicitar otro enlace.",
+    cooldown: "Inténtalo de nuevo en {seconds} segundos.",
+    invalidLink:
+      "Este enlace de verificación no es válido o ha caducado. Solicita otro enlace, o inicia sesión si ya verificaste tu correo.",
+    successTitle: "Correo verificado",
+    signInBody:
+      "Inicia sesión para continuar. Verificar un correo no inicia sesión ni cambia tu cuenta automáticamente.",
+    currentAccount:
+      "Tu cuenta actual está verificada. Continúa con esta cuenta o cierra sesión para usar otra.",
+    signIn: "Iniciar sesión para continuar",
+    continue: "Continuar a la aplicación",
+    check: "Ya verifiqué — comprobar de nuevo",
+    sessionError:
+      "No pudimos comprobar tu sesión. Inténtalo de nuevo para continuar de forma segura.",
+    retry: "Intentar de nuevo",
+  },
   language: {
     en: "EN",
     es: "ES",

@@ -1,4 +1,32 @@
 export const en = {
+  verification: {
+    accessError: "We couldn't check your access. Try again.",
+    title: "Verify your email",
+    body: "Before you can use your account, open the verification link in your email. If you don't see it, check spam or request a new link below.",
+    credentialsHelp:
+      "Your password is only used to request a new link, not to verify your email. It is not saved by this page.",
+    resend: "Request a new link",
+    pending: "Requesting link…",
+    accepted:
+      "Request accepted. Check your inbox and spam folder. Inbox delivery is not confirmed.",
+    invalidCredentials: "The email and password could not be confirmed.",
+    credentialsRequired: "Enter your email and password to request a new link.",
+    sendFailed: "We couldn't send a verification link. Please try again.",
+    rateLimited: "Too many requests. Please wait before requesting another link.",
+    cooldown: "Try again in {seconds} seconds.",
+    invalidLink:
+      "This verification link is invalid or expired. Request a new link, or sign in if you already verified your email.",
+    successTitle: "Email verified",
+    signInBody:
+      "Sign in to continue. Verifying an email does not automatically sign you in or switch your account.",
+    currentAccount:
+      "Your signed-in account is verified. Continue with this account, or sign out to use a different one.",
+    signIn: "Sign in to continue",
+    continue: "Continue to the app",
+    check: "I've verified — check again",
+    sessionError: "We couldn't check your session. Try again to continue safely.",
+    retry: "Try again",
+  },
   language: {
     en: "EN",
     es: "ES",

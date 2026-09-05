@@ -102,6 +102,17 @@ async function verifyEmail(page: Page, request: APIRequestContext, email: string
   if (!urlMatch) throw new Error("verification URL not found in email");
   const verifyUrl = urlMatch[0].replace(/[.,;!?)>]+$/, "");
   await page.goto(verifyUrl);
+  await expect(page).toHaveURL(/\/verify-email\?/);
+  const callback = new URL(page.url());
+  expect(callback.searchParams.has("token")).toBe(false);
+  expect(callback.searchParams.has("email")).toBe(false);
+
+  // Ownership proof does not create a session or switch an existing account.
+  await page.goto("/login");
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByRole("button", { name: "Log in", exact: true }).click();
+  await page.waitForURL("**/my/setup", { timeout: 15_000 });
 }
 
 test("full owner journey: register → guided setup → training → brief → share", async ({
@@ -120,10 +131,21 @@ test("full owner journey: register → guided setup → training → brief → s
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
 
-  // Redirect to guided setup and verification banner visible
-  await page.waitForURL("**/my/setup", { timeout: 15_000 });
-  const banner = page.getByRole("alert");
-  await expect(banner).toContainText("verify your email");
+  // Signup has no privileged session; neither reads nor writes are available.
+  await page.waitForURL("**/verify-email**", { timeout: 15_000 });
+  expect((await page.request.get("/api/overview")).status()).toBe(401);
+  const createDog = await page.request.post("/api/dogs", {
+    data: {
+      name: "Not yet",
+      size: "medium",
+      sex: "female",
+      source: "rescue",
+      vaccineStage: "unknown",
+    },
+  });
+  expect(createDog.status()).toBe(401);
+  await page.reload();
+  await expect(page).toHaveURL(/\/verify-email/);
 
   // ─── 2. Email verification via test outbox ──────────────────────────────
   await verifyEmail(page, request, email);
@@ -132,8 +154,7 @@ test("full owner journey: register → guided setup → training → brief → s
   await page.goto("/my");
   await page.waitForURL("**/my/setup");
   await expect(page).toHaveURL(/\/my\/setup$/);
-  // Banner should be gone
-  await expect(banner).not.toBeVisible({ timeout: 10_000 });
+  expect((await page.request.get("/api/overview")).status()).toBe(200);
 
   // ─── 3. Guided setup ────────────────────────────────────────────────────
   await page.getByLabel("Name").fill("Maple");
@@ -346,7 +367,7 @@ test("[phone] guided training setup resumes after reload", async ({ page, reques
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
-  await page.waitForURL("**/my/setup", { timeout: 15_000 });
+  await page.waitForURL("**/verify-email**", { timeout: 15_000 });
 
   await verifyEmail(page, request, email);
   await page.goto("/my/setup");

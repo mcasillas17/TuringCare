@@ -28,10 +28,10 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-function setup() {
+function setup(entry = "/login") {
   return render(
     <LocaleProvider>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[entry]}>
         <Login />
       </MemoryRouter>
     </LocaleProvider>,
@@ -46,6 +46,36 @@ it("renders a Forgot password? link pointing at /forgot-password", () => {
   );
 });
 
+it.each(["EMAIL_NOT_VERIFIED", "email_unverified"])(
+  "recovers %s without exposing credentials in navigation",
+  async (code) => {
+    signInEmailMock.mockResolvedValue({ data: null, error: { code } });
+    setup("/login?next=%2Fmy%2Fdogs");
+    await userEvent.type(screen.getByLabelText(/email/i), "synthetic@example.test");
+    await userEvent.type(screen.getByLabelText(/password/i), "synthetic-password");
+    await userEvent.click(screen.getByRole("button", { name: /^log in$/i }));
+    expect(assignMock).toHaveBeenCalledWith("/verify-email?next=%2Fmy%2Fdogs&lang=en");
+    expect(localStorage.getItem("email")).toBeNull();
+    expect(sessionStorage.length).toBe(0);
+  },
+);
+
+it.each([
+  ["/admin/trainers", "/admin/trainers"],
+  ["/trainers/t1", "/trainers/t1"],
+  ["https://attacker.test", "/my"],
+  ["/b/private-bearer", "/my"],
+  ["/my?email=private", "/my"],
+  ["/verify-email", "/my"],
+])("full-loads only the canonical safe return for %s", async (next, expected) => {
+  signInEmailMock.mockResolvedValue({ data: {}, error: null });
+  setup(`/login?next=${encodeURIComponent(next)}`);
+  await userEvent.type(screen.getByLabelText(/email/i), "synthetic@example.test");
+  await userEvent.type(screen.getByLabelText(/password/i), "synthetic-password");
+  await userEvent.click(screen.getByRole("button", { name: /^log in$/i }));
+  expect(assignMock).toHaveBeenCalledWith(expected);
+});
+
 it("on successful login, does a full-load navigation to /my", async () => {
   signInEmailMock.mockResolvedValue({ data: { user: {} }, error: null });
   setup();
@@ -53,6 +83,10 @@ it("on successful login, does a full-load navigation to /my", async () => {
   await userEvent.type(screen.getByLabelText(/password/i), "password-123");
   await userEvent.click(screen.getByRole("button", { name: /^log in$/i }));
   expect(signInEmailMock).toHaveBeenCalledOnce();
+  expect(signInEmailMock).toHaveBeenCalledWith({
+    email: "u@example.com",
+    password: "password-123",
+  });
   expect(assignMock).toHaveBeenCalledWith("/my");
 });
 

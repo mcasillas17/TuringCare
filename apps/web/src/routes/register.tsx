@@ -6,29 +6,37 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n";
 import { signUp } from "@/lib/auth-client";
+import { authPagePath, verificationCallbackUrl } from "@/lib/auth-navigation";
+import { safeAuthReturnPath } from "@turingcare/shared";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 export function Register() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const [params] = useSearchParams();
+  const next = safeAuthReturnPath(params.get("next"));
   const [pending, setPending] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     setPending(true);
-    const { error } = await signUp.email({
-      name: String(fd.get("name")),
-      email: String(fd.get("email")),
-      password: String(fd.get("password")),
-    });
-    setPending(false);
-    if (error) return toast.error(t("auth.registerFailed"));
-    toast.success(t("auth.registered"));
-    // Full-load navigation (see login.tsx): avoids the post-sign-up stale
-    // useSession atom bouncing off the RequireAuth gate at /my.
-    window.location.assign("/my");
+    try {
+      const { error } = await signUp.email({
+        name: String(fd.get("name")),
+        email: String(fd.get("email")),
+        password: String(fd.get("password")),
+        callbackURL: verificationCallbackUrl(next, locale),
+      });
+      if (error) return toast.error(t("auth.registerFailed"));
+      // Signup can be accepted without a session or confirmed inbox delivery.
+      window.location.assign(authPagePath("/verify-email", next, locale));
+    } catch {
+      toast.error(t("auth.registerFailed"));
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -62,7 +70,7 @@ export function Register() {
                 required
               />
             </div>
-            <Button type="submit" disabled={pending} className="w-full">
+            <Button type="submit" disabled={pending} aria-busy={pending} className="w-full">
               {pending ? t("auth.registerPending") : t("auth.registerSubmit")}
             </Button>
             <p className="text-xs text-slate-soft">
@@ -78,7 +86,7 @@ export function Register() {
             </p>
             <p className="text-sm text-muted-foreground">
               {t("auth.haveAccount")}{" "}
-              <Link className="underline" to="/login">
+              <Link className="underline" to={authPagePath("/login", next, locale)}>
                 {t("auth.loginLink")}
               </Link>
             </p>

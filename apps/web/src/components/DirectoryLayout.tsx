@@ -1,8 +1,10 @@
 import { PublicLayout } from "@/components/PublicLayout";
 import { AppShell } from "@/components/app-shell/AppShell";
+import { SessionError } from "@/components/session-error";
 import { useSession } from "@/lib/auth-client";
 import { useSessionQueryReady } from "@/lib/session-query-boundary";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
+import { useHasVerifiedSession } from "@/lib/verified-session";
 import { Outlet } from "react-router-dom";
 
 /**
@@ -20,12 +22,14 @@ import { Outlet } from "react-router-dom";
  * signed-in path is flicker-free.
  */
 export function DirectoryLayout() {
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending, error } = useSession();
+  const verified = useHasVerifiedSession();
   const rawUserId = session?.user?.id;
   const userId = isNonemptySessionUserId(rawUserId) ? rawUserId : null;
   const identityReady = useSessionQueryReady(userId);
+  if (error) return <SessionError />;
   if (isPending || !identityReady) return null;
-  if (userId) return <AppShell />;
+  if (verified) return <AppShell />;
   return (
     <PublicLayout>
       <Outlet />

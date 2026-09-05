@@ -2,6 +2,8 @@ import { useSession } from "@/lib/auth-client";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from "react";
+import { EMAIL_UNVERIFIED_EVENT, VERIFIED_SESSION_EVENT } from "./auth-access-events";
+import { VerificationDeniedContext } from "./verified-session";
 
 const UNRESOLVED_IDENTITY = Symbol("unresolved-session-identity");
 type ResolvedIdentity = string | null;
@@ -23,11 +25,30 @@ function sessionUserIdFromSession(session: unknown): ResolvedIdentity {
 
 export function SessionQueryBoundary({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending, isRefetching, error } = useSession();
   const sessionUserId = sessionUserIdFromSession(session);
-  const nextIdentity: IdentityState = isPending ? UNRESOLVED_IDENTITY : sessionUserId;
+  const [deniedUserId, setDeniedUserId] = useState<string | null>(null);
+  const denied = sessionUserId !== null && deniedUserId === sessionUserId;
+  useEffect(() => {
+    const deny = () => setDeniedUserId(sessionUserId);
+    const verify = () => setDeniedUserId(null);
+    window.addEventListener(EMAIL_UNVERIFIED_EVENT, deny);
+    window.addEventListener(VERIFIED_SESSION_EVENT, verify);
+    return () => {
+      window.removeEventListener(EMAIL_UNVERIFIED_EVENT, deny);
+      window.removeEventListener(VERIFIED_SESSION_EVENT, verify);
+    };
+  }, [sessionUserId]);
+  const verified = session?.user.emailVerified === true;
+  const nextIdentity: IdentityState = isPending
+    ? UNRESOLVED_IDENTITY
+    : JSON.stringify([sessionUserId, verified, denied, Boolean(error), Boolean(isRefetching)]);
   const [clearedIdentity, setClearedIdentity] = useState<IdentityState>(UNRESOLVED_IDENTITY);
-  const identityReady = nextIdentity !== UNRESOLVED_IDENTITY && clearedIdentity === nextIdentity;
+  const identityReady =
+    !error &&
+    !isRefetching &&
+    nextIdentity !== UNRESOLVED_IDENTITY &&
+    clearedIdentity === nextIdentity;
 
   useEffect(() => {
     if (nextIdentity === UNRESOLVED_IDENTITY || nextIdentity === clearedIdentity) return;
@@ -40,7 +61,11 @@ export function SessionQueryBoundary({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({ identityReady, sessionUserId }), [identityReady, sessionUserId]);
 
-  return <SessionQueryContext.Provider value={value}>{children}</SessionQueryContext.Provider>;
+  return (
+    <VerificationDeniedContext.Provider value={denied}>
+      <SessionQueryContext.Provider value={value}>{children}</SessionQueryContext.Provider>
+    </VerificationDeniedContext.Provider>
+  );
 }
 
 export function useSessionQueryReady(expectedUserId: string | null): boolean {

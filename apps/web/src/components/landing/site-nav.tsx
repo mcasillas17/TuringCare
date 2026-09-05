@@ -3,15 +3,24 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useSession } from "@/lib/auth-client";
+import { authPagePath } from "@/lib/auth-navigation";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { cn } from "@/lib/utils";
+import { useHasVerifiedSession } from "@/lib/verified-session";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 export function SiteNav() {
-  const { t } = useI18n();
-  const { data: session } = useSession();
-  const isAuthenticated = isNonemptySessionUserId(session?.user?.id);
+  const { t, locale } = useI18n();
+  const { data: session, isPending, isRefetching, error } = useSession();
+  const { pathname } = useLocation();
+  const isAuthenticated = useHasVerifiedSession();
+  const needsVerification =
+    !isPending &&
+    !isRefetching &&
+    !error &&
+    isNonemptySessionUserId(session?.user.id) &&
+    !isAuthenticated;
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -68,6 +77,12 @@ export function SiteNav() {
           {isAuthenticated ? (
             <Button asChild className="bg-slate text-cream hover:bg-slate/90">
               <Link to="/my">{t("nav.openApp")}</Link>
+            </Button>
+          ) : needsVerification ? (
+            <Button asChild className="bg-slate text-cream hover:bg-slate/90">
+              <Link to={authPagePath("/verify-email", pathname, locale)}>
+                {t("verification.title")}
+              </Link>
             </Button>
           ) : (
             <>

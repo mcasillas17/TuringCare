@@ -1,15 +1,23 @@
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { localeFetch } from "./api";
 import {
   SessionQueryBoundary,
   useSessionQueriesReady,
   useSessionQueryReady,
 } from "./session-query-boundary";
+import { useHasVerifiedSession } from "./verified-session";
 
 const { sessionState, useSessionMock } = vi.hoisted(() => ({
-  sessionState: { pending: false, userId: "u1" as unknown },
+  sessionState: {
+    pending: false,
+    refetching: false,
+    userId: "u1" as unknown,
+    emailVerified: true,
+    error: null as Error | null,
+  },
   useSessionMock: vi.fn(),
 }));
 
@@ -56,18 +64,112 @@ function AnonymousIdentityProbe() {
 
 beforeEach(() => {
   sessionState.pending = false;
+  sessionState.refetching = false;
   sessionState.userId = "u1";
+  sessionState.emailVerified = true;
+  sessionState.error = null;
   useSessionMock.mockImplementation(() => ({
-    data: sessionState.userId === null ? null : { user: { id: sessionState.userId } },
+    data:
+      sessionState.userId === null
+        ? null
+        : { user: { id: sessionState.userId, emailVerified: sessionState.emailVerified } },
     isPending: sessionState.pending,
+    isRefetching: sessionState.refetching,
+    error: sessionState.error,
   }));
 });
 
 afterEach(() => {
   useSessionMock.mockReset();
+  vi.unstubAllGlobals();
 });
 
 describe("SessionQueryBoundary", () => {
+  it("hides prior privileged data while a cross-tab/focus session refresh is in flight", async () => {
+    const queryClient = new QueryClient();
+    const tree = () => (
+      <BoundaryTree queryClient={queryClient}>
+        <PublicAndPrivateProbe />
+      </BoundaryTree>
+    );
+    const view = render(tree());
+    await screen.findByText("private-cache-empty");
+    queryClient.setQueryData(["profile", "owner"], { marker: "private-before-focus" });
+    sessionState.refetching = true;
+    view.rerender(tree());
+    expect(screen.getByText("sanitizing")).toBeInTheDocument();
+    expect(queryClient.getQueryData(["profile", "owner"])).toBeUndefined();
+    sessionState.refetching = false;
+    sessionState.userId = null;
+    view.rerender(tree());
+    await screen.findByText("private-cache-empty");
+  });
+  it("recovers a stale verified tab on an authoritative 403 and only unlocks after a fresh verified session", async () => {
+    function AccessProbe() {
+      return <p>{useHasVerifiedSession() ? "verified-access" : "verification-wall"}</p>;
+    }
+    const queryClient = new QueryClient();
+    render(
+      <BoundaryTree queryClient={queryClient}>
+        <AccessProbe />
+      </BoundaryTree>,
+    );
+    await screen.findByText("verified-access");
+    queryClient.setQueryData(["private"], { secret: "stale" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json({ error: "email_unverified" }, { status: 403 })),
+    );
+    await act(async () => {
+      await localeFetch("/api/dogs");
+    });
+    expect(await screen.findByText("verification-wall")).toBeInTheDocument();
+    expect(queryClient.getQueryData(["private"])).toBeUndefined();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json({ user: { id: "u1", emailVerified: true } })),
+    );
+    await act(async () => {
+      await localeFetch("/api/auth/get-session?disableCookieCache=true");
+    });
+    expect(await screen.findByText("verified-access")).toBeInTheDocument();
+  });
+  it("clears private queries and mutations when verification changes on the SAME user", async () => {
+    const queryClient = new QueryClient();
+    const tree = () => (
+      <BoundaryTree queryClient={queryClient}>
+        <PublicAndPrivateProbe />
+      </BoundaryTree>
+    );
+    const view = render(tree());
+    await screen.findByText("private-cache-empty");
+    queryClient.setQueryData(["profile", "owner"], { marker: "verified-secret" });
+    queryClient.getMutationCache().build(queryClient, { mutationKey: ["private"] });
+    sessionState.emailVerified = false;
+    view.rerender(tree());
+    await screen.findByText("private-cache-empty");
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(0);
+    queryClient.setQueryData(["profile", "owner"], { marker: "unverified-stale" });
+    sessionState.emailVerified = true;
+    view.rerender(tree());
+    await screen.findByText("private-cache-empty");
+  });
+
+  it("clears stale privileged data when session refresh fails", async () => {
+    const queryClient = new QueryClient();
+    const tree = () => (
+      <BoundaryTree queryClient={queryClient}>
+        <PublicAndPrivateProbe />
+      </BoundaryTree>
+    );
+    const view = render(tree());
+    await screen.findByText("private-cache-empty");
+    queryClient.setQueryData(["profile", "owner"], { marker: "private-secret" });
+    sessionState.error = new Error("offline");
+    view.rerender(tree());
+    await waitFor(() => expect(queryClient.getQueryData(["profile", "owner"])).toBeUndefined());
+    expect(screen.queryByText("private-secret")).not.toBeInTheDocument();
+  });
   it("clears every cached query on user switch, logout, and login", async () => {
     const queryClient = new QueryClient();
     const tree = () => (

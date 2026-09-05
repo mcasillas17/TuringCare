@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const track = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/track", () => ({ track: (...a: unknown[]) => track(...a) }));
 
-let mockSession: { user: { id: unknown } } | null = null;
+let mockSession: { user: { id: unknown; emailVerified?: boolean } } | null = null;
 vi.mock("@/lib/auth-client", () => ({
   useSession: () => ({ data: mockSession, isPending: false }),
 }));
@@ -72,6 +72,22 @@ afterEach(() => {
 });
 
 describe("TrainerDetail", () => {
+  it("hides stale contact details and owner actions for an unverified session", async () => {
+    mockSession = { user: { id: "u1", emailVerified: false } };
+    stubTrainer({
+      id: "t1",
+      name: "Trainer",
+      city: "Austin",
+      state: "TX",
+      email: "private@example.test",
+      phone: "555-0100",
+    });
+    renderDetail();
+    await screen.findByText("Trainer");
+    expect(screen.queryByText(/private@example.test/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/555-0100/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /send my brief/i })).not.toBeInTheDocument();
+  });
   it("emits trainer.viewed on mount", () => {
     stubTrainer({
       id: "tr1",
@@ -84,7 +100,7 @@ describe("TrainerDetail", () => {
   });
 
   it("renders the Send Brief cross-link when authed and the trainer has an email", async () => {
-    mockSession = { user: { id: "u1" } };
+    mockSession = { user: { id: "u1", emailVerified: true } };
     stubTrainer({
       id: "t1",
       name: "Sarah R+",
@@ -103,7 +119,7 @@ describe("TrainerDetail", () => {
   });
 
   it("does NOT render the Send Brief cross-link when the trainer has no email", async () => {
-    mockSession = { user: { id: "u1" } };
+    mockSession = { user: { id: "u1", emailVerified: true } };
     stubTrainer({
       id: "t2",
       name: "Pat Trainer",
@@ -133,7 +149,7 @@ describe("TrainerDetail", () => {
     renderDetail("t3");
     await waitFor(() => expect(screen.getByText("Anon View")).toBeInTheDocument());
     const cta = (await screen.findByRole("link", { name: /sign up/i })) as HTMLAnchorElement;
-    expect(cta.getAttribute("href")).toBe("/register");
+    expect(cta.getAttribute("href")).toBe("/register?next=%2Ftrainers%2Ft3&lang=en");
     expect(
       screen.queryByRole("link", { name: /send my brief to this trainer/i }),
     ).not.toBeInTheDocument();
@@ -155,7 +171,7 @@ describe("TrainerDetail", () => {
 
       expect(await screen.findByRole("link", { name: /^sign up$/i })).toHaveAttribute(
         "href",
-        "/register",
+        "/register?next=%2Ftrainers%2Ft-invalid&lang=en",
       );
       expect(
         screen.queryByRole("link", { name: /send my brief to this trainer/i }),
@@ -164,7 +180,7 @@ describe("TrainerDetail", () => {
   );
 
   it("authed: hides the 'Sign up to contact' CTA and shows the brief-send button", async () => {
-    mockSession = { user: { id: "u1" } };
+    mockSession = { user: { id: "u1", emailVerified: true } };
     stubTrainer({
       id: "t4",
       name: "Authed View",

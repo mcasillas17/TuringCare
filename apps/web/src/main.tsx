@@ -35,6 +35,7 @@ import { SharedBrief } from "@/routes/shared-brief";
 import { Terms } from "@/routes/terms";
 import { TrainerDetail } from "@/routes/trainer-detail";
 import { Trainers } from "@/routes/trainers";
+import { VerifyEmail } from "@/routes/verify-email";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode, lazy } from "react";
 import { createRoot } from "react-dom/client";
@@ -82,6 +83,7 @@ createRoot(document.getElementById("root") as HTMLElement).render(
                   }
                 />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/terms" element={<Terms />} />

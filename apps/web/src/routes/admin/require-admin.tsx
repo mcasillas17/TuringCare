@@ -1,25 +1,35 @@
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { useLocaleAccountReadiness } from "@/i18n/locale-account-bridge";
+import { authPagePath } from "@/lib/auth-navigation";
 import { useMe } from "@/lib/me";
-import { useSessionQueriesReady } from "@/lib/session-query-boundary";
+import { RequireAuth } from "@/routes/require-auth";
 import type { ReactNode } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 
 export function RequireAdmin({ children }: { children: ReactNode }) {
-  const { t } = useI18n();
-  const identityReady = useSessionQueriesReady();
-  const localeAccountReadiness = useLocaleAccountReadiness();
-
-  if (!identityReady || !localeAccountReadiness.ready)
-    return <p className="p-8">{t("common.loading")}</p>;
-
-  return <AuthenticatedAdmin>{children}</AuthenticatedAdmin>;
+  return (
+    <RequireAuth>
+      <AuthenticatedAdmin>{children}</AuthenticatedAdmin>
+    </RequireAuth>
+  );
 }
 
 function AuthenticatedAdmin({ children }: { children: ReactNode }) {
-  const { t } = useI18n();
-  const { data, isPending, isError } = useMe();
+  const { t, locale } = useI18n();
+  const { pathname } = useLocation();
+  const { data, isPending, isError, isFetching, refetch } = useMe();
   if (isPending) return <p className="p-8">{t("common.loading")}</p>;
-  if (isError || data?.role !== "admin") return <Navigate to="/my" replace />;
+  if (isError)
+    return (
+      <div className="space-y-4 p-8" role="alert">
+        <p>{t("verification.accessError")}</p>
+        <Button disabled={isFetching} onClick={() => void refetch()}>
+          {t("verification.retry")}
+        </Button>
+      </div>
+    );
+  if (data?.emailVerified !== true)
+    return <Navigate to={authPagePath("/verify-email", pathname, locale)} replace />;
+  if (data.role !== "admin") return <Navigate to="/my" replace />;
   return <>{children}</>;
 }
