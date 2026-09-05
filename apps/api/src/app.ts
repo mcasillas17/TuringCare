@@ -3,8 +3,9 @@ import { sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
-import { auth } from "./auth";
 import { resolveAdminRole } from "./auth/admin-bootstrap";
+import { handleAuthRequest } from "./auth/request-handler";
+import { getAuthoritativeSession } from "./auth/session";
 import { db } from "./db";
 import { env } from "./env";
 import { type LocaleEnv, localeMiddleware } from "./middleware/locale";
@@ -27,6 +28,7 @@ import { shareApp } from "./routes/share";
 import { createTestEmailApp } from "./routes/test-email";
 import { trainersApp } from "./routes/trainers";
 import { trainingApp } from "./routes/training";
+import { verificationApp } from "./routes/verification";
 import { eventIngestSchema } from "./telemetry/events";
 import { recordEvent } from "./telemetry/record-event";
 
@@ -38,7 +40,9 @@ const app = new Hono<ApiEnv & LocaleEnv>()
     secureHeaders({
       xContentTypeOptions: "nosniff",
       xFrameOptions: "DENY",
-      referrerPolicy: "strict-origin-when-cross-origin",
+      // Verification entry URLs contain bearer tokens even when the API is
+      // reverse-proxied onto the frontend origin. Never forward them as referrers.
+      referrerPolicy: "no-referrer",
       // No Content-Security-Policy here: this is a JSON API, not an HTML app.
     }),
   )
@@ -49,7 +53,7 @@ const app = new Hono<ApiEnv & LocaleEnv>()
       credentials: true,
       allowHeaders: ["Content-Type", "X-TuringCare-Locale"],
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      exposeHeaders: ["X-Request-ID"],
+      exposeHeaders: ["X-Request-ID", "Retry-After", "X-Retry-After"],
     }),
   )
   .use("*", globalRateLimit())
@@ -88,7 +92,8 @@ const app = new Hono<ApiEnv & LocaleEnv>()
     }
   })
   .get("/me", async (c) => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    c.header("Cache-Control", "no-store");
+    const session = await getAuthoritativeSession(c.req.raw.headers);
     if (!session) return c.json({ error: "unauthorized" } as const, 401);
     const role = await resolveAdminRole(session.user);
     return c.json({ user: { ...session.user, role } });
@@ -107,8 +112,9 @@ const app = new Hono<ApiEnv & LocaleEnv>()
   .post("/api/events", stableZValidator("json", eventIngestSchema), async (c) => {
     const { name, props } = c.req.valid("json");
     // Identity is resolved server-side from the auth cookie — never trusted
-    // from the client. Anonymous (pre-auth, e.g. landing) is allowed.
-    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    // from the client. This bounded public telemetry endpoint deliberately
+    // attributes valid legacy/unverified sessions too; it grants no domain access.
+    const session = await getAuthoritativeSession(c.req.raw.headers);
     await recordEvent(name, {
       userId: session?.user.id ?? null,
       sessionId: session?.session.id ?? null,
@@ -121,15 +127,12 @@ const app = new Hono<ApiEnv & LocaleEnv>()
   .route("/api/training", trainingApp)
   .route("/api/trainers", trainersApp)
   .route("/api/profile", profileApp)
+  .route("/api/verification", verificationApp)
   .route("/api/admin", adminApp)
   .route("/api/admin/courses", adminCoursesApp)
   .route("/api/admin/trainers", adminTrainersApp)
   .route("/api/test", createTestEmailApp({ enabled: env.E2E_TEST_MODE }))
-  .on(
-    ["POST", "GET"],
-    "/api/auth/*",
-    createMonitoringAuthHandler((req) => auth.handler(req)),
-  );
+  .on(["POST", "GET"], "/api/auth/*", createMonitoringAuthHandler(handleAuthRequest));
 
 app.onError(createMonitoringErrorHandler<ApiEnv & LocaleEnv>());
 

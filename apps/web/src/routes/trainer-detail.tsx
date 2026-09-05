@@ -1,17 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { useSession } from "@/lib/auth-client";
-import { isNonemptySessionUserId } from "@/lib/session-user-id";
+import { authPagePath } from "@/lib/auth-navigation";
 import { track } from "@/lib/track";
 import { useTrainer } from "@/lib/trainers";
+import { useHasVerifiedSession } from "@/lib/verified-session";
 import { useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 
 export function TrainerDetail() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { pathname } = useLocation();
   const { id = "" } = useParams();
-  const { data: session } = useSession();
-  const isAuthenticated = isNonemptySessionUserId(session?.user?.id);
+  const isAuthenticated = useHasVerifiedSession();
   const { data: tr, isLoading, isError } = useTrainer(id);
   useEffect(() => {
     if (id) track("trainer.viewed", { id });
@@ -45,12 +45,12 @@ export function TrainerDetail() {
             {t("trainersDir.website")}: {tr.website}
           </div>
         )}
-        {tr.email && (
+        {isAuthenticated && tr.email && (
           <div>
             {t("trainersDir.email")}: {tr.email}
           </div>
         )}
-        {tr.phone && (
+        {isAuthenticated && tr.phone && (
           <div>
             {t("trainersDir.phone")}: {tr.phone}
           </div>
@@ -69,7 +69,9 @@ export function TrainerDetail() {
         <div className="rounded border border-silver bg-white p-4">
           <p className="text-sm text-slate-soft">{t("trainersDir.signUpToContact")}</p>
           <Button asChild className="mt-2 bg-slate text-cream">
-            <Link to="/register">{t("trainersDir.signUpToContactCta")}</Link>
+            <Link to={authPagePath("/register", pathname, locale)}>
+              {t("trainersDir.signUpToContactCta")}
+            </Link>
           </Button>
         </div>
       )}

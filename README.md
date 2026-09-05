@@ -18,11 +18,12 @@ they can share with a trainer.
 ```bash
 git clone https://github.com/mcasillas17/TuringCare.git
 cd TuringCare
-pnpm install
-cp .env.example .env
+pnpm install --frozen-lockfile
+test -e .env || cp .env.example .env
 docker compose up -d --wait                # Postgres 18 on :5432 (waits for healthy)
+# For synthetic no-provider email, set E2E_TEST_MODE=true in .env first (see below).
 set -a && . ./.env && set +a               # export env for this shell
-pnpm --filter @turingcare/api db:push      # apply the schema
+pnpm --filter @turingcare/api db:migrate   # apply committed migrations
 pnpm dev                                   # api :3001, web :3000
 ```
 
@@ -31,13 +32,58 @@ pnpm dev                                   # api :3001, web :3000
 > port mapping in `docker-compose.yml` (e.g. `"5433:5432"`) and update `DATABASE_URL`
 > in `.env` to match.
 
-> **Why `set -a && . ./.env && set +a`?** Neither drizzle-kit (`db:push`) nor the
+> **Why `set -a && . ./.env && set +a`?** Neither drizzle-kit (`db:migrate`) nor the
 > API server (`pnpm dev`) auto-loads `.env`. That line exports the variables into
 > your shell so both pick them up. Run it once per shell session (or use a tool
 > like `direnv` to automate it). Alternative one-offs:
-> `DATABASE_URL=... pnpm --filter @turingcare/api db:push`.
+> `DATABASE_URL=... pnpm --filter @turingcare/api db:migrate`.
 
-Open http://localhost:3000, register an account, and you land on `/my/setup`.
+Use an isolated local database and a development auth secret, never production credentials.
+Do not overwrite an existing `.env` or remove shared database volumes.
+
+### Signup and verified access
+
+Open http://localhost:3000 and register. Registration opens `/verify-email` without an
+authenticated session. Open the email link, press **Verify email**, then sign in. A new
+owner can then continue to `/my/setup`; safe internal destinations are retained.
+
+Opening a link alone does not verify ownership, so automated mail scanners cannot enable
+an account. Verification never automatically signs in or switches accounts. Existing
+unverified sessions use the same recovery screen and cannot access owner data, profile
+mutations, trainer contacts or admin privileges. Public directories and finalized public
+Brief links remain available.
+
+To request another link without a session, enter the account's email and password. A
+legacy session can request its own link without entering credentials. Server-side limits
+and localized cooldowns apply; acceptance means the provider accepted the request, not
+confirmed inbox delivery. Invalid/expired links and password recovery remain usable.
+Password reset does not implicitly verify an account.
+
+Duplicate registration intentionally has a privacy-neutral success response and may not
+send another email. The original password still applies; use **Forgot password?** if
+needed. If an address was mistyped, register with the correct address. Existing data is
+not transferred or deleted by this flow; inaccessible legacy accounts require separately
+authorized ownership recovery.
+
+### Local email without a provider
+
+For synthetic local accounts, set `E2E_TEST_MODE=true` in the local `.env` **before**
+exporting it and starting the API. The test-only outbox then captures email instead of
+contacting a provider. Its local endpoint is
+`GET /api/test/emails/latest?to=<URL-encoded synthetic address>`; open the verification
+link from that captured message and explicitly confirm it. Outbox responses contain
+local authentication links: do not publish them or use real account data in this mode.
+Keep this API local and unexposed. Production rejects test mode and independently disables
+both capture and the outbox route.
+
+When neither a provider key nor capture mode is configured, local signup does not deliver email; its
+success response is not delivery evidence. Credential-proven resend returns
+`verification_send_failed` (503), not a successful no-op.
+
+Existing-account inventory, controlled admin/smoke preparation, API-first cutover and
+forward-only recovery are documented in
+[`DEPLOY.md`](DEPLOY.md#6a-verified-email-ownership-cutover), including the verification
+state diagram. Production cutover evidence is still required.
 
 ## Architecture
 
@@ -68,11 +114,14 @@ docker-compose.yml  Local Postgres
 ## Localization
 
 TuringCare supports exactly English (`en`) and Spanish (`es`). On first load the web app
-uses a valid `tc-locale` browser preference, then the first supported value in
-`navigator.languages` / `navigator.language`, and finally English. After authentication,
-a non-null account preference takes precedence over that local result; a new account with
-no preference is seeded from the already-resolved browser choice. Explicit language
-changes remain usable locally if account persistence fails.
+uses a valid `tc-locale` preference, an exact language hint carried by the verification
+flow when no local preference exists, then browser language and English. After verified
+authentication, a non-null account preference takes precedence; a null preference is
+seeded from the resolved local choice. Unverified recovery does not query the protected
+profile. A storage-denied continuation carries only a validated language hint, never
+credentials or arbitrary redirect queries. Explicit switches remain usable locally if
+account persistence fails. See [`docs/LOCALIZATION.md`](docs/LOCALIZATION.md) for the exact
+precedence and failure behavior.
 
 The web and Better Auth clients send the active locale as `X-TuringCare-Locale`. The API
 accepts only `en` or `es`, falls back to a supported weighted `Accept-Language` value and
@@ -119,9 +168,9 @@ Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highligh
 - **Behavior Brief** — deterministic text + PDF (`@react-pdf/renderer`), windowed
   by 7/30/90 days or all-time, includes a daily-check-in trend tally. Email a
   finalized brief to any recipient; create a public share link.
-- **Public trainer + course directories** with scrape protection (list strips
-  contact info; detail requires auth). Seeded with real Seattle-area trainers
-  and Seattle Humane courses.
+- **Public trainer + course directories** — trainer details are public, but email/phone
+  require verified access and are always hidden in trainer lists. Course lists and
+  details are public. Seeded with real Seattle-area trainers and Seattle Humane courses.
 - **Onboarding checklist** on `/my` — 5-step path (add dog → log 3 moments →
   set a goal → finalize a brief → share with a trainer), live-computed.
 - **Curated training curriculum** — opt-in templates that pre-populate a goal
@@ -168,6 +217,23 @@ API tests use the real local Postgres database through the root `.env`; apply mi
 first. The production API image also includes `packages/i18n` as a workspace dependency and
 is built and boot-smoked in PR CI and the post-merge deployment gate.
 
+API Vitest captures emails automatically without disabling verification. `createTestUser()`
+follows a real captured link, explicitly confirms it and signs in;
+`createUnverifiedTestUser()` and `createLegacySessionUser()` provide explicit negative
+fixtures. CI uses PostgreSQL 16; local Compose uses PostgreSQL 18. Keep the verification
+counter/retention tests compatible with both. Useful focused checks:
+
+```bash
+pnpm --filter @turingcare/api exec vitest run src/auth-verification.test.ts src/auth/verification-proof.test.ts
+pnpm --filter @turingcare/web exec vitest run src/routes/verify-email.test.tsx src/lib/auth-refresh.test.tsx
+```
+
+On a busy development host, `pnpm test --maxWorkers=2` runs the same complete suite with
+bounded concurrency; it does not skip tests.
+CI and predeploy validation additionally run workspace suites sequentially so independent
+test pools do not starve database/subprocess checks. The equivalent local command is
+`pnpm -r --workspace-concurrency=1 test --maxWorkers=2`.
+
 ### API error monitoring
 
 The API preserves `tsx` startup with `src/instrument.ts` preloaded. Monitoring is
@@ -189,21 +255,27 @@ production release remains pending under [#98](https://github.com/mcasillas17/Tu
 
 ## Browser tests
 
-Playwright covers the **critical owner journey** (register → add dog → log moments →
-finalize a Behavior Brief → email and share it) at two viewports: `desktop-chromium`
+Playwright covers the **critical owner journey** (register → explicitly verify → sign in →
+add dog → log moments →
+finalize and share a Behavior Brief) at two viewports: `desktop-chromium`
 (Desktop Chrome) and `phone-chromium` (Pixel 7 / Chromium).
 
 Tests run against the local dev servers with a local Postgres database and a
 **test-only captured email outbox** (`E2E_TEST_MODE=true` on the API) so no real
 email is sent and no external services are required.
 
+The verification journeys also cover denied pre-verification access, legacy persisted
+admins, fresh-browser Spanish continuation, password-reset non-bypass, real resend and
+confirmation limits, stale receipt clearing, focus-preserved drafts, stalled status
+recovery and token-free throttled email navigation.
+
 ### Run locally
 
 ```bash
-# 1. Configure environment as described in Local setup above (copy .env.example → .env,
+# 1. Configure environment as described in Local setup above (preserve any existing .env,
 #    start Docker Compose Postgres, export env vars).
 pnpm --filter @turingcare/api db:migrate # migrate DB
-pnpm dlx playwright install chromium    # install Chromium once
+pnpm exec playwright install chromium   # install the pinned runner's browser once
 pnpm test:e2e                           # run all projects (desktop + phone)
 ```
 
@@ -235,8 +307,10 @@ variables → Actions**.
 
 The canonical delivery order and current public-beta status live in
 [`docs/ROADMAP.md`](docs/ROADMAP.md). The immediate gates are enforced email ownership,
-complete production monitoring, a measured backup/restore drill, in-app feedback, cohort
-analytics, and release-candidate QA before Guided Today and beta recruitment.
+complete production monitoring, a measured backup/restore drill, in-app feedback and cohort
+analytics.
+Guided Today follows measurement readiness; final release-candidate QA then gates beta
+recruitment. T1 implementation is ready, but authorized production cutover remains pending.
 
 Account-security details remain in
 [`docs/SECURITY-BACKLOG.md`](docs/SECURITY-BACKLOG.md).

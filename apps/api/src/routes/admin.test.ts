@@ -1,9 +1,9 @@
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { app } from "../app";
-import { auth } from "../auth";
 import { db } from "../db";
 import { events, user } from "../db/schema";
+import { createTestUser } from "../test-helpers";
 
 const email = `adm_${Date.now()}@example.com`;
 
@@ -18,15 +18,9 @@ describe("/api/admin", () => {
   });
 
   it("returns 200 with metrics for an admin (role seeded)", async () => {
-    await auth.api.signUpEmail({ body: { name: "Adm", email, password: "password-123" } });
+    const fixture = await createTestUser({ email });
     await db.update(user).set({ role: "admin" }).where(eq(user.email, email));
-    const signIn = await auth.api.signInEmail({
-      body: { email, password: "password-123" },
-      asResponse: true,
-    });
-    const cookie = signIn.headers.get("set-cookie") ?? "";
-
-    const res = await app.request("/api/admin/metrics?days=30", { headers: { cookie } });
+    const res = await app.request("/api/admin/metrics?days=30", { headers: fixture.authHeaders });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toHaveProperty("kpis");
@@ -64,17 +58,10 @@ describe("/api/admin", () => {
       .returning({ id: events.id });
 
     try {
-      const adminAccount = await auth.api.signUpEmail({
-        body: { name: "Privacy admin fixture", email: privacyAdminEmail, password: "password-123" },
-      });
-      privacyAdminId = adminAccount.user.id;
-      await db.update(user).set({ role: "admin" }).where(eq(user.id, adminAccount.user.id));
-      const signIn = await auth.api.signInEmail({
-        body: { email: privacyAdminEmail, password: "password-123" },
-        asResponse: true,
-      });
-      const cookie = signIn.headers.get("set-cookie") ?? "";
-      const res = await app.request("/api/admin/metrics?days=1", { headers: { cookie } });
+      const fixture = await createTestUser({ email: privacyAdminEmail });
+      privacyAdminId = fixture.userId;
+      await db.update(user).set({ role: "admin" }).where(eq(user.id, fixture.userId));
+      const res = await app.request("/api/admin/metrics?days=1", { headers: fixture.authHeaders });
       expect(res.status).toBe(200);
 
       const body = (await res.json()) as { topPages: { path: string; count: number }[] };

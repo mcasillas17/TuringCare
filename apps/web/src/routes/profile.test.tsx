@@ -44,7 +44,10 @@ function stubProfile(user: {
 function setup() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   useSessionMock.mockImplementation(() => ({
-    data: sessionState.userId === null ? null : { user: { id: sessionState.userId } },
+    data:
+      sessionState.userId === null
+        ? null
+        : { user: { id: sessionState.userId, emailVerified: true } },
     isPending: sessionState.isPending,
   }));
   const view = render(

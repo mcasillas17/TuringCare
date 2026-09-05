@@ -32,6 +32,7 @@ function setup() {
             }
           />
           <Route path="/login" element={<div>login page</div>} />
+          <Route path="/verify-email" element={<div>verification page</div>} />
         </Routes>
       </MemoryRouter>
     </LocaleProvider>,
@@ -46,7 +47,10 @@ afterEach(() => {
 
 describe("RequireAuth", () => {
   it("renders private children only after the session cache boundary is ready", () => {
-    useSessionMock.mockReturnValue({ data: { user: { id: "u1" } }, isPending: false });
+    useSessionMock.mockReturnValue({
+      data: { user: { id: "u1", emailVerified: true } },
+      isPending: false,
+    });
     identityReadyState.value = false;
 
     const view = setup();
@@ -80,6 +84,31 @@ describe("RequireAuth", () => {
 
     expect(screen.getByText("login page")).toBeInTheDocument();
     expect(screen.queryByText("private content")).not.toBeInTheDocument();
+  });
+
+  it.each([false, undefined, null, "true"])(
+    "requires explicit verified ownership for %j",
+    (emailVerified) => {
+      useSessionMock.mockReturnValue({
+        data: { user: { id: "u1", emailVerified } },
+        isPending: false,
+      });
+      setup();
+      expect(screen.getByText("verification page")).toBeInTheDocument();
+      expect(screen.queryByText("private content")).not.toBeInTheDocument();
+    },
+  );
+
+  it("shows a retryable session error instead of treating it as anonymous", () => {
+    useSessionMock.mockReturnValue({
+      data: null,
+      isPending: false,
+      error: new Error("offline"),
+      refetch: vi.fn(),
+    });
+    setup();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText("login page")).not.toBeInTheDocument();
   });
 
   it.each(["", "   ", 42])("fails closed for the runtime-invalid session user id %j", (userId) => {

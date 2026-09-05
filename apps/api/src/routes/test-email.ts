@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import { findLatestTestEmail } from "../email/test-outbox";
+import { env } from "../env";
 
 export function createTestEmailApp({ enabled }: { enabled: boolean }) {
   const app = new Hono();
 
   app.get("/emails/latest", (c) => {
-    if (!enabled) return c.notFound();
+    if (!enabled || env.NODE_ENV === "production") return c.notFound();
 
     const to = (c.req.query("to") ?? "").trim();
     if (!to) return c.json({ error: "recipient_required" } as const, 400);

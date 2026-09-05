@@ -9,6 +9,61 @@ type Messages<T = En> = {
 };
 
 export const es = {
+  verification: {
+    confirm: "Verificar correo",
+    confirmBody:
+      "Confirma que deseas verificar el correo asociado con este enlace. Abrir el enlace no lo verifica.",
+    confirmPending: "Verificando correo…",
+    confirmFailed: "No pudimos confirmar tu correo. Inténtalo de nuevo.",
+    checkingLink: "Comprobando enlace de verificación…",
+    statusFailed: "No pudimos comprobar tu enlace de verificación. Inténtalo de nuevo.",
+    currentAccountTitle: "Tu cuenta está verificada",
+    sessionNotVerified:
+      "Tu sesión actual aún no está verificada. Comprueba su estado de nuevo o cierra sesión para iniciar sesión con la cuenta verificada.",
+    signupRecovery:
+      "Si ya te registraste, registrarte otra vez puede no enviar otro correo. Solicita un nuevo enlace con tu contraseña original o usa ¿Olvidaste tu contraseña?",
+    typoRecovery: "Si escribiste mal tu correo, regístrate de nuevo con la dirección correcta.",
+    registerCorrectEmail: "Registrarse con el correo correcto",
+    otherLink: "Solicitar otro enlace de verificación",
+    switchTitle: "Cierra sesión para usar este enlace",
+    switchVerified:
+      "Este enlace es para otra cuenta. Cierra sesión para iniciar sesión con esa cuenta.",
+    cooldownStarted: "Espera antes de intentarlo de nuevo.",
+    cooldownFinished: "Ya puedes intentarlo de nuevo.",
+    serviceUnavailable:
+      "El servicio de verificación no está disponible temporalmente. Inténtalo de nuevo.",
+    requestRejected: "No se pudo aceptar esta solicitud. Recarga la página e inténtalo de nuevo.",
+    reopenLimitedLink:
+      "Después de esperar, vuelve a abrir el enlace de tu correo. También puedes continuar con la recuperación para solicitar otro enlace.",
+    navigationRecovery: "Continuar con la recuperación",
+    accessError: "No pudimos comprobar tu acceso. Inténtalo de nuevo.",
+    title: "Verifica tu correo",
+    body: "Antes de usar tu cuenta, abre el enlace de verificación en tu correo. Si no lo ves, revisa la carpeta de spam o solicita un nuevo enlace abajo.",
+    credentialsHelp:
+      "Tu contraseña solo se usa para solicitar un nuevo enlace, no para verificar tu correo. Esta página no la guarda.",
+    resend: "Solicitar un nuevo enlace",
+    pending: "Solicitando enlace…",
+    accepted:
+      "Solicitud aceptada. Revisa tu bandeja de entrada y la carpeta de spam. La entrega no está confirmada.",
+    invalidCredentials: "No se pudieron confirmar el correo y la contraseña.",
+    credentialsRequired: "Ingresa tu correo y contraseña para solicitar un nuevo enlace.",
+    sendFailed: "No pudimos enviar un enlace de verificación. Inténtalo de nuevo.",
+    rateLimited: "Demasiadas solicitudes. Espera antes de intentarlo de nuevo.",
+    cooldown: "Tiempo para otra solicitud: {seconds} s.",
+    invalidLink:
+      "Este enlace de verificación no es válido o ha caducado. Solicita otro enlace, o inicia sesión si ya verificaste tu correo.",
+    successTitle: "Correo verificado",
+    signInBody:
+      "Inicia sesión para continuar. Verificar un correo no inicia sesión ni cambia tu cuenta automáticamente.",
+    currentAccount:
+      "Tu cuenta actual está verificada. Continúa con esta cuenta o cierra sesión para usar otra.",
+    signIn: "Iniciar sesión para continuar",
+    continue: "Continuar a la aplicación",
+    check: "Ya verifiqué — comprobar de nuevo",
+    sessionError:
+      "No pudimos comprobar tu sesión. Inténtalo de nuevo para continuar de forma segura.",
+    retry: "Intentar de nuevo",
+  },
   language: {
     en: "EN",
     es: "ES",
@@ -1480,13 +1535,6 @@ export const es = {
     h_changes: "Cambios",
     p_changes:
       "Estos términos pueden cambiar a medida que el producto evolucione. La versión actual siempre vive en /terms. El uso continuado después de un cambio significa que aceptas los nuevos términos.",
-  },
-  verifyBanner: {
-    message: "Verifica tu correo — revisa tu bandeja de entrada",
-    resend: "Reenviar",
-    dismiss: "Descartar",
-    resendSuccess: "Correo de verificación enviado",
-    resendError: "No se pudo enviar el correo de verificación",
   },
   turing: {
     tipAria: "Turing — toca para ver un consejo",

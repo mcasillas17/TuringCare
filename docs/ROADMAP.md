@@ -1,6 +1,7 @@
 # TuringCare Roadmap
 
-Last audited: 2026-09-03 against `origin/main` at `1375c2a`.
+Last updated: 2026-09-05. T1 implementation is ready for rollout; production cutover
+evidence has not yet been recorded.
 
 This is the canonical source for current product priorities, implementation guidance, dependencies,
 and delivery gates.
@@ -44,10 +45,10 @@ separate outcome and does not substitute for weekly training activity.
 
 | Area | Status | What is complete | Remaining gap |
 |---|---|---|---|
-| Work tracking | Not started | Priority sequence, dependencies, and acceptance gates are defined. | There are no open GitHub issues assigning owners and status to the remaining gates. |
-| Critical owner journey | Complete foundation | Playwright covers registration, verification delivery and link use, guided setup, moment logging, training, practice, contextual progress, and Brief finalization/sharing at desktop and Pixel 7 viewports. | The test does not prove that owner data is blocked before verification. Keep it current as product flows change. |
+| Work tracking | Partial - tracking established | T1-T11 have owned issues with dependencies and acceptance criteria. | Keep runtime, repository and production status truthful as each gate is delivered. |
+| Critical owner journey | Complete foundation | Desktop and Pixel 7 journeys cover denied access before explicit email confirmation, verified sign-in, guided setup, journaling, training, progress and Brief sharing. | Keep coverage current and complete final post-T8 release-candidate QA. |
 | Production smoke | Partial | Scheduled and post-deploy checks cover API health, landing, directories, sign-in, verified-account state, and the authenticated shell. | Add one stable authenticated owner-domain read and keep it running while the remaining gates land. |
-| Email ownership | Not started - P0 gate | Verification delivery, localized email chrome, resend controls, and the soft verification banner are shipped. | Unverified sessions can still use owner APIs, and unverified `ADMIN_EMAILS` accounts can still be promoted. |
+| Email ownership | Partial - implementation ready | Verified-only owner/admin gates, passive email landing with explicit confirmation, and en/es no-session/legacy recovery are implemented. | Authorized aggregate inventory, controlled admin/smoke ownership preparation, production cutover and recorded evidence remain blocking. |
 | Production monitoring | Partial - production acceptance pending, P0 | API image and support contract use Node 22; request IDs, sanitization, capture adapters, isolated API diagnostics, and real-SDK image gates are implemented. Web configuration parsing exists. | Approved running-release request/process capture is still unproven (#98). Browser capture, React recovery, hidden source maps, alerts, and browser diagnostics remain T3. |
 | Backup and restore | Not started | The recovery design and implementation plan are committed. | Add the provider-confirmed runbook and verifier, then complete a measured isolated restore drill. |
 | In-app feedback | Not started | A feedback email link exists. | Add a privacy-bounded form, server persistence, durable prompt suppression, admin triage, and non-blocking milestone prompts. |
@@ -84,15 +85,14 @@ after T8 so the final QA report covers the primary screen owners will actually u
 
 ### T0 - Establish the execution baseline
 
-**Status:** Not started.
+**Status:** Partial - owned tracking established; ongoing runtime/status obligations remain.
 
 **Goal:** Make ownership, runtime support, status, and documentation truthful before feature work
 fans out.
 
 **Implementation seams:**
 
-- Create one GitHub issue for T1-T11 with an owner, status, dependencies, acceptance evidence, and
-  link back to this document.
+- Owned issues for T1-T11 now include status, dependencies, acceptance evidence and roadmap links.
 - Keep implementation branches, local `main`, and `origin/main` unambiguous before each project
   starts.
 - Keep `README.md`, `DEPLOY.md`, `docs/SECURITY-BACKLOG.md`, and `docs/PROJECT-LOG.md` aligned with
@@ -105,43 +105,70 @@ matches repository and production evidence; no planning-only commit is stranded 
 
 **Non-goals:** Rewriting historical specs or creating issues for already shipped features.
 
+**Owned issue map:** All items are assigned to `mcasillas17`; creating tracking does not
+complete their delivery or all remaining T0 obligations.
+
+| Item | Issue | Current delivery status |
+|---|---|---|
+| T1 | [#97](https://github.com/mcasillas17/TuringCare/issues/97) | Implementation ready; production cutover pending |
+| T2 | [#98](https://github.com/mcasillas17/TuringCare/issues/98) | Not started |
+| T3 | [#99](https://github.com/mcasillas17/TuringCare/issues/99) | Configuration foundation only |
+| T4 | [#100](https://github.com/mcasillas17/TuringCare/issues/100) | Not started; drill follows T2 |
+| T5 | [#101](https://github.com/mcasillas17/TuringCare/issues/101) | Not started; depends on T1 |
+| T6 | [#102](https://github.com/mcasillas17/TuringCare/issues/102) | Partial foundation |
+| T7 | [#103](https://github.com/mcasillas17/TuringCare/issues/103) | Partial foundation; depends on T1 |
+| T8 | [#104](https://github.com/mcasillas17/TuringCare/issues/104) | Not started; depends on T1 and T6 |
+| T9 | [#106](https://github.com/mcasillas17/TuringCare/issues/106) | Final post-T8 QA not started |
+| T10 | [#105](https://github.com/mcasillas17/TuringCare/issues/105) | Not started; depends on T9 |
+| T11 | [#107](https://github.com/mcasillas17/TuringCare/issues/107) | Blocked on T10 evidence |
+
 ### T1 - Enforce verified email ownership
 
-**Status:** Not started - P0 security gate.
+**Status:** Partial - implementation ready; P0 production cutover evidence pending.
+Tracked in [#97](https://github.com/mcasillas17/TuringCare/issues/97).
 
 **Goal:** Require proven email ownership before any owner-domain access or allowlist-based admin
 promotion.
 
-**Implementation seams:**
+**Delivered implementation:**
 
-- Set Better Auth's `emailAndPassword.requireEmailVerification` in
-  `apps/api/src/auth.ts`; keep verification delivery and resend behavior in the existing
-  `emailVerification` configuration.
-- Gate existing sessions in `apps/api/src/middleware/require-user.ts`, and require
-  `emailVerified === true` before `resolveAdminRole` can promote an `ADMIN_EMAILS` account.
-- Preserve `/me`, sign-in, verification, resend, reset-password, and expired-link recovery routes
-  needed to complete verification.
-- Add a localized verification wall under `apps/web/src/routes/require-auth.tsx`, reusing
-  `apps/web/src/components/verify-email-banner.tsx` and the shared en/es catalogs.
-- Use one stable `email_unverified` API code where the web needs to distinguish this state.
+- Better Auth requires verified email before issuing a new sign-in session. Uncached
+  server session checks independently protect owner routes, native account mutations,
+  trainer contacts, admin entry and allowlist promotion, including persisted unverified admins.
+- `/me` remains available for recovery, is non-cacheable, and masks unusable admin roles.
+  Public directories, finalized public Briefs, password recovery and sign-out remain available.
+- Email-link GETs only stage a ten-minute encrypted receipt. Explicit trusted-origin
+  confirmation validates ownership; neither opening a link nor a query flag grants access.
+- The public `/verify-email` route handles no-session and legacy-session users in en/es.
+  Credential-proven resend has durable server limits, provider-aware feedback and bounded
+  cooldowns. Password reset does not verify ownership.
+- Session/cache/locale boundaries preserve benign-focus drafts, clear genuine authorization
+  changes, and do not block unverified recovery on a protected profile query.
+- Production forbids test email capture. Counter maintenance is bounded, expires inactive
+  verification counters and reports incomplete work without exposing identity or content.
 
-**Rollout:** Inventory existing unverified users before enablement. Verify the smoke account and all
-controlled allowlisted admins first. After cutover, unverified owners receive the verification wall
-and resend path; there is no bypass or grace period for admin promotion. A temporary feature flag is
-acceptable only for a staged deploy and must be removed after the cutover.
+**Rollout:** No migration or temporary enforcement flag was needed. Before merge-triggered
+deployment, an authorized operator must inventory affected accounts with aggregate information
+and genuinely verify controlled admin/smoke accounts. Preserve API-first ordering and reload
+old tabs after the web bundle is published. There is no administrative grace path or rollback
+to unverified access. The blocking checklist, recovery constraints and state diagram are in
+[`DEPLOY.md`](../DEPLOY.md#6a-verified-email-ownership-cutover).
 
-**Telemetry and privacy:** Record only bounded status/reason values if blocks are measured. Never
-include email addresses.
+**Telemetry and privacy:** Existing server-derived signup/sign-in and public event attribution
+remain; no new auth audit system was added. Emails, tokens, locale and authored content do not
+enter telemetry. Application redirects contain only safe paths and bounded display/retry hints.
 
 **Tests and exit:**
 
 - API tests cover new sign-in behavior, existing unverified sessions, verified sessions, resend and
   recovery, and unverified allowlisted admin accounts.
-- Web tests cover the verification wall, resend failures, and transition after verification.
+- Web tests cover confirmation, resend/service failures, locale continuity, focus/cache transitions
+  and recovery without redirect loops.
 - Playwright proves registration cannot reach owner data before verification and can proceed after
-  the link is used.
-- Exit: no unverified account can read or mutate owner data or self-promote through
-  `ADMIN_EMAILS`.
+  explicit confirmation and sign-in, at desktop and phone sizes.
+- Local gates and PostgreSQL 16/18 maintenance coverage are complete. Production evidence is not.
+- Exit remains: deployed enforcement and recorded cutover evidence show that no unverified account
+  can read or mutate owner data or gain usable admin privileges.
 
 **Non-goals:** OAuth, 2FA, auth audit logging, or session-expiry redesign.
 

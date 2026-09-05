@@ -26,6 +26,7 @@ function setup() {
             }
           />
           <Route path="/my" element={<div>my-portal</div>} />
+          <Route path="/verify-email" element={<div>verification</div>} />
         </Routes>
       </MemoryRouter>
     </LocaleProvider>,
@@ -33,10 +34,23 @@ function setup() {
 }
 
 it("redirects an authenticated user to /my", () => {
-  useSessionMock.mockReturnValue({ data: { user: { id: "u1" } }, isPending: false });
+  useSessionMock.mockReturnValue({
+    data: { user: { id: "u1", emailVerified: true } },
+    isPending: false,
+  });
   setup();
   expect(screen.getByText("my-portal")).toBeInTheDocument();
   expect(screen.queryByText("login-form")).toBeNull();
+});
+
+it("routes an unverified legacy session to verification, never the owner app", () => {
+  useSessionMock.mockReturnValue({
+    data: { user: { id: "u1", emailVerified: false } },
+    isPending: false,
+  });
+  setup();
+  expect(screen.getByText("verification")).toBeInTheDocument();
+  expect(screen.queryByText("my-portal")).not.toBeInTheDocument();
 });
 
 it("shows a loading state while the session is pending", () => {

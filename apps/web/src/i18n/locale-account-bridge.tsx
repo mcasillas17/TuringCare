@@ -2,6 +2,7 @@ import { useSession } from "@/lib/auth-client";
 import { useProfile, useUpdateProfileLocale } from "@/lib/profile";
 import { useSessionQueryReady } from "@/lib/session-query-boundary";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
+import { useHasVerifiedSession } from "@/lib/verified-session";
 import type { Locale } from "@turingcare/i18n";
 import {
   type ReactNode,
@@ -153,12 +154,13 @@ function AuthenticatedLocaleAccountBridge({
 }
 
 export function LocaleAccountBridge() {
-  const { data: session, isPending } = useSession();
+  const { data: session } = useSession();
+  const verified = useHasVerifiedSession();
   const rawUserId = session?.user?.id;
   const userId = isNonemptySessionUserId(rawUserId) ? rawUserId : null;
   const identityReady = useSessionQueryReady(userId);
 
-  if (isPending || !identityReady || !userId) return null;
+  if (!identityReady || !userId || !verified) return null;
 
   return <AuthenticatedLocaleAccountBridge key={userId} userId={userId} />;
 }
@@ -186,21 +188,14 @@ function AuthenticatedLocaleAccountBoundary({
 }
 
 export function LocaleAccountBoundary({ children }: { children: ReactNode }) {
-  const { data: session, isPending } = useSession();
+  const { data: session } = useSession();
+  const verified = useHasVerifiedSession();
   const { t } = useI18n();
   const rawUserId = session?.user?.id;
   const userId = isNonemptySessionUserId(rawUserId) ? rawUserId : null;
   const identityReady = useSessionQueryReady(userId);
 
-  if (isPending) {
-    return (
-      <LocaleAccountReadinessContext.Provider value={PENDING_READINESS}>
-        <p className="p-8">{t("common.loading")}</p>
-      </LocaleAccountReadinessContext.Provider>
-    );
-  }
-
-  if (!userId) {
+  if (!userId || !verified) {
     return (
       <LocaleAccountReadinessContext.Provider value={SIGNED_OUT_READINESS}>
         {children}

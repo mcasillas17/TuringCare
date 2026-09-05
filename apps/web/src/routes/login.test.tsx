@@ -28,10 +28,32 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-function setup() {
+it("carries only a validated locale to the safe app path when browser storage is denied", async () => {
+  vi.stubGlobal("navigator", { language: "es", languages: ["es"] });
+  vi.stubGlobal("localStorage", {
+    getItem: () => {
+      throw new Error("storage denied");
+    },
+    setItem: () => {
+      throw new Error("storage denied");
+    },
+  });
+  signInEmailMock.mockResolvedValue({ data: { user: {} }, error: null });
+  setup("/login?next=%2Fmy%2Fprofile");
+  await userEvent.type(screen.getByLabelText("Correo electrónico"), "synthetic@example.test");
+  await userEvent.type(screen.getByLabelText("Contraseña"), "synthetic-password");
+  await userEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }));
+  expect(assignMock).toHaveBeenCalledWith("/my/profile?lang=es");
+  expect(signInEmailMock).toHaveBeenCalledWith({
+    email: "synthetic@example.test",
+    password: "synthetic-password",
+  });
+});
+
+function setup(entry = "/login") {
   return render(
     <LocaleProvider>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[entry]}>
         <Login />
       </MemoryRouter>
     </LocaleProvider>,
@@ -46,6 +68,36 @@ it("renders a Forgot password? link pointing at /forgot-password", () => {
   );
 });
 
+it.each(["EMAIL_NOT_VERIFIED", "email_unverified"])(
+  "recovers %s without exposing credentials in navigation",
+  async (code) => {
+    signInEmailMock.mockResolvedValue({ data: null, error: { code } });
+    setup("/login?next=%2Fmy%2Fdogs");
+    await userEvent.type(screen.getByLabelText(/email/i), "synthetic@example.test");
+    await userEvent.type(screen.getByLabelText(/password/i), "synthetic-password");
+    await userEvent.click(screen.getByRole("button", { name: /^log in$/i }));
+    expect(assignMock).toHaveBeenCalledWith("/verify-email?next=%2Fmy%2Fdogs&lang=en");
+    expect(localStorage.getItem("email")).toBeNull();
+    expect(sessionStorage.length).toBe(0);
+  },
+);
+
+it.each([
+  ["/admin/trainers", "/admin/trainers"],
+  ["/trainers/t1", "/trainers/t1"],
+  ["https://attacker.test", "/my"],
+  ["/b/private-bearer", "/my"],
+  ["/my?email=private", "/my"],
+  ["/verify-email", "/my"],
+])("full-loads only the canonical safe return for %s", async (next, expected) => {
+  signInEmailMock.mockResolvedValue({ data: {}, error: null });
+  setup(`/login?next=${encodeURIComponent(next)}`);
+  await userEvent.type(screen.getByLabelText(/email/i), "synthetic@example.test");
+  await userEvent.type(screen.getByLabelText(/password/i), "synthetic-password");
+  await userEvent.click(screen.getByRole("button", { name: /^log in$/i }));
+  expect(assignMock).toHaveBeenCalledWith(expected);
+});
+
 it("on successful login, does a full-load navigation to /my", async () => {
   signInEmailMock.mockResolvedValue({ data: { user: {} }, error: null });
   setup();
@@ -53,6 +105,10 @@ it("on successful login, does a full-load navigation to /my", async () => {
   await userEvent.type(screen.getByLabelText(/password/i), "password-123");
   await userEvent.click(screen.getByRole("button", { name: /^log in$/i }));
   expect(signInEmailMock).toHaveBeenCalledOnce();
+  expect(signInEmailMock).toHaveBeenCalledWith({
+    email: "u@example.com",
+    password: "password-123",
+  });
   expect(assignMock).toHaveBeenCalledWith("/my");
 });
 

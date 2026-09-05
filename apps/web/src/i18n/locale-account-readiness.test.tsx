@@ -30,10 +30,41 @@ function PublicProbe() {
   return <p>{`public:${readiness.status}`}</p>;
 }
 
+it.each([false, undefined])(
+  "keeps local Spanish without forbidden profile requests when verification is %j",
+  async (emailVerified) => {
+    localStorage.setItem("tc-locale", "es");
+    useSessionMock.mockReturnValue({
+      data: { user: { id: "u1", emailVerified } },
+      isPending: false,
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response('{"error":"email_unverified"}', { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <LocaleProvider>
+          <LocaleAccountBoundary>
+            <PublicProbe />
+          </LocaleAccountBoundary>
+        </LocaleProvider>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("public:signed-out")).toBeInTheDocument();
+    expect(document.documentElement.lang).toBe("es");
+    expect(localStorage.getItem("tc-locale")).toBe("es");
+    expect(fetchMock).not.toHaveBeenCalled();
+  },
+);
+
 type RequestRecord = { locale: string | null; path: string };
 
 function setupSignedIn(profileResponse: "defer" | "empty-account" | "error") {
-  useSessionMock.mockReturnValue({ data: { user: { id: "u1" } }, isPending: false });
+  useSessionMock.mockReturnValue({
+    data: { user: { id: "u1", emailVerified: true } },
+    isPending: false,
+  });
   const requests: RequestRecord[] = [];
   let resolveLocalePatch: (() => void) | undefined;
   let resolveProfile: (() => void) | undefined;

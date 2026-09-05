@@ -21,3 +21,7 @@ try {
 } catch {
   // .env not found — tests that need env vars will fail with clear Zod messages
 }
+
+// Integration fixtures prove ownership using actual verification links. Capture
+// locally in CI too, without sending mail or disabling verification enforcement.
+process.env.E2E_TEST_MODE = "true";

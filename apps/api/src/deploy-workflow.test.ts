@@ -4,6 +4,16 @@ import { describe, expect, it } from "vitest";
 const deployWorkflowUrl = new URL("../../../.github/workflows/deploy.yml", import.meta.url);
 
 describe("production deployment protocol", () => {
+  it("bounds competing workspace test pools in CI and predeploy validation", async () => {
+    for (const name of ["ci", "deploy"]) {
+      const workflow = await readFile(
+        new URL(`../../../.github/workflows/${name}.yml`, import.meta.url),
+        "utf8",
+      );
+      expect(workflow).toMatch(/^\s+run: pnpm -r --workspace-concurrency=1 test --maxWorkers=2$/m);
+    }
+  });
+
   it("queues complete production rollouts instead of cancelling or interleaving them", async () => {
     const workflow = await readFile(deployWorkflowUrl, "utf8");
     const workflowConcurrency = workflow.match(

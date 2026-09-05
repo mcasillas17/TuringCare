@@ -17,9 +17,9 @@ const schema = z
     // Vite proxy). When set, Better Auth issues cross-subdomain,
     // SameSite=None; Secure cookies so the frontend and API subdomain share a session.
     COOKIE_DOMAIN: z.string().optional(),
-    // Comma-separated admin email allowlist. Any matching authenticated user is
-    // treated as admin and lazily promoted (user.role -> 'admin') so the operator
-    // is never locked out. Empty/unset = no bootstrap admins.
+    // Comma-separated admin email allowlist. Matching verified users are lazily
+    // promoted (user.role -> 'admin'). Unverified accounts, including persisted
+    // admins, have no usable admin privileges. Empty/unset = no bootstrap admins.
     ADMIN_EMAILS: z
       .string()
       .default("")
@@ -49,6 +49,13 @@ const schema = z
       .transform((v) => v === "true"),
   })
   .superRefine((value, context) => {
+    if (value.NODE_ENV === "production" && value.E2E_TEST_MODE) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["E2E_TEST_MODE"],
+        message: "E2E_TEST_MODE must be false in production",
+      });
+    }
     if (value.NODE_ENV === "production" && !value.RESEND_API_KEY) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
