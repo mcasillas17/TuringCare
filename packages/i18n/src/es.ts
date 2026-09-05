@@ -33,6 +33,9 @@ export const es = {
     serviceUnavailable:
       "El servicio de verificación no está disponible temporalmente. Inténtalo de nuevo.",
     requestRejected: "No se pudo aceptar esta solicitud. Recarga la página e inténtalo de nuevo.",
+    reopenLimitedLink:
+      "Después de esperar, vuelve a abrir el enlace de tu correo. También puedes continuar con la recuperación para solicitar otro enlace.",
+    navigationRecovery: "Continuar con la recuperación",
     accessError: "No pudimos comprobar tu acceso. Inténtalo de nuevo.",
     title: "Verifica tu correo",
     body: "Antes de usar tu cuenta, abre el enlace de verificación en tu correo. Si no lo ves, revisa la carpeta de spam o solicita un nuevo enlace abajo.",

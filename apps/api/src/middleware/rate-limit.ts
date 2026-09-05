@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { canonicalAuthPath } from "../auth/request-path";
+import { throttledVerificationNavigation } from "../auth/verification-callback";
 
 type Bucket = { count: number; windowStart: number };
 
@@ -55,6 +56,14 @@ export function globalRateLimit(
     if (path === "/health" || (authPath !== null && authPath !== "/verify-email")) return next();
     const { limited, retryAfter } = check(clientIp(c.req.raw.headers), Date.now());
     if (limited) {
+      const destination = c.req.header("Sec-Fetch-Dest");
+      if (
+        authPath === "/verify-email" &&
+        c.req.method === "GET" &&
+        (destination === undefined || destination === "document")
+      ) {
+        return throttledVerificationNavigation(c.req.raw, retryAfter);
+      }
       c.header("X-Retry-After", String(retryAfter)); // X-Retry-After to match Better Auth's rate-limit header (API-wide consistency)
       c.header("Retry-After", String(retryAfter));
       c.header("Cache-Control", "no-store");

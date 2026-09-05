@@ -21,6 +21,9 @@ export const en = {
     cooldownFinished: "You can try again now.",
     serviceUnavailable: "The verification service is temporarily unavailable. Please try again.",
     requestRejected: "This request could not be accepted. Reload the page and try again.",
+    reopenLimitedLink:
+      "After waiting, reopen the link from your email. You can also continue to recovery to request a new link.",
+    navigationRecovery: "Continue to recovery",
     accessError: "We couldn't check your access. Try again.",
     title: "Verify your email",
     body: "Before you can use your account, open the verification link in your email. If you don't see it, check spam or request a new link below.",

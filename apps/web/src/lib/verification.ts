@@ -9,6 +9,7 @@ import { api } from "./api";
 import { useSessionQueriesReady } from "./session-query-boundary";
 
 export const verificationStatusKey = ["verification-status"] as const;
+const STATUS_TIMEOUT_MS = 8000;
 
 async function decodeStatus(response: Response): Promise<VerificationStatus> {
   const body = await readResponseBody(response);
@@ -22,12 +23,26 @@ export function useVerificationStatus() {
     queryKey: verificationStatusKey,
     enabled: cacheReady,
     retry: false,
-    queryFn: async ({ signal }) =>
-      decodeStatus(
-        await api.api.verification.status.$get(undefined, {
-          init: { signal, cache: "no-store" },
-        }),
-      ),
+    queryFn: async ({ signal }) => {
+      const controller = new AbortController();
+      const cancel = () => controller.abort(signal.reason);
+      if (signal.aborted) cancel();
+      else signal.addEventListener("abort", cancel, { once: true });
+      const timeout = window.setTimeout(
+        () => controller.abort(new DOMException("Verification status timed out", "TimeoutError")),
+        STATUS_TIMEOUT_MS,
+      );
+      try {
+        return await decodeStatus(
+          await api.api.verification.status.$get(undefined, {
+            init: { signal: controller.signal, cache: "no-store" },
+          }),
+        );
+      } finally {
+        window.clearTimeout(timeout);
+        signal.removeEventListener("abort", cancel);
+      }
+    },
   });
 }
 

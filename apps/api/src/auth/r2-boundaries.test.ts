@@ -21,7 +21,7 @@ describe("R2 auth request boundaries", () => {
     const probe = new Hono()
       .use("*", globalRateLimit({ windowMs: 60_000, max: 2 }))
       .get("/api/auth/*", (c) => handleAuthRequest(c.req.raw));
-    const headers = { "fly-client-ip": nextTestIp() };
+    const headers = { "fly-client-ip": nextTestIp(), "Sec-Fetch-Dest": "empty" };
     const one = await probe.request("/api/auth/verify-email?token=fixture", { headers });
     const two = await probe.request("/api/auth/verify-email/?token=fixture", { headers });
     const three = await probe.request("/api/auth/verify-email?token=fixture", { headers });
@@ -29,6 +29,42 @@ describe("R2 auth request boundaries", () => {
     expect(await three.json()).toMatchObject({ error: "rate_limited" });
     expect(three.headers.get("retry-after")).toBe("60");
     expect(three.headers.get("set-cookie")).toBeNull();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("redirects throttled email navigations away from the bearer URL into localized recovery", async () => {
+    const probe = new Hono()
+      .use("*", globalRateLimit({ windowMs: 60_000, max: 1 }))
+      .get("/api/auth/*", (c) => handleAuthRequest(c.req.raw));
+    const headers = { "fly-client-ip": nextTestIp(), "Sec-Fetch-Dest": "document" };
+    const callback = encodeURIComponent(`${env.FRONTEND_URL}/verify-email?next=/my/dogs&lang=es`);
+    const path = `/api/auth/verify-email?token=private-fixture-token&callbackURL=${callback}`;
+    expect((await probe.request(path, { headers })).status).toBe(302);
+    const limited = await probe.request(path, { headers });
+    expect(limited.status).toBe(303);
+    const target = new URL(limited.headers.get("location") ?? "");
+    expect(target.origin).toBe(new URL(env.FRONTEND_URL).origin);
+    expect(target.pathname).toBe("/verify-email");
+    expect(Object.fromEntries(target.searchParams)).toEqual({
+      next: "/my/dogs",
+      lang: "es",
+      error: "rate_limited",
+      retryAfter: "60",
+    });
+    expect(limited.headers.get("retry-after")).toBe("60");
+    expect(limited.headers.get("location")).not.toContain("private-fixture-token");
+    expect(limited.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  it("keeps passive production email navigation token-free during a proxy metadata outage", async () => {
+    env.NODE_ENV = "production";
+    const handler = vi.spyOn(auth, "handler");
+    const result = await app.request("/api/auth/verify-email?token=fixture", {
+      headers: { "Sec-Fetch-Dest": "document" },
+    });
+    expect(result.status).toBe(302);
+    expect(new URL(result.headers.get("location") ?? "").pathname).toBe("/verify-email");
+    expect(result.headers.get("location")).not.toContain("token=");
     expect(handler).not.toHaveBeenCalled();
   });
 

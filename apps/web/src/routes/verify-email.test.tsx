@@ -110,6 +110,9 @@ async function setup(path = "/verify-email?next=%2Fmy%2Fdogs&lang=en") {
     </QueryClientProvider>
   );
   const view = render(tree());
+  if (new URLSearchParams(window.location.search).get("error") === "rate_limited") {
+    return { ...view, tree };
+  }
   await waitFor(() =>
     expect(requests.some((r) => r.path === "/api/verification/status")).toBe(true),
   );
@@ -157,6 +160,30 @@ it("does not show resend credentials before the first receipt lookup resolves", 
     });
   }
   expect(await screen.findByRole("button", { name: "Verify email" })).toBeInTheDocument();
+});
+
+it("presents navigation throttling without querying or trusting an older receipt", async () => {
+  receipt.status = "verified";
+  await setup("/verify-email?error=rate_limited&retryAfter=60&next=%2Fmy%2Fdogs&lang=en");
+  expect(screen.getByRole("alert")).toHaveTextContent("Too many requests");
+  expect(screen.getByRole("button", { name: "Continue to recovery" })).toBeDisabled();
+  expect(screen.queryByRole("heading", { name: "Email verified" })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/^email$/i)).not.toBeInTheDocument();
+  expect(requests.some((request) => request.path === "/api/verification/status")).toBe(false);
+});
+
+it("offers token-free recovery after the navigation retry deadline", async () => {
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  await setup("/verify-email?error=rate_limited&retryAfter=2&next=%2Fmy%2Fdogs&lang=en");
+  const button = screen.getByRole("button", { name: "Continue to recovery" });
+  expect(button).toBeDisabled();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  expect(button).toBeEnabled();
+  await userEvent.click(button);
+  expect(new URLSearchParams(window.location.search).has("error")).toBe(false);
+  expect(await screen.findByLabelText(/^email$/i)).toBeInTheDocument();
 });
 
 it("allows credential recovery without a session when the unrelated session endpoint fails", async () => {

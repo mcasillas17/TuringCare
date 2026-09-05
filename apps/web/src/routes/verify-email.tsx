@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { VerificationNavigationRecovery } from "@/components/verification-navigation-recovery";
 import { useI18n } from "@/i18n";
 import { useSession } from "@/lib/auth-client";
 import { authContinuationPath, authPagePath } from "@/lib/auth-navigation";
@@ -27,7 +28,10 @@ import { Link, useSearchParams } from "react-router-dom";
 /** The public route never needs an authenticated layout or persisted credentials. */
 export function VerifyEmail() {
   const { data } = useSession();
+  const [params] = useSearchParams();
   const userId = isNonemptySessionUserId(data?.user.id) ? data.user.id : null;
+  if (params.get("error") === "rate_limited")
+    return <VerificationNavigationRecovery hasSession={userId !== null} />;
   return <VerificationRecovery key={userId ?? "anonymous"} />;
 }
 

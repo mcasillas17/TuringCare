@@ -213,6 +213,57 @@ describe("verification ingress maintenance", () => {
     }
   });
 
+  it("recovers deferred debt after a real cursor lock timeout without rejecting the credential", async () => {
+    await oldCounters(400);
+    await db
+      .insert(rateLimit)
+      .values({ id: "verification:maintenance", key: "verification:", count: 0, lastRequest: 0 });
+    const client = await fixture.pool.connect();
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await client.query("begin");
+      await client.query(
+        "select id from rate_limit where id = 'verification:maintenance' for update",
+      );
+      // Keep the lock until PostgreSQL itself hits the configured 1s deadline.
+      expect(
+        await consumeVerificationLimit(
+          "credential",
+          JSON.stringify(["deferred@example.com", "198.18.0.1"]),
+          db,
+        ),
+      ).toBe(0);
+      expect(warning.mock.calls).toEqual([
+        ["[auth] verification_retention_deferred", { reason: "busy", sqlState: "55P03" }],
+      ]);
+      expect(await expiredCount()).toBe(400);
+      const marker = await fixture.pool.query<{ key: string }>(
+        "select key from rate_limit where id = 'verification:maintenance'",
+      );
+      expect(marker.rows[0]?.key).toBe("verification:");
+      await client.query("commit");
+      for (let pair = 0; pair < 4; pair++) {
+        expect(
+          await consumeVerificationLimit(
+            "credential",
+            JSON.stringify([`catch-up-${pair}@example.com`, "198.18.0.2"]),
+            db,
+          ),
+        ).toBe(0);
+      }
+      expect(await expiredCount()).toBe(0);
+      console.info("[verification-retention-deferred-evidence]", {
+        sqlState: "55P03",
+        accepted: true,
+        deferredExpiredRows: 400,
+        remainingAfterCatchUp: 0,
+      });
+    } finally {
+      await client.query("rollback");
+      client.release();
+    }
+  });
+
   it("reports cleanup failure privately and still accepts a valid resend without refunding quota", async () => {
     const account = await createUnverifiedTestUser();
     accounts.push(account);

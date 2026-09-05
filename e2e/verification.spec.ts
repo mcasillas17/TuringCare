@@ -346,3 +346,43 @@ test("an email landing waits for its receipt without flashing resend credentials
   }
   await confirmEmailOwnership(page);
 });
+
+test("a stalled verification-status request reaches bounded retry recovery", async ({ page }) => {
+  test.setTimeout(20_000);
+  // Deliberately leave this intercepted request unanswered; the application must abort it.
+  await page.route("**/api/verification/status", () => {});
+  await page.goto("/verify-email");
+  await expect(page.getByText("Checking verification link…", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try again", exact: true })).toBeVisible({
+    timeout: 12_000,
+  });
+  await expect(page.getByRole("alert")).toContainText("couldn't check your verification link");
+  await expect(page.getByRole("button", { name: "Try again", exact: true })).toBeEnabled();
+});
+
+test("an exhausted staging budget redirects email links into token-free recovery", async ({
+  page,
+}) => {
+  const email = emailForTest();
+  await registerThroughApi(page.request, email);
+  const { link } = await capturedLink(page.request, email);
+  let exhausted = false;
+  for (let request = 0; request < 301; request++) {
+    const result = await page.request.get("/api/staging-budget-fixture");
+    if (result.status() === 429) {
+      exhausted = true;
+      break;
+    }
+  }
+  expect(exhausted).toBe(true);
+  const response = await page.goto(link);
+  expect(new URL(page.url()).pathname).toBe("/verify-email");
+  expect(new URL(page.url()).searchParams.has("token")).toBe(false);
+  const redirect = await response?.request().redirectedFrom()?.response();
+  expect(redirect?.status()).toBe(303);
+  await expect(page.getByRole("alert")).toContainText("Too many requests");
+  await expect(
+    page.getByRole("button", { name: "Continue to recovery", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Verify email", exact: true })).toHaveCount(0);
+});

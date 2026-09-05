@@ -11,9 +11,12 @@ import { env } from "../env";
 import { resolveRequestLocale } from "../middleware/locale";
 import { getAuthoritativeSession } from "./session";
 import { verificationCallback, verificationCallbackLocale } from "./verification-callback";
+import {
+  VERIFICATION_RECEIPT_SECONDS,
+  verificationReceiptCookieSettings,
+} from "./verification-cookie";
 import { consumeVerificationLimit, trustedVerificationIp } from "./verification-rate-limit";
 
-const RECEIPT_SECONDS = 600;
 const MAX_RECEIPT_LENGTH = 3500;
 const MAX_TOKEN_LENGTH = 1024;
 const receiptFields = {
@@ -30,15 +33,6 @@ const receiptSchema = z.discriminatedUnion("status", [
 ]);
 type Receipt = z.infer<typeof receiptSchema>;
 
-function cookieSettings(maxAge = RECEIPT_SECONDS) {
-  const secure =
-    env.NODE_ENV === "production" || new URL(env.BETTER_AUTH_URL).protocol === "https:";
-  return {
-    name: `${secure ? "__Secure-" : ""}tc_verification_receipt`,
-    attributes: `Path=/api/verification; HttpOnly; SameSite=${secure ? "None; Secure" : "Lax"}; Max-Age=${maxAge}`,
-  };
-}
-
 function receiptKey() {
   return createHmac("sha256", env.BETTER_AUTH_SECRET)
     .update("verification-receipt-v1")
@@ -49,18 +43,6 @@ function emailFingerprint(email: string) {
   return createHmac("sha256", env.BETTER_AUTH_SECRET)
     .update(`verification-receipt-subject:${email.trim().toLowerCase()}`)
     .digest("hex");
-}
-
-/** Auth boundaries expire this host-only cookie without touching BA's cookies. */
-export function clearVerificationReceipt(response: Response): Response {
-  const { name, attributes } = cookieSettings(0);
-  const headers = new Headers(response.headers);
-  headers.append("Set-Cookie", `${name}=; ${attributes}`);
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
 }
 
 function publicState(receipt: VerificationStatus): VerificationStatus {
@@ -86,7 +68,7 @@ async function receiptCookie(
 ) {
   const receipt: Receipt = {
     ...publicState(state),
-    expiresAt: Date.now() + RECEIPT_SECONDS * 1000,
+    expiresAt: Date.now() + VERIFICATION_RECEIPT_SECONDS * 1000,
     ...proof,
   };
   // Installed Better Auth authenticated encryption; a purpose-specific key
@@ -94,7 +76,7 @@ async function receiptCookie(
   const encrypted = await symmetricEncrypt({ key: receiptKey(), data: JSON.stringify(receipt) });
   const value = Buffer.from(encrypted, "hex").toString("base64url");
   if (value.length > MAX_RECEIPT_LENGTH) throw new Error("Verification receipt exceeded bound");
-  const { name, attributes } = cookieSettings();
+  const { name, attributes } = verificationReceiptCookieSettings();
   // Host-only: frontend JS and sibling subdomains do not need receipt access.
   return `${name}=${value}; ${attributes}`;
 }
@@ -103,7 +85,7 @@ async function readReceipt(request: Request): Promise<Receipt | VerificationStat
   const header = request.headers.get("cookie");
   if (!header) return emptyState(request, "none");
   if (header.length > 16_384) return emptyState(request, "invalid");
-  const { name } = cookieSettings();
+  const { name } = verificationReceiptCookieSettings();
   const matches = header
     .split(";")
     .map((value) => value.trim())
@@ -259,7 +241,7 @@ export async function confirmVerification(request: Request): Promise<Confirmatio
     body: await stateForSession(request, {
       ...state,
       ...proof,
-      expiresAt: Date.now() + RECEIPT_SECONDS * 1000,
+      expiresAt: Date.now() + VERIFICATION_RECEIPT_SECONDS * 1000,
     }),
     cookie: await receiptCookie(state, proof),
   };

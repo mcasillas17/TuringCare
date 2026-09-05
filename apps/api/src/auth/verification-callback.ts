@@ -1,6 +1,8 @@
 import type { Locale } from "@turingcare/i18n";
 import { safeAuthReturnPath } from "@turingcare/shared";
 import { env } from "../env";
+import { resolveRequestLocale } from "../middleware/locale";
+import { clearVerificationReceipt } from "./verification-cookie";
 
 /** Only frontend-origin callbacks may contribute a continuation destination. */
 export function verificationCallback(input: unknown, locale: Locale): string {
@@ -53,4 +55,26 @@ export function verificationCallbackLocale(input: unknown, fallback: Locale): Lo
   } catch {
     return fallback;
   }
+}
+
+/** Navigation uses a redirect; programmatic callers retain their JSON 429. */
+export function throttledVerificationNavigation(request: Request, retryAfter: number): Response {
+  const callback = new URL(request.url).searchParams.get("callbackURL");
+  const locale = verificationCallbackLocale(callback, resolveRequestLocale(request));
+  const target = new URL(verificationCallback(callback, locale));
+  const delay = String(Math.min(60, Math.max(1, Math.ceil(retryAfter))));
+  target.searchParams.set("error", "rate_limited");
+  target.searchParams.set("retryAfter", delay);
+  return clearVerificationReceipt(
+    new Response(null, {
+      status: 303,
+      headers: {
+        Location: target.toString(),
+        "Retry-After": delay,
+        "X-Retry-After": delay,
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+      },
+    }),
+  );
 }

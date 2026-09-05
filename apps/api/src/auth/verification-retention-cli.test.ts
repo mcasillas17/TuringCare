@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { waitForBlockingChain } from "../test-pg-concurrency";
 import { createRateLimitTestDatabase } from "../test-rate-limit-db";
 
 const exec = promisify(execFile);
@@ -40,6 +41,34 @@ async function runCli() {
 }
 
 describe("retention CLI operational evidence", () => {
+  it("waits for an ordinary cursor collision and completes without a false job failure", async () => {
+    await fixture.pool.query(
+      "insert into rate_limit (id, key, count, last_request) values ('verification:maintenance', 'verification:', 0, 0)",
+    );
+    const client = await fixture.pool.connect();
+    let work: ReturnType<typeof runCli> | undefined;
+    try {
+      await client.query("begin");
+      const pid = (await client.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]
+        ?.pid;
+      if (!pid) throw new Error("Missing fixture PID");
+      await client.query(
+        "select id from rate_limit where id = 'verification:maintenance' for update",
+      );
+      work = runCli();
+      await waitForBlockingChain(fixture.pool, pid, 1);
+      await client.query("commit");
+      const result = await work;
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain("complete: true");
+      expect(result.stderr).not.toContain("[retention] failed");
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await work;
+    }
+  }, 10_000);
+
   it("exits nonzero for an exhausted scan budget, then resumes to completion", async () => {
     await fixture.pool.query(`
       insert into rate_limit (id, key, count, last_request)

@@ -12,7 +12,7 @@ async function main() {
   try {
     const removed = await purgeOldEvents(db, env.EVENT_RETENTION_DAYS);
     console.log(`[retention] deleted ${removed} events older than ${env.EVENT_RETENTION_DAYS}d`);
-    const verification = await purgeVerificationLimits(db);
+    const verification = await purgeVerificationLimits(db, { waitForTurn: true });
     console.log("[retention] verification counters", verification);
     if (!verification.complete) {
       throw new VerificationRetentionIncompleteError(

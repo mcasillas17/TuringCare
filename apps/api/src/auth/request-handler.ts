@@ -5,7 +5,8 @@ import { canonicalAuthPath } from "./request-path";
 import { resendVerification, verificationResendHeaders } from "./resend-verification";
 import { getAuthoritativeSession } from "./session";
 import { verificationCallback } from "./verification-callback";
-import { clearVerificationReceipt, stageVerification } from "./verification-proof";
+import { clearVerificationReceipt } from "./verification-cookie";
+import { stageVerification } from "./verification-proof";
 import { trustedVerificationIp, verificationRateLimited } from "./verification-rate-limit";
 
 const recoveryPaths = new Set([
@@ -44,15 +45,15 @@ async function dispatchAuthRequest(inputRequest: Request): Promise<Response> {
     url.pathname = `/api/auth${path}`;
     request = new Request(url, request);
   }
+  if (path === "/verify-email") {
+    if (request.method === "GET" || request.method === "HEAD") return stageVerification(request);
+    return Response.json({ error: "method_not_allowed" }, { status: 405 });
+  }
   const recoveryWithoutIp =
     (path === "/sign-out" && request.method === "POST") ||
     (path === "/get-session" && (request.method === "GET" || request.method === "HEAD"));
   if (!recoveryWithoutIp && trustedVerificationIp(request.headers) === null) {
     return Response.json({ error: "trusted_ip_required" }, { status: 503 });
-  }
-  if (path === "/verify-email") {
-    if (request.method === "GET" || request.method === "HEAD") return stageVerification(request);
-    return Response.json({ error: "method_not_allowed" }, { status: 405 });
   }
   if (!recoveryPaths.has(path) && !/^\/reset-password\/[^/]+$/.test(path)) {
     const session = await getAuthoritativeSession(request.headers);
