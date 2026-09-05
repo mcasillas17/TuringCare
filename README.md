@@ -7,9 +7,9 @@ they can share with a trainer.
 
 ## Prerequisites
 
-- Node 22 for local development and CI (`.nvmrc` provided). The deployed API
-  image currently uses Node 26; [`docs/ROADMAP.md`](docs/ROADMAP.md) tracks the
-  production-monitoring runtime mismatch this creates.
+- Node 22 for local development, CI, and the API image (`.nvmrc` provided).
+  See the [API monitoring runbook](docs/runbooks/api-monitoring.md) for the runtime
+  support contract and pending production capture acceptance.
 - pnpm 11 (`corepack enable` recommended)
 - Docker (for local Postgres)
 
@@ -41,8 +41,8 @@ Open http://localhost:3000, register an account, and you land on `/my/setup`.
 
 ## Architecture
 
-- **apps/api** — Hono (`@hono/node-server`) on Node 22 locally/in CI and
-  currently Node 26 in the production image, with Drizzle ORM and Better Auth
+- **apps/api** — Hono (`@hono/node-server`) on Node 22, with
+  preloaded monitoring, Drizzle ORM and Better Auth
   (email/password, Postgres sessions, httpOnly cookies). Exports `AppType` for
   end-to-end-typed RPC.
 - **apps/web** — Vite + React 19, Tailwind v4 (CSS-first), shadcn/ui, TanStack Query,
@@ -141,9 +141,8 @@ Full chronological log in [`docs/PROJECT-LOG.md`](docs/PROJECT-LOG.md). Highligh
 
 ## Developer verification
 
-Use Node 22 (the local and CI runtime) and a migrated local Postgres database. The
-production image currently runs Node 26; the roadmap tracks reconciliation with
-the monitoring support contract. The main repository gates are:
+Use Node 22 and a migrated, disposable local Postgres database. The API image uses
+the same supported runtime. The main repository gates are:
 
 ```bash
 nvm use
@@ -167,7 +166,24 @@ pnpm --filter @turingcare/web exec vitest run --coverage \
 
 API tests use the real local Postgres database through the root `.env`; apply migrations
 first. The production API image also includes `packages/i18n` as a workspace dependency and
-is built and boot-smoked in CI.
+is built and boot-smoked in PR CI and the post-merge deployment gate.
+
+### API error monitoring
+
+The API preserves `tsx` startup with `src/instrument.ts` preloaded. Monitoring is
+network-free when unconfigured; configured capture is supported only on Node 22.
+The image gate uses the real SDK and an isolated local HTTPS sink to verify sanitized
+request/startup/process events, flush failures, and exit behavior:
+
+```bash
+docker build --file Dockerfile.api --tag turingcare-api:t2 .
+scripts/smoke-api-monitoring-image.sh turingcare-api:t2
+```
+
+No Sentry project, email provider, or database is needed for this monitoring check.
+Operator-only diagnostics and the startup/capture diagram are in the
+[API monitoring runbook](docs/runbooks/api-monitoring.md). Live capture from the approved
+production release remains pending under [#98](https://github.com/mcasillas17/TuringCare/issues/98).
 
 ## Browser tests
 
