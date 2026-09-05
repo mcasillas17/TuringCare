@@ -28,8 +28,8 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-it("on successful registration, does a full-load navigation to /my", async () => {
-  signUpEmailMock.mockResolvedValue({ data: { user: {} }, error: null });
+it("on accepted signup without a session, opens public verification rather than owner content", async () => {
+  signUpEmailMock.mockResolvedValue({ data: { user: {}, token: null }, error: null });
   render(
     <LocaleProvider>
       <MemoryRouter>
@@ -42,7 +42,12 @@ it("on successful registration, does a full-load navigation to /my", async () =>
   await userEvent.type(screen.getByLabelText(/password/i), "password-123");
   await userEvent.click(screen.getByRole("button", { name: /create account/i }));
   expect(signUpEmailMock).toHaveBeenCalledOnce();
-  expect(assignMock).toHaveBeenCalledWith("/my");
+  expect(assignMock).toHaveBeenCalledWith("/verify-email?next=%2Fmy&lang=en");
+  expect(signUpEmailMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      callbackURL: "http://localhost/verify-email?status=verified&next=%2Fmy&lang=en",
+    }),
+  );
 });
 
 it("shows Terms and Privacy links in the agreement copy", () => {

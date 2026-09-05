@@ -71,6 +71,38 @@ afterEach(() => {
   vi.unstubAllGlobals();
   document.documentElement.lang = "";
   localStorage.clear();
+  window.history.replaceState({}, "", "/");
+});
+
+it("persists only a validated fresh email hint across login and a query-free app load", () => {
+  vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US"] });
+  window.history.replaceState({}, "", "/verify-email?lang=es");
+  expect(detectInitialLocale()).toBe("es");
+  expect(localStorage.getItem("tc-locale")).toBe("es");
+  resetActiveLocale();
+  window.history.replaceState({}, "", "/login?lang=es");
+  expect(detectInitialLocale()).toBe("es");
+  resetActiveLocale();
+  window.history.replaceState({}, "", "/my");
+  expect(detectInitialLocale()).toBe("es");
+});
+
+it("ignores invalid hints and does not overwrite an existing valid local choice", () => {
+  vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US"] });
+  window.history.replaceState({}, "", "/verify-email?lang=fr");
+  expect(detectInitialLocale()).toBe("en");
+  expect(localStorage.getItem("tc-locale")).toBeNull();
+  localStorage.setItem("tc-locale", "en");
+  window.history.replaceState({}, "", "/verify-email?lang=es");
+  expect(detectInitialLocale()).toBe("en");
+  expect(localStorage.getItem("tc-locale")).toBe("en");
+});
+
+it("uses a validated app continuation locale when browser storage is unavailable", () => {
+  vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US"] });
+  vi.stubGlobal("localStorage", ThrowingStorage());
+  window.history.replaceState({}, "", "/my/profile?lang=es");
+  expect(detectInitialLocale()).toBe("es");
 });
 
 describe("i18n catalogs", () => {

@@ -1,4 +1,56 @@
 export const en = {
+  verification: {
+    confirm: "Verify email",
+    confirmBody:
+      "Confirm that you want to verify the email address associated with this link. Opening the link alone does not verify it.",
+    confirmPending: "Verifying email…",
+    confirmFailed: "We couldn't confirm your email. Try again.",
+    checkingLink: "Checking verification link…",
+    statusFailed: "We couldn't check your verification link. Try again.",
+    currentAccountTitle: "Your account is verified",
+    sessionNotVerified:
+      "Your current session is not verified yet. Check its status again, or sign out to sign in with the verified account.",
+    signupRecovery:
+      "If you signed up before, signing up again may not send another email. Request a new link with your original password, or use Forgot password.",
+    typoRecovery: "If you mistyped your email, register again with the correct address.",
+    registerCorrectEmail: "Register with the correct email",
+    otherLink: "Request a different verification link",
+    switchTitle: "Sign out to use this link",
+    switchVerified: "This link is for a different account. Sign out to sign in with that account.",
+    cooldownStarted: "Wait before trying again.",
+    cooldownFinished: "You can try again now.",
+    serviceUnavailable: "The verification service is temporarily unavailable. Please try again.",
+    requestRejected: "This request could not be accepted. Reload the page and try again.",
+    reopenLimitedLink:
+      "After waiting, reopen the link from your email. You can also continue to recovery to request a new link.",
+    navigationRecovery: "Continue to recovery",
+    accessError: "We couldn't check your access. Try again.",
+    title: "Verify your email",
+    body: "Before you can use your account, open the verification link in your email. If you don't see it, check spam or request a new link below.",
+    credentialsHelp:
+      "Your password is only used to request a new link, not to verify your email. It is not saved by this page.",
+    resend: "Request a new link",
+    pending: "Requesting link…",
+    accepted:
+      "Request accepted. Check your inbox and spam folder. Inbox delivery is not confirmed.",
+    invalidCredentials: "The email and password could not be confirmed.",
+    credentialsRequired: "Enter your email and password to request a new link.",
+    sendFailed: "We couldn't send a verification link. Please try again.",
+    rateLimited: "Too many requests. Please wait before trying again.",
+    cooldown: "Time until another request: {seconds} s.",
+    invalidLink:
+      "This verification link is invalid or expired. Request a new link, or sign in if you already verified your email.",
+    successTitle: "Email verified",
+    signInBody:
+      "Sign in to continue. Verifying an email does not automatically sign you in or switch your account.",
+    currentAccount:
+      "Your signed-in account is verified. Continue with this account, or sign out to use a different one.",
+    signIn: "Sign in to continue",
+    continue: "Continue to the app",
+    check: "I've verified — check again",
+    sessionError: "We couldn't check your session. Try again to continue safely.",
+    retry: "Try again",
+  },
   language: {
     en: "EN",
     es: "ES",
@@ -1455,13 +1507,6 @@ export const en = {
     h_changes: "Changes",
     p_changes:
       "These terms may change as the product evolves. The current version always lives at /terms. Continued use after a change means you accept the new terms.",
-  },
-  verifyBanner: {
-    message: "Please verify your email — check your inbox",
-    resend: "Resend",
-    dismiss: "Dismiss",
-    resendSuccess: "Verification email sent",
-    resendError: "Could not send verification email",
   },
   turing: {
     tipAria: "Turing — tap for a training tip",

@@ -107,7 +107,7 @@ function setup({
   };
 
   useSessionMock.mockImplementation(() => ({
-    data: { user: { id: currentUserId } },
+    data: { user: { id: currentUserId, emailVerified: true } },
     isPending: false,
   }));
 
@@ -257,7 +257,10 @@ function setup({
 }
 
 beforeEach(() => {
-  useSessionMock.mockReturnValue({ data: { user: { id: "u1" } }, isPending: false });
+  useSessionMock.mockReturnValue({
+    data: { user: { id: "u1", emailVerified: true } },
+    isPending: false,
+  });
   vi.stubGlobal("localStorage", createStorage());
   vi.stubGlobal("navigator", { language: "en-US", languages: ["en-US"] });
 });

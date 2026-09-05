@@ -68,15 +68,18 @@ inside a component.
 
 The effective preference order is:
 
-1. Authenticated `user.locale`, when it is non-null and valid.
+1. Verified authenticated `user.locale`, when it is non-null and valid.
 2. A valid `tc-locale` value in local storage.
-3. The first supported value in `navigator.languages`, falling back to
+3. An exact `lang=en|es` continuation hint on an auth route or allowlisted internal
+   continuation path, only when no valid local selection exists.
+4. The first supported value in `navigator.languages`, falling back to
    `navigator.language`.
-4. English.
+5. English.
 
-The first render resolves steps 2–4, updates i18next and `<html lang>`, and keeps the active
+The first render resolves steps 2–5, updates i18next and `<html lang>`, and keeps the active
 locale in memory even when browser storage is denied. After a valid authenticated session
-is established, the account bridge loads the profile before account-scoped content renders:
+with verified ownership is established, the account bridge loads the profile before
+account-scoped content renders:
 
 - A stored account locale is adopted without being treated as a new user selection.
 - A null account locale is initialized once from the already-resolved local/browser locale.
@@ -88,6 +91,18 @@ is established, the account bridge loads the profile before account-scoped conte
 Session identity and locale-sensitive query caches are scoped by a validated, non-empty user
 ID so one account's profile, trainer detail, or localized training catalog cannot bleed into
 another session.
+
+The public verification screen never loads the verification-gated profile for an
+unverified or anonymous user. It keeps the local selection while ownership is proven.
+Email callbacks carry a validated language hint so a fresh browser can continue in the
+message's language; the hint is persisted only when no valid local preference exists.
+If storage is denied, generated continuation URLs carry only that allowlisted hint.
+Arbitrary query strings, credentials, emails and verification tokens are not forwarded.
+After verified sign-in, the account preference again takes precedence.
+
+Benign session refetches do not discard drafts, locale readiness or caches. Actual identity,
+verification, denial and session-error transitions sanitize private cache state. Public
+directories can fall back to public chrome after session failure.
 
 ## HTTP locale contract
 

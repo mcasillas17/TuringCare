@@ -1,10 +1,8 @@
 # TuringCare — Project Log
 
-Chronological record of shipped phases. One entry per phase: what changed, the
-commit range, and where the design/plan live. Newest at the bottom.
-
-Each phase also has a committed design spec (`docs/superpowers/specs/`) and
-implementation plan (`docs/superpowers/plans/`); this log is the index.
+Chronological record of implemented and shipped phases, with rollout status and linked
+feature guidance. Newest at the bottom. Historical entries also link their original
+design and implementation records.
 
 ---
 
@@ -39,7 +37,7 @@ Open Graph + Twitter + favicon meta in `index.html`, brand `og.png`
 ## 2026-05-17 — Ops & docs
 Security hardening backlog (`docs/SECURITY-BACKLOG.md`, `cf33af2`). Fly VM
 right-sized to 512MB then reverted to 1GB at user request (`4ce8b28` →
-`d9f33f4`). No billing changed by the agent (not possible).
+`d9f33f4`).
 
 ## 2026-05-17 — Rate limiting (sub-project A) — SHIPPED
 Better Auth DB-backed limiter on /api/auth/* (sign-in/sign-up 5/60s,
@@ -159,8 +157,7 @@ drawer, layout route behind RequireAuth, Admin link admin-only) + Overview
 aggregate, re-homed Dogs (chrome stripped), owner-scoped Behavior Journal,
 deterministic Behavior Brief (generate/finalize/print/copy, no AI), Trainers
 directory (filter/detail), Profile (edit name) + Settings (language/sign-out).
-All copy en+es with parity. One PR; internally ~18 reviewed TDD tasks; no
-migration, no new deps, no apps/api infra change.
+All copy en+es with parity. No migration, new dependencies or API infrastructure change.
 - Spec/plan: `specs/2026-05-19-app-shell-design.md`, `plans/2026-05-19-app-shell.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-app-shell-redesign.
 
@@ -461,10 +458,9 @@ auto-focus so a mouseover never steals focus. Drop-in (same export + `className`
 on the trigger; the 5 call sites unchanged). New `language.label` i18n key
 (en "Language" / es "Idioma"); reuses `switchTo`/`nameEn`/`nameEs`. Radix Popover
 needed a `ResizeObserver` (+ element no-op) test polyfill under jsdom. Built on
-the already-installed `radix-ui` (no new dep, no `ui/` wrapper). TDD via
-subagent-driven development; the component had two independent opus code reviews
-(double-click-dismiss, test-bent pointer guard, timer cleanup, hover focus-steal
-all fixed). 5 call-site tests updated for the new trigger name/flow. Gate green:
+the already-installed `radix-ui` (no new dep, no `ui/` wrapper). Double-click dismissal,
+pointer handling, timer cleanup and hover focus preservation are covered. Five call-site
+tests were updated for the new trigger name/flow. Gate green:
 biome 198, web 38 files / 132 tests, tsc 0, build OK.
 - Spec/plan: `specs/2026-05-23-language-toggle-popover-design.md`,
   `plans/2026-05-23-language-toggle-popover.md`
@@ -598,8 +594,7 @@ recent-entry list cap goes 5 → 10. `POST /api/dogs/:id/brief` takes an optiona
 and date-filters the journal query (`gte(occurredAt, cutoff)`); the web brief page
 gets a segmented `7d/30d/90d/All` control. Still a deterministic text template (no
 LLM). No schema/migration; email-a-brief send flow untouched (reuses the stored
-summary, so it inherits the chosen window). Built via subagent-driven development
-(implementer + spec + quality review per task). Gates green: tsc 0, lint 0,
+summary, so it inherits the chosen window). Gates green: tsc 0, lint 0,
 shared 38 / web 158 / api 157, web build OK.
 - Transport note: window is a query param, not a JSON body — the typed hono RPC
   client needs a route validator, and a json-body validator would break every
@@ -621,8 +616,7 @@ checklist collapses to a one-line celebration banner the user can dismiss
 (persisted per-device in localStorage). The five progress-flipping mutations
 (useCreateDog, useAddGoal, useCreateEntry, useFinalizeBrief, useSendBrief)
 each invalidate the `["onboarding"]` query so the checklist updates the
-moment the user returns to /my. Built via subagent-driven-development
-(implementer + spec + quality review per task). Gates green: tsc 0, lint 0,
+moment the user returns to /my. Gates green: tsc 0, lint 0,
 shared 38 / web 167 / api 163, web build OK.
 - Open follow-ups (minor, non-blocking): the `stage==="new"` branch now has
   no page-level `<h1>` (the checklist's heading is `<h2>`) — heading
@@ -651,8 +645,7 @@ Two new owner-scoped API endpoints: `GET /api/training/templates` and atomic
 `POST /api/dogs/:id/goals/from-template`. Single migration (0008) adds two
 nullable text columns; no backfill. The apply mutation invalidates
 `["onboarding"]` so the onboarding checklist's "Set a training goal" row ticks
-immediately. Built via subagent-driven development (7 implementation tasks,
-implementer + spec + quality review per task). Gates green: tsc 0, lint 0
+immediately. Gates green: tsc 0, lint 0
 (241 files), shared 38 / web 172 / api 173, web build OK.
 - Catalog scope: English-only for MVP; the picker chrome (en + es) is localised.
   Catalog can be localised later without further schema/UX work.
@@ -692,10 +685,8 @@ its dedicated **all-my-dogs list** (`dogs-list.tsx`), reachable from the sidebar
 "Dogs" nav — the redesign only declutters the per-dog *detail* page, not the
 list. Deleted `dog-detail.tsx`; removed 3 genuinely-orphaned `dogs.*` i18n keys
 (empty/back/deleteConfirm). No DB, API, or Hono changes — purely a web IA +
-component refactor. Built via subagent-driven development (8 tasks; Task 1
-carried implementer + spec + quality review, which caught a real bug: skill
-`mode` lingered after collapse, so re-expanding reopened a stale form — fixed by
-resetting mode on collapse).
+component refactor. Collapsing a skill now resets its edit/log mode, preventing
+re-expansion from reopening a stale form.
 
 **Follow-up (post-merge, shipped as a separate fix PR off `main`):** the initial
 pass deleted the dogs-list page and redirected `/my/dogs` → `/my`, which broke
@@ -738,11 +729,8 @@ new logging route. All week math is done client-side in local time
 as instants and buckets sessions by local day, so a session lands in exactly one
 column regardless of timezone.
 
-Built via subagent-driven development (8 tasks; implementer + spec + quality
-review; a final whole-feature review confirmed ownership scoping is tight and
-the timezone window/bucketing are internally consistent — the one "tz bug" the
-reviewer raised was a false positive). Gates: web tsc 0, api tsc 0, lint 0 (261
-files), shared 42 / web 190 passing, web build OK. The api vitest suite could not
+Ownership scoping and local-time week boundaries are covered. Gates: web tsc 0, api tsc 0,
+lint 0 (261 files), shared 42 / web 190 passing, web build OK. The api vitest suite could not
 run locally — Postgres was down (ECONNREFUSED, same documented shared-test-DB
 drift; even unrelated suites fail identically) — so the new `focus.test.ts` (6
 cases: add/GET, 409 dup, 404 cross-dog, week-window filtering, delete + re-delete
@@ -800,24 +788,22 @@ its 5 i18n keys; folded the send-panel into the share sheet.
 
 New units: `lib/when.ts` (humanized date/time + day grouping, unit-tested) and a
 `components/ui/sheet.tsx` modal primitive (Esc/backdrop close, scroll-lock, labelled
-dialog). Built via subagent-driven development (10 tasks; implementer + spec +
-quality review each). Gates: web tsc 0, biome 0 (160 files), **199/199 web tests**,
+dialog). Gates: web tsc 0, biome 0 (160 files), **199/199 web tests**,
 web build OK. react-doctor (changed-scope) 74→77 after fixing the Sheet keydown
 re-subscribe and a dead `new Date()` fallback; remaining warnings are SPA
 false-positives (no SSR hydration), a readable-flat-state preference, and the
 native-`<dialog>` a11y upgrade — deferred because jsdom can't run `showModal()`
-(would break the test suite). Manual mobile/visual QA on a device still pending
-(controller has no browser).
+(would break the test suite). Manual mobile/visual QA on a device was still pending.
 - Spec/plan: `docs/superpowers/specs/2026-06-20-journal-brief-redesign-design.md`,
   `docs/superpowers/plans/2026-06-20-journal-brief-redesign.md`
 - Commits: branch `worktree-journal-brief-redesign`. Shipping as a PR.
 
 ## 2026-06-20 — Turing companion mascot (phase 1) — SHIPPED
-Added **Turing**, the animated companion mascot, from Claude Design's handoff
+Added **Turing**, the animated companion mascot, from the owner-approved artwork
 (`Turing the companion animation.zip`). Ported the "corner widget" natively into the
 React app — no iframe, no `support.js`, no new deps. New `TuringCompanion` component
 (`apps/web/src/components/turing-companion.tsx`): the inline SVG artwork is copied
-verbatim from the owner-approved handoff (blue-merle Mini American Shepherd,
+verbatim from the owner-approved artwork (blue-merle Mini American Shepherd,
 heterochromia eyes, teal hex tag), and the original ~60-line vanilla logic is
 reimplemented as React state — ambient breathe/blink/tail-sway, cursor eye-follow,
 hover head-tilt + ear rotation, and a tap-for-a-training-tip speech bubble (random tip,
@@ -859,12 +845,10 @@ easing).
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-polish-i18n`.
 
 ## 2026-06-21 — Turing companion: living, event-driven mascot — phase 2b — SHIPPED
-Turing now reacts to wins, dozes when idle, and gives page-relevant tips — the 8-pose
-handoff variant wired into the app. Built via subagent-driven development (6 TDD tasks,
-implementer + task-review each, plus a whole-branch opus review → ready to merge, no
-Critical/Important findings). Pieces:
+Turing now reacts to wins, dozes when idle, and gives page-relevant tips using the
+approved pose artwork. Pieces:
 - **`turing-poses.ts`** — pure `posePresentation(pose, reduceMotion)` mapping the 6 poses
-  (idle/tilt/bark/wag/celebrate/sleep) to CSS anim/transform values (handoff-exact); loops
+  (idle/tilt/bark/wag/celebrate/sleep) to the approved CSS animation values; loops
   collapse to `none` under reduced motion.
 - **Artwork** (`turing-art.tsx`/`turing-head.tsx` + 3 new keyframes `tg-hop`/`tg-wag-fast`/
   `tg-zzz`) — pose-driven; sleep = closed-eye lines + floating "zzz", celebrate = hop on a
@@ -881,11 +865,11 @@ Critical/Important findings). Pieces:
   template apply; big **hop** on brief finalize / share / send. Added first in each existing
   `onSuccess`, never awaited, can't break invalidation.
 Gates: web **234/234** tests, tsc 0, Biome clean, build OK. react-doctor: the few findings on
-new files are the intentional handoff animation values (head-tilt bounce, 2.4s zzz) + a
+new files are the intentional animation values (head-tilt bounce, 2.4s zzz) + a
 false-positive effect-deps flag (deps verified correct); the score is the stale-base artifact
 re-scoring already-merged code.
 - **Out of scope (future):** `sit`/`lie` poses, sound, a disable-Turing setting. Minor
-  follow-ups noted in review: throttle the provider pointermove handler; symmetrize es/en
+  follow-ups: throttle the provider pointermove handler; symmetrize es/en
   tip derivation in the companion test.
 - Spec/plan: `docs/superpowers/specs/2026-06-21-turing-living-mascot-design.md`,
   `docs/superpowers/plans/2026-06-21-turing-living-mascot.md`
@@ -894,8 +878,7 @@ re-scoring already-merged code.
 ## 2026-06-21 — Turing companion: connect all the events — phase 2c — SHIPPED
 2b's reactions only fired on a few events (and the common ones use the subtle wag), so Turing
 felt inert. This connects him to the rest of the meaningful events, reserving the **hop** for
-milestones. Built via subagent-driven development (3 TDD tasks + 1 refactor, implementer +
-task-review each, whole-branch opus review → ready to merge). New triggers:
+milestones. New triggers:
 - **Add a dog** (`useCreateDog`) → hop · **Add a goal** (`useAddGoal`) → wag.
 - **Skill confidence raised** (`useUpdateSkillConfidence`) → wag, or **hop at mastery**
   (`variables.body.confidence >= CONFIDENCE_MAX`).
@@ -906,8 +889,7 @@ task-review each, whole-branch opus review → ready to merge). New triggers:
   re-baselines on week change (paging to a complete past week is silent).
 Existing 2b triggers unchanged (journal/session/template → wag; brief finalize·share·send →
 hop). The two derived-state triggers use an effect-watching-query-state (the completion comes
-from refetched/cumulative data, not a single event) — react-doctor's "event logic in an
-effect" warning was reviewed and is a **false positive**; documented with inline comments.
+from refetched/cumulative data, not a single event), as documented in their inline comments.
 Gates: web **244/244** tests, tsc 0, **root** `biome check .` clean, build OK.
 - **Out of scope:** concern-adds / profile / settings / deletes (low signal); a celebratory
   text bubble on hop (good follow-up). Optional: an error-path test per new mutation trigger.
@@ -930,11 +912,8 @@ Template skills show their catalog milestone descriptions; free-form skills use 
 generic labels. Skill edit is now name-only (level is owned solely by the level
 route). Brief now reads "Sit — Level 3: Sometimes (reached Jun 3)".
 
-Built via subagent-driven development (10 tasks: shared schema → migration → API
-lib+route → web hook/i18n/stepper/panel → brief → cleanup; implementer + spec +
-quality review each). A final whole-feature review caught two real cross-cutting
-bugs (both fixed): the panel rendered `updateSkill.data` (a bare DB row without
-`milestones`/`sessions`) after a name edit, crashing the stepper — now always uses
+Two cross-cutting bugs were fixed: the panel rendered `updateSkill.data` (a bare DB row
+without `milestones`/`sessions`) after a name edit, crashing the stepper — now always uses
 the full progress prop; and the skill-edit route wrote `confidence` from the request
 body, which could silently reset the level — it now edits the name only.
 Gates: shared/api/web tsc 0, **228 web + 184 api tests** green, i18n parity green,
@@ -951,8 +930,7 @@ reaching level 5 via the stepper now triggers the hop (`celebrate(level >= CONFI
 ## 2026-06-21 — Turing companion: celebration bubbles + cooldown — phase 2d — SHIPPED
 2c connected Turing to many events, but every hop was silent/identical and frequent wags
 risked becoming noise. This gives **milestones a short contextual message** and **throttles
-wags**. Built via subagent-driven development (3 TDD tasks + a test-hygiene fix, each
-task-reviewed, whole-branch opus review → ready to merge). Changes:
+wags**. Changes:
 - **`celebrate(big?, messageKey?)`** + `eventMessage` on the context. Messages show on
   **hops only** (a wag forces `eventMessage` null); the message clears with the pose. Shown
   even under reduced motion (the hop is suppressed but the text isn't — an a11y win).
@@ -967,7 +945,7 @@ task-reviewed, whole-branch opus review → ready to merge). Changes:
   and silent; all invalidates preserved.
 Gates: web **245/245** tests, tsc 0, **root** `biome check .` clean, build OK. react-doctor
 findings on changed files are pre-existing/adjudicated (derived-state effect; intentional
-handoff easing) — none new.
+animation easing) — none new.
 - **Out of scope / future:** streaks & first-of-day greeting, a "quiet Turing" setting,
   state-aware tips, ambient micro-animations, centralizing triggers into a reaction registry.
 - Spec/plan: `docs/superpowers/specs/2026-06-21-turing-celebration-bubbles-design.md`,
@@ -976,8 +954,7 @@ handoff easing) — none new.
 
 ## 2026-06-21 — Turing companion: "Quiet Turing" hide setting — phase 2e — SHIPPED
 Turing was a persistent animated element with no off-switch — a real gap for users who find a
-mascot distracting. Added a **Settings show/hide toggle**. Built via subagent-driven
-development (2 TDD tasks, each task-reviewed, whole-branch review → ready to merge). Changes:
+mascot distracting. Added a **Settings show/hide toggle**. Changes:
 - **`TuringProvider`** gains `hidden` + `setHidden`, persisted per-device in localStorage
   (`tc-turing-hidden`, default shown). When hidden, the idle/activity listeners are skipped.
 - **`TuringCompanion`** returns `null` when hidden (after all hooks) and short-circuits its
@@ -1170,7 +1147,7 @@ authored content and are not machine-translated.
 
 Behavior Briefs store the validated generation locale; their prose, UTC-stable generated
 date, enum/status chrome, owned/public views, email, and PDF remain in that language after
-UI changes. Review hardening serialized per-dog generation and lifecycle transitions,
+UI changes. Concurrency hardening serialized per-dog generation and lifecycle transitions,
 made ambiguous latest versions and drafts fail closed, repaired legacy duplicate versions
 before enforcing unique `(dog_id, version)` values, and made email delivery an intent-first,
 exact-version-bound protocol.
@@ -1203,14 +1180,40 @@ API telemetry normalize `/b/<token>` (including route-equivalent `%62`/`%42` pre
 cleans stored paths. Locale itself is not collected as telemetry. Public shares remain a
 strict finalized-Brief projection with no user ID, dog ID, or token in the response.
 
-GPT-5.6 Luna and GPT-5.6 Terra independently and repeatedly reviewed correctness,
-security/privacy, improvements, gaps, and coverage, including a complete pass after merging
-current `main`. Verified findings were fixed test-first. Both returned **no actionable
-feedback** on the same final code state after the durability, deletion, and rollout changes.
-Final fresh repository, full-migration, deployment-contract, and production-image evidence is
-recorded in PR #70.
+Repository, full-migration, deployment-contract, and production-image evidence is recorded
+in PR #70.
 
 - Current guide: `docs/LOCALIZATION.md`
 - Spec/plan: `docs/superpowers/specs/2026-08-23-end-to-end-localization-design.md`,
   `docs/superpowers/plans/2026-08-23-end-to-end-localization.md`
 - Published for review as [PR #70](https://github.com/mcasillas17/TuringCare/pull/70).
+
+## 2026-09-05 — Verified email ownership — IMPLEMENTED, PRODUCTION CUTOVER PENDING
+
+Accounts now require explicit email ownership before verified sign-in and owner/admin
+access. Existing unverified sessions and persisted admin roles are independently gated;
+owner records and roles are retained while users verify. `/me`, public directories,
+finalized public Brief links, password recovery and sign-out remain usable.
+
+The public English/Spanish verification screen supports signup without a session and
+legacy sessions. Opening an email link only stages an encrypted, short-lived receipt;
+the user explicitly confirms before signing in. Scanner visits cannot enable an account,
+verification does not switch accounts, and invalid/expired links have recovery guidance.
+Credential-proven resend reports provider acceptance or failure honestly, with durable
+limits and accessible cooldowns. Token-free navigation handles throttles, and stalled
+status checks reach a bounded retry state.
+
+Session and locale boundaries preserve drafts during benign refreshes, clear private
+state on real authorization changes, and retain language across fresh-browser and
+storage-denied continuation. Production test-email capture is rejected. Counter cleanup
+is bounded and concurrency-safe, with PostgreSQL 16/18 coverage. Existing owner
+isolation, Brief delivery idempotency and pending-send deletion protections are unchanged.
+
+T1-T11 now have assigned issues and linked dependencies. T1 is tracked in
+[#97](https://github.com/mcasillas17/TuringCare/issues/97); this does not complete the
+other roadmap features or the remaining production gates.
+
+No T1 schema migration or bypass flag was introduced. Authorized aggregate inventory,
+genuine admin/smoke ownership preparation, API-first deployment and recorded production
+evidence remain required. The cutover runbook and state diagram are in
+[`DEPLOY.md`](../DEPLOY.md#6a-verified-email-ownership-cutover).

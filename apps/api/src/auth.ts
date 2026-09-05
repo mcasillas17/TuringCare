@@ -1,5 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { verificationLink } from "./auth/verification-callback";
+import { consumeVerificationLimit } from "./auth/verification-rate-limit";
 import { db } from "./db";
 import * as schema from "./db/schema";
 import { sendEmail } from "./email/send-email";
@@ -17,7 +19,9 @@ function authRequestLocale(request: Request | undefined) {
 // not determine client IP address". Cross-subdomain cookie attrs are still only
 // applied in production (when COOKIE_DOMAIN is set).
 const advanced = {
-  ipAddress: { ipAddressHeaders: ["fly-client-ip", "x-forwarded-for"] },
+  disableOriginCheck: false,
+  disableCSRFCheck: false,
+  ipAddress: { ipAddressHeaders: ["fly-client-ip"] },
   ...(env.COOKIE_DOMAIN
     ? {
         crossSubDomainCookies: { enabled: true, domain: env.COOKIE_DOMAIN },
@@ -31,29 +35,43 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   basePath: "/api/auth",
   trustedOrigins: [env.FRONTEND_URL],
+  // Route unexpected failures through Hono's privacy-safe error handler instead
+  // of Better Call's raw exception logger (database errors can contain tokens).
+  onAPIError: { throw: true },
+  logger: {
+    log: (level) => {
+      if (level === "error") console.error("[auth] request_failed");
+      else if (level === "warn") console.warn("[auth] request_warning");
+    },
+  },
+  session: { cookieCache: { enabled: false } },
   emailAndPassword: {
     enabled: true,
+    requireEmailVerification: true,
     sendResetPassword: async ({ user, url }, request) => {
       try {
         await sendEmail({ to: user.email, ...passwordResetEmail(url, authRequestLocale(request)) });
-      } catch (err) {
-        console.error("[auth] sendResetPassword failed", {
-          userId: user.id,
-          err: err instanceof Error ? err.message : "unknown",
-        });
+      } catch {
+        console.error("[auth] password_reset_send_failed");
       }
     },
   },
   emailVerification: {
     sendOnSignUp: true,
+    sendOnSignIn: false,
+    autoSignInAfterVerification: false,
     sendVerificationEmail: async ({ user, url }, request) => {
       try {
-        await sendEmail({ to: user.email, ...verificationEmail(url, authRequestLocale(request)) });
-      } catch (err) {
-        console.error("[auth] sendVerificationEmail failed", {
-          userId: user.id,
-          err: err instanceof Error ? err.message : "unknown",
+        if (await consumeVerificationLimit("send", user.email)) return;
+        const locale = authRequestLocale(request);
+        await sendEmail({
+          to: user.email,
+          ...verificationEmail(verificationLink(url, locale), locale),
         });
+      } catch {
+        // Signup remains privacy-neutral; credential-proven resend reports real
+        // provider acceptance/failure. Never log identities or provider content.
+        console.error("[auth] verification_send_failed");
       }
     },
   },
@@ -77,9 +95,8 @@ export const auth = betterAuth({
         },
       },
     },
-    // Sign-up also creates a session, so registration legitimately emits both
-    // signed_up and signed_in. Aggregations use first-occurrence/distinct-user,
-    // so the double-emit is harmless.
+    // Verification-required signup creates no session. This event is emitted
+    // only when a session is actually issued (normally explicit verified login).
     session: {
       create: {
         after: async (createdSession) => {
@@ -101,6 +118,7 @@ export const auth = betterAuth({
       "/sign-in/email": { window: 60, max: 5 },
       "/sign-up/email": { window: 60, max: 5 },
       "/forget-password": { window: 60, max: 3 },
+      "/request-password-reset": { window: 60, max: 3 },
     },
   },
   database: drizzleAdapter(db, {

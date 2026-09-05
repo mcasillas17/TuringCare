@@ -47,7 +47,10 @@ afterEach(() => {
 it("adopts a signed-in account locale while rendering the public landing route", async () => {
   window.history.replaceState({}, "", "/");
   localStorage.setItem("tc-locale", "en");
-  useSessionMock.mockReturnValue({ data: { user: { id: "u1" } }, isPending: false });
+  useSessionMock.mockReturnValue({
+    data: { user: { id: "u1", emailVerified: true } },
+    isPending: false,
+  });
   const requestedPaths: string[] = [];
   vi.stubGlobal(
     "fetch",
@@ -59,7 +62,13 @@ it("adopts a signed-in account locale while rendering the public landing route",
       if (path === "/me") {
         return new Response(
           JSON.stringify({
-            user: { id: "u1", name: "Miguel", email: "m@example.com", role: "user" },
+            user: {
+              id: "u1",
+              name: "Miguel",
+              email: "m@example.com",
+              role: "user",
+              emailVerified: true,
+            },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -94,7 +103,10 @@ it("adopts a signed-in account locale while rendering the public landing route",
 
 it("clears all prior-identity cache before rendering a signed-in public landing route", async () => {
   window.history.replaceState({}, "", "/");
-  useSessionMock.mockReturnValue({ data: { user: { id: "u1" } }, isPending: false });
+  useSessionMock.mockReturnValue({
+    data: { user: { id: "u1", emailVerified: true } },
+    isPending: false,
+  });
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -103,7 +115,7 @@ it("clears all prior-identity cache before rendering a signed-in public landing 
       if (path === "/me") {
         return new Response(
           JSON.stringify({
-            user: { id: "u1", name: "User", email: "u1@example.com" },
+            user: { id: "u1", name: "User", email: "u1@example.com", emailVerified: true },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );

@@ -49,7 +49,7 @@ process.env.PLAYWRIGHT_API_BASE_URL = apiOrigin;
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "critical-owner-journey.spec.ts",
+  testMatch: ["critical-owner-journey.spec.ts", "verification.spec.ts"],
   fullyParallel: false,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,

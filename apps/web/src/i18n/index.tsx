@@ -6,6 +6,7 @@ import {
   resolveBrowserLocale,
   translate as translateMessage,
 } from "@turingcare/i18n";
+import { safeAuthReturnPath } from "@turingcare/shared";
 import {
   type ReactNode,
   createContext,
@@ -27,6 +28,24 @@ export function detectInitialLocale(): Locale {
     if (isLocale(stored)) return stored;
   } catch {
     /* storage unavailable */
+  }
+
+  // Seed a fresh browser from the email's exact en/es hint without replacing
+  // a local selection. Verified account preferences still apply afterward.
+  if (
+    typeof window !== "undefined" &&
+    (["/verify-email", "/login", "/register"].includes(window.location.pathname) ||
+      safeAuthReturnPath(window.location.pathname) === window.location.pathname)
+  ) {
+    const lang = new URLSearchParams(window.location.search).get("lang");
+    if (isLocale(lang)) {
+      try {
+        localStorage.setItem(STORAGE_KEY, lang);
+      } catch {
+        // The validated URL hint still supplies this document's language.
+      }
+      return lang;
+    }
   }
 
   const nav = typeof navigator !== "undefined" ? navigator : undefined;

@@ -24,9 +24,9 @@ checks use the stable `turingcare-api.fly.dev` hostname, so custom-domain
 provisioning cannot block recovery. The web deploys only after the migrated API
 is healthy and the migration tail has succeeded.
 
-> Nothing here is automated by the repo. Do every step below **once**, by hand,
-> before the first push to `main`. The workflows (`.github/workflows/ci.yml`,
-> `deploy.yml`) only run after the secrets and platform projects exist.
+> First-time platform and secret setup below is manual. Once configured, the workflows
+> automate deployment on `main`. Before merging verified-email enforcement, complete the
+> blocking existing-account preparation in [section 6a](#6a-verified-email-ownership-cutover).
 
 ---
 
@@ -94,8 +94,8 @@ by hand — just confirm them:
   and `@turingcare/shared` is consumed as TypeScript source — Node's native ESM
   loader can run neither, so `node dist/index.js` crashes with
   `ERR_MODULE_NOT_FOUND`. `tsx` transpiles + resolves both, exactly like local
-  dev. Verified: the image builds, boots, and serves `/health` + register +
-  `/me` against Postgres.
+  dev. Image health/readiness is not proof of the account journey: signup has no
+  session, and `/me` requires a session established by verified sign-in.
 
 `flyctl deploy --remote-only` builds the image on Fly's builders from
 `Dockerfile.api`; `internal_port` (3001) matches the `PORT` the app binds via
@@ -119,7 +119,7 @@ fly secrets set --app turingcare-api \
   EMAIL_FROM='TuringCare <noreply@send.turingcare.dog>'
 ```
 
-**Fly secrets required:**
+**Fly secrets and optional admin bootstrap configuration:**
 
 | Secret | Value |
 |---|---|
@@ -130,6 +130,7 @@ fly secrets set --app turingcare-api \
 | `COOKIE_DOMAIN` | `.turingcare.dog` |
 | `RESEND_API_KEY` | Resend API key (domain `send.turingcare.dog` verified) |
 | `EMAIL_FROM` | `TuringCare <noreply@send.turingcare.dog>` |
+| `ADMIN_EMAILS` (optional) | Existing comma-separated admin bootstrap allowlist; only controlled, ownership-verified accounts |
 
 > `COOKIE_DOMAIN` was added during the deploy audit. The frontend and API are
 > different subdomains, so without it Better Auth's default `SameSite=Lax`
@@ -249,6 +250,165 @@ This release adds no locale environment variable or secret. Locale is a
 validated request, account, and artifact value; keep `.env.example`, GitHub
 secrets, and Fly secrets unchanged.
 
+## 6a. Verified email ownership cutover
+
+This is a behavioral cutover, not a database migration. Enforcement is unconditional when
+the new API starts: new accounts have no session until verified sign-in, and existing
+unverified sessions cannot read or mutate owner data or use admin privileges. Existing
+data and persisted roles are retained. There is no grace period or bypass flag.
+
+### Blocking preparation before merge
+
+Merging to `main` starts the existing deployment sequence. An authorized operator must
+complete and record these prerequisites before approving that merge:
+
+1. Inventory affected accounts using aggregate information only. Record counts, the
+   inspected release, date and operator; never publish account rosters, credentials,
+   session cookies, email links or authored content.
+2. Prove ownership of every controlled allowlisted/admin account and the dedicated
+   non-admin smoke account through their real mailbox and the ordinary verification
+   flow. Confirm authoritative verified status. Adding an address to `ADMIN_EMAILS`,
+   holding a password or seeing a persisted admin role is not email-ownership proof.
+3. Confirm production uses `NODE_ENV=production`, real email delivery is configured,
+   and `E2E_TEST_MODE` is false. Production refuses captured-email mode.
+4. Confirm the normal Fly edge supplies and overwrites a valid `fly-client-ip`. Credential,
+   send and confirmation operations fail with `trusted_ip_required` if it is absent;
+   do not substitute client-controlled `X-Forwarded-For`. Passive landing, session status
+   and sign-out remain available so a proxy problem cannot trap a signed-in user.
+5. Review the candidate's cross-origin cookie configuration. The API-host-only receipt
+   is HttpOnly, Secure, SameSite=None and scoped to `/api/verification`; it is consumed
+   only by credentialed API requests. Existing session `COOKIE_DOMAIN` settings remain
+   unchanged. Rehearse on an isolated HTTPS candidate where available; actual production
+   confirmation is part of the required post-deploy evidence below.
+
+An authorized operator can obtain the basic inventory with this read-only query:
+
+```sql
+SELECT
+  u.email_verified,
+  u.role,
+  count(*) AS accounts,
+  count(*) FILTER (
+    WHERE EXISTS (
+      SELECT 1
+      FROM public.session s
+      WHERE s.user_id = u.id AND s.expires_at > now()
+    )
+  ) AS accounts_with_active_sessions
+FROM public."user" u
+GROUP BY u.email_verified, u.role
+ORDER BY u.email_verified, u.role;
+```
+
+Privately reconcile configured allowlisted and smoke accounts with the controlled
+mailboxes; do not add addresses or row-level data to deployment evidence. Do not update
+verification flags, reset production passwords, change secrets or send bulk mail as
+part of this inventory.
+
+### Deployment and recovery
+
+Preserve the existing API-first sequence: drain, apply committed migrations, deploy and
+verify API readiness, idempotently verify migrations, then publish Pages. T1 adds no
+migration and does not change that ordering.
+
+Unverified owners use the public verification screen. Opening an email link only stages a
+ten-minute encrypted receipt; the explicit **Verify email** action performs ownership
+verification. Automated link scans and subresource loads cannot verify an account.
+Re-confirming a valid link is idempotent; verification never automatically creates a
+session or switches the active account. Expired receipts or links have a recovery path.
+
+Rate-limited canonical verification GETs with a document destination or absent
+`Sec-Fetch-Dest` receive a token-free 303 recovery redirect with the advertised wait.
+Explicitly non-navigation verification requests retain JSON 429. The user can reopen the
+email link afterward. Stalled verification-status checks reach retry feedback after eight seconds
+instead of waiting indefinitely.
+
+A user without a session supplies email and password to request another link; a legacy
+session supplies its own identity. This permits useful provider-failure feedback without
+an anonymous email-existence oracle. A successful resend means the provider accepted the
+request, not that the inbox received it. Provider failures retain their send allowance;
+the UI displays the server's retry delay rather than inviting immediate repeated sends.
+
+Already-open old bundles may show a generic access failure or lack the new confirmation
+screen during the API-to-web interval. They cannot perform protected server operations.
+After Pages publication, reload to obtain the verification flow. A rollback to a
+pre-confirmation web bundle is not a recovery strategy for this API.
+
+If an address was mistyped, register a new account with the correct address. If it was
+already registered, the original password still applies; use password recovery, then
+verify normally. For a legacy account with data and an inaccessible mailbox, preserve the
+account and escalate to a separately authorized ownership-recovery process. Do not
+transfer data, change its email, or grant verification based solely on a claimed typo or
+possession of its password.
+
+Do not clear pending Brief delivery claims to unblock an unverified owner. The owner
+first verifies, then uses the existing exact-version/idempotent retry and deletion
+readiness flow. Retained data and delivery protections do not expire with a verification
+or delivery-claim timer.
+
+### Evidence required after cutover
+
+Record the deployed API/web SHAs and bounded HTTPS browser outcomes: controlled signup
+denied before confirmation; passive link opening still denied; explicit confirmation
+plus sign-in allowed; legacy unverified owner and persisted-admin access denied; verified
+admin and smoke access allowed; resend delay/failure recovery; expired link, password
+recovery, sign-out, old-tab reload and English/Spanish continuation. Use dedicated
+controlled fixtures. Do not manufacture legacy states by changing production flags or
+attach real emails, tokens, cookies or owner data.
+
+Exercise a pre-existing legacy session only when one is available and authorized. If
+the inventory contains no affected legacy/admin accounts, record that aggregate fact
+and cite the candidate's negative-case regression evidence; do not create an unsafe
+production admin merely to demonstrate denial.
+
+Confirm the existing retention job succeeds. New credential pairs perform a bounded
+indexed cleanup page, and daily maintenance is the fallback. Only verification counters
+inactive for more than 24 hours are deleted; enforcement windows remain 60 seconds.
+The maintenance job queues briefly through ordinary cursor contention. A prolonged lock
+timeout or `budget_exhausted` fails the invocation with safe diagnostics. After contention
+ends, or when a scan needs another bounded pass, rerun the existing job and confirm
+completion. Never truncate the rate-limit table.
+
+Passing PR CI is not production deployment evidence. Keep T1's rollout status pending
+until the authorized operator records these outcomes.
+
+### Rollback constraints
+
+Email ownership enforcement is forward-only. There is no T1 schema change to reverse.
+Do not restore an API that permits unverified owner/admin access, add an administrative
+grace path, or mark accounts verified in bulk. If recovery is broken, retain the gates,
+use maintenance procedures as needed, and deploy a forward fix. Any later rollback must
+remain within releases that preserve both verification and the existing Brief/migration
+safety boundaries.
+
+```mermaid
+flowchart TD
+  Signup["Sign up: no session"] --> Recovery["Public verification and recovery"]
+  UnverifiedLogin["Unverified sign-in"] --> Recovery
+  Legacy["Legacy unverified owner or admin session"] --> Blocked["Owner and admin APIs blocked"]
+  Blocked --> Recovery
+  Signup --> Mail["Verification email"]
+  Recovery --> Resend["Resend: session or credential proof and server limits"]
+  Resend --> Mail
+  Mail --> Landing["Open link: passive GET stages encrypted receipt"]
+  Landing --> Confirm["Explicit Verify email POST"]
+  Confirm -- "invalid or expired" --> Recovery
+  Confirm -- "verified" --> Result["Server-proven verification result"]
+  Result --> SessionChoice{"Existing session"}
+  SessionChoice -- "none" --> Login["Explicit sign-in"]
+  SessionChoice -- "same account" --> Refresh["Refresh session status"]
+  SessionChoice -- "different account" --> SignOut["Sign out, then sign in"]
+  SignOut --> Login
+  Login --> VerificationGate{"Current session is explicitly verified"}
+  Refresh --> VerificationGate
+  VerificationGate -- "no" --> Recovery
+  VerificationGate -- "yes" --> Verified["Verified session"]
+  Verified --> Owner["Owner-scoped access"]
+  Verified --> AdminGate{"Verified now AND (admin role OR allowlist)"}
+  AdminGate -- "yes" --> Admin["Admin access or promotion"]
+  Public["Directories and finalized public Brief links"] --> PublicAccess["Public access unchanged"]
+```
+
 ## 7. First deploy
 
 Push to `main`. Watch the single serialized sequence through `ci`, `deploy-api`
@@ -284,13 +444,17 @@ Cloudflare Pages → `turingcare-web` → **Custom domains** → add:
 Pages manages these DNS records automatically (apex + `www`, proxied/orange is
 fine for Pages).
 
-Verify end-to-end: open `https://turingcare.dog`, register, confirm you land on
-`/my/setup` (session cookie set on `.turingcare.dog`, accepted cross-subdomain by
-`api.turingcare.dog`).
+Verify end-to-end with a controlled account: register, open its email link, explicitly
+confirm ownership, then sign in and reach `/my/setup`. The session cookie is accepted
+cross-subdomain by `api.turingcare.dog`; the separate verification receipt remains
+API-host-only. Follow section 6a's privacy and evidence requirements.
 
 ---
 
 ## 9. Rollback
+
+Only use a known-good release that preserves section 6a's email-ownership contract and
+the migration/Brief constraints below. The pre-T1 API is not an authorized rollback target.
 
 ### API (Fly)
 
@@ -314,6 +478,9 @@ reverse the historical telemetry cleanup in `0021`/`0024`.
 Dashboard → Workers & Pages → `turingcare-web` → **Deployments** → pick the last
 known-good deployment → **⋯ → Rollback to this deployment**. Instant; no rebuild.
 
+The selected web release must support the enforcing API's explicit confirmation and
+recovery endpoints. Do not restore the old soft-banner-only bundle.
+
 ---
 
 ## Quick reference
@@ -321,7 +488,7 @@ known-good deployment → **⋯ → Rollback to this deployment**. Instant; no r
 | Where | Secrets |
 |---|---|
 | GitHub Actions | `DATABASE_URL`, `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
-| Fly (`turingcare-api`) | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `FRONTEND_URL`, `COOKIE_DOMAIN`, `RESEND_API_KEY`, `EMAIL_FROM` |
+| Fly (`turingcare-api`) | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `FRONTEND_URL`, `COOKIE_DOMAIN`, `RESEND_API_KEY`, `EMAIL_FROM`; optional `ADMIN_EMAILS` |
 
 | Name | Must equal |
 |---|---|

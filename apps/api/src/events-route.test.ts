@@ -1,11 +1,40 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { app } from "./app";
 import { auth } from "./auth";
 import { db } from "./db";
 import { events, user } from "./db/schema";
+import { createLegacySessionUser, createTestUser } from "./test-helpers";
 
 describe("POST /api/events", () => {
+  it("uses an authoritative legacy session for public telemetry without granting owner access", async () => {
+    const fixture = await createLegacySessionUser();
+    const getSession = vi.spyOn(auth.api, "getSession");
+    try {
+      const path = `/legacy-${fixture.userId}`;
+      const res = await app.request("/api/events", {
+        method: "POST",
+        headers: fixture.authHeaders,
+        body: JSON.stringify({ name: "page.viewed", props: { path } }),
+      });
+      expect(res.status).toBe(202);
+      expect(getSession).toHaveBeenCalledWith({
+        headers: expect.any(Headers),
+        query: { disableCookieCache: true },
+      });
+      const [stored] = await db
+        .select()
+        .from(events)
+        .where(and(eq(events.userId, fixture.userId), eq(events.name, "page.viewed")));
+      expect(stored?.userId).toBe(fixture.userId);
+      expect(stored?.sessionId).toBeTruthy();
+      expect((await app.request("/api/dogs", { headers: fixture.authHeaders })).status).toBe(403);
+    } finally {
+      getSession.mockRestore();
+      await db.delete(events).where(eq(events.userId, fixture.userId));
+      await fixture.cleanup();
+    }
+  });
   it("rejects an event name not on the client allowlist", async () => {
     const res = await app.request("/api/events", {
       method: "POST",
@@ -91,16 +120,11 @@ describe("POST /api/events", () => {
 
   it("attributes an authenticated page.viewed to the user + session", async () => {
     const email = `evtr_${Date.now()}@example.com`;
-    await auth.api.signUpEmail({ body: { name: "EvtR", email, password: "password-123" } });
-    const signIn = await auth.api.signInEmail({
-      body: { email, password: "password-123" },
-      asResponse: true,
-    });
-    const cookie = signIn.headers.get("set-cookie") ?? "";
+    const fixture = await createTestUser({ email });
     const path = `/auth-${Date.now()}`;
     const res = await app.request("/api/events", {
       method: "POST",
-      headers: { "Content-Type": "application/json", cookie },
+      headers: fixture.authHeaders,
       body: JSON.stringify({ name: "page.viewed", props: { path } }),
     });
     expect(res.status).toBe(202);

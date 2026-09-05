@@ -2,19 +2,14 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
-import { auth } from "../auth";
 import { db, pool } from "../db";
 import { briefs, user } from "../db/schema";
 import { withBriefLifecycleLock } from "../lib/brief-lifecycle";
+import { createTestUser } from "../test-helpers";
 import { waitForBlockingChain } from "../test-pg-concurrency";
 
 async function signedUpCookie(email: string) {
-  await auth.api.signUpEmail({ body: { name: "Sh", email, password: "password-123" } });
-  const res = await auth.api.signInEmail({
-    body: { email, password: "password-123" },
-    asResponse: true,
-  });
-  return res.headers.get("set-cookie") ?? "";
+  return (await createTestUser({ email })).authHeaders.cookie ?? "";
 }
 
 async function createDogWithBrief(

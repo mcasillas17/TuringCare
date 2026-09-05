@@ -50,6 +50,8 @@ const TOAST_COPY_METHODS = new Set(["error", "info", "loading", "message", "succ
 const TOAST_OPTION_COPY_PROPERTIES = new Set(["description"]);
 const TOAST_PROMISE_COPY_PROPERTIES = new Set(["description", "error", "loading", "success"]);
 const REVIEWED_NON_UI_RETURN_FUNCTIONS = new Set([
+  // Auth callback URL chrome is protocol data, not visible interface copy.
+  "src/lib/auth-navigation.ts:verificationCallbackUrl",
   "src/components/progress/contextual-progress-presentation.tsx:serializeContext",
   "src/components/turing-tips.ts:tipContextForPath",
   "src/lib/brief-chrome.ts:normalizeBriefLocale",
