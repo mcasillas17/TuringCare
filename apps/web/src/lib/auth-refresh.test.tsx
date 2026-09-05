@@ -123,6 +123,7 @@ it("keeps a no-session resend form mounted through pending and refetching transi
   view.rerender(view.tree());
   expect(screen.getByLabelText("Email")).toBe(email);
   expect(password).toHaveValue("in-memory-only");
+  expect(screen.getByRole("button", { name: "Request a new link" })).toBeEnabled();
   session.isPending = false;
   session.isRefetching = false;
   view.rerender(view.tree());

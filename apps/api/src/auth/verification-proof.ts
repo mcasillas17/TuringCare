@@ -16,16 +16,18 @@ import { consumeVerificationLimit, trustedVerificationIp } from "./verification-
 const RECEIPT_SECONDS = 600;
 const MAX_RECEIPT_LENGTH = 3500;
 const MAX_TOKEN_LENGTH = 1024;
-const receiptSchema = verificationStatusSchema
-  .extend({
-    expiresAt: z.number().finite(),
-    token: z.string().max(MAX_TOKEN_LENGTH).optional(),
-    emailFingerprint: z
-      .string()
-      .regex(/^[a-f0-9]{64}$/)
-      .optional(),
-  })
-  .strict();
+const receiptFields = {
+  expiresAt: z.number().finite(),
+  token: z.string().max(MAX_TOKEN_LENGTH).optional(),
+  emailFingerprint: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+};
+const receiptSchema = z.discriminatedUnion("status", [
+  verificationStatusSchema.options[0].omit({ requiresSignOut: true }).extend(receiptFields),
+  verificationStatusSchema.options[1].omit({ requiresSignOut: true }).extend(receiptFields),
+]);
 type Receipt = z.infer<typeof receiptSchema>;
 
 function cookieSettings(maxAge = RECEIPT_SECONDS) {
@@ -62,11 +64,20 @@ export function clearVerificationReceipt(response: Response): Response {
 }
 
 function publicState(receipt: VerificationStatus): VerificationStatus {
-  return { status: receipt.status, next: receipt.next, locale: receipt.locale };
+  return proofState(receipt.status, receipt.next, receipt.locale);
+}
+
+function proofState(
+  status: VerificationStatus["status"],
+  next: string,
+  locale: VerificationStatus["locale"],
+): VerificationStatus {
+  if (status === "verified") return { status: "verified", next, locale };
+  return { status, next, locale };
 }
 
 function emptyState(request: Request, status: VerificationStatus["status"]): VerificationStatus {
-  return { status, next: "/my", locale: resolveRequestLocale(request) };
+  return proofState(status, "/my", resolveRequestLocale(request));
 }
 
 async function receiptCookie(
@@ -113,7 +124,7 @@ async function readReceipt(request: Request): Promise<Receipt | VerificationStat
     // must not be recast as an invalid user link.
     return emptyState(request, "invalid");
   }
-  if (receipt.expiresAt <= Date.now()) return { ...publicState(receipt), status: "expired" };
+  if (receipt.expiresAt <= Date.now()) return proofState("expired", receipt.next, receipt.locale);
   if (receipt.status === "pending" && !receipt.token) return emptyState(request, "invalid");
   if (receipt.status === "verified" && !receipt.emailFingerprint) {
     return emptyState(request, "invalid");
@@ -154,14 +165,15 @@ export async function stageVerification(request: Request): Promise<Response> {
     locale,
   };
   target.searchParams.set("next", state.next);
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: target.toString(),
-      "Cache-Control": "no-store",
-      "Set-Cookie": await receiptCookie(state, validShape ? { token } : {}),
-    },
+  const headers = new Headers({
+    Location: target.toString(),
+    "Cache-Control": "no-store",
   });
+  const destination = request.headers.get("sec-fetch-dest");
+  if (request.method === "GET" && (destination === null || destination === "document")) {
+    headers.set("Set-Cookie", await receiptCookie(state, validShape ? { token } : {}));
+  }
+  return new Response(null, { status: 302, headers });
 }
 
 type ConfirmationResult =
@@ -199,7 +211,7 @@ export async function confirmVerification(request: Request): Promise<Confirmatio
       "requestType" in payload ||
       !z.email().safeParse(payload.email).success)
   ) {
-    state = { ...state, status: "invalid" };
+    state = proofState("invalid", state.next, state.locale);
   } else {
     // No browser cookie/redirect passed internally. BA performs token validation
     // and the authoritative write; autoSignInAfterVerification remains false.
@@ -216,21 +228,21 @@ export async function confirmVerification(request: Request): Promise<Confirmatio
       "status" in body &&
       body.status === true
     ) {
-      state = { ...state, status: "verified" };
+      state = proofState("verified", state.next, state.locale);
     } else if (
       body &&
       typeof body === "object" &&
       "code" in body &&
       body.code === "TOKEN_EXPIRED"
     ) {
-      state = { ...state, status: "expired" };
+      state = proofState("expired", state.next, state.locale);
     } else if (
       body &&
       typeof body === "object" &&
       "code" in body &&
       ["INVALID_TOKEN", "USER_NOT_FOUND", "INVALID_USER"].includes(String(body.code))
     ) {
-      state = { ...state, status: "invalid" };
+      state = proofState("invalid", state.next, state.locale);
     } else {
       throw new Error("Unexpected verification service response");
     }

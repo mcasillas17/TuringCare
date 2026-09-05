@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n";
 import { useSession } from "@/lib/auth-client";
-import { authPagePath } from "@/lib/auth-navigation";
+import { authContinuationPath, authPagePath } from "@/lib/auth-navigation";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { useSignOut } from "@/lib/sign-out";
 import {
@@ -38,6 +38,11 @@ function VerificationRecovery() {
   const hasSession = isNonemptySessionUserId(data?.user.id);
   const currentAccountVerified = useHasVerifiedSession();
   const proof = useVerificationStatus();
+  const [proofResolvedOnce, setProofResolvedOnce] = useState(false);
+  const proofResolved = proofResolvedOnce || proof.isSuccess || proof.isError;
+  useEffect(() => {
+    if (proof.isSuccess || proof.isError) setProofResolvedOnce(true);
+  }, [proof.isSuccess, proof.isError]);
   const [requestingNewLink, setRequestingNewLink] = useState(false);
   const receipt = proof.isError ? undefined : proof.data;
   const next = safeAuthReturnPath(
@@ -47,7 +52,11 @@ function VerificationRecovery() {
   const invalidLink =
     Boolean(receipt) &&
     (params.has("error") || receipt?.status === "invalid" || receipt?.status === "expired");
-  const requiresSignOut = !requestingNewLink && !invalidLink && receipt?.requiresSignOut === true;
+  const requiresSignOut =
+    !requestingNewLink &&
+    !invalidLink &&
+    receipt?.status === "verified" &&
+    receipt.requiresSignOut === true;
   const linkPending = !requestingNewLink && !invalidLink && receipt?.status === "pending";
   const linkVerified = !requestingNewLink && !invalidLink && receipt?.status === "verified";
   const queryClient = useQueryClient();
@@ -59,13 +68,14 @@ function VerificationRecovery() {
   const [accepted, setAccepted] = useState(false);
   const [alreadyVerified, setAlreadyVerified] = useState(false);
   const [failure, setFailure] = useState<MessageKey | null>(null);
-  const [confirmFailed, setConfirmFailed] = useState(false);
+  const [confirmFailure, setConfirmFailure] = useState<MessageKey | null>(null);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const [cooldownFinished, setCooldownFinished] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const busy = sending || confirming || checking || signingOut;
-  const showResend = !linkPending && !linkVerified && !currentAccountVerified && !alreadyVerified;
+  const showResend =
+    proofResolved && !linkPending && !linkVerified && !currentAccountVerified && !alreadyVerified;
   const showSignIn = !requiresSignOut && !hasSession && (linkVerified || alreadyVerified);
   const title = requiresSignOut
     ? t("verification.switchTitle")
@@ -118,17 +128,27 @@ function VerificationRecovery() {
   }
 
   async function confirm() {
-    if (busy || requiresSignOut) return;
+    if (busy || requiresSignOut || cooldown > 0) return;
     setConfirming(true);
-    setConfirmFailed(false);
+    setConfirmFailure(null);
     try {
       const result = await confirmVerification();
       queryClient.setQueryData(verificationStatusKey, result);
       // Refresh a legacy cookie only; confirmation never signs in or switches accounts.
       if (result.status === "verified" && hasSession && !result.requiresSignOut)
         await checkSession();
-    } catch {
-      setConfirmFailed(true);
+    } catch (cause) {
+      const code = cause instanceof VerificationRequestError ? cause.code : null;
+      setConfirmFailure(
+        code === "rate_limited"
+          ? "verification.rateLimited"
+          : code === "trusted_ip_required"
+            ? "verification.serviceUnavailable"
+            : code === "forbidden" || code === "invalid_input"
+              ? "verification.requestRejected"
+              : "verification.confirmFailed",
+      );
+      if (cause instanceof VerificationRequestError) beginCooldown(cause.retryAfter);
     } finally {
       setConfirming(false);
     }
@@ -136,7 +156,7 @@ function VerificationRecovery() {
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || cooldown > 0 || error || isPending || !receipt) return;
+    if (busy || cooldown > 0 || (hasSession && (error || isPending)) || !receipt) return;
     const form = event.currentTarget;
     const fields = new FormData(form);
     const input = hasSession
@@ -166,13 +186,33 @@ function VerificationRecovery() {
             ? "verification.credentialsRequired"
             : code === "rate_limited"
               ? "verification.rateLimited"
-              : "verification.sendFailed",
+              : code === "trusted_ip_required" || code === "verification_service_failed"
+                ? "verification.serviceUnavailable"
+                : code === "forbidden" || code === "invalid_input"
+                  ? "verification.requestRejected"
+                  : "verification.sendFailed",
       );
       if (cause instanceof VerificationRequestError) beginCooldown(cause.retryAfter);
     } finally {
       setSending(false);
     }
   }
+
+  const cooldownFeedback = (
+    <>
+      {cooldown > 0 && (
+        <p className="text-sm">{t("verification.cooldown", { seconds: cooldown })}</p>
+      )}
+      <output className="block text-sm" aria-live="polite" aria-atomic="true">
+        {accepted && t("verification.accepted")}{" "}
+        {cooldown > 0
+          ? t("verification.cooldownStarted")
+          : cooldownFinished
+            ? t("verification.cooldownFinished")
+            : ""}
+      </output>
+    </>
+  );
 
   return (
     <main className="relative mx-auto w-full max-w-md space-y-6 px-5 py-8">
@@ -208,38 +248,35 @@ function VerificationRecovery() {
               {t("verification.invalidLink")}
             </p>
           )}
-          {requiresSignOut && (
-            <p>
-              {linkPending ? t("verification.switchPending") : t("verification.switchVerified")}
-            </p>
-          )}
+          {requiresSignOut && <p>{t("verification.switchVerified")}</p>}
           {linkPending && !requiresSignOut && (
             <div className="space-y-3">
               <p>{t("verification.confirmBody")}</p>
               <Button
                 className="w-full"
-                disabled={busy}
+                disabled={busy || cooldown > 0}
                 aria-busy={confirming}
                 onClick={() => void confirm()}
               >
                 {confirming
                   ? t("verification.confirmPending")
-                  : confirmFailed
+                  : confirmFailure
                     ? t("verification.retry")
                     : t("verification.confirm")}
               </Button>
-              {confirmFailed && (
+              {confirmFailure && (
                 <p role="alert" className="text-sm text-destructive">
-                  {t("verification.confirmFailed")}
+                  {t(confirmFailure)}
                 </p>
               )}
+              {cooldownFeedback}
             </div>
           )}
           {currentAccountVerified && (
             <div className="space-y-3">
               <p>{t("verification.currentAccount")}</p>
               <Button asChild className="w-full">
-                <a href={next}>{t("verification.continue")}</a>
+                <a href={authContinuationPath(next, locale)}>{t("verification.continue")}</a>
               </Button>
             </div>
           )}
@@ -295,7 +332,12 @@ function VerificationRecovery() {
                 <Button
                   className="w-full"
                   type="submit"
-                  disabled={busy || isPending || Boolean(error) || !receipt || cooldown > 0}
+                  disabled={
+                    busy ||
+                    (hasSession && (isPending || Boolean(error))) ||
+                    !receipt ||
+                    cooldown > 0
+                  }
                   aria-busy={sending}
                 >
                   {sending ? t("verification.pending") : t("verification.resend")}
@@ -305,17 +347,7 @@ function VerificationRecovery() {
                     {t(failure)}
                   </p>
                 )}
-                {cooldown > 0 && (
-                  <p className="text-sm">{t("verification.cooldown", { seconds: cooldown })}</p>
-                )}
-                <output className="block text-sm" aria-live="polite" aria-atomic="true">
-                  {accepted && t("verification.accepted")}{" "}
-                  {cooldown > 0
-                    ? t("verification.cooldownStarted")
-                    : cooldownFinished
-                      ? t("verification.cooldownFinished")
-                      : ""}
-                </output>
+                {cooldownFeedback}
                 {!hasSession && (
                   <div className="space-y-3">
                     <Link className="block text-sm underline" to="/forgot-password">
@@ -379,11 +411,7 @@ function VerificationRecovery() {
               onClick={async () => {
                 setSigningOut(true);
                 const result = await signOut({
-                  destination: authPagePath(
-                    requiresSignOut && linkPending ? "/verify-email" : "/login",
-                    next,
-                    locale,
-                  ),
+                  destination: authPagePath("/login", next, locale),
                 });
                 if (!result.ok) setFailure("app.signOutFailed");
                 setSigningOut(false);

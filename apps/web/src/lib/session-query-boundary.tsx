@@ -12,6 +12,7 @@ type IdentityState = ResolvedIdentity | typeof UNRESOLVED_IDENTITY;
 type SessionQueryState = {
   identityReady: boolean;
   cacheReady: boolean;
+  resolvedOnce: boolean;
   sessionUserId: ResolvedIdentity;
 };
 
@@ -26,7 +27,11 @@ function sessionUserIdFromSession(session: unknown): ResolvedIdentity {
 
 export function SessionQueryBoundary({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const { data: session, error } = useSession();
+  const { data: session, error, isPending } = useSession();
+  const [resolvedOnce, setResolvedOnce] = useState(!isPending);
+  useEffect(() => {
+    if (!isPending) setResolvedOnce(true);
+  }, [isPending]);
   const sessionUserId = sessionUserIdFromSession(session);
   const [deniedUserId, setDeniedUserId] = useState<string | null>(null);
   const denied = sessionUserId !== null && deniedUserId === sessionUserId;
@@ -58,8 +63,8 @@ export function SessionQueryBoundary({ children }: { children: ReactNode }) {
   }, [clearedIdentity, nextIdentity, queryClient]);
 
   const value = useMemo(
-    () => ({ identityReady, cacheReady, sessionUserId }),
-    [identityReady, cacheReady, sessionUserId],
+    () => ({ identityReady, cacheReady, resolvedOnce, sessionUserId }),
+    [identityReady, cacheReady, resolvedOnce, sessionUserId],
   );
 
   return (
@@ -78,4 +83,8 @@ export function useSessionQueryReady(expectedUserId: string | null): boolean {
 export function useSessionQueriesReady(): boolean {
   // Public queries may restart after sanitation even when session trust failed.
   return useContext(SessionQueryContext)?.cacheReady ?? true;
+}
+
+export function useSessionResolvedOnce(): boolean {
+  return useContext(SessionQueryContext)?.resolvedOnce ?? true;
 }

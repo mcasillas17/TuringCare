@@ -299,3 +299,50 @@ test("a previous verification receipt cannot claim success for a new signup", as
   await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
   expect((await page.request.get("/api/profile")).status()).toBe(401);
 });
+
+test("confirmation shows the real server rate limit and disables retry until its deadline", async ({
+  page,
+}) => {
+  const email = emailForTest();
+  await registerThroughApi(page.request, email);
+  const { link } = await capturedLink(page.request, email);
+  await page.goto(link);
+  await expect(page.getByRole("button", { name: "Verify email", exact: true })).toBeVisible();
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const result = await page.request.post("/api/verification/resend", {
+      headers: { Origin: WEB_ORIGIN },
+      data: {},
+    });
+    expect(result.status()).toBe(401);
+  }
+  await page.getByRole("button", { name: "Verify email", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Too many requests");
+  await expect(page.getByRole("button", { name: "Try again", exact: true })).toBeDisabled();
+  await expect(page.getByText(/Time until another request:/)).toBeVisible();
+  expect((await page.request.get("/api/profile")).status()).toBe(401);
+});
+
+test("an email landing waits for its receipt without flashing resend credentials", async ({
+  page,
+}) => {
+  const email = emailForTest();
+  await registerThroughApi(page.request, email);
+  const { link } = await capturedLink(page.request, email);
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/verification/status", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goto(link);
+  try {
+    await expect(page.getByText("Checking verification link…", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Email", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("Password", { exact: true })).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await confirmEmailOwnership(page);
+});

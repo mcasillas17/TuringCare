@@ -26,6 +26,20 @@ it("validates the exact server-authenticated verification state DTO", () => {
     expect(verificationStatusSchema.safeParse(body).success).toBe(false);
 });
 
+it.each(["none", "pending", "invalid", "expired"])(
+  "rejects requiresSignOut for non-verified status %s",
+  (status) => {
+    expect(
+      verificationStatusSchema.safeParse({
+        status,
+        next: "/my",
+        locale: "en",
+        requiresSignOut: true,
+      }).success,
+    ).toBe(false);
+  },
+);
+
 describe("safeAuthReturnPath", () => {
   it.each(["/", "/my", "/my/dogs/dog-id/brief", "/admin/courses", "/trainers", "/courses/id"])(
     "preserves internal path %s",

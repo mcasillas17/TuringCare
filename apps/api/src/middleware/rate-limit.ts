@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from "hono";
+import { canonicalAuthPath } from "../auth/request-path";
 
 type Bucket = { count: number; windowStart: number };
 
@@ -43,17 +44,20 @@ function clientIp(headers: Headers): string {
   return headers.get("fly-client-ip") ?? "unknown";
 }
 
-/** Lenient global net. Skips /health (liveness) and /api/auth/* (Better Auth's own limiter). */
+/** Native endpoints have BA's limiter; passive staging and rejected aliases do not. */
 export function globalRateLimit(
   opts: RateLimitOptions = { windowMs: 60_000, max: 300 },
 ): MiddlewareHandler {
   const check = createRateLimiter(opts);
   return async (c, next) => {
     const path = c.req.path;
-    if (path === "/health" || path.startsWith("/api/auth/")) return next();
+    const authPath = canonicalAuthPath(path);
+    if (path === "/health" || (authPath !== null && authPath !== "/verify-email")) return next();
     const { limited, retryAfter } = check(clientIp(c.req.raw.headers), Date.now());
     if (limited) {
       c.header("X-Retry-After", String(retryAfter)); // X-Retry-After to match Better Auth's rate-limit header (API-wide consistency)
+      c.header("Retry-After", String(retryAfter));
+      c.header("Cache-Control", "no-store");
       return c.json({ error: "rate_limited", retryAfter } as const, 429);
     }
     return next();

@@ -1,6 +1,6 @@
 import { PublicLayout } from "@/components/PublicLayout";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { useSessionQueriesReady } from "@/lib/session-query-boundary";
+import { useSessionQueriesReady, useSessionResolvedOnce } from "@/lib/session-query-boundary";
 import { useHasVerifiedSession } from "@/lib/verified-session";
 import { Outlet } from "react-router-dom";
 
@@ -14,13 +14,14 @@ import { Outlet } from "react-router-dom";
  *                  <Outlet/> renders the matched directory page.
  *   - anonymous  → render the public marketing chrome (SiteNav + footer).
  *
- * Wait only for private-cache sanitation. A pending or failed session check
- * must not block public browsing; only a verified current identity gets app chrome.
+ * Wait for the first session result and private-cache sanitation. Later refreshes
+ * preserve the page; a failed session check falls back to public browsing.
  */
 export function DirectoryLayout() {
   const verified = useHasVerifiedSession();
   const cacheReady = useSessionQueriesReady();
-  if (!cacheReady) return null;
+  const resolvedOnce = useSessionResolvedOnce();
+  if (!cacheReady || !resolvedOnce) return null;
   if (verified) return <AppShell />;
   return (
     <PublicLayout>

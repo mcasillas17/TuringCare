@@ -26,12 +26,13 @@ export const es = {
     registerCorrectEmail: "Registrarse con el correo correcto",
     otherLink: "Solicitar otro enlace de verificación",
     switchTitle: "Cierra sesión para usar este enlace",
-    switchPending:
-      "Este enlace es para otra cuenta. Cierra sesión y vuelve a abrir el enlace de tu correo para verificarla.",
     switchVerified:
       "Este enlace es para otra cuenta. Cierra sesión para iniciar sesión con esa cuenta.",
-    cooldownStarted: "Espera antes de solicitar otro enlace.",
-    cooldownFinished: "Ya puedes solicitar otro enlace.",
+    cooldownStarted: "Espera antes de intentarlo de nuevo.",
+    cooldownFinished: "Ya puedes intentarlo de nuevo.",
+    serviceUnavailable:
+      "El servicio de verificación no está disponible temporalmente. Inténtalo de nuevo.",
+    requestRejected: "No se pudo aceptar esta solicitud. Recarga la página e inténtalo de nuevo.",
     accessError: "No pudimos comprobar tu acceso. Inténtalo de nuevo.",
     title: "Verifica tu correo",
     body: "Antes de usar tu cuenta, abre el enlace de verificación en tu correo. Si no lo ves, revisa la carpeta de spam o solicita un nuevo enlace abajo.",
@@ -44,7 +45,7 @@ export const es = {
     invalidCredentials: "No se pudieron confirmar el correo y la contraseña.",
     credentialsRequired: "Ingresa tu correo y contraseña para solicitar un nuevo enlace.",
     sendFailed: "No pudimos enviar un enlace de verificación. Inténtalo de nuevo.",
-    rateLimited: "Demasiadas solicitudes. Espera antes de solicitar otro enlace.",
+    rateLimited: "Demasiadas solicitudes. Espera antes de intentarlo de nuevo.",
     cooldown: "Tiempo para otra solicitud: {seconds} s.",
     invalidLink:
       "Este enlace de verificación no es válido o ha caducado. Solicita otro enlace, o inicia sesión si ya verificaste tu correo.",

@@ -33,6 +33,7 @@ let response: { status: number; body: object };
 let receipt: { status: string; next: string; locale: "en" | "es"; requiresSignOut?: true };
 let receiptStatus: number;
 let confirmation: { status: number; body: object };
+let receiptReply: Promise<Response> | undefined;
 let resendThrows: boolean;
 let requests: Array<{ path: string; body: unknown; method: string }>;
 beforeEach(() => {
@@ -44,6 +45,7 @@ beforeEach(() => {
   receipt = { status: "none", next: "/my/dogs", locale: "en" };
   receiptStatus = 200;
   confirmation = { status: 200, body: { status: "verified", next: "/my/dogs", locale: "en" } };
+  receiptReply = undefined;
   resendThrows = false;
   requests = [];
   localStorage.clear();
@@ -59,7 +61,7 @@ beforeEach(() => {
         method: init?.method ?? "GET",
       });
       if (path === "/api/verification/status")
-        return Response.json(receipt, { status: receiptStatus });
+        return receiptReply ?? Response.json(receipt, { status: receiptStatus });
       if (path === "/api/verification/confirm")
         return Response.json(confirmation.body, { status: confirmation.status });
       if (path === "/api/verification/resend" && resendThrows)
@@ -111,6 +113,14 @@ async function setup(path = "/verify-email?next=%2Fmy%2Fdogs&lang=en") {
   await waitFor(() =>
     expect(requests.some((r) => r.path === "/api/verification/status")).toBe(true),
   );
+  if (!receiptReply) {
+    await waitFor(() => {
+      expect(queryClient.getQueryState(["verification-status"])?.fetchStatus).toBe("idle");
+      expect(
+        screen.queryByText(/^(Checking verification link|Comprobando enlace de verificación)/),
+      ).not.toBeInTheDocument();
+    });
+  }
   return { ...view, tree };
 }
 
@@ -130,6 +140,67 @@ it("is a public no-session recovery route with password explanation and no profi
     "/forgot-password",
   );
   expect(requests.some((r) => r.path === "/api/profile")).toBe(false);
+});
+
+it("does not show resend credentials before the first receipt lookup resolves", async () => {
+  let finish: (response: Response) => void = () => {};
+  receiptReply = new Promise<Response>((resolve) => {
+    finish = resolve;
+  });
+  await setup();
+  try {
+    expect(screen.queryByLabelText(/^email$/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Request a new link" })).not.toBeInTheDocument();
+  } finally {
+    await act(async () => {
+      finish(Response.json({ status: "pending", next: "/my/dogs", locale: "en" }));
+    });
+  }
+  expect(await screen.findByRole("button", { name: "Verify email" })).toBeInTheDocument();
+});
+
+it("allows credential recovery without a session when the unrelated session endpoint fails", async () => {
+  session.error = new Error("session endpoint unavailable");
+  await setup();
+  await resend();
+  expect(await screen.findByText(/Request accepted/)).toBeInTheDocument();
+});
+
+it("uses the advertised confirmation cooldown and localized rate-limit feedback", async () => {
+  receipt.status = "pending";
+  confirmation = { status: 429, body: { error: "rate_limited", retryAfter: 17 } };
+  await setup();
+  await userEvent.click(await screen.findByRole("button", { name: "Verify email" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Too many requests");
+  expect(screen.getByRole("button", { name: "Try again" })).toBeDisabled();
+  expect(screen.getByText(/17/)).toBeInTheDocument();
+});
+
+it.each([
+  [503, "trusted_ip_required", "verification service is temporarily unavailable"],
+  [403, "forbidden", "Reload the page and try again"],
+])(
+  "keeps confirmation %s/%s distinct from a link or provider failure",
+  async (status, error, text) => {
+    receipt.status = "pending";
+    confirmation = { status: Number(status), body: { error } };
+    await setup();
+    await userEvent.click(screen.getByRole("button", { name: "Verify email" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(String(text));
+    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+    expect(screen.queryByText(/Time until another request/)).not.toBeInTheDocument();
+  },
+);
+
+it("does not add a cooldown or claim provider failure during a trusted-proxy outage", async () => {
+  response = { status: 503, body: { error: "trusted_ip_required" } };
+  await setup();
+  await resend();
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "verification service is temporarily unavailable",
+  );
+  expect(screen.getByRole("button", { name: "Request a new link" })).toBeEnabled();
+  expect(screen.queryByText(/Time until another request/)).not.toBeInTheDocument();
 });
 
 it("resends through the typed credential endpoint, clears the password, and promises acceptance not delivery", async () => {
@@ -334,16 +405,16 @@ it.each(["accepted", "provider failure"])(
     vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
     await resend();
     const status = screen.getByRole("status");
-    expect(status).toHaveTextContent("Wait before requesting another link.");
+    expect(status).toHaveTextContent("Wait before trying again.");
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
-    expect(status).toHaveTextContent("Wait before requesting another link.");
+    expect(status).toHaveTextContent("Wait before trying again.");
     expect(screen.getByText("Time until another request: 1 s.")).toBeInTheDocument();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
-    expect(status).toHaveTextContent("You can request another link now.");
+    expect(status).toHaveTextContent("You can try again now.");
     expect(screen.getByRole("button", { name: "Request a new link" })).toBeEnabled();
   },
 );
@@ -369,7 +440,7 @@ it("expires cooldown on the next tick after a background-style wall-clock jump",
     await vi.advanceTimersByTimeAsync(1000);
   });
   expect(screen.getByRole("button", { name: "Request a new link" })).toBeEnabled();
-  expect(screen.getByRole("status")).toHaveTextContent("You can request another link now.");
+  expect(screen.getByRole("status")).toHaveTextContent("You can try again now.");
 });
 
 it("already_verified credential response offers sign-in continuation without silently signing in", async () => {
@@ -462,6 +533,20 @@ it("a refreshed verified legacy session can explicitly continue to the safe dest
   );
 });
 
+it("preserves the language hint on app continuation when browser storage is unavailable", async () => {
+  session.user = { id: "u1", emailVerified: true };
+  const view = await setup();
+  await screen.findByRole("link", { name: "Continue to the app" });
+  vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    throw new DOMException("Storage unavailable");
+  });
+  view.rerender(view.tree());
+  expect(screen.getByRole("link", { name: "Continue to the app" })).toHaveAttribute(
+    "href",
+    "/my/dogs?lang=en",
+  );
+  vi.restoreAllMocks();
+});
 it("confirmation refreshes an existing same-account session without signing in or navigating", async () => {
   session.user = { id: "u1", emailVerified: false };
   receipt.status = "pending";
@@ -494,13 +579,12 @@ it("keeps manual refresh available for a stale legacy session after another tab 
 });
 
 it.each([
-  ["pending", "en", "Sign out to use this link", "Sign out, then reopen the link from your email"],
   ["verified", "en", "Sign out to use this link", "Sign out to sign in with that account"],
   [
-    "pending",
+    "verified",
     "es",
     "Cierra sesión para usar este enlace",
-    "Cierra sesión y vuelve a abrir el enlace de tu correo",
+    "Cierra sesión para iniciar sesión con esa cuenta",
   ],
 ] as const)(
   "requires explicit sign-out for a different account's %s receipt in %s",

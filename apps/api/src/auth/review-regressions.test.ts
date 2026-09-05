@@ -142,7 +142,7 @@ describe("review regression boundaries", () => {
     }
     expect((await app.request("/health")).status).toBe(200);
     expect((await app.request("/api/verification/status")).status).toBe(200);
-    expect((await app.request("/api/auth/get-session")).status).toBe(503);
+    expect((await app.request("/api/auth/get-session")).status).toBe(200);
   });
 
   it("keeps public directory browsing available without trusted-IP metadata", async () => {
