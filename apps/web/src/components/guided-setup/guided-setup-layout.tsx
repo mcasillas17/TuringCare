@@ -1,7 +1,6 @@
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
-import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { useI18n } from "@/i18n";
 import { useSignOut } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
@@ -35,7 +34,6 @@ export function GuidedSetupLayout() {
           <LanguageToggle />
         </div>
       </header>
-      <VerifyEmailBanner />
       <main className={cn("mx-auto w-full max-w-3xl px-4 py-8 sm:px-6")}>
         <Outlet />
       </main>

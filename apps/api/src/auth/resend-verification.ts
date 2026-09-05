@@ -1,4 +1,7 @@
-import type { VerificationResendInput } from "@turingcare/shared";
+import {
+  VERIFICATION_RESEND_WINDOW_SECONDS,
+  type VerificationResendInput,
+} from "@turingcare/shared";
 import { createEmailVerificationToken } from "better-auth/api";
 import { auth } from "../auth";
 import { sendEmail } from "../email/send-email";
@@ -10,17 +13,25 @@ import { verificationCallback } from "./verification-callback";
 import { consumeVerificationLimit, trustedVerificationIp } from "./verification-rate-limit";
 
 export type VerificationResendResult =
-  | { status: 200; body: { status: "accepted" | "already_verified" } }
+  | {
+      status: 200;
+      body: { status: "accepted"; retryAfter: number } | { status: "already_verified" };
+    }
   | {
       status: 401;
       body: { error: "invalid_credentials" | "verification_credentials_required" };
     }
   | { status: 403; body: { error: "forbidden" } }
   | { status: 429; body: { error: "rate_limited"; retryAfter: number } }
-  | { status: 503; body: { error: "verification_send_failed" } };
+  | {
+      status: 503;
+      body:
+        | { error: "verification_send_failed"; retryAfter: number }
+        | { error: "trusted_ip_required" };
+    };
 
 export function verificationResendHeaders(result: VerificationResendResult) {
-  return result.status === 429
+  return "retryAfter" in result.body
     ? {
         "Retry-After": String(result.body.retryAfter),
         "X-Retry-After": String(result.body.retryAfter),
@@ -41,10 +52,12 @@ export async function resendVerification(
   input: VerificationResendInput,
   native = false,
 ): Promise<VerificationResendResult> {
+  const ip = trustedVerificationIp(request.headers);
+  if (ip === null) return { status: 503, body: { error: "trusted_ip_required" } };
   if (!isTrustedVerificationRequest(request)) {
     return { status: 403, body: { error: "forbidden" } };
   }
-  const ipWait = await consumeVerificationLimit("ip", trustedVerificationIp(request.headers));
+  const ipWait = await consumeVerificationLimit("ip", ip);
   if (ipWait) return { status: 429, body: { error: "rate_limited", retryAfter: ipWait } };
   const session = await getAuthoritativeSession(request.headers);
   let identity: { id: string; email: string; emailVerified: boolean } | undefined = session?.user;
@@ -57,7 +70,12 @@ export async function resendVerification(
     if (native || !email || !input.password) {
       return { status: 401, body: { error: "verification_credentials_required" } };
     }
-    const credentialWait = await consumeVerificationLimit("credential", email);
+    // Pair quota bounds password work without letting another IP lock a victim
+    // out globally. The independent IP quota also limits guesses across emails.
+    const credentialWait = await consumeVerificationLimit(
+      "credential",
+      JSON.stringify([email, ip]),
+    );
     if (credentialWait) {
       return { status: 429, body: { error: "rate_limited", retryAfter: credentialWait } };
     }
@@ -85,6 +103,12 @@ export async function resendVerification(
   }
   const sendWait = await consumeVerificationLimit("send", identity.email);
   if (sendWait) return { status: 429, body: { error: "rate_limited", retryAfter: sendWait } };
+  const claimedAt = performance.now();
+  const remaining = () =>
+    Math.max(
+      1,
+      Math.ceil(VERIFICATION_RESEND_WINDOW_SECONDS - (performance.now() - claimedAt) / 1000),
+    );
   const locale = resolveRequestLocale(request);
   const url = new URL("/api/auth/verify-email", env.BETTER_AUTH_URL);
   url.searchParams.set(
@@ -99,7 +123,7 @@ export async function resendVerification(
     await sendEmail({ to: identity.email, ...verificationEmail(url.toString(), locale) });
   } catch {
     console.error("[auth] verification_send_failed");
-    return { status: 503, body: { error: "verification_send_failed" } };
+    return { status: 503, body: { error: "verification_send_failed", retryAfter: remaining() } };
   }
-  return { status: 200, body: { status: "accepted" } };
+  return { status: 200, body: { status: "accepted", retryAfter: remaining() } };
 }

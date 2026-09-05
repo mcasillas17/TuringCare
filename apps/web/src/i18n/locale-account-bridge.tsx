@@ -154,13 +154,13 @@ function AuthenticatedLocaleAccountBridge({
 }
 
 export function LocaleAccountBridge() {
-  const { data: session, isPending } = useSession();
+  const { data: session } = useSession();
   const verified = useHasVerifiedSession();
   const rawUserId = session?.user?.id;
   const userId = isNonemptySessionUserId(rawUserId) ? rawUserId : null;
   const identityReady = useSessionQueryReady(userId);
 
-  if (isPending || !identityReady || !userId || !verified) return null;
+  if (!identityReady || !userId || !verified) return null;
 
   return <AuthenticatedLocaleAccountBridge key={userId} userId={userId} />;
 }
@@ -188,20 +188,12 @@ function AuthenticatedLocaleAccountBoundary({
 }
 
 export function LocaleAccountBoundary({ children }: { children: ReactNode }) {
-  const { data: session, isPending } = useSession();
+  const { data: session } = useSession();
   const verified = useHasVerifiedSession();
   const { t } = useI18n();
   const rawUserId = session?.user?.id;
   const userId = isNonemptySessionUserId(rawUserId) ? rawUserId : null;
   const identityReady = useSessionQueryReady(userId);
-
-  if (isPending) {
-    return (
-      <LocaleAccountReadinessContext.Provider value={PENDING_READINESS}>
-        <p className="p-8">{t("common.loading")}</p>
-      </LocaleAccountReadinessContext.Provider>
-    );
-  }
 
   if (!userId || !verified) {
     return (

@@ -85,7 +85,7 @@ afterEach(() => {
 });
 
 describe("SessionQueryBoundary", () => {
-  it("hides prior privileged data while a cross-tab/focus session refresh is in flight", async () => {
+  it("preserves the current cache during a benign focus refresh, then clears on actual logout", async () => {
     const queryClient = new QueryClient();
     const tree = () => (
       <BoundaryTree queryClient={queryClient}>
@@ -97,8 +97,10 @@ describe("SessionQueryBoundary", () => {
     queryClient.setQueryData(["profile", "owner"], { marker: "private-before-focus" });
     sessionState.refetching = true;
     view.rerender(tree());
-    expect(screen.getByText("sanitizing")).toBeInTheDocument();
-    expect(queryClient.getQueryData(["profile", "owner"])).toBeUndefined();
+    expect(screen.getByText("private-before-focus")).toBeInTheDocument();
+    expect(queryClient.getQueryData(["profile", "owner"])).toEqual({
+      marker: "private-before-focus",
+    });
     sessionState.refetching = false;
     sessionState.userId = null;
     view.rerender(tree());

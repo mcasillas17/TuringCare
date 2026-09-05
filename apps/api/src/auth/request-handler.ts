@@ -3,8 +3,9 @@ import { auth } from "../auth";
 import { resolveRequestLocale } from "../middleware/locale";
 import { resendVerification, verificationResendHeaders } from "./resend-verification";
 import { getAuthoritativeSession } from "./session";
-import { verificationCallback, verificationCallbackLocale } from "./verification-callback";
-import { verificationRateLimited } from "./verification-rate-limit";
+import { verificationCallback } from "./verification-callback";
+import { clearVerificationReceipt, stageVerification } from "./verification-proof";
+import { trustedVerificationIp, verificationRateLimited } from "./verification-rate-limit";
 
 const recoveryPaths = new Set([
   "/get-session",
@@ -19,9 +20,27 @@ const recoveryPaths = new Set([
 
 /** Gate native account endpoints independently of domain middleware. */
 export async function handleAuthRequest(inputRequest: Request): Promise<Response> {
+  const response = await dispatchAuthRequest(inputRequest);
+  const path = new URL(inputRequest.url).pathname.slice("/api/auth".length).replace(/\/+$/, "");
+  if (
+    inputRequest.method === "POST" &&
+    (path === "/sign-up/email" ||
+      path === "/sign-out" ||
+      (path === "/sign-in/email" && response.ok))
+  ) {
+    return clearVerificationReceipt(response);
+  }
+  return response;
+}
+
+async function dispatchAuthRequest(inputRequest: Request): Promise<Response> {
   let request = inputRequest;
   const url = new URL(request.url);
   const path = url.pathname.slice("/api/auth".length).replace(/\/+$/, "");
+  if (trustedVerificationIp(request.headers) === null) {
+    return Response.json({ error: "trusted_ip_required" }, { status: 503 });
+  }
+  if (path === "/verify-email" && request.method === "GET") return stageVerification(request);
   if (!recoveryPaths.has(path) && !/^\/reset-password\/[^/]+$/.test(path)) {
     const session = await getAuthoritativeSession(request.headers);
     if (!session) return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -72,31 +91,25 @@ export async function handleAuthRequest(inputRequest: Request): Promise<Response
       headers: verificationResendHeaders(result),
     });
   }
-  if (path === "/verify-email") {
-    const callback = url.searchParams.get("callbackURL");
-    url.searchParams.set(
-      "callbackURL",
-      verificationCallback(
-        callback,
-        verificationCallbackLocale(callback, resolveRequestLocale(request)),
-      ),
-    );
-    // Let Better Auth retain its native limiter and invalid-token handling even
-    // for truncated links, rather than returning a raw validation error page.
-    if (!url.searchParams.has("token")) url.searchParams.set("token", "invalid");
-    request = new Request(url, request);
-  }
   const response = await auth.handler(request);
   if (response.status === 429) {
     const raw = Number(response.headers.get("x-retry-after") ?? 60);
     return verificationRateLimited(Number.isFinite(raw) ? Math.max(1, Math.min(60, raw)) : 60);
   }
   if (path === "/sign-in/email" && response.status === 403) {
-    const body = (await response.clone().json()) as { code?: string };
-    if (body.code === "EMAIL_NOT_VERIFIED") {
-      return Response.json(
-        { code: "email_unverified", error: "email_unverified", message: "email_unverified" },
-        { status: 403 },
+    let body: unknown;
+    try {
+      body = await response.clone().json();
+    } catch (error) {
+      if (error instanceof SyntaxError) return response;
+      throw error;
+    }
+    if (body && typeof body === "object" && "code" in body && body.code === "EMAIL_NOT_VERIFIED") {
+      return clearVerificationReceipt(
+        Response.json(
+          { code: "email_unverified", error: "email_unverified", message: "email_unverified" },
+          { status: 403 },
+        ),
       );
     }
   }

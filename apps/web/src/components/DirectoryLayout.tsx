@@ -1,9 +1,6 @@
 import { PublicLayout } from "@/components/PublicLayout";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { SessionError } from "@/components/session-error";
-import { useSession } from "@/lib/auth-client";
-import { useSessionQueryReady } from "@/lib/session-query-boundary";
-import { isNonemptySessionUserId } from "@/lib/session-user-id";
+import { useSessionQueriesReady } from "@/lib/session-query-boundary";
 import { useHasVerifiedSession } from "@/lib/verified-session";
 import { Outlet } from "react-router-dom";
 
@@ -17,18 +14,13 @@ import { Outlet } from "react-router-dom";
  *                  <Outlet/> renders the matched directory page.
  *   - anonymous  → render the public marketing chrome (SiteNav + footer).
  *
- * While the session is still resolving we render nothing briefly to avoid
- * flashing the wrong chrome. In-app navigations have a cached session, so the
- * signed-in path is flicker-free.
+ * Wait only for private-cache sanitation. A pending or failed session check
+ * must not block public browsing; only a verified current identity gets app chrome.
  */
 export function DirectoryLayout() {
-  const { data: session, isPending, error } = useSession();
   const verified = useHasVerifiedSession();
-  const rawUserId = session?.user?.id;
-  const userId = isNonemptySessionUserId(rawUserId) ? rawUserId : null;
-  const identityReady = useSessionQueryReady(userId);
-  if (error) return <SessionError />;
-  if (isPending || !identityReady) return null;
+  const cacheReady = useSessionQueriesReady();
+  if (!cacheReady) return null;
   if (verified) return <AppShell />;
   return (
     <PublicLayout>

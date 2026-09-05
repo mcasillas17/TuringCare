@@ -12,15 +12,10 @@ import { Link, useLocation } from "react-router-dom";
 
 export function SiteNav() {
   const { t, locale } = useI18n();
-  const { data: session, isPending, isRefetching, error } = useSession();
+  const { data: session, error } = useSession();
   const { pathname } = useLocation();
   const isAuthenticated = useHasVerifiedSession();
-  const needsVerification =
-    !isPending &&
-    !isRefetching &&
-    !error &&
-    isNonemptySessionUserId(session?.user.id) &&
-    !isAuthenticated;
+  const needsVerification = !error && isNonemptySessionUserId(session?.user.id) && !isAuthenticated;
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);

@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { sessionState } = vi.hoisted(() => ({
-  sessionState: { userId: "u1" as unknown, emailVerified: true },
+  sessionState: { userId: "u1" as unknown, emailVerified: true, isRefetching: false },
 }));
 
 vi.mock("@/lib/auth-client", () => ({
@@ -18,6 +18,7 @@ vi.mock("@/lib/auth-client", () => ({
       },
     },
     isPending: false,
+    isRefetching: sessionState.isRefetching,
   }),
   signOut: vi.fn(),
 }));
@@ -27,6 +28,7 @@ import { SiteNav } from "./site-nav";
 beforeEach(() => {
   sessionState.userId = "u1";
   sessionState.emailVerified = true;
+  sessionState.isRefetching = false;
 });
 
 afterEach(() => {
@@ -34,6 +36,18 @@ afterEach(() => {
 });
 
 describe("SiteNav (logged in)", () => {
+  it("does not replace verified navigation with anonymous links during a background refresh", () => {
+    sessionState.isRefetching = true;
+    render(
+      <LocaleProvider>
+        <MemoryRouter>
+          <SiteNav />
+        </MemoryRouter>
+      </LocaleProvider>,
+    );
+    expect(screen.getByRole("link", { name: "Open app" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Log in" })).not.toBeInTheDocument();
+  });
   it("offers verification, not owner navigation, for a legacy unverified session", () => {
     sessionState.emailVerified = false;
     render(

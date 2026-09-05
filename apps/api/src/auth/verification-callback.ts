@@ -28,7 +28,7 @@ export function verificationCallback(input: unknown, locale: Locale): string {
       // Invalid or untrusted callback inputs never become redirect targets.
     }
   }
-  target.search = new URLSearchParams({ status: "verified", next, lang: locale }).toString();
+  target.search = new URLSearchParams({ next, lang: locale }).toString();
   return target.toString();
 }
 

@@ -77,12 +77,28 @@ function resend(fixture: TestUser, input: Record<string, unknown> = {}) {
   });
 }
 
+function confirmStaged(staged: Response, headers: Record<string, string> = {}) {
+  const receipt = staged.headers.get("set-cookie")?.split(";")[0];
+  if (!receipt) throw new Error("Missing staged receipt");
+  return app.request("/api/verification/confirm", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: env.FRONTEND_URL,
+      "fly-client-ip": nextTestIp(),
+      ...headers,
+      cookie: [headers.cookie, receipt].filter(Boolean).join("; "),
+    },
+    body: "{}",
+  });
+}
+
 describe("verified email ownership enforcement", () => {
   it("signup has no session; unverified sign-in is rejected without automatic resend", async () => {
     const { res, email, headers } = await signup();
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ token: null });
-    expect(res.headers.get("set-cookie")).toBeNull();
+    expect(res.headers.get("set-cookie")).not.toContain("session_token");
     const initial = findLatestTestEmail(email);
     expect(initial).toBeTruthy();
     const signIn = await app.request("/api/auth/sign-in/email", {
@@ -92,7 +108,7 @@ describe("verified email ownership enforcement", () => {
     });
     expect(signIn.status).toBe(403);
     expect(await signIn.json()).toMatchObject({ code: "email_unverified" });
-    expect(signIn.headers.get("set-cookie")).toBeNull();
+    expect(signIn.headers.get("set-cookie")).not.toContain("session_token");
     expect(findLatestTestEmail(email)).toBe(initial);
   });
 
@@ -169,7 +185,6 @@ describe("verified email ownership enforcement", () => {
     expect(callback.origin).toBe(new URL(env.FRONTEND_URL).origin);
     expect(callback.pathname).toBe("/verify-email");
     expect(Object.fromEntries(callback.searchParams)).toEqual({
-      status: "verified",
       next: "/my",
       lang: "en",
     });
@@ -182,8 +197,11 @@ describe("verified email ownership enforcement", () => {
     for (let i = 0; i < 2; i++) {
       const verified = await app.request(link, { headers: { "fly-client-ip": nextTestIp() } });
       expect(verified.status).toBe(302);
-      expect(verified.headers.get("set-cookie")).toBeNull();
+      expect(verified.headers.get("set-cookie")).toContain("tc_verification_receipt=");
       expect(verified.headers.get("location")).not.toContain("error=");
+      const [before] = await db.select().from(user).where(eq(user.id, fixture.userId));
+      if (i === 0) expect(before?.emailVerified).toBe(false);
+      expect(await (await confirmStaged(verified)).json()).toMatchObject({ status: "verified" });
     }
     expect((await app.request("/api/dogs")).status).toBe(401);
     const signIn = await app.request("/api/auth/sign-in/email", {
@@ -208,7 +226,10 @@ describe("verified email ownership enforcement", () => {
     cleanups.push(owner.cleanup, pending.cleanup);
     const res = await app.request(capturedLink(pending.email), { headers: owner.authHeaders });
     expect(res.status).toBe(302);
-    expect(res.headers.get("set-cookie")).toBeNull();
+    expect(res.headers.get("set-cookie")).toContain("tc_verification_receipt=");
+    const confirmation = await confirmStaged(res, owner.authHeaders);
+    expect(await confirmation.json()).toMatchObject({ status: "verified" });
+    expect(confirmation.headers.get("set-cookie")).not.toContain("session_token");
     const me = await app.request("/me", { headers: owner.authHeaders });
     expect(await me.json()).toMatchObject({ user: { id: owner.userId } });
   });
@@ -302,7 +323,11 @@ describe("verified email ownership enforcement", () => {
       returnTo: "/my/dogs",
     });
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ status: "accepted" });
+    const accepted = (await response.json()) as { status: string; retryAfter: number };
+    expect(accepted.status).toBe("accepted");
+    expect(accepted.retryAfter).toBeGreaterThanOrEqual(1);
+    expect(accepted.retryAfter).toBeLessThanOrEqual(60);
+    expect(response.headers.get("retry-after")).toBe(String(accepted.retryAfter));
     expect(response.headers.get("set-cookie")).toBeNull();
     expect(await db.select().from(session).where(eq(session.userId, fixture.userId))).toHaveLength(
       0,
@@ -419,7 +444,14 @@ describe("verified email ownership enforcement", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await resend(fixture, { email: fixture.email, password: fixture.password });
     expect(res.status).toBe(503);
-    expect(await res.json()).toEqual({ error: "verification_send_failed" });
+    const body = (await res.json()) as { error: string; retryAfter: number };
+    expect(body.error).toBe("verification_send_failed");
+    expect(body.retryAfter).toBeGreaterThanOrEqual(1);
+    expect(body.retryAfter).toBeLessThanOrEqual(60);
+    expect(res.headers.get("retry-after")).toBe(String(body.retryAfter));
+    expect(
+      (await resend(fixture, { email: fixture.email, password: fixture.password })).status,
+    ).toBe(429);
     expect(log.mock.calls).toEqual([["[auth] verification_send_failed"]]);
     expect(JSON.stringify(log.mock.calls)).not.toContain(diagnostic);
   });
@@ -445,11 +477,11 @@ describe("verified email ownership enforcement", () => {
       expect(result.status).toBe(302);
       const location = new URL(result.headers.get("location") ?? "");
       expect(location.pathname).toBe("/verify-email");
-      expect(location.searchParams.get("error")).toBe(
-        kind === "invalid" ? "INVALID_TOKEN" : "TOKEN_EXPIRED",
-      );
+      expect(location.searchParams.has("error")).toBe(false);
       expect(location.searchParams.has("token")).toBe(false);
       expect(location.searchParams.has("email")).toBe(false);
+      const confirmation = await confirmStaged(result, fixture.authHeaders);
+      expect(await confirmation.json()).toMatchObject({ status: kind });
       const [stored] = await db.select().from(user).where(eq(user.id, fixture.userId));
       expect(stored?.emailVerified).toBe(false);
     },
@@ -533,7 +565,7 @@ describe("verified email ownership enforcement", () => {
     expect(findLatestTestEmail(fixture.email)).toBe(original);
   });
 
-  it("credential throttling persists across changing client IPs", async () => {
+  it("credential throttling does not combine independent client IPs into an account lockout", async () => {
     const fixture = await createUnverifiedTestUser();
     cleanups.push(fixture.cleanup);
     const results = await Promise.all(
@@ -545,8 +577,8 @@ describe("verified email ownership enforcement", () => {
         }),
       ),
     );
-    expect(results.filter((r) => r.status === 401)).toHaveLength(5);
-    expect(results.filter((r) => r.status === 429)).toHaveLength(2);
+    expect(results.filter((r) => r.status === 401)).toHaveLength(7);
+    expect(results.filter((r) => r.status === 429)).toHaveLength(0);
   });
 
   it("signup and reset provider failures keep privacy-neutral responses and fixed diagnostics", async () => {
@@ -585,7 +617,11 @@ describe("verified email ownership enforcement", () => {
     try {
       const res = await resend(fixture);
       expect(res.status).toBe(503);
-      expect(await res.json()).toEqual({ error: "verification_send_failed" });
+      const body = (await res.json()) as { error: string; retryAfter: number };
+      expect(body.error).toBe("verification_send_failed");
+      expect(body.retryAfter).toBeGreaterThanOrEqual(1);
+      expect(body.retryAfter).toBeLessThanOrEqual(60);
+      expect(res.headers.get("retry-after")).toBe(String(body.retryAfter));
     } finally {
       env.E2E_TEST_MODE = previous;
       env.RESEND_API_KEY = key;
@@ -638,8 +674,12 @@ describe("verified email ownership enforcement", () => {
     expect(res.status).toBe(302);
     const target = new URL(res.headers.get("location") ?? "");
     expect(target.pathname).toBe("/verify-email");
-    expect(target.searchParams.get("error")).toBe("INVALID_TOKEN");
+    expect(target.searchParams.has("error")).toBe(false);
     expect(target.searchParams.get("lang")).toBe("es");
+    const status = await app.request("/api/verification/status", {
+      headers: { cookie: res.headers.get("set-cookie")?.split(";")[0] ?? "" },
+    });
+    expect(await status.json()).toMatchObject({ status: "invalid", locale: "es" });
   });
 
   it("email locale survives opening a verification link in a new browser", async () => {

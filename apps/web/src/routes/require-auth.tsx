@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { data, isPending, isRefetching, error } = useSession();
+  const { data, isPending, error } = useSession();
   const verified = useHasVerifiedSession();
   const rawUserId = data?.user?.id;
   const userId = isNonemptySessionUserId(rawUserId) ? rawUserId : null;
@@ -19,7 +19,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const { t, locale } = useI18n();
   const { pathname } = useLocation();
   if (error) return <SessionError />;
-  if (isPending || isRefetching) return <p className="p-8">{t("common.loading")}</p>;
+  if (isPending && !userId) return <p className="p-8">{t("common.loading")}</p>;
   if (!data || !userId) return <Navigate to={authPagePath("/login", pathname, locale)} replace />;
   if (!verified) return <Navigate to={authPagePath("/verify-email", pathname, locale)} replace />;
   if (!identityReady || !localeAccountReadiness.ready)

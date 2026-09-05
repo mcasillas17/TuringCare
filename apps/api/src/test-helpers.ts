@@ -71,6 +71,22 @@ export async function verifyTestEmail(email: string): Promise<void> {
   if (response.status !== 302 || response.headers.get("location")?.includes("error=")) {
     throw new Error(`Test fixture verification failed: ${response.status}`);
   }
+  const cookie = response.headers.get("set-cookie")?.split(";")[0];
+  if (!cookie) throw new Error("Missing staged verification receipt");
+  const confirmation = await app.request("/api/verification/confirm", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: env.FRONTEND_URL,
+      "fly-client-ip": nextTestIp(),
+      cookie,
+    },
+    body: "{}",
+  });
+  const state = (await confirmation.json()) as { status?: string };
+  if (!confirmation.ok || state.status !== "verified") {
+    throw new Error(`Test fixture confirmation failed: ${confirmation.status}`);
+  }
 }
 
 /** Ordinary domain fixtures prove email ownership and then explicitly sign in. */

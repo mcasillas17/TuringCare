@@ -60,11 +60,11 @@ describe("DirectoryLayout", () => {
     expect(screen.queryByTestId("app-shell")).not.toBeInTheDocument();
   });
 
-  it("renders neither while the session is pending", () => {
+  it("renders only safe public chrome while an anonymous session check is pending", () => {
     mockUseSession.mockReturnValue({ data: null, isPending: true } as never);
     setup();
     expect(screen.queryByTestId("app-shell")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("public-layout")).not.toBeInTheDocument();
+    expect(screen.getByTestId("public-layout")).toBeInTheDocument();
   });
 
   it.each(["", "   ", 42])(

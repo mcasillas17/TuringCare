@@ -23,6 +23,24 @@ export const verificationResendSchema = z.object({
 
 export type VerificationResendInput = z.infer<typeof verificationResendSchema>;
 
+export const VERIFICATION_RESEND_WINDOW_SECONDS = 60;
+
+export const verificationConfirmSchema = z.object({}).strict();
+export const verificationStatusSchema = z
+  .object({
+    status: z.enum(["none", "pending", "verified", "invalid", "expired"]),
+    next: z
+      .string()
+      .max(1024)
+      .refine((value) => safeAuthReturnPath(value) === value),
+    locale: z.enum(["en", "es"]),
+    // The proof belongs to another currently authenticated account. No identity
+    // is disclosed; the UI must offer sign-out/switch recovery.
+    requiresSignOut: z.literal(true).optional(),
+  })
+  .strict();
+export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
+
 /**
  * Auth continuation is a path, never an arbitrary URL. No query/fragment or
  * encoded characters are needed by these routes; rejecting them also excludes

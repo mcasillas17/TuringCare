@@ -1,23 +1,22 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { LocaleProvider } from "@/i18n";
+import { LocaleAccountBoundary } from "@/i18n/locale-account-bridge";
+import { SessionQueryBoundary } from "@/lib/session-query-boundary";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactElement } from "react";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { Login } from "./login";
+import { RequireAuth } from "./require-auth";
+import { VerifyEmail } from "./verify-email";
 
-const { root, session, refetch, signOut } = vi.hoisted(() => ({
-  root: { node: null as unknown },
+const { session, refetch, signOut } = vi.hoisted(() => ({
   session: {
     user: null as null | { id: string; emailVerified: boolean },
     error: null as Error | null,
   },
   refetch: vi.fn(),
   signOut: vi.fn(),
-}));
-vi.mock("react-dom/client", () => ({
-  createRoot: () => ({
-    render: (node: unknown) => {
-      root.node = node;
-    },
-  }),
 }));
 vi.mock("@/lib/track", () => ({ PageViewTracker: () => null, track: vi.fn() }));
 vi.mock("@/lib/auth-client", () => ({
@@ -31,13 +30,21 @@ vi.mock("@/lib/auth-client", () => ({
 }));
 
 let response: { status: number; body: object };
-let requests: Array<{ path: string; body: unknown }>;
+let receipt: { status: string; next: string; locale: "en" | "es"; requiresSignOut?: true };
+let receiptStatus: number;
+let confirmation: { status: number; body: object };
+let resendThrows: boolean;
+let requests: Array<{ path: string; body: unknown; method: string }>;
 beforeEach(() => {
   session.user = null;
   session.error = null;
   refetch.mockResolvedValue(undefined);
   signOut.mockResolvedValue({ error: null });
-  response = { status: 200, body: { status: "accepted" } };
+  response = { status: 200, body: { status: "accepted", retryAfter: 60 } };
+  receipt = { status: "none", next: "/my/dogs", locale: "en" };
+  receiptStatus = 200;
+  confirmation = { status: 200, body: { status: "verified", next: "/my/dogs", locale: "en" } };
+  resendThrows = false;
   requests = [];
   localStorage.clear();
   sessionStorage.clear();
@@ -46,7 +53,17 @@ beforeEach(() => {
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(input instanceof Request ? input.url : String(input), "http://localhost")
         .pathname;
-      requests.push({ path, body: init?.body ? JSON.parse(String(init.body)) : null });
+      requests.push({
+        path,
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+        method: init?.method ?? "GET",
+      });
+      if (path === "/api/verification/status")
+        return Response.json(receipt, { status: receiptStatus });
+      if (path === "/api/verification/confirm")
+        return Response.json(confirmation.body, { status: confirmation.status });
+      if (path === "/api/verification/resend" && resendThrows)
+        throw new Error("network unreachable");
       if (path === "/api/verification/resend")
         return Response.json(response.body, { status: response.status });
       if (path === "/api/profile")
@@ -58,14 +75,43 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
 async function setup(path = "/verify-email?next=%2Fmy%2Fdogs&lang=en") {
   window.history.replaceState({}, "", path);
-  await import("../main");
-  return render(root.node as ReactElement);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const tree = () => (
+    <QueryClientProvider client={queryClient}>
+      <LocaleProvider>
+        <SessionQueryBoundary>
+          <LocaleAccountBoundary>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/login" element={<Login />} />
+                <Route
+                  path="/my/dogs"
+                  element={
+                    <RequireAuth>
+                      <div>Owner content</div>
+                    </RequireAuth>
+                  }
+                />
+              </Routes>
+            </BrowserRouter>
+          </LocaleAccountBoundary>
+        </SessionQueryBoundary>
+      </LocaleProvider>
+    </QueryClientProvider>
+  );
+  const view = render(tree());
+  await waitFor(() =>
+    expect(requests.some((r) => r.path === "/api/verification/status")).toBe(true),
+  );
+  return { ...view, tree };
 }
 
 async function resend() {
@@ -77,6 +123,7 @@ async function resend() {
 it("is a public no-session recovery route with password explanation and no profile request", async () => {
   await setup();
   expect(await screen.findByRole("heading", { name: "Verify your email" })).toHaveFocus();
+  expect(screen.getByRole("heading", { name: "Verify your email" })).toHaveClass("outline-none");
   expect(screen.getByText(/password is only used to request a new link/i)).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /forgot password/i })).toHaveAttribute(
     "href",
@@ -88,7 +135,8 @@ it("is a public no-session recovery route with password explanation and no profi
 it("resends through the typed credential endpoint, clears the password, and promises acceptance not delivery", async () => {
   await setup();
   await resend();
-  expect(await screen.findByRole("status")).toHaveTextContent("Request accepted");
+  expect(await screen.findByText(/Request accepted/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Request a new link" })).toBeDisabled();
   expect(requests.find((r) => r.path === "/api/verification/resend")?.body).toEqual({
     email: "synthetic@example.test",
     password: "synthetic-password",
@@ -114,8 +162,11 @@ it.each([
   await resend();
   expect(await screen.findByRole("alert")).toHaveTextContent(String(message));
   expect(screen.queryByText(/Request accepted/)).not.toBeInTheDocument();
-  if (status === 429)
+  if (status === 429 || status === 503)
     expect(screen.getByRole("button", { name: "Request a new link" })).toBeDisabled();
+  const alert = screen.getByRole("alert");
+  const signIn = screen.getByRole("link", { name: "Back to log in" });
+  expect(alert.compareDocumentPosition(signIn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 it("renders Spanish in a fresh browser from the exact callback language", async () => {
@@ -165,7 +216,8 @@ it.each(["TOKEN_EXPIRED", "INVALID_TOKEN", "invalid_token", ""])(
   },
 );
 
-it("callback success or reused success without a session offers only sign in, not owner access", async () => {
+it("only a verified server receipt offers no-session success and sign-in continuation", async () => {
+  receipt = { status: "verified", next: "/admin", locale: "en" };
   await setup("/verify-email?status=verified&next=%2Fadmin&lang=en");
   expect(await screen.findByRole("heading", { name: "Email verified" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Sign in to continue" })).toHaveAttribute(
@@ -174,6 +226,150 @@ it("callback success or reused success without a session offers only sign in, no
   );
   expect(screen.queryByRole("link", { name: "Continue to the app" })).not.toBeInTheDocument();
   expect(requests.some((r) => r.path === "/api/profile")).toBe(false);
+  const statusCall = vi
+    .mocked(fetch)
+    .mock.calls.find(([input]) => String(input).endsWith("/api/verification/status"));
+  expect(statusCall?.[1]).toEqual(
+    expect.objectContaining({ credentials: "include", cache: "no-store" }),
+  );
+});
+
+it("never treats a spoofed status query as no-session proof", async () => {
+  await setup("/verify-email?status=verified");
+  expect(screen.getByRole("heading", { name: "Verify your email" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Email verified" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Sign in to continue" })).not.toBeInTheDocument();
+});
+
+it.each([false, true])(
+  "keeps different-account resend recovery reachable with an older verified receipt (legacy session: %s)",
+  async (legacy) => {
+    receipt = { status: "verified", next: "/my/dogs", locale: "en" };
+    if (legacy) session.user = { id: "u1", emailVerified: false };
+    await setup("/verify-email?next=%2Fmy%2Fprofile");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Request a different verification link" }),
+    );
+    expect(screen.getByRole("heading", { name: "Verify your email" })).toBeInTheDocument();
+    if (legacy) {
+      expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Request a new link" }));
+    } else {
+      await resend();
+    }
+    expect(requests.find((r) => r.path === "/api/verification/resend")?.body).toEqual(
+      legacy
+        ? { returnTo: "/my/profile" }
+        : {
+            email: "synthetic@example.test",
+            password: "synthetic-password",
+            returnTo: "/my/profile",
+          },
+    );
+  },
+);
+
+it.each([
+  ["en", "Verify email", "Email verified"],
+  ["es", "Verificar correo", "Correo verificado"],
+] as const)(
+  "requires an explicit %s confirmation and sends only an empty JSON body",
+  async (locale, label, successTitle) => {
+    receipt = { status: "pending", next: "/my/profile", locale };
+    confirmation.body = { status: "verified", next: "/my/profile", locale };
+    await setup(`/verify-email?next=%2Fmy%2Fprofile&lang=${locale}`);
+    expect(requests.some((r) => r.path === "/api/verification/confirm")).toBe(false);
+    const button = await screen.findByRole("button", { name: label });
+    await userEvent.click(button);
+    expect(await screen.findByRole("heading", { name: successTitle })).toBeInTheDocument();
+    expect(requests.filter((r) => r.path === "/api/verification/confirm")).toEqual([
+      { path: "/api/verification/confirm", body: {}, method: "POST" },
+    ]);
+    const confirmCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).endsWith("/api/verification/confirm"));
+    expect(confirmCall?.[1]).toEqual(
+      expect.objectContaining({ credentials: "include", cache: "no-store" }),
+    );
+    expect(window.location.search).not.toMatch(/email=|token=/);
+  },
+);
+
+it.each(["invalid", "expired"])("renders recoverable server receipt state %s", async (status) => {
+  receipt.status = status;
+  await setup();
+  expect(await screen.findByRole("alert")).toHaveTextContent("invalid or expired");
+  expect(screen.getByRole("button", { name: "Request a new link" })).toBeInTheDocument();
+});
+
+it("shows a retryable status error, never invalid or success, when the receipt lookup fails", async () => {
+  receiptStatus = 503;
+  await setup("/verify-email?status=verified&error=TOKEN_EXPIRED");
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "We couldn't check your verification link",
+  );
+  expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  expect(screen.queryByText(/invalid or expired/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Email verified" })).not.toBeInTheDocument();
+});
+
+it("shows a retryable confirmation failure without claiming success", async () => {
+  receipt.status = "pending";
+  confirmation = { status: 503, body: { error: "unavailable" } };
+  await setup();
+  await userEvent.click(await screen.findByRole("button", { name: "Verify email" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't confirm your email");
+  expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Email verified" })).not.toBeInTheDocument();
+});
+
+it.each(["accepted", "provider failure"])(
+  "announces %s cooldown start and completion, not every countdown second",
+  async (outcome) => {
+    response =
+      outcome === "accepted"
+        ? { status: 200, body: { status: "accepted", retryAfter: 2 } }
+        : { status: 503, body: { error: "verification_send_failed", retryAfter: 2 } };
+    await setup();
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    await resend();
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Wait before requesting another link.");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(status).toHaveTextContent("Wait before requesting another link.");
+    expect(screen.getByText("Time until another request: 1 s.")).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(status).toHaveTextContent("You can request another link now.");
+    expect(screen.getByRole("button", { name: "Request a new link" })).toBeEnabled();
+  },
+);
+
+it("explains duplicate signup and typo recovery without exposing account existence", async () => {
+  await setup("/verify-email?next=%2Fmy%2Fprofile");
+  expect(screen.getByText(/signing up again may not send another email/i)).toBeInTheDocument();
+  expect(screen.getByText(/original password/i)).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Register with the correct email" })).toHaveAttribute(
+    "href",
+    "/register?next=%2Fmy%2Fprofile&lang=en",
+  );
+});
+
+it("expires cooldown on the next tick after a background-style wall-clock jump", async () => {
+  response = { status: 200, body: { status: "accepted", retryAfter: 60 } };
+  await setup();
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+  await resend();
+  expect(screen.getByRole("button", { name: "Request a new link" })).toBeDisabled();
+  vi.setSystemTime(Date.now() + 61_000);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(screen.getByRole("button", { name: "Request a new link" })).toBeEnabled();
+  expect(screen.getByRole("status")).toHaveTextContent("You can request another link now.");
 });
 
 it("already_verified credential response offers sign-in continuation without silently signing in", async () => {
@@ -202,7 +398,7 @@ it("shows sign-out failure even after a verified callback", async () => {
 });
 
 it("turns a network resend failure into retryable feedback without preserving the password", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network unreachable")));
+  resendThrows = true;
   await setup();
   await resend();
   expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -216,7 +412,7 @@ it("fresh recovery after a session switch cannot retain anonymous form credentia
   const view = await setup();
   await userEvent.type(screen.getByLabelText(/^password$/i), "synthetic-password");
   session.user = { id: "u1", emailVerified: false };
-  view.rerender(root.node as ReactElement);
+  view.rerender(view.tree());
   // A real session atom update renders its subscribers, so remount a fresh root
   // to also exercise the new-tab contract with no transient state.
   view.unmount();
@@ -232,7 +428,8 @@ it("an old verified tab rejected by profile recovers once, without profile retri
     vi.fn(async (input: RequestInfo | URL) => {
       const path = new URL(input instanceof Request ? input.url : String(input), "http://localhost")
         .pathname;
-      requests.push({ path, body: null });
+      requests.push({ path, body: null, method: "GET" });
+      if (path === "/api/verification/status") return Response.json(receipt);
       return Response.json({ error: "email_unverified" }, { status: 403 });
     }),
   );
@@ -249,7 +446,7 @@ it("legacy unverified sessions can resend without submitting someone else's iden
   expect(await screen.findByRole("heading", { name: "Verify your email" })).toBeInTheDocument();
   expect(screen.queryByLabelText(/^email$/i)).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Request a new link" }));
-  await screen.findByRole("status");
+  await screen.findByText(/Request accepted/);
   expect(requests.find((r) => r.path === "/api/verification/resend")?.body).toEqual({
     returnTo: "/my/dogs",
   });
@@ -263,6 +460,94 @@ it("a refreshed verified legacy session can explicitly continue to the safe dest
     "href",
     "/my/dogs",
   );
+});
+
+it("confirmation refreshes an existing same-account session without signing in or navigating", async () => {
+  session.user = { id: "u1", emailVerified: false };
+  receipt.status = "pending";
+  refetch.mockImplementation(async () => {
+    session.user = { id: "u1", emailVerified: true };
+  });
+  await setup();
+  await userEvent.click(await screen.findByRole("button", { name: "Verify email" }));
+  expect(await screen.findByRole("link", { name: "Continue to the app" })).toHaveAttribute(
+    "href",
+    "/my/dogs",
+  );
+  expect(refetch).toHaveBeenCalledTimes(1);
+  expect(refetch).toHaveBeenCalledWith({ query: { disableCookieCache: true } });
+  expect(window.location.pathname).toBe("/verify-email");
+  expect(screen.queryByRole("link", { name: "Sign in to continue" })).not.toBeInTheDocument();
+});
+
+it("keeps manual refresh available for a stale legacy session after another tab confirmed", async () => {
+  session.user = { id: "u1", emailVerified: false };
+  receipt.status = "verified";
+  await setup();
+  await screen.findByRole("heading", { name: "Email verified" });
+  expect(refetch).not.toHaveBeenCalled();
+  expect(screen.queryByRole("link", { name: "Sign in to continue" })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "I've verified — check again" }));
+  expect(refetch).toHaveBeenCalledTimes(1);
+  expect(refetch).toHaveBeenCalledWith({ query: { disableCookieCache: true } });
+  expect(window.location.pathname).toBe("/verify-email");
+});
+
+it.each([
+  ["pending", "en", "Sign out to use this link", "Sign out, then reopen the link from your email"],
+  ["verified", "en", "Sign out to use this link", "Sign out to sign in with that account"],
+  [
+    "pending",
+    "es",
+    "Cierra sesión para usar este enlace",
+    "Cierra sesión y vuelve a abrir el enlace de tu correo",
+  ],
+] as const)(
+  "requires explicit sign-out for a different account's %s receipt in %s",
+  async (status, locale, title, instruction) => {
+    session.user = { id: "u1", emailVerified: false };
+    receipt = { status, next: "/my/profile", locale, requiresSignOut: true };
+    await setup(`/verify-email?next=%2Fmy%2Fprofile&lang=${locale}`);
+    expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(instruction))).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: locale === "es" ? "Verificar correo" : "Verify email" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", {
+        name: locale === "es" ? "Iniciar sesión para continuar" : "Sign in to continue",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", {
+        name: locale === "es" ? "Continuar a la aplicación" : "Continue to the app",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: locale === "es" ? "Cerrar sesión" : "Sign out" }),
+    ).toBeInTheDocument();
+    expect(requests.some((r) => r.path === "/api/verification/confirm")).toBe(false);
+  },
+);
+
+it("honors requiresSignOut returned by confirmation without refreshing or switching the other account", async () => {
+  session.user = { id: "u1", emailVerified: false };
+  receipt.status = "pending";
+  confirmation.body = {
+    status: "verified",
+    next: "/my/profile",
+    locale: "en",
+    requiresSignOut: true,
+  };
+  await setup();
+  await userEvent.click(await screen.findByRole("button", { name: "Verify email" }));
+  expect(
+    await screen.findByRole("heading", { name: "Sign out to use this link" }),
+  ).toBeInTheDocument();
+  expect(refetch).not.toHaveBeenCalled();
+  expect(signOut).not.toHaveBeenCalled();
+  expect(screen.queryByRole("link", { name: "Sign in to continue" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Continue to the app" })).not.toBeInTheDocument();
 });
 
 it("a spoofed callback status never grants an unverified legacy session app access", async () => {

@@ -11,6 +11,7 @@ type IdentityState = ResolvedIdentity | typeof UNRESOLVED_IDENTITY;
 
 type SessionQueryState = {
   identityReady: boolean;
+  cacheReady: boolean;
   sessionUserId: ResolvedIdentity;
 };
 
@@ -25,7 +26,7 @@ function sessionUserIdFromSession(session: unknown): ResolvedIdentity {
 
 export function SessionQueryBoundary({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const { data: session, isPending, isRefetching, error } = useSession();
+  const { data: session, error } = useSession();
   const sessionUserId = sessionUserIdFromSession(session);
   const [deniedUserId, setDeniedUserId] = useState<string | null>(null);
   const denied = sessionUserId !== null && deniedUserId === sessionUserId;
@@ -40,18 +41,15 @@ export function SessionQueryBoundary({ children }: { children: ReactNode }) {
     };
   }, [sessionUserId]);
   const verified = session?.user.emailVerified === true;
-  const nextIdentity: IdentityState = isPending
-    ? UNRESOLVED_IDENTITY
-    : JSON.stringify([sessionUserId, verified, denied, Boolean(error), Boolean(isRefetching)]);
+  // Refetch flags are transport state, not identity. Keep live forms and caches
+  // until the resolved user, authorization, or error state actually changes.
+  const nextIdentity = JSON.stringify([sessionUserId, verified, denied, Boolean(error)]);
   const [clearedIdentity, setClearedIdentity] = useState<IdentityState>(UNRESOLVED_IDENTITY);
-  const identityReady =
-    !error &&
-    !isRefetching &&
-    nextIdentity !== UNRESOLVED_IDENTITY &&
-    clearedIdentity === nextIdentity;
+  const cacheReady = clearedIdentity === nextIdentity;
+  const identityReady = !error && cacheReady;
 
   useEffect(() => {
-    if (nextIdentity === UNRESOLVED_IDENTITY || nextIdentity === clearedIdentity) return;
+    if (nextIdentity === clearedIdentity) return;
 
     void queryClient.cancelQueries();
     queryClient.removeQueries();
@@ -59,7 +57,10 @@ export function SessionQueryBoundary({ children }: { children: ReactNode }) {
     setClearedIdentity(nextIdentity);
   }, [clearedIdentity, nextIdentity, queryClient]);
 
-  const value = useMemo(() => ({ identityReady, sessionUserId }), [identityReady, sessionUserId]);
+  const value = useMemo(
+    () => ({ identityReady, cacheReady, sessionUserId }),
+    [identityReady, cacheReady, sessionUserId],
+  );
 
   return (
     <VerificationDeniedContext.Provider value={denied}>
@@ -75,5 +76,6 @@ export function useSessionQueryReady(expectedUserId: string | null): boolean {
 }
 
 export function useSessionQueriesReady(): boolean {
-  return useContext(SessionQueryContext)?.identityReady ?? true;
+  // Public queries may restart after sanitation even when session trust failed.
+  return useContext(SessionQueryContext)?.cacheReady ?? true;
 }

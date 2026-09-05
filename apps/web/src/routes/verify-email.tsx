@@ -10,38 +10,73 @@ import { useSession } from "@/lib/auth-client";
 import { authPagePath } from "@/lib/auth-navigation";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { useSignOut } from "@/lib/sign-out";
-import { VerificationRequestError, resendVerification } from "@/lib/verification";
+import {
+  VerificationRequestError,
+  confirmVerification,
+  resendVerification,
+  useVerificationStatus,
+  verificationStatusKey,
+} from "@/lib/verification";
 import { useHasVerifiedSession } from "@/lib/verified-session";
+import { useQueryClient } from "@tanstack/react-query";
 import type { MessageKey } from "@turingcare/i18n";
 import { safeAuthReturnPath } from "@turingcare/shared";
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-/** Public by design: signup and unverified sign-in do not create a session. */
+/** The public route never needs an authenticated layout or persisted credentials. */
 export function VerifyEmail() {
+  const { data } = useSession();
+  const userId = isNonemptySessionUserId(data?.user.id) ? data.user.id : null;
+  return <VerificationRecovery key={userId ?? "anonymous"} />;
+}
+
+function VerificationRecovery() {
   const { t, locale } = useI18n();
   const [params] = useSearchParams();
-  const next = safeAuthReturnPath(params.get("next"));
-  const invalidLink = params.has("error");
-  const { data, isPending, isRefetching, error, refetch } = useSession();
+  const { data, isPending, error, refetch } = useSession();
   const hasSession = isNonemptySessionUserId(data?.user.id);
-  const verified = useHasVerifiedSession();
+  const currentAccountVerified = useHasVerifiedSession();
+  const proof = useVerificationStatus();
+  const [requestingNewLink, setRequestingNewLink] = useState(false);
+  const receipt = proof.isError ? undefined : proof.data;
+  const next = safeAuthReturnPath(
+    receipt && receipt.status !== "none" && !requestingNewLink ? receipt.next : params.get("next"),
+  );
+  // A query can only suppress success, never establish ownership.
+  const invalidLink =
+    Boolean(receipt) &&
+    (params.has("error") || receipt?.status === "invalid" || receipt?.status === "expired");
+  const requiresSignOut = !requestingNewLink && !invalidLink && receipt?.requiresSignOut === true;
+  const linkPending = !requestingNewLink && !invalidLink && receipt?.status === "pending";
+  const linkVerified = !requestingNewLink && !invalidLink && receipt?.status === "verified";
+  const queryClient = useQueryClient();
   const signOut = useSignOut();
-  const [pending, setPending] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [alreadyVerified, setAlreadyVerified] = useState(false);
   const [failure, setFailure] = useState<MessageKey | null>(null);
+  const [confirmFailed, setConfirmFailed] = useState(false);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [cooldown, setCooldown] = useState(0);
+  const [cooldownFinished, setCooldownFinished] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
-  // A query parameter is presentation only, never session/authorization evidence.
-  const showContinuation =
-    verified ||
-    alreadyVerified ||
-    (!invalidLink && !hasSession && params.get("status") === "verified");
-  const success = !invalidLink && showContinuation;
+  const busy = sending || confirming || checking || signingOut;
+  const showResend = !linkPending && !linkVerified && !currentAccountVerified && !alreadyVerified;
+  const showSignIn = !requiresSignOut && !hasSession && (linkVerified || alreadyVerified);
+  const title = requiresSignOut
+    ? t("verification.switchTitle")
+    : linkVerified
+      ? t("verification.successTitle")
+      : currentAccountVerified && !linkPending && !invalidLink
+        ? t("verification.currentAccountTitle")
+        : alreadyVerified && !invalidLink
+          ? t("verification.signIn")
+          : t("verification.title");
 
-  const title = success ? t("verification.successTitle") : t("verification.title");
   useEffect(() => {
     const previousTitle = document.title;
     document.title = `${title} | TuringCare`;
@@ -52,14 +87,56 @@ export function VerifyEmail() {
   }, [title]);
 
   useEffect(() => {
-    if (cooldown <= 0) return;
-    const timer = window.setTimeout(() => setCooldown((n) => Math.max(0, n - 1)), 1000);
-    return () => window.clearTimeout(timer);
-  }, [cooldown]);
+    if (cooldownUntil === null) return;
+    const timer = window.setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+      setCooldown(remaining);
+      if (remaining === 0) {
+        setCooldownUntil(null);
+        setCooldownFinished(true);
+      }
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownUntil]);
+
+  function beginCooldown(seconds: number) {
+    setCooldown(seconds);
+    setCooldownUntil(seconds > 0 ? Date.now() + seconds * 1000 : null);
+    setCooldownFinished(false);
+  }
+
+  async function checkSession() {
+    setChecking(true);
+    setFailure(null);
+    try {
+      await refetch({ query: { disableCookieCache: true } });
+    } catch {
+      setFailure("verification.sessionError");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function confirm() {
+    if (busy || requiresSignOut) return;
+    setConfirming(true);
+    setConfirmFailed(false);
+    try {
+      const result = await confirmVerification();
+      queryClient.setQueryData(verificationStatusKey, result);
+      // Refresh a legacy cookie only; confirmation never signs in or switches accounts.
+      if (result.status === "verified" && hasSession && !result.requiresSignOut)
+        await checkSession();
+    } catch {
+      setConfirmFailed(true);
+    } finally {
+      setConfirming(false);
+    }
+  }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending || cooldown > 0) return;
+    if (busy || cooldown > 0 || error || isPending || !receipt) return;
     const form = event.currentTarget;
     const fields = new FormData(form);
     const input = hasSession
@@ -69,16 +146,17 @@ export function VerifyEmail() {
           password: String(fields.get("password")),
           returnTo: next,
         };
-    // Never retain a password after a request, including failed requests.
     const password = form.elements.namedItem("password");
     if (password instanceof HTMLInputElement) password.value = "";
     setFailure(null);
     setAccepted(false);
-    setPending(true);
+    setSending(true);
     try {
-      const status = await resendVerification(input);
-      setAlreadyVerified(status === "already_verified");
-      setAccepted(status === "accepted");
+      const result = await resendVerification(input);
+      setAlreadyVerified(result.status === "already_verified");
+      setAccepted(result.status === "accepted");
+      if (result.status === "accepted") beginCooldown(result.retryAfter);
+      else if (hasSession) await checkSession();
     } catch (cause) {
       const code = cause instanceof VerificationRequestError ? cause.code : null;
       setFailure(
@@ -90,9 +168,9 @@ export function VerifyEmail() {
               ? "verification.rateLimited"
               : "verification.sendFailed",
       );
-      if (cause instanceof VerificationRequestError) setCooldown(cause.retryAfter);
+      if (cause instanceof VerificationRequestError) beginCooldown(cause.retryAfter);
     } finally {
-      setPending(false);
+      setSending(false);
     }
   }
 
@@ -107,142 +185,212 @@ export function VerifyEmail() {
       <Card>
         <CardHeader>
           <CardTitle>
-            <h1 ref={heading} tabIndex={-1}>
+            <h1 ref={heading} tabIndex={-1} className="outline-none">
               {title}
             </h1>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          {error ? (
-            <SessionError />
-          ) : isPending || isRefetching ? (
-            <output className="block">{t("common.loading")}</output>
-          ) : (
+          {error && <SessionError />}
+          {proof.isPending && <p>{t("verification.checkingLink")}</p>}
+          {proof.isError && (
+            <div className="space-y-3">
+              <p role="alert" className="text-sm text-destructive">
+                {t("verification.statusFailed")}
+              </p>
+              <Button disabled={proof.isFetching} onClick={() => void proof.refetch()}>
+                {t("verification.retry")}
+              </Button>
+            </div>
+          )}
+          {invalidLink && (
+            <p role="alert" className="text-sm text-destructive">
+              {t("verification.invalidLink")}
+            </p>
+          )}
+          {requiresSignOut && (
+            <p>
+              {linkPending ? t("verification.switchPending") : t("verification.switchVerified")}
+            </p>
+          )}
+          {linkPending && !requiresSignOut && (
+            <div className="space-y-3">
+              <p>{t("verification.confirmBody")}</p>
+              <Button
+                className="w-full"
+                disabled={busy}
+                aria-busy={confirming}
+                onClick={() => void confirm()}
+              >
+                {confirming
+                  ? t("verification.confirmPending")
+                  : confirmFailed
+                    ? t("verification.retry")
+                    : t("verification.confirm")}
+              </Button>
+              {confirmFailed && (
+                <p role="alert" className="text-sm text-destructive">
+                  {t("verification.confirmFailed")}
+                </p>
+              )}
+            </div>
+          )}
+          {currentAccountVerified && (
+            <div className="space-y-3">
+              <p>{t("verification.currentAccount")}</p>
+              <Button asChild className="w-full">
+                <a href={next}>{t("verification.continue")}</a>
+              </Button>
+            </div>
+          )}
+          {showSignIn && (
+            <div className="space-y-3">
+              <p>{t("verification.signInBody")}</p>
+              <Button asChild className="w-full">
+                <a href={authPagePath("/login", next, locale)}>{t("verification.signIn")}</a>
+              </Button>
+            </div>
+          )}
+          {(linkVerified || alreadyVerified) &&
+            hasSession &&
+            !currentAccountVerified &&
+            !requiresSignOut && <p>{t("verification.sessionNotVerified")}</p>}
+          {showResend && (
             <>
-              {invalidLink && (
-                <p role="alert" className="text-sm text-destructive">
-                  {t("verification.invalidLink")}
-                </p>
-              )}
-              {showContinuation ? (
-                <>
-                  <p>
-                    {verified ? t("verification.currentAccount") : t("verification.signInBody")}
-                  </p>
-                  <Button asChild className="w-full">
-                    <a href={verified ? next : authPagePath("/login", next, locale)}>
-                      {verified ? t("verification.continue") : t("verification.signIn")}
-                    </a>
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <p>{t("verification.body")}</p>
-                  <form onSubmit={onSubmit} className="space-y-4">
-                    {!hasSession && (
-                      <>
-                        <p
-                          id="verification-credentials-help"
-                          className="text-sm text-muted-foreground"
-                        >
-                          {t("verification.credentialsHelp")}
-                        </p>
-                        <div className="space-y-1">
-                          <Label htmlFor="verification-email">{t("auth.email")}</Label>
-                          <Input
-                            id="verification-email"
-                            name="email"
-                            type="email"
-                            autoComplete="email"
-                            maxLength={254}
-                            required
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="verification-password">{t("auth.password")}</Label>
-                          <Input
-                            id="verification-password"
-                            name="password"
-                            type="password"
-                            autoComplete="current-password"
-                            maxLength={128}
-                            aria-describedby="verification-credentials-help"
-                            required
-                          />
-                        </div>
-                        <Link className="block text-sm underline" to="/forgot-password">
-                          {t("auth.forgotLink")}
-                        </Link>
-                      </>
-                    )}
-                    <Button
-                      className="w-full"
-                      type="submit"
-                      disabled={pending || cooldown > 0}
-                      aria-busy={pending}
-                    >
-                      {pending ? t("verification.pending") : t("verification.resend")}
-                    </Button>
-                    {cooldown > 0 && (
-                      <p className="text-sm">{t("verification.cooldown", { seconds: cooldown })}</p>
-                    )}
-                    {accepted && (
-                      <output className="block text-sm">{t("verification.accepted")}</output>
-                    )}
-                  </form>
-                  {hasSession ? (
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      disabled={checking || pending}
-                      aria-busy={checking}
-                      onClick={async () => {
-                        setChecking(true);
-                        setFailure(null);
-                        try {
-                          await refetch({ query: { disableCookieCache: true } });
-                        } catch {
-                          setFailure("verification.sessionError");
-                        } finally {
-                          setChecking(false);
-                        }
-                      }}
-                    >
-                      {t("verification.check")}
-                    </Button>
-                  ) : (
-                    <a
-                      className="block text-sm underline"
-                      href={authPagePath("/login", next, locale)}
-                    >
-                      {t("auth.backToLogin")}
-                    </a>
-                  )}
-                </>
-              )}
-              {failure && (
-                <p role="alert" className="text-sm text-destructive">
-                  {t(failure)}
-                </p>
-              )}
-              {hasSession && (
+              <p>{t("verification.body")}</p>
+              <form onSubmit={onSubmit} className="space-y-4">
+                {!hasSession && (
+                  <>
+                    <p id="verification-credentials-help" className="text-sm text-muted-foreground">
+                      {t("verification.credentialsHelp")}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {t("verification.signupRecovery")}
+                    </p>
+                    <div className="space-y-1">
+                      <Label htmlFor="verification-email">{t("auth.email")}</Label>
+                      <Input
+                        id="verification-email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        maxLength={254}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="verification-password">{t("auth.password")}</Label>
+                      <Input
+                        id="verification-password"
+                        name="password"
+                        type="password"
+                        autoComplete="current-password"
+                        maxLength={128}
+                        aria-describedby="verification-credentials-help"
+                        required
+                      />
+                    </div>
+                  </>
+                )}
                 <Button
-                  variant="outline"
                   className="w-full"
-                  disabled={pending}
-                  onClick={async () => {
-                    setPending(true);
-                    const result = await signOut({
-                      destination: authPagePath("/login", next, locale),
-                    });
-                    if (!result.ok) setFailure("app.signOutFailed");
-                    setPending(false);
-                  }}
+                  type="submit"
+                  disabled={busy || isPending || Boolean(error) || !receipt || cooldown > 0}
+                  aria-busy={sending}
                 >
-                  {t("app.signOut")}
+                  {sending ? t("verification.pending") : t("verification.resend")}
                 </Button>
+                {failure && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {t(failure)}
+                  </p>
+                )}
+                {cooldown > 0 && (
+                  <p className="text-sm">{t("verification.cooldown", { seconds: cooldown })}</p>
+                )}
+                <output className="block text-sm" aria-live="polite" aria-atomic="true">
+                  {accepted && t("verification.accepted")}{" "}
+                  {cooldown > 0
+                    ? t("verification.cooldownStarted")
+                    : cooldownFinished
+                      ? t("verification.cooldownFinished")
+                      : ""}
+                </output>
+                {!hasSession && (
+                  <div className="space-y-3">
+                    <Link className="block text-sm underline" to="/forgot-password">
+                      {t("auth.forgotLink")}
+                    </Link>
+                    <p className="text-sm text-muted-foreground">
+                      {t("verification.typoRecovery")}
+                    </p>
+                    <Link
+                      className="block text-sm underline"
+                      to={authPagePath("/register", next, locale)}
+                    >
+                      {t("verification.registerCorrectEmail")}
+                    </Link>
+                  </div>
+                )}
+              </form>
+              {!hasSession && (
+                <a className="block text-sm underline" href={authPagePath("/login", next, locale)}>
+                  {t("auth.backToLogin")}
+                </a>
               )}
             </>
+          )}
+          {!showResend && failure && (
+            <p role="alert" className="text-sm text-destructive">
+              {t(failure)}
+            </p>
+          )}
+          {(linkPending || linkVerified || alreadyVerified) && !currentAccountVerified && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+              onClick={() => {
+                setRequestingNewLink(true);
+                setAlreadyVerified(false);
+                setAccepted(false);
+                setFailure(null);
+              }}
+            >
+              {t("verification.otherLink")}
+            </Button>
+          )}
+          {hasSession && !currentAccountVerified && !requiresSignOut && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+              aria-busy={checking}
+              onClick={() => void checkSession()}
+            >
+              {t("verification.check")}
+            </Button>
+          )}
+          {(hasSession || requiresSignOut) && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+              onClick={async () => {
+                setSigningOut(true);
+                const result = await signOut({
+                  destination: authPagePath(
+                    requiresSignOut && linkPending ? "/verify-email" : "/login",
+                    next,
+                    locale,
+                  ),
+                });
+                if (!result.ok) setFailure("app.signOutFailed");
+                setSigningOut(false);
+              }}
+            >
+              {t("app.signOut")}
+            </Button>
           )}
         </CardContent>
       </Card>

@@ -1,4 +1,5 @@
 import { type APIRequestContext, type Page, expect, test } from "@playwright/test";
+import { confirmEmailOwnership, localClientHeaders } from "./verification-helpers";
 
 /**
  * Critical Owner Journey — end-to-end happy-path covering:
@@ -9,6 +10,10 @@ import { type APIRequestContext, type Page, expect, test } from "@playwright/tes
 const PASSWORD = "Maple2024!xQ"; // satisfies min-8 + mixed-case + digit + special
 const API_BASE_URL = process.env.PLAYWRIGHT_API_BASE_URL ?? "http://localhost:3311";
 const WEB_ORIGIN = "http://localhost:3310";
+
+test.beforeEach(async ({ context }) => {
+  await context.setExtraHTTPHeaders(localClientHeaders());
+});
 
 function captureApiClientRequests(page: Page): string[] {
   const requests: string[] = [];
@@ -106,6 +111,7 @@ async function verifyEmail(page: Page, request: APIRequestContext, email: string
   const callback = new URL(page.url());
   expect(callback.searchParams.has("token")).toBe(false);
   expect(callback.searchParams.has("email")).toBe(false);
+  await confirmEmailOwnership(page);
 
   // Ownership proof does not create a session or switch an existing account.
   await page.goto("/login");

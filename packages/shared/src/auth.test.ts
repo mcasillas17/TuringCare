@@ -1,5 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { safeAuthReturnPath, verificationResendSchema } from "./auth";
+import { safeAuthReturnPath, verificationResendSchema, verificationStatusSchema } from "./auth";
+
+it("validates the exact server-authenticated verification state DTO", () => {
+  expect(
+    verificationStatusSchema.parse({
+      status: "verified",
+      next: "/my",
+      locale: "en",
+      requiresSignOut: true,
+    }),
+  ).toEqual({ status: "verified", next: "/my", locale: "en", requiresSignOut: true });
+  for (const status of ["none", "pending", "verified", "invalid", "expired"]) {
+    expect(verificationStatusSchema.parse({ status, next: "/my/dogs", locale: "es" })).toEqual({
+      status,
+      next: "/my/dogs",
+      locale: "es",
+    });
+  }
+  for (const body of [
+    { status: "success", next: "/my", locale: "en" },
+    { status: "verified", next: "https://evil.example", locale: "en" },
+    { status: "verified", next: "/my", locale: "fr" },
+    { status: "verified", next: "/my", locale: "en", token: "never-public" },
+  ])
+    expect(verificationStatusSchema.safeParse(body).success).toBe(false);
+});
 
 describe("safeAuthReturnPath", () => {
   it.each(["/", "/my", "/my/dogs/dog-id/brief", "/admin/courses", "/trainers", "/courses/id"])(

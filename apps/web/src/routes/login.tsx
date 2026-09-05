@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n";
 import { signIn } from "@/lib/auth-client";
-import { authPagePath, isEmailUnverifiedCode } from "@/lib/auth-navigation";
+import { authContinuationPath, authPagePath, isEmailUnverifiedCode } from "@/lib/auth-navigation";
 import { safeAuthReturnPath } from "@turingcare/shared";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -37,7 +37,7 @@ export function Login() {
       }
       // Own the only navigation: Better Auth auto-redirects if given callbackURL.
       // A document load also reinitializes its deferred session atom.
-      window.location.assign(next);
+      window.location.assign(authContinuationPath(next, locale));
     } catch {
       toast.error(t("auth.loginFailed"));
     } finally {

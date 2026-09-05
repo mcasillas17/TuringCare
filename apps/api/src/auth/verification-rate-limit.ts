@@ -1,12 +1,13 @@
 import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
+import { VERIFICATION_RESEND_WINDOW_SECONDS } from "@turingcare/shared";
 import { sql } from "drizzle-orm";
 import { db } from "../db";
 import { env } from "../env";
 
 type LimitKind = "ip" | "credential" | "send";
 const limits: Record<LimitKind, number> = { ip: 20, credential: 5, send: 1 };
-const WINDOW_MS = 60_000;
+const WINDOW_MS = VERIFICATION_RESEND_WINDOW_SECONDS * 1000;
 
 export function verificationLimitKey(kind: LimitKind, value: string): string {
   const digest = createHmac("sha256", env.BETTER_AUTH_SECRET)
@@ -15,10 +16,10 @@ export function verificationLimitKey(kind: LimitKind, value: string): string {
   return `verification:${kind}:${digest}`;
 }
 
-export function trustedVerificationIp(headers: Headers): string {
+export function trustedVerificationIp(headers: Headers): string | null {
   // Fly overwrites this header at the edge. Never use client-supplied XFF.
   const ip = headers.get("fly-client-ip")?.trim();
-  return ip && isIP(ip) ? ip : "unknown";
+  return ip && isIP(ip) ? ip : env.NODE_ENV === "production" ? null : "unknown";
 }
 
 /**

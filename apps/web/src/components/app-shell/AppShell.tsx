@@ -3,7 +3,6 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { TuringCompanion } from "@/components/turing-companion";
 import { TuringProvider } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
-import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { useI18n } from "@/i18n";
 import { useMe } from "@/lib/me";
 import { useSignOut } from "@/lib/sign-out";
@@ -126,7 +125,6 @@ export function AppShell() {
             <LanguageToggle />
           </div>
         </header>
-        <VerifyEmailBanner />
         <div className="flex flex-1">
           <div className="hidden md:block">{rail}</div>
           {drawerOpen && (

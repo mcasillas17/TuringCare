@@ -1,5 +1,26 @@
 export const en = {
   verification: {
+    confirm: "Verify email",
+    confirmBody:
+      "Confirm that you want to verify the email address associated with this link. Opening the link alone does not verify it.",
+    confirmPending: "Verifying email…",
+    confirmFailed: "We couldn't confirm your email. Try again.",
+    checkingLink: "Checking verification link…",
+    statusFailed: "We couldn't check your verification link. Try again.",
+    currentAccountTitle: "Your account is verified",
+    sessionNotVerified:
+      "Your current session is not verified yet. Check its status again, or sign out to sign in with the verified account.",
+    signupRecovery:
+      "If you signed up before, signing up again may not send another email. Request a new link with your original password, or use Forgot password.",
+    typoRecovery: "If you mistyped your email, register again with the correct address.",
+    registerCorrectEmail: "Register with the correct email",
+    otherLink: "Request a different verification link",
+    switchTitle: "Sign out to use this link",
+    switchPending:
+      "This link is for a different account. Sign out, then reopen the link from your email to verify it.",
+    switchVerified: "This link is for a different account. Sign out to sign in with that account.",
+    cooldownStarted: "Wait before requesting another link.",
+    cooldownFinished: "You can request another link now.",
     accessError: "We couldn't check your access. Try again.",
     title: "Verify your email",
     body: "Before you can use your account, open the verification link in your email. If you don't see it, check spam or request a new link below.",
@@ -13,7 +34,7 @@ export const en = {
     credentialsRequired: "Enter your email and password to request a new link.",
     sendFailed: "We couldn't send a verification link. Please try again.",
     rateLimited: "Too many requests. Please wait before requesting another link.",
-    cooldown: "Try again in {seconds} seconds.",
+    cooldown: "Time until another request: {seconds} s.",
     invalidLink:
       "This verification link is invalid or expired. Request a new link, or sign in if you already verified your email.",
     successTitle: "Email verified",
@@ -1483,13 +1504,6 @@ export const en = {
     h_changes: "Changes",
     p_changes:
       "These terms may change as the product evolves. The current version always lives at /terms. Continued use after a change means you accept the new terms.",
-  },
-  verifyBanner: {
-    message: "Please verify your email — check your inbox",
-    resend: "Resend",
-    dismiss: "Dismiss",
-    resendSuccess: "Verification email sent",
-    resendError: "Could not send verification email",
   },
   turing: {
     tipAria: "Turing — tap for a training tip",

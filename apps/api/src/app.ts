@@ -3,7 +3,6 @@ import { sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
-import { auth } from "./auth";
 import { resolveAdminRole } from "./auth/admin-bootstrap";
 import { handleAuthRequest } from "./auth/request-handler";
 import { getAuthoritativeSession } from "./auth/session";
@@ -41,7 +40,9 @@ const app = new Hono<ApiEnv & LocaleEnv>()
     secureHeaders({
       xContentTypeOptions: "nosniff",
       xFrameOptions: "DENY",
-      referrerPolicy: "strict-origin-when-cross-origin",
+      // Verification entry URLs contain bearer tokens even when the API is
+      // reverse-proxied onto the frontend origin. Never forward them as referrers.
+      referrerPolicy: "no-referrer",
       // No Content-Security-Policy here: this is a JSON API, not an HTML app.
     }),
   )
@@ -111,8 +112,9 @@ const app = new Hono<ApiEnv & LocaleEnv>()
   .post("/api/events", stableZValidator("json", eventIngestSchema), async (c) => {
     const { name, props } = c.req.valid("json");
     // Identity is resolved server-side from the auth cookie — never trusted
-    // from the client. Anonymous (pre-auth, e.g. landing) is allowed.
-    const session = await auth.api.getSession({ headers: c.req.raw.headers });
+    // from the client. This bounded public telemetry endpoint deliberately
+    // attributes valid legacy/unverified sessions too; it grants no domain access.
+    const session = await getAuthoritativeSession(c.req.raw.headers);
     await recordEvent(name, {
       userId: session?.user.id ?? null,
       sessionId: session?.session.id ?? null,

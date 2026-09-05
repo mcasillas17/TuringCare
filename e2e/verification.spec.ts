@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import { type APIRequestContext, type Page, expect, test } from "@playwright/test";
 import { verificationLimitKey } from "../apps/api/src/auth/verification-rate-limit";
 import { pool } from "../apps/api/src/db";
+import {
+  confirmEmailOwnership,
+  localClientHeaders,
+  refreshSessionOnFocus,
+} from "./verification-helpers";
 
 const PASSWORD = "Verification2026!local";
 const WEB_ORIGIN = "http://localhost:3310";
@@ -26,10 +31,7 @@ test.beforeAll(() => {
 });
 
 test.beforeEach(async ({ context }) => {
-  const ip = [...randomUUID().replaceAll("-", "").slice(0, 6).matchAll(/../g)].map((part) =>
-    Number.parseInt(part[0], 16),
-  );
-  await context.setExtraHTTPHeaders({ "fly-client-ip": `10.${ip.join(".")}` });
+  await context.setExtraHTTPHeaders(localClientHeaders());
 });
 
 test.afterEach(async () => {
@@ -84,6 +86,7 @@ async function legacySession(page: Page, email: string) {
   await registerThroughApi(page.request, email);
   const { link } = await capturedLink(page.request, email);
   await page.goto(link);
+  await confirmEmailOwnership(page);
   await signIn(page, email);
   await expect(page).toHaveURL((url) => url.pathname === "/my/profile");
   requireLocalDatabase();
@@ -108,7 +111,10 @@ test("unverified credentials have no owner access; a fresh browser can verify in
   const { link, html } = await capturedLink(page.request, email);
   expect(html).toContain('<html lang="es">');
 
-  const freshContext = await browser.newContext({ locale: "en-US" });
+  const freshContext = await browser.newContext({
+    locale: "en-US",
+    extraHTTPHeaders: localClientHeaders(),
+  });
   const freshPage = await freshContext.newPage();
   try {
     await freshPage.goto(link);
@@ -118,6 +124,11 @@ test("unverified credentials have no owner access; a fresh browser can verify in
     expect(url.searchParams.has("token")).toBe(false);
     expect(url.searchParams.has("email")).toBe(false);
     expect((await freshContext.request.get(`${WEB_ORIGIN}/me`)).status()).toBe(401);
+    const passiveSignIn = await page.request.post(`${WEB_ORIGIN}/api/auth/sign-in/email`, {
+      data: { email, password: PASSWORD },
+    });
+    expect(passiveSignIn.status()).toBe(403);
+    await confirmEmailOwnership(freshPage, "es");
     await freshPage.reload();
     await expect(freshPage.locator("html")).toHaveAttribute("lang", "es");
     expect(
@@ -127,7 +138,19 @@ test("unverified credentials have no owner access; a fresh browser can verify in
     // A reused ownership link is safe and never mints another session.
     await freshPage.goto(link);
     await expect(freshPage).toHaveURL(/\/verify-email\?/);
+    await confirmEmailOwnership(freshPage, "es");
     expect((await freshContext.request.get(`${WEB_ORIGIN}/me`)).status()).toBe(401);
+    await freshPage
+      .getByRole("link", { name: "Iniciar sesión para continuar", exact: true })
+      .click();
+    await freshPage.getByLabel("Correo electrónico", { exact: true }).fill(email);
+    await freshPage.getByLabel("Contraseña", { exact: true }).fill(PASSWORD);
+    await freshPage.getByRole("button", { name: "Iniciar sesión", exact: true }).click();
+    await expect(freshPage).toHaveURL((destination) => destination.pathname === "/my/profile");
+    await expect(freshPage.getByRole("heading", { name: "Perfil", level: 1 })).toBeVisible();
+    await expect(freshPage.locator("html")).toHaveAttribute("lang", "es");
+    const profile = await freshContext.request.get(`${WEB_ORIGIN}/api/profile`);
+    expect(await profile.json()).toMatchObject({ user: { locale: "es" } });
   } finally {
     await freshContext.close();
   }
@@ -135,6 +158,11 @@ test("unverified credentials have no owner access; a fresh browser can verify in
   await signIn(page, email);
   await expect(page).toHaveURL((url) => url.pathname === "/my/profile");
   expect((await page.request.get("/api/profile")).status()).toBe(200);
+  await expect(page.locator("html")).toHaveAttribute("lang", "es");
+  const name = page.getByLabel("Nombre", { exact: true });
+  await name.fill("Unsaved owner draft");
+  await refreshSessionOnFocus(page);
+  await expect(name).toHaveValue("Unsaved owner draft");
   await page.request.post("/api/auth/sign-out", {
     headers: { Origin: WEB_ORIGIN },
     data: {},
@@ -164,6 +192,7 @@ test("legacy unverified admins are blocked and recover after another tab verifie
   await expect(page).toHaveURL(/\/verify-email/);
   await page.reload();
   await expect(page).toHaveURL(/\/verify-email/);
+  await expect(page.getByRole("button", { name: "Request a new link", exact: true })).toBeVisible();
   // Advance only this fixture's signup-send window, not shared/IP counters.
   await pool.query("UPDATE rate_limit SET last_request = 0 WHERE id = $1", [
     verificationLimitKey("send", email),
@@ -177,6 +206,7 @@ test("legacy unverified admins are blocked and recover after another tab verifie
   const otherTab = await context.newPage();
   await otherTab.goto(link);
   await expect(otherTab).toHaveURL(/\/verify-email/);
+  await confirmEmailOwnership(otherTab);
   await otherTab.close();
   await page.bringToFront();
   await page.goto("/my/profile");
@@ -191,7 +221,11 @@ test("password reset preserves the verification requirement and invalid links re
   await registerThroughApi(page.request, email);
   await page.goto("/forgot-password");
   await page.getByLabel("Email", { exact: true }).fill(email);
+  const resetRequested = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/auth/request-password-reset",
+  );
   await page.getByRole("button", { name: "Send reset link", exact: true }).click();
+  expect((await resetRequested).status()).toBe(200);
   await expect(page.getByRole("link", { name: /Back to log ?in/i })).toBeVisible();
   const { link } = await capturedLink(page.request, email, "reset-password");
   await page.goto(link);
@@ -207,8 +241,61 @@ test("password reset preserves the verification requirement and invalid links re
   invalid.searchParams.set("token", "invalid-local-test-token");
   invalid.searchParams.set("callbackURL", `${WEB_ORIGIN}/verify-email?status=verified`);
   await page.goto(invalid.toString());
-  await expect(page).toHaveURL(/\/verify-email.*error=/);
+  await expect(page).toHaveURL((url) => url.pathname === "/verify-email");
   expect(new URL(page.url()).searchParams.has("token")).toBe(false);
+  await page.getByRole("button", { name: "Verify email", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("invalid or expired");
   expect((await page.request.get("/api/profile")).status()).toBe(401);
   await expect(page.getByRole("link", { name: /password/i })).toBeVisible();
+});
+
+test("anonymous resend form survives focus and reports actual throttling and acceptance", async ({
+  page,
+}) => {
+  const email = emailForTest();
+  await registerThroughApi(page.request, email);
+  await page.goto("/verify-email");
+  const emailField = page.getByLabel("Email", { exact: true });
+  const passwordField = page.getByLabel("Password", { exact: true });
+  const resendButton = page.getByRole("button", { name: "Request a new link", exact: true });
+  await emailField.fill(email);
+  await passwordField.fill(PASSWORD);
+  await refreshSessionOnFocus(page);
+  await expect(emailField).toHaveValue(email);
+  await expect(passwordField).toHaveValue(PASSWORD);
+
+  await resendButton.click();
+  await expect(page.getByRole("alert")).toContainText("Too many requests");
+  await expect(resendButton).toBeDisabled();
+  await expect(passwordField).toHaveValue("");
+  await pool.query("UPDATE rate_limit SET last_request = 0 WHERE id = $1", [
+    verificationLimitKey("send", email),
+  ]);
+  await page.clock.fastForward(61_000);
+  await expect(resendButton).toBeEnabled();
+  await passwordField.fill(PASSWORD);
+  await resendButton.click();
+  await expect(page.getByRole("status").filter({ hasText: "Request accepted" })).toBeVisible();
+  await expect(resendButton).toBeDisabled();
+  await expect(passwordField).toHaveValue("");
+  expect((await page.request.get("/api/profile")).status()).toBe(401);
+});
+
+test("a previous verification receipt cannot claim success for a new signup", async ({ page }) => {
+  const firstEmail = emailForTest();
+  await registerThroughApi(page.request, firstEmail);
+  const { link } = await capturedLink(page.request, firstEmail);
+  await page.goto(link);
+  await confirmEmailOwnership(page);
+
+  await registerThroughApi(page.request, emailForTest());
+  await page.goto("/verify-email?status=verified");
+  await expect(
+    page.getByRole("heading", { name: "Verify your email", level: 1, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Email verified", level: 1, exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
+  expect((await page.request.get("/api/profile")).status()).toBe(401);
 });

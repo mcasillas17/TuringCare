@@ -10,6 +10,28 @@ type Messages<T = En> = {
 
 export const es = {
   verification: {
+    confirm: "Verificar correo",
+    confirmBody:
+      "Confirma que deseas verificar el correo asociado con este enlace. Abrir el enlace no lo verifica.",
+    confirmPending: "Verificando correo…",
+    confirmFailed: "No pudimos confirmar tu correo. Inténtalo de nuevo.",
+    checkingLink: "Comprobando enlace de verificación…",
+    statusFailed: "No pudimos comprobar tu enlace de verificación. Inténtalo de nuevo.",
+    currentAccountTitle: "Tu cuenta está verificada",
+    sessionNotVerified:
+      "Tu sesión actual aún no está verificada. Comprueba su estado de nuevo o cierra sesión para iniciar sesión con la cuenta verificada.",
+    signupRecovery:
+      "Si ya te registraste, registrarte otra vez puede no enviar otro correo. Solicita un nuevo enlace con tu contraseña original o usa ¿Olvidaste tu contraseña?",
+    typoRecovery: "Si escribiste mal tu correo, regístrate de nuevo con la dirección correcta.",
+    registerCorrectEmail: "Registrarse con el correo correcto",
+    otherLink: "Solicitar otro enlace de verificación",
+    switchTitle: "Cierra sesión para usar este enlace",
+    switchPending:
+      "Este enlace es para otra cuenta. Cierra sesión y vuelve a abrir el enlace de tu correo para verificarla.",
+    switchVerified:
+      "Este enlace es para otra cuenta. Cierra sesión para iniciar sesión con esa cuenta.",
+    cooldownStarted: "Espera antes de solicitar otro enlace.",
+    cooldownFinished: "Ya puedes solicitar otro enlace.",
     accessError: "No pudimos comprobar tu acceso. Inténtalo de nuevo.",
     title: "Verifica tu correo",
     body: "Antes de usar tu cuenta, abre el enlace de verificación en tu correo. Si no lo ves, revisa la carpeta de spam o solicita un nuevo enlace abajo.",
@@ -23,7 +45,7 @@ export const es = {
     credentialsRequired: "Ingresa tu correo y contraseña para solicitar un nuevo enlace.",
     sendFailed: "No pudimos enviar un enlace de verificación. Inténtalo de nuevo.",
     rateLimited: "Demasiadas solicitudes. Espera antes de solicitar otro enlace.",
-    cooldown: "Inténtalo de nuevo en {seconds} segundos.",
+    cooldown: "Tiempo para otra solicitud: {seconds} s.",
     invalidLink:
       "Este enlace de verificación no es válido o ha caducado. Solicita otro enlace, o inicia sesión si ya verificaste tu correo.",
     successTitle: "Correo verificado",
@@ -1509,13 +1531,6 @@ export const es = {
     h_changes: "Cambios",
     p_changes:
       "Estos términos pueden cambiar a medida que el producto evolucione. La versión actual siempre vive en /terms. El uso continuado después de un cambio significa que aceptas los nuevos términos.",
-  },
-  verifyBanner: {
-    message: "Verifica tu correo — revisa tu bandeja de entrada",
-    resend: "Reenviar",
-    dismiss: "Descartar",
-    resendSuccess: "Correo de verificación enviado",
-    resendError: "No se pudo enviar el correo de verificación",
   },
   turing: {
     tipAria: "Turing — toca para ver un consejo",

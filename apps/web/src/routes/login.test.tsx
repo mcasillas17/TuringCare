@@ -28,6 +28,28 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+it("carries only a validated locale to the safe app path when browser storage is denied", async () => {
+  vi.stubGlobal("navigator", { language: "es", languages: ["es"] });
+  vi.stubGlobal("localStorage", {
+    getItem: () => {
+      throw new Error("storage denied");
+    },
+    setItem: () => {
+      throw new Error("storage denied");
+    },
+  });
+  signInEmailMock.mockResolvedValue({ data: { user: {} }, error: null });
+  setup("/login?next=%2Fmy%2Fprofile");
+  await userEvent.type(screen.getByLabelText("Correo electrónico"), "synthetic@example.test");
+  await userEvent.type(screen.getByLabelText("Contraseña"), "synthetic-password");
+  await userEvent.click(screen.getByRole("button", { name: "Iniciar sesión" }));
+  expect(assignMock).toHaveBeenCalledWith("/my/profile?lang=es");
+  expect(signInEmailMock).toHaveBeenCalledWith({
+    email: "synthetic@example.test",
+    password: "synthetic-password",
+  });
+});
+
 function setup(entry = "/login") {
   return render(
     <LocaleProvider>

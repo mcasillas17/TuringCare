@@ -5,11 +5,9 @@ import { isNonemptySessionUserId } from "./session-user-id";
 export const VerificationDeniedContext = createContext(false);
 
 export function useHasVerifiedSession() {
-  const { data, isPending, isRefetching, error } = useSession();
+  const { data, error } = useSession();
   const denied = useContext(VerificationDeniedContext);
   return (
-    !isPending &&
-    !isRefetching &&
     !error &&
     !denied &&
     isNonemptySessionUserId(data?.user?.id) &&

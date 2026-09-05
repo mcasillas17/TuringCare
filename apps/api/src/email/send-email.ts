@@ -70,7 +70,13 @@ export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): 
   // Capture resolution: explicit `capture` key in deps takes priority; then
   // E2E_TEST_MODE auto-captures; otherwise undefined (normal send path).
   const capture: ((args: SendEmailArgs) => void) | undefined =
-    "capture" in deps ? deps.capture : env.E2E_TEST_MODE ? captureTestEmail : undefined;
+    env.NODE_ENV === "production"
+      ? undefined
+      : "capture" in deps
+        ? deps.capture
+        : env.E2E_TEST_MODE
+          ? captureTestEmail
+          : undefined;
 
   if (capture) {
     capture(args);
@@ -81,6 +87,7 @@ export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): 
   const from = deps.from ?? env.EMAIL_FROM;
 
   if (!apiKey) {
+    if (env.NODE_ENV === "production") throw new EmailSendError("Email provider unavailable");
     console.info("[email:dev] delivery skipped: provider not configured");
     return;
   }

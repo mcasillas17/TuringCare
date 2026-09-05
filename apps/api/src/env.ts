@@ -49,6 +49,13 @@ const schema = z
       .transform((v) => v === "true"),
   })
   .superRefine((value, context) => {
+    if (value.NODE_ENV === "production" && value.E2E_TEST_MODE) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["E2E_TEST_MODE"],
+        message: "E2E_TEST_MODE must be false in production",
+      });
+    }
     if (value.NODE_ENV === "production" && !value.RESEND_API_KEY) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
