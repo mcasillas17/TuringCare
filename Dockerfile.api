@@ -6,12 +6,8 @@
 # Node's native ESM loader can run. tsx transpiles + resolves both correctly.
 FROM node:25-slim AS base
 
-# Corepack reads packageManager so the pnpm version has one source of truth.
-RUN corepack enable
-
-# corepack prompts before downloading a package manager it has not seen; that
-# prompt would hang a non-interactive build.
-ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+# Node 25 no longer bundles Corepack; install the pinned package manager directly.
+RUN npm install --global pnpm@11.11.0
 
 WORKDIR /app
 
