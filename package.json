@@ -5,7 +5,7 @@
   "engines": {
     "node": "22.x"
   },
-  "packageManager": "pnpm@11.1.2",
+  "packageManager": "pnpm@11.11.0",
   "scripts": {
     "dev": "concurrently -n api,web -c blue,magenta \"pnpm --filter @turingcare/api dev\" \"pnpm --filter @turingcare/web dev\"",
     "build": "pnpm -r build",

@@ -24,7 +24,9 @@ function buildApp(capture: ReturnType<typeof vi.fn>) {
     .get("/sentinel", () => {
       throw SENTINEL;
     });
-  app.onError(createMonitoringErrorHandler(capture));
+  app.onError(
+    createMonitoringErrorHandler(capture as Parameters<typeof createMonitoringErrorHandler>[0]),
+  );
   return app;
 }
 
