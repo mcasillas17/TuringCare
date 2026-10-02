@@ -2869,7 +2869,9 @@ describe("sendFailedException (brief send-failed monitoring seam)", () => {
         throw sendFailedException(c, new Error("provider-sentinel-do-not-leak"));
       })
       .get("/not-found-ish", (c) => c.json({ error: "not_found" } as const, 404));
-    probe.onError(createMonitoringErrorHandler(capture));
+    probe.onError(
+      createMonitoringErrorHandler(capture as Parameters<typeof createMonitoringErrorHandler>[0]),
+    );
     return probe;
   }
 

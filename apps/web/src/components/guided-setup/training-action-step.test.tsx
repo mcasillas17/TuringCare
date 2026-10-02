@@ -52,7 +52,7 @@ function renderStep({
   isError?: boolean;
   mutateAsync?: ReturnType<typeof vi.fn>;
   isPending?: boolean;
-  onReconcile?: ReturnType<typeof vi.fn>;
+  onReconcile?: () => Promise<boolean>;
   abandonPending?: boolean;
   skipPending?: boolean;
 } = {}) {

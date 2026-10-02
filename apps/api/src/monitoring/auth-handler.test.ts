@@ -15,7 +15,14 @@ const SENTINEL = "auth-response-body-sentinel-do-not-leak";
 function buildApp(handler: AuthRequestHandler, capture: ReturnType<typeof vi.fn>) {
   return new Hono<ApiEnv>()
     .use("*", requestIdMiddleware)
-    .on(["POST", "GET"], "/api/auth/*", createMonitoringAuthHandler(handler, capture));
+    .on(
+      ["POST", "GET"],
+      "/api/auth/*",
+      createMonitoringAuthHandler(
+        handler,
+        capture as Parameters<typeof createMonitoringAuthHandler>[1],
+      ),
+    );
 }
 
 describe("createMonitoringAuthHandler", () => {
