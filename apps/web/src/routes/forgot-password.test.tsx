@@ -46,8 +46,8 @@ it("submits with email + redirectTo, then shows the success view (resolved)", as
   expect(await screen.findByRole("heading", { name: /check your inbox/i })).toBeInTheDocument();
 });
 
-it("shows the same success view even if the API rejects (anti-enumeration)", async () => {
-  requestPasswordResetMock.mockRejectedValue(new Error("not found"));
+it("shows the same success view even if the API reports an error (anti-enumeration)", async () => {
+  requestPasswordResetMock.mockResolvedValue({ data: null, error: { message: "not found" } });
   setup();
   await userEvent.type(screen.getByLabelText(/email/i), "u@example.com");
   await userEvent.click(screen.getByRole("button", { name: /send reset link/i }));
