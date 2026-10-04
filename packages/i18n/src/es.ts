@@ -1,12 +1,4 @@
-import type { En } from "./en";
-
-type Messages<T = En> = {
-  [K in keyof T]: T[K] extends string
-    ? string
-    : T[K] extends Record<string, unknown>
-      ? Messages<T[K]>
-      : never;
-};
+import type { Messages } from "./index";
 
 export const es = {
   verification: {
@@ -65,12 +57,9 @@ export const es = {
     retry: "Intentar de nuevo",
   },
   language: {
-    en: "EN",
-    es: "ES",
     switchTo: "Cambiar a {lang}",
     nameEn: "English",
     nameEs: "Español",
-    label: "Idioma",
   },
   units: {
     minuteOne: "{n} minuto",
@@ -1165,10 +1154,6 @@ export const es = {
     recentEmpty: "Aún no hay registros",
     seeAllJournal: "Ver todo en el Diario →",
     logAMoment: "+ Registrar momento",
-    today: "hoy",
-    daysAgo: "hace {n}d",
-    weeksAgo: "hace {n}sem",
-    monthsAgo: "hace {n}m",
     statusDraft: "Borrador",
     statusFinalized: "Finalizado",
   },
@@ -1264,7 +1249,8 @@ export const es = {
     sending: "Enviando…",
     needsFinalized: "Marca el resumen como definitivo para enviarlo.",
     notFound: "Este resumen ya no está disponible.",
-    versionConflict: "Hay más de una versión reciente del resumen. Genera una nueva versión.",
+    versionConflict:
+      "Existe una versión más reciente del Resumen. Revisa la versión más reciente antes de enviarla.",
     idempotencyConflict:
       "Este intento de envío ya se usó con otros datos. Revisa e inténtalo de nuevo.",
     clientUpgradeRequired: "Actualiza esta página antes de enviar el Resumen.",

@@ -38,25 +38,10 @@ export const KNOWN_EVENTS = [
 
 export type EventName = (typeof KNOWN_EVENTS)[number];
 
-const KNOWN = new Set<string>(KNOWN_EVENTS);
-export function isKnownEvent(name: string): name is EventName {
-  return KNOWN.has(name);
-}
-
 /** Names a browser client is allowed to submit via POST /api/events. */
 export const CLIENT_EVENTS = ["page.viewed", "trainer.viewed", "course.viewed"] as const;
 
 const scalar = z.union([z.string(), z.number(), z.boolean()]);
-type EventProp = z.infer<typeof scalar>;
-type EventProps = Record<string, EventProp>;
-
-export function normalizeEventProps(
-  _name: (typeof CLIENT_EVENTS)[number],
-  props: EventProps,
-): EventProps {
-  const path = props.path;
-  return typeof path === "string" ? { ...props, path: normalizeTelemetryPagePath(path) } : props;
-}
 
 /** Validated, privacy-safe ingest payload: scalar-only props, size-capped. */
 export const eventIngestSchema = z
@@ -67,6 +52,12 @@ export const eventIngestSchema = z
       .default({})
       .refine((p) => Buffer.byteLength(JSON.stringify(p), "utf8") <= 1024, "props too large"),
   })
-  .transform(({ name, props }) => ({ name, props: normalizeEventProps(name, props) }));
+  .transform(({ name, props }) => ({
+    name,
+    props:
+      typeof props.path === "string"
+        ? { ...props, path: normalizeTelemetryPagePath(props.path) }
+        : props,
+  }));
 
 export type EventIngest = z.infer<typeof eventIngestSchema>;

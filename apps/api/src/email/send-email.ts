@@ -97,11 +97,6 @@ export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): 
   const client: ResendLike = deps.client ?? (new Resend(apiKey) as unknown as ResendLike);
 
   let result: { data: unknown; error: unknown };
-  const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(new Error("email provider deadline exceeded")),
-    deps.timeoutMs ?? 10_000,
-  );
   try {
     const sendArgs: Parameters<ResendLike["emails"]["send"]>[0] = {
       from,
@@ -113,15 +108,13 @@ export async function sendEmail(args: SendEmailArgs, deps: SendEmailDeps = {}): 
     if (args.replyTo) sendArgs.reply_to = args.replyTo;
     result = await client.emails.send(sendArgs, {
       ...(args.idempotencyKey ? { idempotencyKey: args.idempotencyKey } : {}),
-      signal: controller.signal,
+      signal: AbortSignal.timeout(deps.timeoutMs ?? 10_000),
     });
   } catch (cause) {
     throw new EmailSendError(
       `sendEmail: transport failure: ${cause instanceof Error ? cause.message : "unknown"}`,
       { cause },
     );
-  } finally {
-    clearTimeout(timeout);
   }
   if (result.error) {
     const e = result.error as { message?: string; statusCode?: number };

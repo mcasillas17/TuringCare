@@ -1,10 +1,10 @@
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { db } from "../db";
 import { journalEntries } from "../db/schema";
+import { DAY_MS } from "./time";
 
 /** How recent a daily check-in must be to influence today's suggestion. */
 export const OBSERVATION_WINDOW_DAYS = 3;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type RecentObservation = { trend: "better" | "same" | "harder"; occurredAt: Date } | null;
 

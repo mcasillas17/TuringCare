@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { VALIDATION_MESSAGE_CODES } from "./validation";
 
+// Also Postgres enum values (apps/api/src/db/schema.ts): changing them needs a committed migration.
 export const journalEntryKindValues = ["moment", "daily_checkin"] as const;
 export const journalTrendValues = ["better", "same", "harder"] as const;
 
@@ -59,10 +60,5 @@ export const journalEntryUpdateSchema = journalDetailsSchema
 
 export type JournalEntryKind = (typeof journalEntryKindValues)[number];
 export type JournalTrend = (typeof journalTrendValues)[number];
-export type JournalMomentCreateInput = z.infer<typeof journalMomentCreateSchema>;
-export type JournalDailyCheckInCreateInput = z.infer<typeof journalDailyCheckInCreateSchema>;
 export type JournalEntryCreateInput = z.infer<typeof journalEntryCreateSchema>;
 export type JournalEntryUpdateInput = z.infer<typeof journalEntryUpdateSchema>;
-
-export const journalEntrySchema = journalEntryCreateSchema;
-export type JournalEntryInput = JournalEntryCreateInput;

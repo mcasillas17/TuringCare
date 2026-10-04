@@ -4,10 +4,10 @@ import { Hono } from "hono";
 import { createMonitoringErrorHandler } from "./error-handler";
 import { type ApiEnv, requestIdMiddleware } from "./request-id";
 import {
-  captureApiError,
   captureApiStartupFailure,
   flushApiMonitoring,
   isApiMonitoringEnabled,
+  reportApiError,
 } from "./sentry";
 
 const mode = process.argv[2];
@@ -59,7 +59,7 @@ async function main(): Promise<void> {
   const app = new Hono<ApiEnv>().use("*", requestIdMiddleware);
   app.onError(
     createMonitoringErrorHandler((error, meta) => {
-      eventId = captureApiError(error, meta);
+      eventId = reportApiError(error, meta);
       return eventId;
     }),
   );

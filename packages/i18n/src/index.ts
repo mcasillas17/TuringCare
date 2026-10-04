@@ -35,7 +35,7 @@ export function isLocale(value: unknown): value is Locale {
   return typeof value === "string" && (LOCALES as readonly string[]).includes(value);
 }
 
-function supportedLocaleFromBrowserLanguage(language: string): Locale | null {
+export function supportedLocaleFromBrowserLanguage(language: string): Locale | null {
   if (language.length === 0 || language.length > MAX_BROWSER_LANGUAGE_TAG_LENGTH) return null;
 
   try {

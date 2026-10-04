@@ -52,12 +52,9 @@ export const en = {
     retry: "Try again",
   },
   language: {
-    en: "EN",
-    es: "ES",
     switchTo: "Switch to {lang}",
     nameEn: "English",
     nameEs: "Español",
-    label: "Language",
   },
   units: {
     minuteOne: "{n} minute",
@@ -1140,10 +1137,6 @@ export const en = {
     recentEmpty: "Nothing logged yet",
     seeAllJournal: "See all in Journal →",
     logAMoment: "+ Log a moment",
-    today: "today",
-    daysAgo: "{n}d ago",
-    weeksAgo: "{n}w ago",
-    monthsAgo: "{n}mo ago",
     statusDraft: "Draft",
     statusFinalized: "Final",
   },
@@ -1237,7 +1230,7 @@ export const en = {
     sending: "Sending…",
     needsFinalized: "Mark the brief finalized to send it.",
     notFound: "This Brief is no longer available.",
-    versionConflict: "There is more than one latest Brief version. Generate a new version.",
+    versionConflict: "A newer Brief version exists. Review the latest version before sending.",
     idempotencyConflict:
       "This send attempt was already used with different details. Review it and try again.",
     clientUpgradeRequired: "Refresh this page before sending the Brief.",

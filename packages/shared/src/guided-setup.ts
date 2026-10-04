@@ -3,6 +3,7 @@ import { behaviorConcernSchema, dogProfileSchema } from "./dog";
 import { journalDailyCheckInCreateSchema } from "./journal";
 import { VALIDATION_MESSAGE_CODES } from "./validation";
 
+// Also Postgres enum values (apps/api/src/db/schema.ts): changing them needs a committed migration.
 export const guidedSetupIntentValues = [
   "understand_behavior",
   "train_skill",

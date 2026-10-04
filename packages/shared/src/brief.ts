@@ -19,4 +19,3 @@ export type BriefWindow = (typeof briefWindows)[number];
 export const briefGenerateSchema = z.object({
   window: z.enum(briefWindows).default("30d"),
 });
-export type BriefGenerateInput = z.infer<typeof briefGenerateSchema>;

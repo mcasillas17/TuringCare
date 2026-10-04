@@ -14,7 +14,6 @@ export type TrainingSkillInput = z.infer<typeof trainingSkillSchema>;
 export const skillLevelSchema = z.object({
   level: z.number().int().min(CONFIDENCE_MIN).max(CONFIDENCE_MAX),
 });
-export type SkillLevelInput = z.infer<typeof skillLevelSchema>;
 
 const practiceSessionFields = {
   occurredAt: z.string().min(1, VALIDATION_MESSAGE_CODES.dateRequired),

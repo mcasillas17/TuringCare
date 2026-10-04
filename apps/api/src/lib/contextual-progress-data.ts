@@ -13,8 +13,8 @@ import {
   applyContextualSafety,
   deriveContextualProgress,
 } from "./contextual-progress";
+import { DAY_MS } from "./time";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 type ContextualProgressExecutor = Pick<typeof db, "select">;
 
 const contextualProgressColumns = {

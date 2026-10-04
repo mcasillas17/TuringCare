@@ -2,16 +2,15 @@ import type { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { routePath } from "hono/route";
 import { invalidValidationResult, isMalformedJsonValidationError } from "../middleware/validation";
-import { logApiError } from "./log-error";
 import type { ApiEnv } from "./request-id";
-import { captureApiError } from "./sentry";
+import { reportApiError } from "./sentry";
 
-type Capture = typeof captureApiError;
+type Report = typeof reportApiError;
 
 /**
- * Builds the app-wide Hono error boundary. `capture` defaults to the real
- * Sentry adapter but is injectable so tests can assert on captured errors
- * without touching Sentry.
+ * Builds the app-wide Hono error boundary. `report` defaults to the real
+ * log + Sentry adapter but is injectable so tests can assert on reported
+ * errors without touching Sentry.
  *
  * Preserves the existing HTTP response contract:
  * - malformed JSON is collapsed to the same stable validation-code payload as
@@ -27,17 +26,13 @@ type Capture = typeof captureApiError;
  * (set after `next()` in that middleware runs), so every response — including
  * this handler's — carries it.
  *
- * Every captured (>=500) branch also emits exactly one privacy-safe
- * structured `console.error` via {@link logApiError}, independent of whether
- * Sentry capture is enabled — so an unexpected failure is never silent just
- * because monitoring is disabled, misconfigured, or Node-guarded off (see
- * sentry.ts). Each branch runs at most once per request, so a given failure
- * is never logged twice.
+ * Every captured (>=500) branch calls {@link reportApiError} exactly once,
+ * which logs independent of whether Sentry capture is enabled.
  */
-export function createMonitoringErrorHandler(capture?: Capture): ErrorHandler<ApiEnv>;
-export function createMonitoringErrorHandler<E extends ApiEnv>(capture?: Capture): ErrorHandler<E>;
+export function createMonitoringErrorHandler(report?: Report): ErrorHandler<ApiEnv>;
+export function createMonitoringErrorHandler<E extends ApiEnv>(report?: Report): ErrorHandler<E>;
 export function createMonitoringErrorHandler<E extends ApiEnv>(
-  capture: Capture = captureApiError,
+  report: Report = reportApiError,
 ): ErrorHandler<E> {
   return (err, c) => {
     const route = routePath(c) || "unmatched";
@@ -51,16 +46,12 @@ export function createMonitoringErrorHandler<E extends ApiEnv>(
     if (err instanceof HTTPException) {
       const res = err.getResponse();
       if (res.status >= 500) {
-        const meta = { route, method, status: res.status, requestId };
-        logApiError(err, meta);
-        capture(err, meta);
+        report(err, { route, method, status: res.status, requestId });
       }
       return res;
     }
 
-    const meta = { route, method, status: 500, requestId };
-    logApiError(err, meta);
-    capture(err, meta);
+    report(err, { route, method, status: 500, requestId });
     return c.json({ error: "internal_server_error" } as const, 500);
   };
 }

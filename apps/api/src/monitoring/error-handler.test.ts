@@ -7,9 +7,9 @@ import { type ApiEnv, requestIdMiddleware } from "./request-id";
 /**
  * Throwaway Hono application built inline for this test only — the
  * production `app` instance in src/app.ts is never given a synthetic
- * failure route (see design doc).
+ * failure route.
  */
-function buildApp(capture: ReturnType<typeof vi.fn>) {
+function buildApp(report?: ReturnType<typeof vi.fn>) {
   const app = new Hono<ApiEnv>()
     .use("*", requestIdMiddleware)
     .get("/boom", () => {
@@ -25,7 +25,7 @@ function buildApp(capture: ReturnType<typeof vi.fn>) {
       throw SENTINEL;
     });
   app.onError(
-    createMonitoringErrorHandler(capture as Parameters<typeof createMonitoringErrorHandler>[0]),
+    createMonitoringErrorHandler(report as Parameters<typeof createMonitoringErrorHandler>[0]),
   );
   return app;
 }
@@ -127,7 +127,7 @@ describe("createMonitoringErrorHandler", () => {
 describe("createMonitoringErrorHandler console.error observability", () => {
   it("logs a generic exception exactly once with safe metadata and never the raw message", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const res = await buildApp(vi.fn()).request("/boom");
+    const res = await buildApp().request("/boom");
     expect(res.status).toBe(500);
 
     expect(errorSpy).toHaveBeenCalledTimes(1);
@@ -144,7 +144,7 @@ describe("createMonitoringErrorHandler console.error observability", () => {
 
   it("logs a 5xx HTTPException exactly once with safe metadata and never the response body", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const res = await buildApp(vi.fn()).request("/upstream");
+    const res = await buildApp().request("/upstream");
     expect(res.status).toBe(502);
 
     expect(errorSpy).toHaveBeenCalledTimes(1);
@@ -159,7 +159,7 @@ describe("createMonitoringErrorHandler console.error observability", () => {
 
   it("never logs for a preserved 4xx HTTPException response", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const res = await buildApp(vi.fn()).request("/forbidden");
+    const res = await buildApp().request("/forbidden");
     expect(res.status).toBe(403);
 
     expect(errorSpy).not.toHaveBeenCalled();
@@ -168,7 +168,7 @@ describe("createMonitoringErrorHandler console.error observability", () => {
 
   it("never logs for a preserved 404 (unmatched route)", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const res = await buildApp(vi.fn()).request("/missing");
+    const res = await buildApp().request("/missing");
     expect(res.status).toBe(404);
 
     expect(errorSpy).not.toHaveBeenCalled();
@@ -177,22 +177,12 @@ describe("createMonitoringErrorHandler console.error observability", () => {
 
   it("logs a normalized non-Error (sentinel) throw exactly once and never leaks the sentinel", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const res = await buildApp(vi.fn()).request("/sentinel");
+    const res = await buildApp().request("/sentinel");
     expect(res.status).toBe(500);
 
     expect(errorSpy).toHaveBeenCalledTimes(1);
     const serialized = JSON.stringify(errorSpy.mock.calls[0]);
     expect(serialized).not.toContain(SENTINEL);
-    errorSpy.mockRestore();
-  });
-
-  it("logs exactly once per request even when capture also runs (no duplicate logging)", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const capture = vi.fn();
-    await buildApp(capture).request("/boom");
-
-    expect(capture).toHaveBeenCalledTimes(1);
-    expect(errorSpy).toHaveBeenCalledTimes(1);
     errorSpy.mockRestore();
   });
 });

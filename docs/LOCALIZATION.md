@@ -160,11 +160,11 @@ current UI or viewer locale—controls:
 Artifact dates are formatted in UTC so the visible generated calendar day does not vary by
 viewer timezone. A malformed or absent legacy locale fails closed to English.
 
-Brief lifecycle routes also fail closed when the latest version is ambiguous during the
-phased migration window. Per-dog generation and share/finalize/send transitions are
-serialized at database-backed ownership rows, `(dog_id, version)` is unique after migration
-`0023_third_madripoor`, draft Briefs cannot be shared, and stable machine error codes drive
-localized recovery feedback.
+Per-dog Brief generation and share/finalize/send transitions are serialized at
+database-backed ownership rows, and `(dog_id, version)` is unique since migration
+`0023_third_madripoor`. Only the send route returns `brief_version_conflict`, when the
+supplied `briefId` is not the latest version. Draft Briefs cannot be shared, and stable
+machine error codes drive localized recovery feedback.
 
 ## Durable Brief email delivery
 

@@ -66,6 +66,28 @@ describe("setSkillLevel", () => {
     expect(row?.confidence).toBe(2);
   });
 
+  it("raising later keeps earlier reachedAt dates and adds the new level", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const skill = await makeSkill((await makeDog(u)).id);
+    await setSkillLevel(skill.id, 3);
+    const rows = () =>
+      db.select().from(skillMilestones).where(eq(skillMilestones.skillId, skill.id));
+    // Backdate so a rewritten reachedAt (now()) cannot equal the original.
+    await db
+      .update(skillMilestones)
+      .set({ reachedAt: new Date("2020-01-01T00:00:00Z") })
+      .where(eq(skillMilestones.skillId, skill.id));
+    const backdated = new Map((await rows()).map((m) => [m.level, m.reachedAt.getTime()]));
+
+    await setSkillLevel(skill.id, 4);
+
+    const after = new Map((await rows()).map((m) => [m.level, m.reachedAt.getTime()]));
+    expect([...after.keys()].sort()).toEqual([2, 3, 4]);
+    expect(after.get(2)).toBe(backdated.get(2));
+    expect(after.get(3)).toBe(backdated.get(3));
+  });
+
   it("loadProgress returns milestones ascending", async () => {
     const u = await createTestUser();
     users.push(u);

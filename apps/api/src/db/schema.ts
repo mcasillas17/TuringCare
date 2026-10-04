@@ -1,4 +1,23 @@
-import { relations, sql } from "drizzle-orm";
+import {
+  advancementStatusValues,
+  cueSupportValues,
+  distanceValues,
+  distractionValues,
+  durationBandValues,
+  environmentValues,
+  evidenceCategoryValues,
+  guidedSetupActionTypeValues,
+  guidedSetupCompletionReasonValues,
+  guidedSetupIntentValues,
+  guidedSetupStepValues,
+  journalEntryKindValues,
+  journalTrendValues,
+  practiceDimensionValues,
+  practiceOutcomeValues,
+  suggestionActionValues,
+  suggestionTypeValues,
+} from "@turingcare/shared";
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -86,24 +105,18 @@ export const dogSourceEnum = pgEnum("dog_source", ["breeder", "rescue", "shelter
 export const vaccineStageEnum = pgEnum("vaccine_stage", ["in_progress", "complete", "unknown"]);
 export const concernSeverityEnum = pgEnum("concern_severity", ["mild", "moderate", "severe"]);
 export const briefStatusEnum = pgEnum("brief_status", ["draft", "finalized"]);
-export const journalEntryKindEnum = pgEnum("journal_entry_kind", ["moment", "daily_checkin"]);
-export const journalTrendEnum = pgEnum("journal_trend", ["better", "same", "harder"]);
-export const guidedSetupIntentEnum = pgEnum("guided_setup_intent", [
-  "understand_behavior",
-  "train_skill",
-  "track_progress",
-]);
-export const guidedSetupStepEnum = pgEnum("guided_setup_step", ["intent", "action"]);
-export const guidedSetupCompletionReasonEnum = pgEnum("guided_setup_completion_reason", [
-  "first_action_completed",
-  "skipped",
-  "abandoned",
-]);
-export const guidedSetupActionTypeEnum = pgEnum("guided_setup_action_type", [
-  "behavior",
-  "training",
-  "progress",
-]);
+export const journalEntryKindEnum = pgEnum("journal_entry_kind", journalEntryKindValues);
+export const journalTrendEnum = pgEnum("journal_trend", journalTrendValues);
+export const guidedSetupIntentEnum = pgEnum("guided_setup_intent", guidedSetupIntentValues);
+export const guidedSetupStepEnum = pgEnum("guided_setup_step", guidedSetupStepValues);
+export const guidedSetupCompletionReasonEnum = pgEnum(
+  "guided_setup_completion_reason",
+  guidedSetupCompletionReasonValues,
+);
+export const guidedSetupActionTypeEnum = pgEnum(
+  "guided_setup_action_type",
+  guidedSetupActionTypeValues,
+);
 
 /* ---------- Domain tables ---------- */
 
@@ -211,51 +224,14 @@ export const trainingSkills = pgTable(
   (t) => [check("confidence_range", sql`${t.confidence} BETWEEN 1 AND 5`)],
 );
 
-export const practiceOutcomeEnum = pgEnum("practice_outcome", ["went_well", "mixed", "too_hard"]);
-export const practiceCueSupportEnum = pgEnum("practice_cue_support", [
-  "food_lure",
-  "hand_signal",
-  "verbal_cue",
-  "no_extra_help",
-]);
-export const practiceEnvironmentEnum = pgEnum("practice_environment", [
-  "home_quiet",
-  "home_busy",
-  "yard",
-  "quiet_outdoor",
-  "busy_outdoor",
-]);
-export const practiceDistanceEnum = pgEnum("practice_distance", [
-  "at_side",
-  "few_steps",
-  "across_room",
-  "across_yard",
-  "far_away",
-]);
-export const practiceDurationBandEnum = pgEnum("practice_duration_band", [
-  "under_5_seconds",
-  "about_15_seconds",
-  "about_30_seconds",
-  "one_to_two_minutes",
-  "five_to_fifteen_minutes",
-  "about_30_minutes",
-  "one_to_two_hours",
-  "half_day_or_more",
-]);
+export const practiceOutcomeEnum = pgEnum("practice_outcome", practiceOutcomeValues);
+export const practiceCueSupportEnum = pgEnum("practice_cue_support", cueSupportValues);
+export const practiceEnvironmentEnum = pgEnum("practice_environment", environmentValues);
+export const practiceDistanceEnum = pgEnum("practice_distance", distanceValues);
+export const practiceDurationBandEnum = pgEnum("practice_duration_band", durationBandValues);
 export const practiceVariantEnum = pgEnum("practice_variant", ["primary", "fallback"]);
-export const practiceDistractionEnum = pgEnum("practice_distraction", [
-  "none",
-  "mild",
-  "moderate",
-  "strong",
-]);
-export const practiceDimensionEnum = pgEnum("practice_dimension", [
-  "cue_support",
-  "environment",
-  "distance",
-  "duration",
-  "distraction",
-]);
+export const practiceDistractionEnum = pgEnum("practice_distraction", distractionValues);
+export const practiceDimensionEnum = pgEnum("practice_dimension", practiceDimensionValues);
 export const safetySignalTypeEnum = pgEnum("safety_signal_type", [
   "aggression_or_bite_risk",
   "injury_or_pain",
@@ -267,32 +243,13 @@ export const safetySignalSourceEnum = pgEnum("safety_signal_source", [
   "practice_session",
   "behavior_concern",
 ]);
-export const suggestionTypeEnum = pgEnum("suggestion_type", [
-  "exercise",
-  "safety_suppressed",
-  "needs_focus_skill",
-  "custom_skill_unsupported",
-]);
-export const suggestionEvidenceCategoryEnum = pgEnum("suggestion_evidence_category", [
-  "curriculum_only",
-  "recent_practice",
-  "recent_observation",
-]);
-export const suggestionActionEnum = pgEnum("suggestion_action", [
-  "started",
-  "skipped",
-  "rated_useful",
-  "rated_not_useful",
-]);
-export const advancementStatusEnum = pgEnum("advancement_status", [
-  "proposed",
-  "confirmed",
-  "stayed",
-  "rejected",
-  "regressed",
-  "insufficient_evidence",
-  "withdrawn",
-]);
+export const suggestionTypeEnum = pgEnum("suggestion_type", suggestionTypeValues);
+export const suggestionEvidenceCategoryEnum = pgEnum(
+  "suggestion_evidence_category",
+  evidenceCategoryValues,
+);
+export const suggestionActionEnum = pgEnum("suggestion_action", suggestionActionValues);
+export const advancementStatusEnum = pgEnum("advancement_status", advancementStatusValues);
 
 /**
  * One row per distinct suggestion shown to an owner. Scalar columns only — no
@@ -652,61 +609,3 @@ export const events = pgTable(
     index("events_created_at_idx").on(t.createdAt),
   ],
 );
-
-/* ---------- Relations ---------- */
-
-export const userRelations = relations(user, ({ many }) => ({
-  dogs: many(dogs),
-  guidedSetups: many(guidedSetups),
-}));
-
-export const dogsRelations = relations(dogs, ({ one, many }) => ({
-  owner: one(user, { fields: [dogs.ownerId], references: [user.id] }),
-  guidedSetup: one(guidedSetups),
-  behaviorConcerns: many(behaviorConcerns),
-  trainingGoals: many(trainingGoals),
-  journalEntries: many(journalEntries),
-  briefs: many(briefs),
-}));
-
-export const guidedSetupsRelations = relations(guidedSetups, ({ one }) => ({
-  owner: one(user, { fields: [guidedSetups.userId], references: [user.id] }),
-  dog: one(dogs, { fields: [guidedSetups.dogId], references: [dogs.id] }),
-}));
-
-export const behaviorConcernsRelations = relations(behaviorConcerns, ({ one }) => ({
-  dog: one(dogs, { fields: [behaviorConcerns.dogId], references: [dogs.id] }),
-}));
-
-export const trainingGoalsRelations = relations(trainingGoals, ({ one, many }) => ({
-  dog: one(dogs, { fields: [trainingGoals.dogId], references: [dogs.id] }),
-  trainingSkills: many(trainingSkills),
-}));
-
-export const trainingSkillsRelations = relations(trainingSkills, ({ one, many }) => ({
-  goal: one(trainingGoals, { fields: [trainingSkills.goalId], references: [trainingGoals.id] }),
-  practiceSessions: many(practiceSessions),
-  skillMilestones: many(skillMilestones),
-}));
-
-export const practiceSessionsRelations = relations(practiceSessions, ({ one }) => ({
-  skill: one(trainingSkills, {
-    fields: [practiceSessions.skillId],
-    references: [trainingSkills.id],
-  }),
-}));
-
-export const skillMilestonesRelations = relations(skillMilestones, ({ one }) => ({
-  skill: one(trainingSkills, {
-    fields: [skillMilestones.skillId],
-    references: [trainingSkills.id],
-  }),
-}));
-
-export const journalEntriesRelations = relations(journalEntries, ({ one }) => ({
-  dog: one(dogs, { fields: [journalEntries.dogId], references: [dogs.id] }),
-}));
-
-export const briefsRelations = relations(briefs, ({ one }) => ({
-  dog: one(dogs, { fields: [briefs.dogId], references: [dogs.id] }),
-}));

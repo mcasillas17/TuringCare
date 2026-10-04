@@ -1,5 +1,4 @@
 import { useI18n } from "@/i18n";
-import { Reveal } from "./reveal";
 
 export function Hero() {
   const { t } = useI18n();
@@ -18,12 +17,12 @@ export function Hero() {
         }}
       />
       <div className="relative mx-auto max-w-3xl text-center">
-        <Reveal>
+        <div className="reveal">
           <span className="inline-block rounded-full border border-silver bg-surface px-4 py-1 text-xs font-semibold tracking-wide text-slate-soft uppercase">
             {t("hero.eyebrow")}
           </span>
-        </Reveal>
-        <Reveal delay={80}>
+        </div>
+        <div className="reveal">
           <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-slate md:text-6xl">
             {t("hero.headline")}
             <br />
@@ -31,11 +30,11 @@ export function Hero() {
               {t("hero.headlineEmphasis")}
             </span>
           </h1>
-        </Reveal>
-        <Reveal delay={160}>
+        </div>
+        <div className="reveal">
           <p className="mx-auto mt-6 max-w-xl text-lg text-slate-soft">{t("hero.subcopy")}</p>
-        </Reveal>
-        <Reveal delay={240}>
+        </div>
+        <div className="reveal">
           <div className="mt-8 flex flex-col items-center gap-4">
             <img
               src="/turing.jpg"
@@ -50,7 +49,7 @@ export function Hero() {
               {t("hero.turingCaption")}
             </p>
           </div>
-        </Reveal>
+        </div>
       </div>
     </section>
   );

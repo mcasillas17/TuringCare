@@ -8,10 +8,10 @@ import { and, desc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import { practiceSessions } from "../db/schema";
+import { DAY_MS } from "./time";
 
 /** How far back structured practice evidence is considered. */
 export const EVIDENCE_WINDOW_DAYS = 21;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type EvidenceRow = {
   id?: string;

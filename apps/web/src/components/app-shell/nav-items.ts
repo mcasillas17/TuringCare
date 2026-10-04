@@ -15,11 +15,12 @@ export type NavItem = {
   to: string;
   labelKey: Extract<MessageKey, `shell.${string}`>;
   icon: typeof PawPrint;
+  end?: boolean;
   adminOnly?: boolean;
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  { to: "/my", labelKey: "shell.overview", icon: LayoutDashboard },
+  { to: "/my", labelKey: "shell.overview", icon: LayoutDashboard, end: true },
   { to: "/my/dogs", labelKey: "shell.dogs", icon: PawPrint },
   { to: "/my/journal", labelKey: "shell.journal", icon: ClipboardList },
   { to: "/my/brief", labelKey: "shell.brief", icon: FileText },

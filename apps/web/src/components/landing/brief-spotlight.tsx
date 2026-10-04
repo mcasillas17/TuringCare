@@ -1,6 +1,5 @@
 import { useI18n } from "@/i18n";
 import { Check } from "lucide-react";
-import { Reveal } from "./reveal";
 
 export function BriefSpotlight() {
   const { t } = useI18n();
@@ -15,7 +14,7 @@ export function BriefSpotlight() {
   return (
     <section id="brief" className="bg-surface-sand px-5 py-24">
       <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-2">
-        <Reveal>
+        <div className="reveal">
           <h2 className="text-3xl font-bold text-slate md:text-4xl">{t("briefSpotlight.title")}</h2>
           <p className="mt-4 text-slate-soft">{t("briefSpotlight.body")}</p>
           <ul className="mt-7 space-y-3">
@@ -31,8 +30,8 @@ export function BriefSpotlight() {
               </li>
             ))}
           </ul>
-        </Reveal>
-        <Reveal delay={120}>
+        </div>
+        <div className="reveal">
           {/* Illustrative mock — not real data */}
           <div className="rounded-2xl border border-silver bg-surface p-6 shadow-md">
             <div className="flex items-center justify-between border-b border-silver/70 pb-4">
@@ -72,7 +71,7 @@ export function BriefSpotlight() {
               </div>
             </div>
           </div>
-        </Reveal>
+        </div>
       </div>
     </section>
   );

@@ -1,50 +1,34 @@
-import { type Locale, en, es, formatDateInUtc, isLocale } from "@turingcare/i18n";
-
-const briefMessages = {
-  en: en.brief,
-  es: es.brief,
-} as const;
-
-function interpolate(template: string, vars: Record<string, string | number>) {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => {
-    const value = vars[key];
-    return value === undefined ? match : String(value);
-  });
-}
+import { translate } from "@/i18n";
+import { type Locale, formatDateInUtc, isLocale } from "@turingcare/i18n";
 
 export function normalizeBriefLocale(locale: unknown): Locale {
   return isLocale(locale) ? locale : "en";
 }
 
 export function briefTitle(locale: unknown) {
-  return briefMessages[normalizeBriefLocale(locale)].title;
+  return translate(normalizeBriefLocale(locale), "brief.title");
 }
 
 export function sharedBriefTitle(locale: unknown) {
-  return briefMessages[normalizeBriefLocale(locale)].sharedTitle;
+  return translate(normalizeBriefLocale(locale), "brief.sharedTitle");
 }
 
 export function briefVersionLabel(locale: unknown) {
-  return briefMessages[normalizeBriefLocale(locale)].version;
+  return translate(normalizeBriefLocale(locale), "brief.version");
 }
 
 export function briefStatusLabel(status: string, version: number, locale: unknown) {
-  const messages = briefMessages[normalizeBriefLocale(locale)];
-  const template = status === "finalized" ? messages.finalVersion : messages.draftVersion;
-  return interpolate(template, { version });
-}
-
-function formatStoredBriefDate(generatedAt: string, locale: Locale) {
-  return formatDateInUtc(locale, generatedAt, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const key = status === "finalized" ? "brief.finalVersion" : "brief.draftVersion";
+  return translate(normalizeBriefLocale(locale), key, { version });
 }
 
 export function briefGeneratedLabel(generatedAt: string, locale: unknown) {
   const normalized = normalizeBriefLocale(locale);
-  const formatted = formatStoredBriefDate(generatedAt, normalized);
+  const formatted = formatDateInUtc(normalized, generatedAt, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
   if (!formatted) return "";
-  return interpolate(briefMessages[normalized].generatedOn, { date: formatted });
+  return translate(normalized, "brief.generatedOn", { date: formatted });
 }

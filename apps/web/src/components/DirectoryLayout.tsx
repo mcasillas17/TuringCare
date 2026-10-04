@@ -1,5 +1,6 @@
-import { PublicLayout } from "@/components/PublicLayout";
 import { AppShell } from "@/components/app-shell/AppShell";
+import { SiteFooter } from "@/components/landing/site-footer";
+import { SiteNav } from "@/components/landing/site-nav";
 import { useSessionQueriesReady, useSessionResolvedOnce } from "@/lib/session-query-boundary";
 import { useHasVerifiedSession } from "@/lib/verified-session";
 import { Outlet } from "react-router-dom";
@@ -24,8 +25,12 @@ export function DirectoryLayout() {
   if (!cacheReady || !resolvedOnce) return null;
   if (verified) return <AppShell />;
   return (
-    <PublicLayout>
-      <Outlet />
-    </PublicLayout>
+    <>
+      <SiteNav />
+      <main className="mx-auto max-w-6xl px-5 pt-24 pb-16">
+        <Outlet />
+      </main>
+      <SiteFooter />
+    </>
   );
 }

@@ -67,15 +67,15 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("captureApiError", () => {
+describe("reportApiError", () => {
   it("returns undefined and never calls Sentry when monitoring is disabled", async () => {
     stubDisabledEnv();
-    const { initializeApiMonitoring, captureApiError, isApiMonitoringEnabled } =
+    const { initializeApiMonitoring, reportApiError, isApiMonitoringEnabled } =
       await loadSentryModule();
     initializeApiMonitoring();
     expect(isApiMonitoringEnabled()).toBe(false);
 
-    const result = captureApiError(new Error("boom"), {
+    const result = reportApiError(new Error("boom"), {
       route: "/x",
       method: "GET",
       status: 500,
@@ -88,12 +88,12 @@ describe("captureApiError", () => {
 
   it("returns undefined and never calls Sentry for a status below 500, even when enabled", async () => {
     stubEnabledEnv();
-    const { initializeApiMonitoring, captureApiError, isApiMonitoringEnabled } =
+    const { initializeApiMonitoring, reportApiError, isApiMonitoringEnabled } =
       await loadSentryModule();
     initializeApiMonitoring("v22.4.0");
     expect(isApiMonitoringEnabled()).toBe(true);
 
-    const result = captureApiError(new Error("not found"), {
+    const result = reportApiError(new Error("not found"), {
       route: "/x",
       method: "GET",
       status: 404,
@@ -106,11 +106,11 @@ describe("captureApiError", () => {
 
   it("captures and returns the Sentry event ID for a 5xx error when enabled", async () => {
     stubEnabledEnv();
-    const { initializeApiMonitoring, captureApiError } = await loadSentryModule();
+    const { initializeApiMonitoring, reportApiError } = await loadSentryModule();
     initializeApiMonitoring("v22.4.0");
 
     const error = new Error("boom");
-    const result = captureApiError(error, {
+    const result = reportApiError(error, {
       route: "/api/dogs/:id",
       method: "GET",
       status: 500,
@@ -127,6 +127,111 @@ describe("captureApiError", () => {
         request_id: "req-1",
       },
     });
+  });
+});
+
+describe("reportApiError logging", () => {
+  const META = {
+    requestId: "e5d938bf-65c0-4a79-b19e-e3c46091fead",
+    route: "/api/dogs/:id",
+    method: "GET",
+    status: 500,
+  };
+
+  async function loadReporter(monitoring: "enabled" | "disabled" = "disabled") {
+    if (monitoring === "enabled") stubEnabledEnv();
+    else stubDisabledEnv();
+    const api = await loadSentryModule();
+    const { registerApiMonitoringRoutes } = await import("./sanitize-event");
+    registerApiMonitoringRoutes([{ path: "/api/dogs/:id" }]);
+    api.initializeApiMonitoring("v22.4.0");
+    return api.reportApiError;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("emits exactly one console.error call with the fixed line and structured metadata", async () => {
+    const reportApiError = await loadReporter();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    reportApiError(new Error("raw failure detail"), META);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith("[monitoring] unexpected server error", {
+      requestId: META.requestId,
+      route: META.route,
+      method: META.method,
+      status: META.status,
+      errorType: "Unexpected Error",
+    });
+  });
+
+  it("logs exactly once and captures exactly once when monitoring is enabled", async () => {
+    const reportApiError = await loadReporter("enabled");
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    expect(reportApiError(new Error("boom"), META)).toBe("mock-event-id");
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(sentryMocks.captureException).toHaveBeenCalledTimes(1);
+  });
+
+  it("never logs a status below 500", async () => {
+    const reportApiError = await loadReporter();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    reportApiError(new Error("not found"), { ...META, status: 404 });
+
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not log identifier-shaped private metadata or custom exception names", async () => {
+    const reportApiError = await loadReporter();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    class OwnerPrivateToken123 extends Error {}
+    reportApiError(new OwnerPrivateToken123(), {
+      requestId: "OwnerPrivateToken123",
+      route: "/OwnerPrivateToken123",
+      method: "OWNERSECRET",
+      status: 500,
+    });
+    const serialized = JSON.stringify(errorSpy.mock.calls);
+    expect(serialized).not.toContain("OwnerPrivateToken123");
+    expect(serialized).not.toContain("OWNERSECRET");
+  });
+
+  it("never logs the raw error message, even embedded inside the call arguments", async () => {
+    const reportApiError = await loadReporter();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sentinel = "raw-message-sentinel-do-not-leak";
+
+    reportApiError(new Error(sentinel), META);
+
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(sentinel);
+  });
+
+  it("classifies a recognizable Error subclass by its constructor name", async () => {
+    const reportApiError = await loadReporter();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    reportApiError(new TypeError("boom"), META);
+
+    expect(errorSpy.mock.calls[0]?.[1]).toMatchObject({ errorType: "Unexpected TypeError" });
+  });
+
+  it("falls back to a generic classification for a non-Error thrown value, without leaking it", async () => {
+    const reportApiError = await loadReporter();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sentinel = "non-error-sentinel-do-not-leak";
+
+    reportApiError(sentinel, META);
+
+    expect(errorSpy.mock.calls[0]?.[1]).toMatchObject({
+      errorType: "Unexpected application error",
+    });
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(sentinel);
   });
 });
 
@@ -325,7 +430,7 @@ describe("monitoring failure results", () => {
     sentryMocks.captureException.mockImplementationOnce(() => {
       throw new Error("private");
     });
-    expect(api.captureApiError(new Error("synthetic"), meta)).toBeUndefined();
+    expect(api.reportApiError(new Error("synthetic"), meta)).toBeUndefined();
   });
 
   it("reports failed startup capture without attempting to flush", async () => {

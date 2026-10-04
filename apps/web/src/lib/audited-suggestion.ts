@@ -80,11 +80,3 @@ export function getAuditedSuggestionTargetState(
 
   return { status: "eligible", target: { focusSkill, suggestion } };
 }
-
-export function getAuditedSuggestionTarget(
-  queryClient: QueryClient,
-  input: AuditedSuggestionTargetInput,
-): AuditedSuggestionTarget | null {
-  const state = getAuditedSuggestionTargetState(queryClient, input);
-  return state.status === "eligible" ? state.target : null;
-}

@@ -41,6 +41,7 @@ export function DogCardBody({ dog }: { dog: DogOverview }) {
     qc.invalidateQueries({ queryKey: ["dogs-overview"] });
   };
   const dogList = [{ id: dog.id, name: dog.name }];
+  const lastActivity = timeAgo(locale, summary.lastActivityAt);
 
   return (
     <div className="space-y-4 border-t border-silver bg-cream/40 p-4">
@@ -50,7 +51,7 @@ export function DogCardBody({ dog }: { dog: DogOverview }) {
           <div className="text-base font-bold text-slate">{summary.journalCount}</div>
           <div className="text-xs text-slate-soft">
             {t("dogs.statJournal")}
-            {summary.lastActivityAt ? ` · ${timeAgo(t, summary.lastActivityAt)}` : ""}
+            {lastActivity ? ` · ${lastActivity}` : ""}
           </div>
         </div>
         <div className="flex-1 rounded-xl border border-silver bg-white p-3">

@@ -176,12 +176,12 @@ describe("@turingcare/i18n catalogs", () => {
     ] as const;
 
     expect(keys.map((key) => translate(english, key))).toEqual([
-      "There is more than one latest Brief version. Generate a new version.",
+      "A newer Brief version exists. Review the latest version before sending.",
       "This send attempt was already used with different details. Review it and try again.",
       "You've reached the daily send limit. Try again later.",
     ]);
     expect(keys.map((key) => translate(spanish, key))).toEqual([
-      "Hay más de una versión reciente del resumen. Genera una nueva versión.",
+      "Existe una versión más reciente del Resumen. Revisa la versión más reciente antes de enviarla.",
       "Este intento de envío ya se usó con otros datos. Revisa e inténtalo de nuevo.",
       "Alcanzaste el límite diario de envíos. Inténtalo más tarde.",
     ]);

@@ -40,4 +40,3 @@ export type TrainingGoalInput = z.infer<typeof trainingGoalSchema>;
 export const goalFromTemplateSchema = z.object({
   templateKey: z.string().min(1).max(200),
 });
-export type GoalFromTemplateInput = z.infer<typeof goalFromTemplateSchema>;

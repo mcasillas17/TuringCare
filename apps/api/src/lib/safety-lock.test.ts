@@ -5,7 +5,8 @@ import { app } from "../app";
 import { db, pool } from "../db";
 import { dogSafetySignals } from "../db/schema";
 import { type TestUser, createTestUser } from "../test-helpers";
-import { withDogSafetyLock, withDogSafetySharedLock } from "./safety-lock";
+import { withDogSafetyLock } from "./safety-lock";
+import { evaluateSafetyWithSharedLock } from "./safety-policy";
 
 /**
  * Asks an independent connection whether the dog-safety advisory lock is free.
@@ -91,8 +92,8 @@ describe("withDogSafetyLock", () => {
   it("allows two safety readers for the same dog to enter concurrently", async () => {
     const dogId = randomUUID();
 
-    const secondReader = await withDogSafetySharedLock(dogId, async () =>
-      withDogSafetySharedLock(dogId, async () => "second reader entered"),
+    const secondReader = await evaluateSafetyWithSharedLock(dogId, async () =>
+      evaluateSafetyWithSharedLock(dogId, async () => "second reader entered"),
     );
 
     expect(secondReader).toBe("second reader entered");
@@ -101,7 +102,7 @@ describe("withDogSafetyLock", () => {
   it("makes an exclusive safety writer wait while a safety reader is active", async () => {
     const dogId = randomUUID();
 
-    await withDogSafetySharedLock(dogId, async () => {
+    await evaluateSafetyWithSharedLock(dogId, async () => {
       expect(await dogSafetyLockIsFree(dogId)).toBe(false);
     });
   });

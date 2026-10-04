@@ -1,8 +1,8 @@
 import { and, arrayContains, eq } from "drizzle-orm";
 import { Hono } from "hono";
+import { getAuthoritativeSession } from "../auth/session";
 import { db } from "../db";
 import { trainers } from "../db/schema";
-import { type OptionalVars, optionalUser } from "../middleware/optional-user";
 
 const TRAINER_COLS = {
   id: trainers.id,
@@ -18,8 +18,7 @@ const TRAINER_COLS = {
   phone: trainers.phone,
 } as const;
 
-export const trainersApp = new Hono<{ Variables: OptionalVars }>()
-  .use("*", optionalUser)
+export const trainersApp = new Hono()
   .get("/", async (c) => {
     const state = c.req.query("state");
     const specialty = c.req.query("specialty");
@@ -42,7 +41,9 @@ export const trainersApp = new Hono<{ Variables: OptionalVars }>()
       .where(eq(trainers.id, c.req.param("id")));
     if (!trainer) return c.json({ error: "not_found" } as const, 404);
     // Detail reveals contact ONLY to verified authenticated users.
+    const session = await getAuthoritativeSession(c.req.raw.headers);
     return c.json({
-      trainer: c.get("userId") ? trainer : { ...trainer, email: null, phone: null },
+      trainer:
+        session?.user.emailVerified === true ? trainer : { ...trainer, email: null, phone: null },
     });
   });

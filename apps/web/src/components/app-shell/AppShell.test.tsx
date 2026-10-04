@@ -50,6 +50,7 @@ afterEach(() => {
 function setup(
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
   locale: "en" | "es" = "en",
+  path = "/my",
 ) {
   localStorage.setItem("tc-locale", locale);
   return {
@@ -57,10 +58,12 @@ function setup(
     ...render(
       <QueryClientProvider client={queryClient}>
         <LocaleProvider>
-          <MemoryRouter initialEntries={["/my"]}>
+          <MemoryRouter initialEntries={[path]}>
             <Routes>
               <Route element={<AppShell />}>
                 <Route path="/my" element={<div>OVERVIEW-CONTENT</div>} />
+                <Route path="/my/dogs/:id" element={<div>DOG-CONTENT</div>} />
+                <Route path="/nowhere" element={<div>NOWHERE-CONTENT</div>} />
                 <Route path="/login" element={<div>LOGIN-CONTENT</div>} />
               </Route>
             </Routes>
@@ -79,6 +82,18 @@ describe("AppShell", () => {
     expect(screen.getByText("OVERVIEW-CONTENT")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /dogs/i })).toBeInTheDocument();
   });
+  const headerTitle = () => screen.getByRole("banner").querySelector("span.font-semibold");
+
+  it("shows the Dogs title on a nested dogs path, not Overview", () => {
+    mockMe("user");
+    setup(undefined, "en", "/my/dogs/abc");
+    expect(headerTitle()).toHaveTextContent(/^Dogs$/);
+  });
+  it("shows an empty header title for an unmatched path", () => {
+    mockMe("user");
+    setup(undefined, "en", "/nowhere");
+    expect(headerTitle()).toBeEmptyDOMElement();
+  });
   it("hides Admin for non-admins, shows it for admins", async () => {
     mockMe("user");
     const { unmount } = setup();
@@ -92,7 +107,7 @@ describe("AppShell", () => {
     mockMe("user");
     setup();
     const signOut = screen.getByRole("button", { name: /sign out/i });
-    const chip = screen.getByRole("button", { name: "Language" });
+    const chip = screen.getByRole("button", { name: "Switch to Español" });
     // The chip must come AFTER the Sign out button in document order.
     expect(signOut.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -102,6 +117,29 @@ describe("AppShell", () => {
     setup(undefined, "es");
     await user.click(screen.getByRole("button", { name: "Menú" }));
     expect(screen.getByRole("button", { name: "Cerrar menú" })).toBeInTheDocument();
+  });
+
+  it("persists rail collapse under tc-nav-expanded and restores it on remount", async () => {
+    const user = userEvent.setup();
+    mockMe("user");
+    const { unmount } = setup();
+    await user.click(screen.getByRole("button", { name: "Collapse menu" }));
+    expect(localStorage.getItem("tc-nav-expanded")).toBe("false");
+    unmount();
+    setup();
+    expect(screen.getByRole("button", { name: "Expand menu" })).toBeInTheDocument();
+  });
+
+  it("opens the mobile drawer and closes it after a nav link click", async () => {
+    const user = userEvent.setup();
+    mockMe("user");
+    setup();
+    expect(screen.queryByRole("button", { name: "Close menu" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Menu" }));
+    expect(screen.getByRole("button", { name: "Close menu" })).toBeInTheDocument();
+    // Drawer rail renders after the always-present desktop rail.
+    await user.click(screen.getAllByRole("link", { name: /overview/i }).at(-1) as HTMLElement);
+    expect(screen.queryByRole("button", { name: "Close menu" })).toBeNull();
   });
 
   it("clears owner caches before navigating after a successful sign out", async () => {

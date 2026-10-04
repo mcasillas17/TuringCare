@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useValidationMessage } from "@/i18n/validation";
 import { BriefRequestError, briefSendErrorMessageKey } from "@/lib/brief-errors";
-import { createBriefSendIdempotencyKey } from "@/lib/brief-idempotency";
 import { useBriefSends, useSendBrief } from "@/lib/brief-send";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { formatDate } from "@turingcare/i18n";
@@ -71,7 +70,7 @@ export function SendPanel({
         );
         submission.current = {
           intent,
-          idempotencyKey: recoverable?.id ?? createBriefSendIdempotencyKey(),
+          idempotencyKey: recoverable?.id ?? crypto.randomUUID(),
         };
       }
       await send.mutateAsync({

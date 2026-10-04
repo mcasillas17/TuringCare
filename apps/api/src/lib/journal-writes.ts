@@ -3,18 +3,7 @@ import { journalEntries } from "../db/schema";
 import { type TransactionType, lockDogSafety } from "./safety-lock";
 
 export class InvalidJournalOccurredAtError extends Error {
-  declare readonly occurredAtInput: string;
-
-  constructor(occurredAtInput: string) {
-    super("invalid journal occurredAt");
-    this.name = "InvalidJournalOccurredAtError";
-    Object.defineProperty(this, "occurredAtInput", {
-      value: occurredAtInput,
-      enumerable: false,
-      configurable: false,
-      writable: false,
-    });
-  }
+  override name = "InvalidJournalOccurredAtError";
 }
 
 export async function createJournalEntry(
@@ -24,7 +13,7 @@ export async function createJournalEntry(
 ) {
   const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
   if (Number.isNaN(occurredAt.getTime())) {
-    throw new InvalidJournalOccurredAtError(input.occurredAt ?? "");
+    throw new InvalidJournalOccurredAtError("invalid journal occurredAt");
   }
 
   await lockDogSafety(executor, dogId);

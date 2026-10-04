@@ -32,7 +32,7 @@ const overview: DogOverview = {
   },
 };
 
-function setup(locale: "en" | "es" = "en", goals: ProgressGoal[] = []) {
+function setup(locale: "en" | "es" = "en", goals: ProgressGoal[] = [], dog = overview) {
   localStorage.setItem("tc-locale", locale);
   vi.mocked(progressLib.useProgress).mockReturnValue({ data: goals } as unknown as ReturnType<
     typeof progressLib.useProgress
@@ -62,7 +62,7 @@ function setup(locale: "en" | "es" = "en", goals: ProgressGoal[] = []) {
     <LocaleProvider>
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter>
-          <DogCardBody dog={overview} />
+          <DogCardBody dog={dog} />
         </MemoryRouter>
       </QueryClientProvider>
     </LocaleProvider>,
@@ -101,6 +101,16 @@ describe("DogCardBody", () => {
     ]);
 
     expect(screen.getByText("N3")).toBeInTheDocument();
+  });
+
+  it("omits the last-activity suffix when the timestamp is malformed", () => {
+    setup("en", [], {
+      ...overview,
+      summary: { ...overview.summary, lastActivityAt: "not-a-date" },
+    });
+
+    expect(screen.queryByText(/null/)).not.toBeInTheDocument();
+    expect(screen.getByText("journal")).toBeInTheDocument();
   });
 
   it("opens the Log moment dialog in place (no navigation)", () => {

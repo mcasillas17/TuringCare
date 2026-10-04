@@ -1,9 +1,10 @@
 import { lt } from "drizzle-orm";
 import type { DB } from "../db";
 import { events } from "../db/schema";
+import { DAY_MS } from "../lib/time";
 
 export function retentionCutoff(now: Date, retentionDays: number): Date {
-  return new Date(now.getTime() - retentionDays * 86_400_000);
+  return new Date(now.getTime() - retentionDays * DAY_MS);
 }
 
 /** Deletes events older than `retentionDays`. Returns the row count removed. */

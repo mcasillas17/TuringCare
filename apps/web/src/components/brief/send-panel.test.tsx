@@ -100,7 +100,7 @@ describe("SendPanel", () => {
   it.each([
     [
       "brief_version_conflict",
-      "Hay más de una versión reciente del resumen. Genera una nueva versión.",
+      "Existe una versión más reciente del Resumen. Revisa la versión más reciente antes de enviarla.",
     ],
     [
       "idempotency_conflict",

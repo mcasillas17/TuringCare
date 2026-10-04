@@ -1,22 +1,17 @@
 // Local-time humanized date/time helpers for the journal timeline and capture.
 
 import { type Locale, formatDate } from "@turingcare/i18n";
-
-/** Local YYYY-MM-DD key for a date. */
-export function localDayKey(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
+import { dayKey } from "./week";
 
 export type DayKind = "today" | "yesterday" | "date";
 
 /** Classify a date relative to `now` (local days). */
 export function dayKindOf(value: string | Date, now: Date = new Date()): DayKind {
   const d = new Date(value);
-  const key = localDayKey(d);
-  if (key === localDayKey(now)) return "today";
+  const key = dayKey(d);
+  if (key === dayKey(now)) return "today";
   const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-  if (key === localDayKey(y)) return "yesterday";
+  if (key === dayKey(y)) return "yesterday";
   return "date";
 }
 
@@ -60,7 +55,7 @@ export function groupByDay<T>(
   const buckets = new Map<string, DayGroup<T>>();
   for (const item of items) {
     const d = new Date(getDate(item));
-    const key = localDayKey(d);
+    const key = dayKey(d);
     let group = buckets.get(key);
     if (!group) {
       group = { key, kind: dayKindOf(d, now), sample: d, items: [] };

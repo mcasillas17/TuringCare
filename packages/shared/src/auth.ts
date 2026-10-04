@@ -12,9 +12,6 @@ export const loginSchema = z.object({
   password: z.string().min(1, VALIDATION_MESSAGE_CODES.passwordRequired),
 });
 
-export type RegisterInput = z.infer<typeof registerSchema>;
-export type LoginInput = z.infer<typeof loginSchema>;
-
 export const verificationResendSchema = z.object({
   email: z.string().trim().email(VALIDATION_MESSAGE_CODES.emailInvalid).max(254).optional(),
   password: z.string().min(1, VALIDATION_MESSAGE_CODES.passwordRequired).max(128).optional(),

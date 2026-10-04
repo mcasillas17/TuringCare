@@ -19,7 +19,6 @@ describe("overview", () => {
       dogCount: 0,
       journalEntryCount: 0,
       latestBrief: null,
-      latestBriefAmbiguous: false,
       recentActivity: [],
     });
     const dr = await app.request("/api/dogs", {
@@ -57,7 +56,6 @@ describe("overview", () => {
       dogCount: number;
       journalEntryCount: number;
       latestBrief: { dogId: string; dogName: string; status: string } | null;
-      latestBriefAmbiguous: boolean;
       recentActivity: { dogName: string; behavior: string }[];
     };
     expect(body.dogCount).toBe(1);
@@ -67,7 +65,6 @@ describe("overview", () => {
       dogName: "Biscuit",
       status: "finalized",
     });
-    expect(body.latestBriefAmbiguous).toBe(false);
     expect(body.recentActivity[0]).toMatchObject({ dogName: "Biscuit", behavior: "Barked" });
   });
 });

@@ -10,7 +10,6 @@ export const BRIEF_ERROR_CODES = [
 ] as const;
 
 export type BriefErrorCode = (typeof BRIEF_ERROR_CODES)[number];
-export type BriefRequestContext = "load" | "generate" | "finalize" | "share" | "revoke" | "send";
 export type BriefFallbackCode =
   | "load_failed"
   | "gen_failed"
@@ -29,29 +28,16 @@ export class BriefRequestError extends Error {
   constructor(
     public readonly code: BriefErrorCode | BriefFallbackCode,
     public readonly status: number,
-    public readonly context: BriefRequestContext,
   ) {
     super(code);
     this.name = "BriefRequestError";
   }
 }
 
-export function isBriefVersionConflict(
-  error: unknown,
-  context: BriefRequestContext,
-): error is BriefRequestError {
-  return (
-    error instanceof BriefRequestError &&
-    error.code === "brief_version_conflict" &&
-    error.context === context
-  );
-}
-
 type ErrorResponse = Pick<Response, "status" | "json">;
 
 export async function readBriefRequestError(
   response: ErrorResponse,
-  context: BriefRequestContext,
   fallback: BriefFallbackCode,
 ): Promise<BriefRequestError> {
   let code: BriefErrorCode | BriefFallbackCode = fallback;
@@ -69,7 +55,7 @@ export async function readBriefRequestError(
     // A malformed or non-JSON response is an untrusted transport failure. The
     // stable operation fallback is intentionally used instead of response text.
   }
-  return new BriefRequestError(code, response.status, context);
+  return new BriefRequestError(code, response.status);
 }
 
 export type BriefSendMessageKey =

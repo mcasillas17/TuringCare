@@ -9,7 +9,6 @@ import {
   briefTitle,
   normalizeBriefLocale,
 } from "@/lib/brief-chrome";
-import { isBriefVersionConflict } from "@/lib/brief-errors";
 import { useDogs } from "@/lib/dogs";
 import { type BriefWindow, briefWindows } from "@turingcare/shared";
 import { useEffect, useRef, useState } from "react";
@@ -25,7 +24,7 @@ export function Brief() {
   const [picked, setPicked] = useState("");
   const dogId = routeId ?? picked ?? "";
   const [windowChoice, setWindowChoice] = useState<BriefWindow>("30d");
-  const { data: brief, error: briefError, isError } = useBrief(dogId);
+  const { data: brief, isError } = useBrief(dogId);
   const dog = dogs?.find((d) => d.id === dogId);
   const gen = useGenerateBrief(dogId);
   const [shareOpen, setShareOpen] = useState(false);
@@ -136,15 +135,7 @@ export function Brief() {
             </Button>
           )}
 
-          {isError && (
-            <p className="text-red-600">
-              {t(
-                isBriefVersionConflict(briefError, "load")
-                  ? "briefSend.versionConflict"
-                  : "brief.loadError",
-              )}
-            </p>
-          )}
+          {isError && <p className="text-red-600">{t("brief.loadError")}</p>}
 
           {!brief && !isError && (
             <section className="space-y-2 rounded-xl border border-silver bg-white p-6 text-center">

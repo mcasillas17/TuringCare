@@ -2,15 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n";
+import { type Trainer, useTrainers } from "@/lib/trainers";
 import type { TrainerInput } from "@turingcare/shared";
 import { type FormEvent, useState } from "react";
-import {
-  type Trainer,
-  useCreateTrainer,
-  useDeleteTrainer,
-  useTrainers,
-  useUpdateTrainer,
-} from "./use-trainers";
+import { useCreateTrainer, useDeleteTrainer, useUpdateTrainer } from "./use-trainers";
 
 type FormState = {
   name: string;
@@ -84,7 +79,7 @@ function fromTrainer(t: Trainer): FormState {
 
 export function AdminTrainers() {
   const { t } = useI18n();
-  const list = useTrainers();
+  const list = useTrainers({});
   const create = useCreateTrainer();
   const update = useUpdateTrainer();
   const remove = useDeleteTrainer();

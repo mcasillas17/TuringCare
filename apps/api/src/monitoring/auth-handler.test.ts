@@ -12,7 +12,7 @@ const SENTINEL = "auth-response-body-sentinel-do-not-leak";
  * "/api/auth/*", createMonitoringAuthHandler(...))`), but with a fake auth
  * handler so no real Better Auth instance or network call is involved.
  */
-function buildApp(handler: AuthRequestHandler, capture: ReturnType<typeof vi.fn>) {
+function buildApp(handler: AuthRequestHandler, report?: ReturnType<typeof vi.fn>) {
   return new Hono<ApiEnv>()
     .use("*", requestIdMiddleware)
     .on(
@@ -20,7 +20,7 @@ function buildApp(handler: AuthRequestHandler, capture: ReturnType<typeof vi.fn>
       "/api/auth/*",
       createMonitoringAuthHandler(
         handler,
-        capture as Parameters<typeof createMonitoringAuthHandler>[1],
+        report as Parameters<typeof createMonitoringAuthHandler>[1],
       ),
     );
 }
@@ -95,12 +95,11 @@ describe("createMonitoringAuthHandler", () => {
     expect(serialized).not.toContain(SENTINEL);
   });
 
-  it("logs exactly one privacy-safe console.error for a >=500 response, independent of capture", async () => {
+  it("logs exactly one privacy-safe console.error for a >=500 response with monitoring disabled", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const handler = vi.fn(async () => new Response(SENTINEL, { status: 500 }));
-    // capture is a no-op here (simulating monitoring disabled), yet the log must still fire.
-    const noopCapture = vi.fn(() => undefined);
-    const res = await buildApp(handler, noopCapture).request("/api/auth/sign-in", {
+    // The real reporter runs with monitoring disabled, yet the log must still fire.
+    const res = await buildApp(handler).request("/api/auth/sign-in", {
       method: "POST",
     });
 
@@ -111,17 +110,6 @@ describe("createMonitoringAuthHandler", () => {
     expect(meta).toMatchObject({ route: "/api/auth/*", method: "POST", status: 500 });
     const serialized = JSON.stringify(errorSpy.mock.calls);
     expect(serialized).not.toContain(SENTINEL);
-    errorSpy.mockRestore();
-  });
-
-  it("logs and captures exactly once each per request (no duplicates)", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const handler = vi.fn(async () => new Response(SENTINEL, { status: 503 }));
-    const capture = vi.fn();
-    await buildApp(handler, capture).request("/api/auth/sign-in", { method: "POST" });
-
-    expect(capture).toHaveBeenCalledTimes(1);
-    expect(errorSpy).toHaveBeenCalledTimes(1);
     errorSpy.mockRestore();
   });
 
