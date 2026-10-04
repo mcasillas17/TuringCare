@@ -13,6 +13,8 @@ export function useTrainers(f: TrainerFilters) {
     },
   });
 }
+export type Trainer = NonNullable<ReturnType<typeof useTrainers>["data"]>[number];
+
 export function useTrainer(id: string) {
   return useQuery({
     queryKey: ["trainers", id],

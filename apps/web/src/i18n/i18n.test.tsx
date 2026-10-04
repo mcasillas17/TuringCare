@@ -281,8 +281,6 @@ describe("i18n catalogs", () => {
             "admin.total",
             "footer.brand",
             "generatedBrief.goalProgress",
-            "language.en",
-            "language.es",
             "language.nameEn",
             "language.nameEs",
             "settings.deleteConfirmWord",

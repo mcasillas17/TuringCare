@@ -191,20 +191,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 describe("Brief review", () => {
-  it.each([
-    ["en", "There is more than one latest Brief version. Generate a new version."],
-    ["es", "Hay más de una versión reciente del resumen. Genera una nueva versión."],
-  ] as const)("renders localized recovery for a %s load conflict", (locale, expected) => {
-    setupLoadError(new BriefRequestError("brief_version_conflict", 409, "load"), locale);
-
-    expect(screen.getByText(expected)).toBeInTheDocument();
-  });
-
-  it("keeps a wrong-context load failure on generic recovery copy", () => {
-    setupLoadError(new BriefRequestError("brief_version_conflict", 409, "share"), "en");
+  it("renders generic recovery copy when the Brief fails to load", () => {
+    setupLoadError(new BriefRequestError("load_failed", 500), "en");
 
     expect(screen.getByText("Couldn't load the Brief.")).toBeInTheDocument();
-    expect(screen.queryByText(/more than one latest Brief version/i)).not.toBeInTheDocument();
   });
 
   it("renders the document preview with status and a Share action", () => {

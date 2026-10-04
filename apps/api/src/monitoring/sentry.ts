@@ -1,9 +1,7 @@
 // Sentry adapter for the API. This is the only application module that
 // imports `@sentry/node` directly: everything else depends on the small
 // functions exported here, so sanitization and disabled-mode (fail-open)
-// behavior stay centralized. See
-// docs/superpowers/specs/2026-08-10-production-operational-readiness-design.md
-// for the full design this implements.
+// behavior stay centralized.
 
 import {
   captureException,
@@ -19,7 +17,12 @@ import {
   onUncaughtExceptionIntegration,
 } from "@sentry/node";
 import { readApiMonitoringConfig } from "./config";
-import { sanitizeApiBreadcrumb, sanitizeApiEvent } from "./sanitize-event";
+import {
+  classifyExceptionValue,
+  sanitizeApiBreadcrumb,
+  sanitizeApiErrorTags,
+  sanitizeApiEvent,
+} from "./sanitize-event";
 
 let enabled = false;
 let transportFailed = false;
@@ -191,7 +194,7 @@ export function initializeApiMonitoring(nodeVersion: string = process.version): 
         // own — no raw message/stack var ever reaches Sentry, for the wrapper
         // exception or any of its causes.
         linkedErrorsIntegration(),
-        // The only capture path for a process-level crash (see design doc);
+        // The only capture path for a process-level crash;
         // preserves Node's existing non-zero-exit behavior.
         onUncaughtExceptionIntegration({
           exitEvenIfOtherHandlersAreRegistered: true,
@@ -248,15 +251,33 @@ export interface ApiErrorMeta {
 }
 
 /**
- * Captures an API error, but only when monitoring is enabled AND the
- * response is an unexpected server error (status >= 500). Expected 4xx
- * responses — validation, auth, not-found, rate-limit, ... — are never sent
- * to Sentry, including when raised as a framework `HTTPException`. Returns
- * the queued Sentry event ID (not delivery confirmation), or `undefined` when
- * monitoring is disabled or the status doesn't qualify.
+ * Reports an unexpected server error (status >= 500); expected 4xx responses
+ * are ignored. Always emits exactly one privacy-safe structured
+ * `console.error` line — the independent operational signal when Sentry is
+ * disabled, misconfigured, or Node-guarded off — then captures to Sentry when
+ * enabled. Only allowlisted fields are logged (sanitized requestId, route,
+ * method, status, and an exception-type classification); never the raw
+ * message, stack, thrown value, or any body. Call at most once per request.
+ * Returns the queued Sentry event ID (not delivery confirmation), or
+ * `undefined` when monitoring is disabled or the status doesn't qualify.
  */
-export function captureApiError(error: unknown, meta: ApiErrorMeta): string | undefined {
-  if (!enabled || meta.status < 500) return undefined;
+export function reportApiError(error: unknown, meta: ApiErrorMeta): string | undefined {
+  if (meta.status < 500) return undefined;
+  const tags = sanitizeApiErrorTags({
+    request_id: meta.requestId,
+    route: meta.route,
+    method: meta.method,
+    status: meta.status,
+  });
+  console.error("[monitoring] unexpected server error", {
+    requestId: tags?.request_id,
+    route: tags?.route,
+    method: tags?.method,
+    status: tags?.status,
+    // Constructor name only; `.message`/`.stack` are never read.
+    errorType: classifyExceptionValue(error instanceof Error ? error.constructor.name : undefined),
+  });
+  if (!enabled) return undefined;
   try {
     return captureException(error, {
       tags: {

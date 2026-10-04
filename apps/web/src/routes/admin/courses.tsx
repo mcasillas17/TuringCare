@@ -3,15 +3,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n";
 import type { MessageKey } from "@/i18n/types";
+import { type Course, useCourses } from "@/lib/courses";
 import { type CourseInput, courseAgeGroups, courseFormats } from "@turingcare/shared";
 import { type FormEvent, useState } from "react";
-import {
-  type Course,
-  useAdminCourses,
-  useCreateCourse,
-  useDeleteCourse,
-  useUpdateCourse,
-} from "./use-courses";
+import { useCreateCourse, useDeleteCourse, useUpdateCourse } from "./use-courses";
 
 type FormState = {
   organizationName: string;
@@ -124,7 +119,7 @@ function fromCourse(c: Course): FormState {
 
 export function AdminCourses() {
   const { t } = useI18n();
-  const list = useAdminCourses();
+  const list = useCourses({});
   const create = useCreateCourse();
   const update = useUpdateCourse();
   const remove = useDeleteCourse();

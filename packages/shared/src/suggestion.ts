@@ -2,6 +2,7 @@ import { z } from "zod";
 import { weekKeySchema } from "./focus";
 import type { EasingStrategy, PracticeDimension, PracticeOutcome } from "./practice-evidence";
 
+// Also Postgres enum values (apps/api/src/db/schema.ts): changing them needs a committed migration.
 export const suggestionTypeValues = [
   "exercise",
   "safety_suppressed",
@@ -88,15 +89,12 @@ export const suggestionQuerySchema = z.object({
   weekKey: weekKeySchema,
   timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840),
 });
-export type SuggestionQuery = z.infer<typeof suggestionQuerySchema>;
 
 export const suggestionActionSchema = z.object({ action: z.enum(suggestionActionValues) });
-export type SuggestionActionInput = z.infer<typeof suggestionActionSchema>;
 
 export const advancementDecisionSchema = z.object({
   decision: z.enum(advancementDecisionValues),
 });
-export type AdvancementDecisionInput = z.infer<typeof advancementDecisionSchema>;
 
 /** One reviewed exercise: authored catalog prose for a curriculum level. */
 export type CurriculumExercise = {

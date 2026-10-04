@@ -40,11 +40,10 @@ it("switches the landing copy to Spanish via the toggle", async () => {
   expect(
     screen.getByRole("heading", { name: /train with positive reinforcement/i }),
   ).toBeInTheDocument();
-  const trigger = screen.getAllByRole("button", { name: "Language" })[0];
-  if (!trigger) throw new Error("language toggle not found");
-  trigger.focus();
+  const toggle = screen.getAllByRole("button", { name: "Switch to Español" })[0];
+  if (!toggle) throw new Error("language toggle not found");
+  toggle.focus();
   await userEvent.keyboard("{Enter}");
-  await userEvent.click(await screen.findByRole("button", { name: /español/i }));
   expect(
     screen.getByRole("heading", { name: /ad[ií]éstralo con refuerzo positivo/i }),
   ).toBeInTheDocument();
@@ -53,11 +52,10 @@ it("switches the landing copy to Spanish via the toggle", async () => {
 
 it("expands an FAQ item on click", async () => {
   setup();
-  const trigger = screen.getByRole("button", {
-    name: /is it really positive reinforcement/i,
-  });
-  await userEvent.click(trigger);
-  expect(screen.getByText(/reward-based, science-supported/i)).toBeVisible();
+  const answer = screen.getByText(/reward-based, science-supported/i);
+  expect(answer).not.toBeVisible();
+  await userEvent.click(screen.getByText(/is it really positive reinforcement/i));
+  expect(answer).toBeVisible();
 });
 
 it("localizes Turing image alt text in Spanish", () => {

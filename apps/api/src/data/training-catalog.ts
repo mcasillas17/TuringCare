@@ -1,4 +1,4 @@
-import { type Locale, type Messages, en, es } from "@turingcare/i18n";
+import { type Locale, type Messages, en, es, isLocale } from "@turingcare/i18n";
 import type { AuthoredCatalogTemplate } from "@turingcare/shared";
 
 type TrainingCatalogShape = typeof en.trainingCatalog;
@@ -21,31 +21,27 @@ type CatalogSkillMessages = {
   levels: Record<CatalogLevelKey, string>;
 };
 
-function defineTemplate<const T extends TemplateKey>(template: TemplateDefinition<T>) {
-  return template;
-}
-
 const templateDefinitions = [
-  defineTemplate({
+  {
     key: "basic-manners",
     skills: ["sit", "down", "stay", "recall", "loose-leash"],
-  }),
-  defineTemplate({
+  },
+  {
     key: "puppy-fundamentals",
     skills: ["name-recognition", "potty-signal", "sit", "bite-inhibition", "settle-on-mat"],
-  }),
-  defineTemplate({
+  },
+  {
     key: "reactivity-work",
     skills: ["threshold-awareness", "look-at-that", "engage-disengage", "settle-in-distractions"],
-  }),
-  defineTemplate({
+  },
+  {
     key: "separation-comfort",
     skills: ["calm-departures", "self-settle", "stay-alone-duration"],
-  }),
-  defineTemplate({
+  },
+  {
     key: "recall-reliability",
     skills: ["name-response", "recall-on-cue", "recall-through-distractions", "recall-at-distance"],
-  }),
+  },
 ] as const satisfies readonly AnyTemplateDefinition[];
 
 const trainingCatalogMessagesByLocale = {
@@ -56,9 +52,7 @@ const trainingCatalogMessagesByLocale = {
 const catalogLevelNumbers = [1, 2, 3, 4, 5] as const;
 
 function resolveTrainingCatalogMessages(locale: Locale | string): TrainingCatalogMessages {
-  return Object.prototype.hasOwnProperty.call(trainingCatalogMessagesByLocale, locale)
-    ? trainingCatalogMessagesByLocale[locale as Locale]
-    : trainingCatalogMessagesByLocale.en;
+  return trainingCatalogMessagesByLocale[isLocale(locale) ? locale : "en"];
 }
 
 function localizeTemplate(

@@ -24,7 +24,7 @@ export function useSendBrief(dogId: string) {
   return useMutation({
     mutationFn: async (body: BriefSendInput) => {
       const res = await b.send.$post({ param: { id: dogId }, json: body });
-      if (!res.ok) throw await readBriefRequestError(res, "send", "send_failed");
+      if (!res.ok) throw await readBriefRequestError(res, "send_failed");
       return (await res.json()).send;
     },
     onSuccess: () => {

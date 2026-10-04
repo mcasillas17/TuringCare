@@ -4,8 +4,8 @@ import { db } from "../db";
 import { dogs, practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
 import { type TestUser, createTestUser } from "../test-helpers";
 import { loadContextualProgress } from "./contextual-progress-data";
+import { DAY_MS } from "./time";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const NOW = new Date("2026-08-21T12:34:56.789Z");
 
 const validDog = {

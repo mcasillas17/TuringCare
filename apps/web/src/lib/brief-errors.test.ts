@@ -10,19 +10,15 @@ describe("readBriefRequestError", () => {
     ["send_rate_limited", 429],
     ["not_finalized", 409],
     ["send_failed", 502],
-  ] as const)(
-    "preserves allowlisted stable code %s, HTTP status, and operation context",
-    async (code, status) => {
-      const error = await readBriefRequestError(
-        new Response(JSON.stringify({ error: code }), { status }),
-        "send",
-        "send_failed",
-      );
+  ] as const)("preserves allowlisted stable code %s and HTTP status", async (code, status) => {
+    const error = await readBriefRequestError(
+      new Response(JSON.stringify({ error: code }), { status }),
+      "send_failed",
+    );
 
-      expect(error).toBeInstanceOf(BriefRequestError);
-      expect(error).toMatchObject({ code, status, context: "send" });
-    },
-  );
+    expect(error).toBeInstanceOf(BriefRequestError);
+    expect(error).toMatchObject({ code, status });
+  });
 
   it.each([
     { error: "server says the user's private summary is broken" },
@@ -31,21 +27,19 @@ describe("readBriefRequestError", () => {
   ])("does not trust a non-allowlisted response payload", async (payload) => {
     const error = await readBriefRequestError(
       new Response(JSON.stringify(payload), { status: 409 }),
-      "send",
       "send_failed",
     );
 
-    expect(error).toMatchObject({ code: "send_failed", status: 409, context: "send" });
+    expect(error).toMatchObject({ code: "send_failed", status: 409 });
     expect(error.message).toBe("send_failed");
   });
 
   it("uses the stable fallback for malformed JSON", async () => {
     const error = await readBriefRequestError(
       new Response("not-json", { status: 502 }),
-      "send",
       "send_failed",
     );
 
-    expect(error).toMatchObject({ code: "send_failed", status: 502, context: "send" });
+    expect(error).toMatchObject({ code: "send_failed", status: 502 });
   });
 });

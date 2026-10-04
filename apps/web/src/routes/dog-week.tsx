@@ -8,10 +8,7 @@ import { FocusPicker } from "@/components/week/focus-picker";
 import { WeekGrid } from "@/components/week/week-grid";
 import { WeekNav } from "@/components/week/week-nav";
 import { useI18n } from "@/i18n";
-import {
-  getAuditedSuggestionTarget,
-  getAuditedSuggestionTargetState,
-} from "@/lib/audited-suggestion";
+import { getAuditedSuggestionTargetState } from "@/lib/audited-suggestion";
 import { useDeleteSession, useLogSession, useSetSessionEvidence } from "@/lib/progress";
 import { useAdvancementDecision, useSuggestion, useSuggestionAction } from "@/lib/suggestion";
 import {
@@ -204,13 +201,14 @@ export function DogWeek() {
       },
     });
     if (activeScope.current !== scopeAtStart) return;
-    const auditedTarget = getAuditedSuggestionTarget(queryClient, {
+    const auditedState = getAuditedSuggestionTargetState(queryClient, {
       dogId: id,
       weekKey,
       currentWeekKey,
       locale,
       skillId,
     });
+    const auditedTarget = auditedState.status === "eligible" ? auditedState.target : null;
     const latestFocusSkill =
       auditedTarget?.focusSkill ??
       queryClient
@@ -309,7 +307,7 @@ export function DogWeek() {
 
   const onSuggestionAction = async (action: SuggestionAction) => {
     if (!suggestion?.skill?.id || !suggestion.suggestionId) return;
-    const auditedTarget = getAuditedSuggestionTarget(queryClient, {
+    const auditedState = getAuditedSuggestionTargetState(queryClient, {
       dogId: id,
       weekKey,
       currentWeekKey,
@@ -317,7 +315,7 @@ export function DogWeek() {
       skillId: suggestion.skill.id,
       suggestionId: suggestion.suggestionId,
     });
-    if (!auditedTarget) {
+    if (auditedState.status !== "eligible") {
       toast.error(t("suggestion.actionFailed"));
       return;
     }

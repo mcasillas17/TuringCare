@@ -6,11 +6,11 @@ vi.mock("@/lib/auth-client", () => ({ useSession: vi.fn() }));
 vi.mock("@/components/app-shell/AppShell", () => ({
   AppShell: () => <div data-testid="app-shell" />,
 }));
-vi.mock("@/components/PublicLayout", () => ({
-  PublicLayout: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="public-layout">{children}</div>
-  ),
+// The public marketing nav marks the public chrome.
+vi.mock("@/components/landing/site-nav", () => ({
+  SiteNav: () => <div data-testid="public-layout" />,
 }));
+vi.mock("@/components/landing/site-footer", () => ({ SiteFooter: () => null }));
 
 import { useSession } from "@/lib/auth-client";
 import { SessionQueryBoundary } from "@/lib/session-query-boundary";

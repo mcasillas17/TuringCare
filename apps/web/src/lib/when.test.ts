@@ -1,20 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-  dateLabel,
-  dayKindOf,
-  groupByDay,
-  humanTime,
-  localDayKey,
-  toLocalInputValue,
-} from "./when";
+import { dateLabel, dayKindOf, groupByDay, humanTime, toLocalInputValue } from "./when";
 
 const NOW = new Date(2026, 5, 21, 9, 0); // Jun 21 2026, 09:00 local
 
 describe("when helpers", () => {
-  it("localDayKey is local YYYY-MM-DD", () => {
-    expect(localDayKey(new Date(2026, 0, 5, 23, 59))).toBe("2026-01-05");
-  });
-
   it("dayKindOf classifies today / yesterday / date", () => {
     expect(dayKindOf(new Date(2026, 5, 21, 4, 46), NOW)).toBe("today");
     expect(dayKindOf(new Date(2026, 5, 20, 23, 0), NOW)).toBe("yesterday");

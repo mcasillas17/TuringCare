@@ -8,6 +8,10 @@ import {
   briefs,
   dogSafetySignals,
   dogs,
+  guidedSetupActionTypeEnum,
+  guidedSetupCompletionReasonEnum,
+  guidedSetupIntentEnum,
+  guidedSetupStepEnum,
   guidedSetups,
   journalEntries,
   journalEntryKindEnum,
@@ -189,6 +193,23 @@ describe("telemetry schema", () => {
     expect(migrationSql).toMatch(
       /jsonb_set\("props", '\{path\}', to_jsonb\('\/b\/:token'::text\), false\)/,
     );
+  });
+});
+
+describe("guided setup schema", () => {
+  it("pins the guided setup enum vocabularies", () => {
+    expect(guidedSetupIntentEnum.enumValues).toEqual([
+      "understand_behavior",
+      "train_skill",
+      "track_progress",
+    ]);
+    expect(guidedSetupStepEnum.enumValues).toEqual(["intent", "action"]);
+    expect(guidedSetupCompletionReasonEnum.enumValues).toEqual([
+      "first_action_completed",
+      "skipped",
+      "abandoned",
+    ]);
+    expect(guidedSetupActionTypeEnum.enumValues).toEqual(["behavior", "training", "progress"]);
   });
 });
 

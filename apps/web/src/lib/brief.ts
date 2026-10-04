@@ -10,7 +10,7 @@ const b = api.api.dogs[":id"].brief;
 
 async function fetchBrief(dogId: string) {
   const res = await b.$get({ param: { id: dogId } });
-  if (!res.ok) throw await readBriefRequestError(res, "load", "load_failed");
+  if (!res.ok) throw await readBriefRequestError(res, "load_failed");
   return (await res.json()).brief;
 }
 
@@ -28,7 +28,7 @@ export function useGenerateBrief(dogId: string) {
   return useMutation({
     mutationFn: async (window: BriefWindow) => {
       const res = await b.$post({ param: { id: dogId }, query: { window } });
-      if (!res.ok) throw await readBriefRequestError(res, "generate", "gen_failed");
+      if (!res.ok) throw await readBriefRequestError(res, "gen_failed");
       return (await res.json()).brief;
     },
     onSuccess: (brief) => {
@@ -44,7 +44,7 @@ export function useFinalizeBrief(dogId: string) {
   return useMutation({
     mutationFn: async () => {
       const res = await b.$put({ param: { id: dogId } });
-      if (!res.ok) throw await readBriefRequestError(res, "finalize", "save_failed");
+      if (!res.ok) throw await readBriefRequestError(res, "save_failed");
       return (await res.json()).brief;
     },
     onSuccess: (brief) => {
@@ -62,7 +62,7 @@ export function useShareBrief(dogId: string) {
   return useMutation({
     mutationFn: async () => {
       const res = await b.share.$post({ param: { id: dogId } });
-      if (!res.ok) throw await readBriefRequestError(res, "share", "share_failed");
+      if (!res.ok) throw await readBriefRequestError(res, "share_failed");
       return (await res.json()) as { token: string; url: string };
     },
     onSuccess: ({ token }) => {
@@ -79,7 +79,7 @@ export function useRevokeShare(dogId: string) {
   return useMutation({
     mutationFn: async () => {
       const res = await b.share.$delete({ param: { id: dogId } });
-      if (!res.ok) throw await readBriefRequestError(res, "revoke", "revoke_failed");
+      if (!res.ok) throw await readBriefRequestError(res, "revoke_failed");
       return (await res.json()) as { ok: true };
     },
     onSuccess: () => {

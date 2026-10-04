@@ -1160,126 +1160,6 @@ describe("dogs: brief", () => {
     );
   });
 
-  it("fails every latest-Brief consumer closed on a legacy duplicate maximum", async () => {
-    const u = await createTestUser();
-    users.push(u);
-    const dog = await makeDog(u);
-    const legacyToken = `legacy-duplicate-${Date.now()}`;
-    let constraintDropped = false;
-
-    try {
-      await pool.query(`ALTER TABLE "briefs" DROP CONSTRAINT "briefs_dog_id_version_unique"`);
-      constraintDropped = true;
-      await db.insert(briefs).values([
-        {
-          dogId: dog.id,
-          summary: "older finalized artifact",
-          version: 7,
-          status: "finalized",
-          locale: "en",
-          generatedAt: new Date("2026-08-22T12:00:00Z"),
-          shareToken: legacyToken,
-        },
-        {
-          dogId: dog.id,
-          summary: "newer draft artifact",
-          version: 7,
-          status: "draft",
-          locale: "es",
-          generatedAt: new Date("2026-08-23T12:00:00Z"),
-        },
-      ]);
-      const { sendEmail } = await import("../email/send-email");
-      vi.mocked(sendEmail).mockClear();
-
-      const responses = await Promise.all([
-        app.request(`/api/dogs/${dog.id}/brief`, { headers: u.authHeaders }),
-        app.request(`/api/dogs/${dog.id}/brief`, { method: "PUT", headers: u.authHeaders }),
-        app.request(`/api/dogs/${dog.id}/brief/share`, {
-          method: "POST",
-          headers: u.authHeaders,
-        }),
-        app.request(`/api/dogs/${dog.id}/brief/share`, {
-          method: "DELETE",
-          headers: u.authHeaders,
-        }),
-        app.request(`/api/dogs/${dog.id}/brief/send`, {
-          method: "POST",
-          headers: u.authHeaders,
-          body: briefSendBody({ briefId: randomUUID(), recipient: "legacy-conflict@example.com" }),
-        }),
-      ]);
-
-      expect(responses.map(({ status }) => status)).toEqual([409, 409, 409, 409, 409]);
-      for (const response of responses) {
-        expect(await response.json()).toEqual({ error: "brief_version_conflict" });
-      }
-      expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
-
-      const [accountOverview, dogsOverview] = await Promise.all([
-        app.request("/api/overview", { headers: u.authHeaders }),
-        app.request("/api/dogs/overview", { headers: u.authHeaders }),
-      ]);
-      expect(accountOverview.status).toBe(200);
-      expect(await accountOverview.json()).toMatchObject({
-        latestBrief: null,
-        latestBriefAmbiguous: true,
-      });
-      expect(dogsOverview.status).toBe(200);
-      const dogsOverviewBody = (await dogsOverview.json()) as {
-        dogs: Array<{
-          id: string;
-          summary: {
-            briefStatus: "draft" | "finalized" | null;
-            briefVersion: number | null;
-            briefAmbiguous: boolean;
-          };
-        }>;
-      };
-      expect(dogsOverviewBody.dogs.find(({ id }) => id === dog.id)?.summary).toMatchObject({
-        briefStatus: null,
-        briefVersion: null,
-        briefAmbiguous: true,
-      });
-
-      const repaired = await app.request(`/api/dogs/${dog.id}/brief`, {
-        method: "POST",
-        headers: u.authHeaders,
-      });
-      expect(repaired.status).toBe(201);
-      expect((await repaired.json()) as object).toMatchObject({ brief: { version: 8 } });
-      const latestAfterRepair = await app.request(`/api/dogs/${dog.id}/brief`, {
-        headers: u.authHeaders,
-      });
-      expect(latestAfterRepair.status).toBe(200);
-      expect((await latestAfterRepair.json()) as object).toMatchObject({ brief: { version: 8 } });
-      expect(
-        await db
-          .select({ status: briefs.status, shareToken: briefs.shareToken })
-          .from(briefs)
-          .where(eq(briefs.dogId, dog.id)),
-      ).toEqual(
-        expect.arrayContaining([
-          { status: "finalized", shareToken: null },
-          { status: "draft", shareToken: null },
-        ]),
-      );
-      expect(
-        await db
-          .select({ id: briefSends.id })
-          .from(briefSends)
-          .where(eq(briefSends.sentByUserId, u.userId)),
-      ).toEqual([]);
-    } finally {
-      if (constraintDropped) {
-        await db.delete(briefs).where(eq(briefs.dogId, dog.id));
-        await pool.query(
-          `ALTER TABLE "briefs" ADD CONSTRAINT "briefs_dog_id_version_unique" UNIQUE ("dog_id", "version")`,
-        );
-      }
-    }
-  });
-
   it("owner isolation: other user 404", async () => {
     const a = await createTestUser();
     const b = await createTestUser();
@@ -2037,6 +1917,26 @@ describe("dogs: brief send", () => {
 
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: "client_upgrade_required" });
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+  });
+
+  it("POST send: rejects an explicit Brief id that is not the latest", async () => {
+    const u = await createTestUser();
+    users.push(u);
+    const dog = await makeDog(u);
+    const older = await makeFinalizedBrief(u, dog.id);
+    await makeFinalizedBrief(u, dog.id);
+    const { sendEmail } = await import("../email/send-email");
+    vi.mocked(sendEmail).mockClear();
+
+    const response = await app.request(`/api/dogs/${dog.id}/brief/send`, {
+      method: "POST",
+      headers: u.authHeaders,
+      body: briefSendBody({ recipient: "stale@example.com", briefId: older.id }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "brief_version_conflict" });
     expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
   });
 
@@ -2862,7 +2762,7 @@ describe("sendFailedException (brief send-failed monitoring seam)", () => {
    * the 502 path is proven end-to-end without dynamically re-mocking the
    * whole `dogs.ts` module.
    */
-  function buildProbeApp(capture: ReturnType<typeof vi.fn>) {
+  function buildProbeApp(report?: ReturnType<typeof vi.fn>) {
     const probe = new Hono<ApiEnv>()
       .use("*", requestIdMiddleware)
       .get("/probe", (c) => {
@@ -2870,7 +2770,7 @@ describe("sendFailedException (brief send-failed monitoring seam)", () => {
       })
       .get("/not-found-ish", (c) => c.json({ error: "not_found" } as const, 404));
     probe.onError(
-      createMonitoringErrorHandler(capture as Parameters<typeof createMonitoringErrorHandler>[0]),
+      createMonitoringErrorHandler(report as Parameters<typeof createMonitoringErrorHandler>[0]),
     );
     return probe;
   }
@@ -2915,7 +2815,7 @@ describe("sendFailedException (brief send-failed monitoring seam)", () => {
 
   it("logs exactly one privacy-safe structured line and never the original cause", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const res = await buildProbeApp(vi.fn()).request("/probe");
+    const res = await buildProbeApp().request("/probe");
 
     expect(res.status).toBe(502);
     expect(errorSpy).toHaveBeenCalledTimes(1);
@@ -2931,12 +2831,10 @@ describe("sendFailedException (brief send-failed monitoring seam)", () => {
 
   it("does not capture or log a preserved 4xx response (4xx behavior unaffected)", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const capture = vi.fn();
-    const res = await buildProbeApp(capture).request("/not-found-ish");
+    const res = await buildProbeApp().request("/not-found-ish");
 
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "not_found" });
-    expect(capture).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
     errorSpy.mockRestore();
   });

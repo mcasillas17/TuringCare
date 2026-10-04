@@ -1,21 +1,12 @@
 import { api } from "@/lib/api";
 import type { Course } from "@/lib/courses";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CourseInput } from "@turingcare/shared";
 
-export type { Course };
-
-const COURSES_KEY = ["admin", "courses"] as const;
-
-export function useAdminCourses() {
-  return useQuery({
-    queryKey: COURSES_KEY,
-    queryFn: async () => {
-      const res = await api.api.courses.$get();
-      if (!res.ok) throw new Error("failed to load courses");
-      return ((await res.json()) as { courses: Course[] }).courses;
-    },
-  });
+// List (["courses", filters]) and detail (["course", id]) caches in lib/courses.
+function invalidateCourses(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["courses"] });
+  qc.invalidateQueries({ queryKey: ["course"] });
 }
 
 export function useCreateCourse() {
@@ -26,7 +17,7 @@ export function useCreateCourse() {
       if (!res.ok) throw new Error("failed to create course");
       return ((await res.json()) as { course: Course }).course;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: COURSES_KEY }),
+    onSuccess: () => invalidateCourses(qc),
   });
 }
 
@@ -38,7 +29,7 @@ export function useUpdateCourse() {
       if (!res.ok) throw new Error("failed to update course");
       return ((await res.json()) as { course: Course }).course;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: COURSES_KEY }),
+    onSuccess: () => invalidateCourses(qc),
   });
 }
 
@@ -50,6 +41,6 @@ export function useDeleteCourse() {
       if (!res.ok) throw new Error("failed to delete course");
       return id;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: COURSES_KEY }),
+    onSuccess: () => invalidateCourses(qc),
   });
 }

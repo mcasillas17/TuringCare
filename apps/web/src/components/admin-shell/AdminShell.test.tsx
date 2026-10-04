@@ -20,6 +20,7 @@ function setup(path: string, locale: "en" | "es" = "en") {
             <Route element={<AdminShell />}>
               <Route path="/admin" element={<div>DASH-CONTENT</div>} />
               <Route path="/admin/trainers" element={<div>TRAINERS-CONTENT</div>} />
+              <Route path="/admin/other" element={<div>OTHER-CONTENT</div>} />
               <Route path="/admin/courses" element={<div>COURSES-CONTENT</div>} />
             </Route>
             <Route path="/my" element={<div>APP-HOME</div>} />
@@ -56,6 +57,15 @@ describe("AdminShell", () => {
     expect(screen.getByRole("link", { name: /dashboard/i })).not.toHaveAttribute("aria-current");
   });
 
+  it("shows the matched section as the header title, falling back to Admin", () => {
+    const title = () => screen.getByRole("banner").querySelector("span.font-semibold");
+    const { unmount } = setup("/admin/trainers");
+    expect(title()).toHaveTextContent(/^Trainers$/);
+    unmount();
+    setup("/admin/other");
+    expect(title()).toHaveTextContent(/^Admin$/);
+  });
+
   it("renders the admin shell system copy in Spanish", () => {
     setup("/admin/courses", "es");
     expect(screen.getAllByText("Administración").length).toBeGreaterThan(0);
@@ -70,18 +80,25 @@ describe("AdminShell", () => {
     expect(screen.getByRole("button", { name: "Cerrar sesión" })).toBeInTheDocument();
   });
 
+  it("persists rail collapse under tc-admin-nav-expanded and restores it on remount", async () => {
+    const user = userEvent.setup();
+    const { unmount } = setup("/admin");
+    await user.click(screen.getByRole("button", { name: "Collapse menu" }));
+    expect(localStorage.getItem("tc-admin-nav-expanded")).toBe("false");
+    unmount();
+    setup("/admin");
+    expect(screen.getByRole("button", { name: "Expand menu" })).toBeInTheDocument();
+  });
+
   it("exposes the language control by accessible label and switches it entirely by keyboard", async () => {
     setup("/admin", "es");
     const user = userEvent.setup();
-    const trigger = screen.getByRole("button", { name: "Idioma" });
+    const toggle = screen.getByRole("button", { name: "Cambiar a English" });
 
-    trigger.focus();
-    await user.keyboard("{Enter}");
-    const english = await screen.findByRole("button", { name: "Cambiar a English" });
-    expect(english).toHaveFocus();
+    toggle.focus();
     await user.keyboard("{Enter}");
 
-    expect(screen.getByRole("button", { name: "Language" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Switch to Español" })).toHaveFocus();
     expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/admin");
   });
 });

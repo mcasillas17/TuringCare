@@ -36,7 +36,6 @@ export type DogSummary = {
   avgLevel: number | null;
   briefStatus: "draft" | "finalized" | null;
   briefVersion: number | null;
-  briefAmbiguous?: boolean;
 };
 
 export type DogOverview = {

@@ -90,11 +90,11 @@ function ok<T>(body: T) {
   return { ok: true, json: async () => body };
 }
 
-function conflictResponse() {
+function notFoundResponse() {
   return {
     ok: false,
-    status: 409,
-    json: async () => ({ error: "brief_version_conflict" }),
+    status: 404,
+    json: async () => ({ error: "not_found" }),
   };
 }
 
@@ -105,19 +105,15 @@ function expectBriefInvalidation(invalidateQueries: unknown) {
 afterEach(() => vi.clearAllMocks());
 
 describe("Brief mutation cache updates", () => {
-  it("preserves a stable conflict code, status, and load context", async () => {
-    getBrief.mockResolvedValue(conflictResponse());
+  it("preserves a stable error code and status through the load query", async () => {
+    getBrief.mockResolvedValue(notFoundResponse());
     const queryClient = makeQueryClient();
     const { result } = renderHook(() => useBrief("dog-1"), {
       wrapper: makeWrapper(queryClient),
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.error).toMatchObject({
-      code: "brief_version_conflict",
-      status: 409,
-      context: "load",
-    });
+    expect(result.current.error).toMatchObject({ code: "not_found", status: 404 });
   });
 
   it.each([
@@ -126,9 +122,9 @@ describe("Brief mutation cache updates", () => {
     ["share", shareBrief, () => useShareBrief("dog-1"), undefined],
     ["revoke", revokeShare, () => useRevokeShare("dog-1"), undefined],
   ] as const)(
-    "preserves a stable conflict through the %s mutation",
-    async (context, request, hook, input) => {
-      request.mockResolvedValue(conflictResponse());
+    "preserves a stable error code and status through the %s mutation",
+    async (_name, request, hook, input) => {
+      request.mockResolvedValue(notFoundResponse());
       const queryClient = makeQueryClient();
       const { result } = renderHook(
         hook as unknown as () => { mutateAsync: (value?: unknown) => Promise<unknown> },
@@ -144,7 +140,7 @@ describe("Brief mutation cache updates", () => {
         }
       });
 
-      expect(error).toMatchObject({ code: "brief_version_conflict", status: 409, context });
+      expect(error).toMatchObject({ code: "not_found", status: 404 });
     },
   );
 

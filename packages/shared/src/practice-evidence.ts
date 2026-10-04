@@ -4,6 +4,7 @@ import { z } from "zod";
  * Persisted controlled vocabularies. These values are version-compared in
  * stored records and must not change after shipping.
  */
+// Also Postgres enum values (apps/api/src/db/schema.ts): changing them needs a committed migration.
 export const practiceOutcomeValues = ["went_well", "mixed", "too_hard"] as const;
 export type PracticeOutcome = (typeof practiceOutcomeValues)[number];
 

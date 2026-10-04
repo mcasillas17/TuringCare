@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { briefGeneratedLabel } from "./brief-chrome";
+import {
+  briefGeneratedLabel,
+  briefStatusLabel,
+  briefTitle,
+  briefVersionLabel,
+  sharedBriefTitle,
+} from "./brief-chrome";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -13,5 +19,18 @@ describe("briefGeneratedLabel", () => {
     vi.stubEnv("TZ", "America/Los_Angeles");
 
     expect(briefGeneratedLabel("2026-05-22T00:30:00.000Z", locale)).toBe(expected);
+  });
+});
+
+describe("brief chrome labels", () => {
+  it("renders exact catalog strings and falls back to English", () => {
+    expect([briefTitle("es"), sharedBriefTitle("en"), briefVersionLabel("xx")]).toEqual([
+      "Resumen de conducta",
+      "Shared Behavior Brief",
+      "Version",
+    ]);
+    expect(briefStatusLabel("finalized", 3, "en")).toBe("Final · v3");
+    expect(briefStatusLabel("draft", 2, "es")).toBe("Borrador · v2");
+    expect(briefStatusLabel("finalized", 1, "es")).toBe("Definitivo · v1");
   });
 });

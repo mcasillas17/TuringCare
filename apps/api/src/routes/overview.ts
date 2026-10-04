@@ -1,7 +1,6 @@
 import { and, desc, eq, inArray, max } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
-import { resolveLatestBriefRowsByKey } from "../db/latest-brief";
 import { briefs, dogs, journalEntries } from "../db/schema";
 import { type Vars, requireUser } from "../middleware/require-user";
 
@@ -19,7 +18,6 @@ export const overviewApp = new Hono<{ Variables: Vars }>()
         dogCount: 0,
         journalEntryCount: 0,
         latestBrief: null,
-        latestBriefAmbiguous: false,
         recentActivity: [],
       });
     }
@@ -40,7 +38,6 @@ export const overviewApp = new Hono<{ Variables: Vars }>()
           id: briefs.id,
           dogId: briefs.dogId,
           status: briefs.status,
-          version: briefs.version,
           generatedAt: briefs.generatedAt,
         })
         .from(briefs)
@@ -51,20 +48,11 @@ export const overviewApp = new Hono<{ Variables: Vars }>()
             eq(briefs.version, latestBriefVersions.maxVersion),
           ),
         )
-        .where(inArray(briefs.dogId, ids))
-        .orderBy(desc(briefs.version), desc(briefs.generatedAt), desc(briefs.id)),
+        .where(inArray(briefs.dogId, ids)),
     ]);
-    const latestByDog = resolveLatestBriefRowsByKey(briefRows, (brief) => brief.dogId);
-    const latestBriefAmbiguous = [...latestByDog.values()].some(
-      (resolution) => resolution.kind === "conflict",
-    );
-    const latest = latestBriefAmbiguous
-      ? undefined
-      : [...latestByDog.values()]
-          .flatMap((resolution) => (resolution.kind === "found" ? [resolution.brief] : []))
-          .toSorted(
-            (a, b) => b.generatedAt.getTime() - a.generatedAt.getTime() || b.id.localeCompare(a.id),
-          )[0];
+    const latest = briefRows.toSorted(
+      (a, b) => b.generatedAt.getTime() - a.generatedAt.getTime() || b.id.localeCompare(a.id),
+    )[0];
     return c.json({
       dogCount: mine.length,
       journalEntryCount: entries.length,
@@ -76,7 +64,6 @@ export const overviewApp = new Hono<{ Variables: Vars }>()
             status: latest.status,
           }
         : null,
-      latestBriefAmbiguous,
       recentActivity: entries.slice(0, 5).map((e) => ({
         dogName: nameById.get(e.dogId) ?? "",
         behavior: e.note,

@@ -49,8 +49,8 @@ separate outcome and does not substitute for weekly training activity.
 | Critical owner journey | Complete foundation | Desktop and Pixel 7 journeys cover denied access before explicit email confirmation, verified sign-in, guided setup, journaling, training, progress and Brief sharing. | Keep coverage current and complete final post-T8 release-candidate QA. |
 | Production smoke | Partial | Scheduled and post-deploy checks cover API health, landing, directories, sign-in, verified-account state, and the authenticated shell. | Add one stable authenticated owner-domain read and keep it running while the remaining gates land. |
 | Email ownership | Partial - implementation ready | Verified-only owner/admin gates, passive email landing with explicit confirmation, and en/es no-session/legacy recovery are implemented. | Authorized aggregate inventory, controlled admin/smoke ownership preparation, production cutover and recorded evidence remain blocking. |
-| Production monitoring | Partial - production acceptance pending, P0 | API image and support contract use Node 22; request IDs, sanitization, capture adapters, isolated API diagnostics, and real-SDK image gates are implemented. Web configuration parsing exists. | Approved running-release request/process capture is still unproven (#98). Browser capture, React recovery, hidden source maps, alerts, and browser diagnostics remain T3. |
-| Backup and restore | Not started | The recovery design and implementation plan are committed. | Add the provider-confirmed runbook and verifier, then complete a measured isolated restore drill. |
+| Production monitoring | Partial - production acceptance pending, P0 | API image and support contract use Node 22; request IDs, sanitization, capture adapters, isolated API diagnostics, and real-SDK image gates are implemented. Web (browser) monitoring has not started; the earlier unused web configuration parsing was removed. | Approved running-release request/process capture is still unproven (#98). Browser capture, React recovery, hidden source maps, alerts, and browser diagnostics remain T3. |
+| Backup and restore | Not started | The recovery design and implementation plan were removed from the tree; they are available in git history. | Add the provider-confirmed runbook and verifier, then complete a measured isolated restore drill. |
 | In-app feedback | Not started | A feedback email link exists. | Add a privacy-bounded form, server persistence, durable prompt suppression, admin triage, and non-blocking milestone prompts. |
 | Beta analytics | Partial | First-party lifecycle events, DAU/WAU/MAU, event totals, and an admin dashboard are shipped. | Add signup cohorts, target-aligned activation and week-2/week-4 retention, distinct-owner lifecycle views, and actual trainer/course outbound-click events. |
 | Guided Today | Not started - foundation available | Guided setup, weekly focus, deterministic training suggestions, training deferral, and contextual progress are shipped. | Replace `/my` with one cross-domain next action, dog switching, durable daily deferral, stable reason codes, and compact weekly context. |
@@ -210,7 +210,7 @@ replay, broad auto-instrumentation, or unrelated runtime/module-system upgrades.
 
 ### T3 - Finish browser monitoring and monitoring operations
 
-**Status:** Not started beyond configuration parsing.
+**Status:** Not started. The earlier unused web configuration parsing was removed.
 
 **Goal:** Detect recoverable browser and React failures without sending owner-authored content or
 public Brief tokens to Sentry.
@@ -239,7 +239,8 @@ handlers that duplicate the explicit capture paths.
 
 ### T4 - Prove backup and restore readiness
 
-**Status:** Not started; detailed plan exists.
+**Status:** Not started; the detailed recovery design and plan were removed from the tree and are
+available in git history.
 
 **Goal:** Demonstrate that the Supabase production database can be restored into an isolated target,
 validated without exposing owner content, measured, and destroyed.

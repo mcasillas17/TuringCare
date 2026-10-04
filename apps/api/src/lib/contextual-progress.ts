@@ -12,10 +12,9 @@ import type {
   SuggestionSafety,
 } from "@turingcare/shared";
 import { adjacentContext, isContextNoHarderThan } from "./context-adjacency";
+import { DAY_MS } from "./time";
 
 export const CONTEXTUAL_PROGRESS_POLICY_VERSION = "2026-08-20";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const contextFields = [
   "cueSupport",

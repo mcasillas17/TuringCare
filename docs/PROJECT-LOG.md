@@ -1,8 +1,8 @@
 # TuringCare — Project Log
 
 Chronological record of implemented and shipped phases, with rollout status and linked
-feature guidance. Newest at the bottom. Historical entries also link their original
-design and implementation records.
+feature guidance. Newest at the bottom. Historical design and implementation records were
+removed from the tree; see git history (and the 2026-10-04 over-engineering cleanup entry).
 
 ---
 
@@ -10,7 +10,6 @@ design and implementation records.
 Monorepo (pnpm workspaces: api/web/shared), Hono + Drizzle + Better Auth
 (email/password, Postgres sessions, httpOnly cookies), Vite + React 19 +
 Tailwind v4 + shadcn, full Drizzle schema, end-to-end auth verified.
-- Spec/plan: `specs/2026-05-16-turingcare-scaffolding-design.md`, `plans/2026-05-16-turingcare-scaffolding.md`
 - Merged to `main` as `66e1383` (branch `feat/session-1-scaffolding`).
 
 ## 2026-05-17 — CI/CD deploy pipeline
@@ -25,13 +24,11 @@ session-pooler + TLS. Live: turingcare.dog / api.turingcare.dog.
 Warm, animated marketing landing in Turing's blue-merle/copper palette: 9
 section components, `useInView`/`Reveal` (reduced-motion safe), shadcn
 accordion FAQ, WCAG-AA color placement.
-- Spec/plan: `specs/2026-05-17-landing-page-design.md`, `plans/2026-05-17-landing-page.md`
 - Commits to `e5ecea0` (pushed to `main`).
 
 ## 2026-05-17 — Social share preview (sub-project D)
 Open Graph + Twitter + favicon meta in `index.html`, brand `og.png`
 (1200×630) + favicon assets, metadata contract test.
-- Spec/plan: `specs/2026-05-17-social-share-preview-design.md`, `plans/2026-05-17-social-share-preview.md`
 - Commits `5e21b23`..`41a70b7` (pushed). Post-deploy: FB Sharing Debugger re-scrape.
 
 ## 2026-05-17 — Ops & docs
@@ -46,7 +43,6 @@ in-memory lenient global net (300/60s, exempts /health and /api/auth/*).
 New `rate_limit` table (migration 0001). Both 429 layers emit `X-Retry-After`
 (matches Better Auth 1.6.11). Tests: middleware unit/integration + DB-backed
 sign-in 429.
-- Spec/plan: `specs/2026-05-17-rate-limiting-design.md`, `plans/2026-05-17-rate-limiting.md`
 - Commits: 572aa4e (table/0001), 5de7c41 (middleware), eb43de0 (mount),
   6d2f03a (Better Auth limiter+IP), ce5f60c (X-Retry-After consistency),
   this log entry.
@@ -56,7 +52,6 @@ Replaced "force-free" / "Train without force" with positive-reinforcement /
 reward-based phrasing across the 7 landing components, footer, FAQ, trainers
 tag/heading, `index.html` description/og/twitter/og:image:alt, and regenerated
 `og.png` (tagline + font-size 44→40). Tests updated red→green; full gate green.
-- Spec/plan: `specs/2026-05-17-copy-rephrase-design.md`, `plans/2026-05-17-copy-rephrase.md`
 - Commits: `758cf46` (copy+tests), `05ecb13` (OG image), this log entry.
 
 ## 2026-05-17 — Landing tweaks (CTAs top-bar-only + Turing photo) — SHIPPED
@@ -65,7 +60,6 @@ link) — CTAs live only in the sticky SiteNav. Added Turing's real photo to the
 hero caption + footer, served as a 640×850, ~109 KB, EXIF/GPS/XMP-stripped
 derivative; the GPS-tagged original is gitignored and never enters the public
 repo (verified at JPEG-marker level).
-- Spec/plan: `specs/2026-05-17-landing-tweaks-design.md`, `plans/2026-05-17-landing-tweaks.md`
 - Commits: ecaf0e0 (CTA removal), 79060e4 (scrubbed image+gitignore),
   1827d86 (hero+footer photo), this log entry.
 
@@ -73,7 +67,6 @@ repo (verified at JPEG-marker level).
 Hero Turing photo enlarged 48px→160px (`size-40`), re-laid-out as a centered
 vertical stack above the caption (`flex-col items-center`, ring-4 + shadow-lg).
 Footer avatar / OG image unchanged.
-- Spec/plan: `specs/2026-05-17-hero-photo-enlarge-design.md`, `plans/2026-05-17-hero-photo-enlarge.md`
 - Commit: e16ed82 (hero.tsx), this log entry.
 
 ## 2026-05-17 — Spanish / i18n (sub-project B) — SHIPPED
@@ -81,7 +74,6 @@ In-house typed i18n (en/es catalogs with compile-time parity), LocaleProvider +
 useI18n + t(), browser-locale detection + localStorage persistence, EN|ES
 LanguageToggle in the nav and on auth/app pages, all landing + auth/app copy
 localized. No backend, no deps; meta/OG stay English (<html lang> flips).
-- Spec/plan: `specs/2026-05-17-i18n-spanish-design.md`, `plans/2026-05-17-i18n-spanish.md`
 - Commits: this cycle (see `git log`).
 
 ## 2026-05-17 — Nav paw-mark contrast fix — SHIPPED
@@ -89,7 +81,6 @@ Replaced the OS 🐾 color-emoji in the site-nav brand badge with the lucide
 `PawPrint` vector icon (cream stroke via `currentColor` on the slate badge) —
 strong, device-independent contrast. No deps (lucide already present); single
 component change.
-- Spec/plan: `specs/2026-05-17-nav-paw-contrast-design.md`, `plans/2026-05-17-nav-paw-contrast.md`
 - Commits: this cycle (see `git log`).
 
 ## 2026-05-17 — Dog Profile CRUD (sub-project C) — SHIPPED
@@ -100,7 +91,6 @@ detail (concern/goal sub-lists + delete-confirm) → create/edit forms replacing
 the `/app` JSON placeholder; typed TanStack Query hooks via hc<AppType>. All
 copy localized (en+es parity). No DB migration, no new deps, no apps/api infra
 change. Shipped as a PR from the worktree-dog-profile-crud worktree.
-- Spec/plan: `specs/2026-05-17-dog-profile-crud-design.md`, `plans/2026-05-17-dog-profile-crud.md`
 - Commits: this branch (see `git log`).
 
 ## 2026-05-18 — API cold-start / 502 fix — SHIPPED
@@ -108,7 +98,6 @@ Fly `min_machines_running` 0→1 (keep one machine warm — no cold-start race) 
 explicit `serve({ hostname: "0.0.0.0" })` + corrected log. Root cause: scale-to-
 zero + slow `tsx` boot exceeding Fly proxy patience → 502 (the earlier trial
 5-min cap was a separate, now-resolved cause). No deps, no schema, apps/api only.
-- Spec/plan: `specs/2026-05-18-api-coldstart-fix-design.md`, `plans/2026-05-18-api-coldstart-fix.md`
 - Commits: see `git log` (merged via #1; this branch carries it forward through the merge).
 
 ## 2026-05-18 — Admin portal & usage telemetry — SHIPPED
@@ -124,7 +113,6 @@ signups, active-usage, activation funnel, live activity feed; range selector;
 admin-guarded + code-split (recharts kept out of the main bundle — landing
 entry chunk −47%). 180-day retention via a scheduled GitHub Actions workflow
 (`telemetry:purge`). Full TDD; 60 tests (API 30 / web 30), gate green.
-- Spec/plan: `specs/2026-05-17-admin-telemetry-design.md`, `plans/2026-05-17-admin-telemetry.md`
 - Commits: this cycle (see `git log`; branch `worktree-feat+admin-telemetry`).
 
 ## 2026-05-19 — API client cross-origin credentials fix — SHIPPED
@@ -133,7 +121,6 @@ session cookie is attached on cross-origin (`turingcare.dog` → `api.turingcare
 calls. Root cause of the prod 401 on `/api/dogs` (CORS/COOKIE_DOMAIN were already
 correct; the client just wasn't sending the cookie). Dev unaffected (same-origin
 via Vite proxy). One-line change, no deps.
-- Spec/plan: `specs/2026-05-19-api-client-credentials-design.md`, `plans/2026-05-19-api-client-credentials.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-fix-api-credentials.
 
 ## 2026-05-18 — Admin bootstrap self-heal (hotfix) — SHIPPED
@@ -148,7 +135,6 @@ first authenticated request. `requireAdmin` behavior unchanged (401/403/
 adminUser). Tests: 4 unit (DI fakes) + real-DB self-heal + 2 `/me` integration;
 full gate green (91 tests). Immediate prod unblock was a manual
 `UPDATE "user" SET role='admin'`.
-- Spec/plan: `specs/2026-05-18-admin-bootstrap-selfheal-design.md`, `plans/2026-05-18-admin-bootstrap-selfheal.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-fix+admin-bootstrap-selfheal.
 
 ## 2026-05-19 — App Shell + Journal/Brief/Trainers/Profile/Settings (sub-project D) — SHIPPED
@@ -158,7 +144,6 @@ aggregate, re-homed Dogs (chrome stripped), owner-scoped Behavior Journal,
 deterministic Behavior Brief (generate/finalize/print/copy, no AI), Trainers
 directory (filter/detail), Profile (edit name) + Settings (language/sign-out).
 All copy en+es with parity. No migration, new dependencies or API infrastructure change.
-- Spec/plan: `specs/2026-05-19-app-shell-design.md`, `plans/2026-05-19-app-shell.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-app-shell-redesign.
 
 ## 2026-05-19 — Landing logged-in CTA — SHIPPED
@@ -167,7 +152,6 @@ logged in (Better Auth `useSession`, cached — no extra round-trip); the
 existing Log in / Get started pair renders for anonymous visitors. One new
 i18n key (`nav.openApp`) in both en + es. Focused `site-nav.test.tsx` covers
 the logged-in path via `vi.mock`; landing.test stays green for logged-out.
-- Spec/plan: `specs/2026-05-19-landing-loggedin-cta-design.md`, `plans/2026-05-19-landing-loggedin-cta.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-landing-loggedin-cta.
 
 ## 2026-05-19 — Transactional email provider (P1) — SHIPPED
@@ -185,7 +169,6 @@ user-facing change. `RESEND_API_KEY` + `EMAIL_FROM` env/Fly secrets + DEPLOY.md
 domain-verification checklist (verify endpoint is
 `/api/auth/request-password-reset`). Full TDD; gate green (API 63 / web 34 /
 shared 8). Unblocks P2 (email verification) and P3 (password recovery).
-- Spec/plan: `specs/2026-05-19-transactional-email-design.md`, `plans/2026-05-19-transactional-email.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-feat+transactional-email.
 - Cleanup follow-up (not a gap): the `"/forget-password"` rate-limit customRule
   in `auth.ts` is exact-match and does not hit the real `/request-password-reset`
@@ -202,7 +185,6 @@ every in-app `<Link>`/`navigate(…)`/test fixture retargeted in one pass via
 a regex-precise sed (zero `/app` route literals remain). No backend, no i18n
 strings, no deps, no infra; `/login`/`/register`/`/`/`/admin` untouched.
 Tests pass at 44/17 (string fixtures updated in place).
-- Spec/plan: `specs/2026-05-20-rename-app-to-my-design.md`, `plans/2026-05-20-rename-app-to-my.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-rename-app-to-my.
 
 ## 2026-05-21 — Behavior Journal: edit + 4 missing capture fields — SHIPPED
@@ -220,8 +202,6 @@ bug after refetch). 11 new i18n keys with en/es parity; one new component
 test file (3 cases) + 5 new api/shared cases. No DB migration (columns
 already nullable), no new deps, no infra changes. Gates green: API 80/80,
 web 47/47, shared 19/19, tsc 0, lint 0, build OK.
-- Spec/plan: `specs/2026-05-21-journal-edit-and-fields-design.md`,
-  `plans/2026-05-21-journal-edit-and-fields.md`
 - Commits: this branch (see `git log`). Shipped as a PR from
   worktree-journal-edit-and-fields.
 
@@ -237,7 +217,6 @@ redirect to `/login` on success, invalid-link state when token is missing) +
 `resetPassword` from `auth-client.ts`; new i18n keys en+es with parity
 (compile-time guard); accessible `<h2>` headings inside shadcn `CardTitle`.
 Full TDD.
-- Spec/plan: `specs/2026-05-20-password-reset-frontend-design.md`, `plans/2026-05-20-password-reset-frontend.md`
 - Naming note: the plan said `forgetPassword` for the Better Auth client method;
   the real name in 1.6.11 is `requestPasswordReset` (verified against the
   installed package). The code uses `requestPasswordReset`; the spec/plan docs
@@ -253,7 +232,6 @@ so it reads as a distinct control — no absolute repositioning. Auth pages
 (already corner-anchored) and Settings (intentional inline) unchanged. New
 `LanguageToggle.test.tsx` (accessible name stays EN/ES proving aria-hidden,
 flags present in DOM, locale switch). Full TDD.
-- Spec/plan: `specs/2026-05-21-language-toggle-redesign-design.md`, `plans/2026-05-21-language-toggle-redesign.md`
 
 ## 2026-05-22 — Auth redirects fix — SHIPPED
 Two related defects in authenticated-redirect behavior. (A) After a valid
@@ -269,7 +247,6 @@ worked). (B) Authenticated users hitting `/login`/`/register` saw the form —
 added `RedirectIfAuthed` (mirror of `RequireAuth`) wrapping both routes →
 redirect to `/my`. Full TDD (new `redirect-if-authed`/`register` tests +
 extended `login` test). Gate green (API 80 / web 66 / shared 19).
-- Spec: `specs/2026-05-22-auth-redirects-fix-design.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-fix+auth-redirects.
 
 ## 2026-05-22 — Behavior Brief PDF export — SHIPPED
@@ -312,7 +289,6 @@ without throwing (no PDF-byte assertions — jsdom can't render @react-pdf).
 Gate green: biome clean, `tsc --noEmit` clean, web tests 76 pass (26 files),
 build green (PDF lib confirmed split into its own `brief-download-button`
 chunk).
-- Spec: `specs/2026-05-22-brief-pdf-design.md`
 - Commits: this branch (see `git log`). Shipped as a PR from feat/brief-pdf.
 
 ## 2026-05-22 — Trainer admin management — SHIPPED
@@ -336,7 +312,6 @@ dashboard. No fabricated data shipped — admins enter real trainers. Full TDD
 invalid / 404 PUT+DELETE unknown id; web `trainers.test.tsx` covers form render
 + create-mutation call (mock `@/lib/api`). Gate green (biome clean, tsc clean,
 API 88 / web 68, build incl. code-split `trainers` chunk).
-- Spec: `specs/2026-05-22-trainer-admin-design.md`
 - Endpoints: `POST/PUT/DELETE /api/admin/trainers[/:id]`
 
 ## 2026-05-22 — Email verification soft banner (P2) — SHIPPED
@@ -349,7 +324,6 @@ accessed via type cast `(data.user as { emailVerified?: boolean }).emailVerified
 (mirrors the `role?` cast in `require-admin.ts`). `VerifyEmailBanner` mounted in
 `AppShell` below the header, above page content. 5 TDD unit tests (all green).
 Gate: biome clean, tsc clean, web tests 71/71, build clean.
-- Spec: `specs/2026-05-22-email-verify-banner-design.md`
 - Commits: branch `feat/verify-email-banner`.
 
 ## 2026-05-22 — Behavior Brief sharing (read-only link) — SHIPPED
@@ -363,7 +337,6 @@ whitelist (dogName, summary, status, version, generatedAt) — no userId/dog
 id/token; revoked + unknown both 404. Web: Share control on the brief page
 (create/copy/stop) + public `SharedBrief` page reusing the PDF download (with
 generatedAt). en+es parity. Full TDD; gate green (API 126 / web 100 / shared 28).
-- Spec/plan: `specs/2026-05-22-brief-sharing-design.md`, `plans/2026-05-22-brief-sharing.md`
 - Commits: this branch (see `git log`). Shipped as a PR from feat+brief-sharing.
 
 ## 2026-05-22 — Email a Behavior Brief to a trainer — SHIPPED
@@ -383,8 +356,6 @@ owns validation. 13 new `briefSend` i18n keys with en/es parity. 502 test
 deferred with TODO (vi.doMock + module re-import vs. one-line branch — not
 worth the cost; flagged for follow-up if a DI seam emerges). Gates green:
 api 105/105, web 90/90, shared 23/23, tsc 0, lint 0, build OK.
-- Spec/plan: `specs/2026-05-22-email-a-brief-design.md`,
-  `plans/2026-05-22-email-a-brief.md`
 - Commits: this branch (see `git log`). Shipped as a PR from
   worktree-email-a-brief.
 
@@ -397,8 +368,6 @@ and a dog-detail `<ProgressPanel>` with confidence chips, skill CRUD, session
 logging/deletion, and en/es parity. No new deps; package manifests unchanged.
 Gates green: API 97/97 (+17), web 72/72 (+6), shared 24/24 (+5), tsc 0,
 lint 0, build OK. Shipped as a PR from worktree-training-progress.
-- Spec/plan: `specs/2026-05-22-training-progress-design.md`,
-  `plans/2026-05-22-training-progress.md`
 - Commits: this branch (see `git log`).
 
 ## 2026-05-23 — MVP coverage: 404 + Privacy + Terms — SHIPPED
@@ -441,8 +410,6 @@ schema changes — the existing FK cascades from `user` → `dogs` (and
 through to journal/briefs/training/concerns/goals/brief_sends) handle
 all data cleanup. Gates green: tsc 0, lint 0, web tests 116/116 (+16),
 build OK.
-- Spec/plan: `specs/2026-05-23-settings-completeness-design.md`,
-  `plans/2026-05-23-settings-completeness.md`
 - Commits: this branch (see `git log`). Shipped as a PR from
   worktree-settings-completeness.
 
@@ -462,8 +429,6 @@ the already-installed `radix-ui` (no new dep, no `ui/` wrapper). Double-click di
 pointer handling, timer cleanup and hover focus preservation are covered. Five call-site
 tests were updated for the new trigger name/flow. Gate green:
 biome 198, web 38 files / 132 tests, tsc 0, build OK.
-- Spec/plan: `specs/2026-05-23-language-toggle-popover-design.md`,
-  `plans/2026-05-23-language-toggle-popover.md`
 - Commits: this branch (see `git log`). Shipped as a PR from worktree-lang-toggle.
 
 ## 2026-05-23 — Feedback channel — SHIPPED
@@ -505,8 +470,6 @@ Idempotent seed script loads Seattle Humane's 19-course catalog
 (`scripts/seed-seattle-humane.ts`). No journal/plan adoption (deferred
 Level-2). `brief.tsx`/`trainer-detail.tsx` untouched. Gates green: tsc 0,
 lint 0, web + api + shared tests pass, build OK.
-- Spec/plan: `specs/2026-05-24-courses-section-design.md`,
-  `plans/2026-05-24-courses-section.md`
 - Commits: this branch. Shipped as a PR from worktree-courses-section.
 
 ## 2026-05-24 — Public Trainers + Courses directory — SHIPPED
@@ -521,8 +484,6 @@ public (no PII; link-out to the provider page). Pages render in a new
 links (section anchors → `/#…`). Sidebar + all internal links + route-move
 test fixtures repointed. Admin CRUD unchanged. Gates green: tsc 0, lint 0,
 web + api + shared tests pass, build OK.
-- Spec/plan: `specs/2026-05-24-public-directory-design.md`,
-  `plans/2026-05-24-public-directory.md`
 - Commits: this branch. Shipped as a PR from worktree-public-directory.
 
 ## 2026-05-25 — Seattle independent trainers seed — SHIPPED
@@ -570,8 +531,6 @@ merging current `origin/main` (through #34) — renumbered its migration 0005 �
 unioned the journal i18n keys, and took the quick-capture journal.tsx over the
 superseded #25 empty-state tweaks. Gates green: tsc 0, lint 0, api 154 / web
 157 / shared 35, build OK, migration applies cleanly.
-- Spec/plan: `specs/2026-05-22-journal-quick-capture-design.md`,
-  `plans/2026-05-23-journal-quick-capture.md`
 - Refinement: quick-moment intensity is now an opt-in snapping 1–5 slider
   instead of a `<select>`. Default state is "none" (a "+ Add intensity" button);
   clicking reveals a `range` input (min 1 / max 5 / step 1, default 3) with a
@@ -599,8 +558,6 @@ shared 38 / web 158 / api 157, web build OK.
 - Transport note: window is a query param, not a JSON body — the typed hono RPC
   client needs a route validator, and a json-body validator would break every
   no-body `POST /:id/brief` caller. See the spec's implementation note.
-- Spec/plan: `docs/superpowers/specs/2026-05-25-brief-windowed-trend-design.md`,
-  `docs/superpowers/plans/2026-05-25-brief-windowed-trend.md`
 - Commits: this branch. Shipped as a PR from feature/brief-windowed-trend.
 
 ## 2026-05-30 — Onboarding checklist on /my overview — SHIPPED
@@ -624,8 +581,6 @@ shared 38 / web 167 / api 163, web build OK.
   fetch stub returns `{}` for `/api/onboarding` (the checklist test mocks
   the hook directly, so coverage is fine, but the route-level stub could
   be tightened).
-- Spec/plan: `docs/superpowers/specs/2026-05-27-onboarding-checklist-design.md`,
-  `docs/superpowers/plans/2026-05-27-onboarding-checklist.md`
 - Commits: this branch. Shipped as a PR from feature/onboarding-checklist.
 
 ## 2026-05-31 — Training goal templates (curated curriculum) — SHIPPED
@@ -657,8 +612,6 @@ immediately. Gates green: tsc 0, lint 0
   Escape dismissal; API error details are squashed into a generic toast; the
   same template can be applied twice (intentional per spec, but a unique
   constraint on `(dog_id, catalog_goal_key)` would close the gap).
-- Spec/plan: `docs/superpowers/specs/2026-05-30-training-goal-templates-design.md`,
-  `docs/superpowers/plans/2026-05-30-training-goal-templates.md`
 - Commits: this branch. Shipped as a PR from feature/training-goal-templates.
 
 ## 2026-05-31 — Dog-hub redesign (hub + spokes) — SHIPPED
@@ -702,8 +655,6 @@ dashboard's duplicate widget (the dashboard keeps its "Dogs" stat count and the
   shared-test-DB environment drift and is unrelated to this frontend-only change
   (the diff touches zero `apps/api`/migration/schema files). CI runs the api
   suite against its own database.
-- Spec/plan: `docs/superpowers/specs/2026-05-31-dog-hub-redesign-design.md`,
-  `docs/superpowers/plans/2026-05-31-dog-hub-redesign.md`
 - Commits: this branch. Shipped as a PR from feature/dog-hub-redesign.
 
 ## 2026-06-07 — Weekly skill focus ("This Week" tab) — SHIPPED
@@ -736,8 +687,6 @@ drift; even unrelated suites fail identically) — so the new `focus.test.ts` (6
 cases: add/GET, 409 dup, 404 cross-dog, week-window filtering, delete + re-delete
 404, skill-delete cascade) runs in CI. No change to existing session/journal
 flows.
-- Spec/plan: `docs/superpowers/specs/2026-06-07-weekly-skill-focus-design.md`,
-  `docs/superpowers/plans/2026-06-07-weekly-skill-focus.md`
 - Commits: this branch. Shipped as a PR from feature/weekly-skill-focus.
 
 ## 2026-06-09 — Postgres RLS hardening (Supabase Data API exposure) — SHIPPED
@@ -794,8 +743,6 @@ re-subscribe and a dead `new Date()` fallback; remaining warnings are SPA
 false-positives (no SSR hydration), a readable-flat-state preference, and the
 native-`<dialog>` a11y upgrade — deferred because jsdom can't run `showModal()`
 (would break the test suite). Manual mobile/visual QA on a device was still pending.
-- Spec/plan: `docs/superpowers/specs/2026-06-20-journal-brief-redesign-design.md`,
-  `docs/superpowers/plans/2026-06-20-journal-brief-redesign.md`
 - Commits: branch `worktree-journal-brief-redesign`. Shipping as a PR.
 
 ## 2026-06-20 — Turing companion mascot (phase 1) — SHIPPED
@@ -820,7 +767,6 @@ green: web tsc 0, lint 0 (Biome), web 196 passing, web build OK.
 - **Deferred to phase 2:** the 8-pose `state`-driven variant (`celebrate`/`sleep`/`wag`/…)
   wired to journal / training / week-completion events (e.g. `celebrate` on a finished
   week); i18n of the 6 English tips (currently hardcoded).
-- Spec: `docs/superpowers/specs/2026-06-20-turing-companion-mascot-design.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-companion-mascot`.
 
 ## 2026-06-21 — Turing companion: polish (bubble-fit + Spanish) — phase 2a — SHIPPED
@@ -841,7 +787,6 @@ easing).
 - **Out of scope (phase 2b):** the 8-pose `state`-driven mascot + a `TuringProvider`/
   `playPose()` trigger wired to app events — `celebrate` on journal save / training session
   / brief finalize-send (owner-selected), idle→`sleep`, and contextual per-route tips.
-- Spec: `docs/superpowers/specs/2026-06-21-turing-polish-i18n-design.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-polish-i18n`.
 
 ## 2026-06-21 — Turing companion: living, event-driven mascot — phase 2b — SHIPPED
@@ -871,8 +816,6 @@ re-scoring already-merged code.
 - **Out of scope (future):** `sit`/`lie` poses, sound, a disable-Turing setting. Minor
   follow-ups: throttle the provider pointermove handler; symmetrize es/en
   tip derivation in the companion test.
-- Spec/plan: `docs/superpowers/specs/2026-06-21-turing-living-mascot-design.md`,
-  `docs/superpowers/plans/2026-06-21-turing-living-mascot.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-living-mascot`.
 
 ## 2026-06-21 — Turing companion: connect all the events — phase 2c — SHIPPED
@@ -893,8 +836,6 @@ from refetched/cumulative data, not a single event), as documented in their inli
 Gates: web **244/244** tests, tsc 0, **root** `biome check .` clean, build OK.
 - **Out of scope:** concern-adds / profile / settings / deletes (low signal); a celebratory
   text bubble on hop (good follow-up). Optional: an error-path test per new mutation trigger.
-- Spec/plan: `docs/superpowers/specs/2026-06-21-turing-connect-events-design.md`,
-  `docs/superpowers/plans/2026-06-21-turing-connect-events.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-connect-events`.
 
 ## 2026-06-21 — Skill milestones (checkable training levels) — IN REVIEW
@@ -923,8 +864,6 @@ still pending.
 **Merge note (rebased onto `main` after #51):** the mascot's "celebrate at mastery"
 moved off the removed `useUpdateSkillConfidence` onto the new `useSetSkillLevel` —
 reaching level 5 via the stepper now triggers the hop (`celebrate(level >= CONFIDENCE_MAX)`).
-- Spec/plan: `docs/superpowers/specs/2026-06-21-skill-milestones-design.md`,
-  `docs/superpowers/plans/2026-06-21-skill-milestones.md`
 - Commits: branch `feat/skill-milestones`. Shipping as a PR.
 
 ## 2026-06-21 — Turing companion: celebration bubbles + cooldown — phase 2d — SHIPPED
@@ -948,8 +887,6 @@ findings on changed files are pre-existing/adjudicated (derived-state effect; in
 animation easing) — none new.
 - **Out of scope / future:** streaks & first-of-day greeting, a "quiet Turing" setting,
   state-aware tips, ambient micro-animations, centralizing triggers into a reaction registry.
-- Spec/plan: `docs/superpowers/specs/2026-06-21-turing-celebration-bubbles-design.md`,
-  `docs/superpowers/plans/2026-06-21-turing-celebration-bubbles.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-celebration-bubbles`.
 
 ## 2026-06-21 — Turing companion: "Quiet Turing" hide setting — phase 2e — SHIPPED
@@ -967,8 +904,6 @@ no new findings on changed files (pre-existing/adjudicated only).
 - **Per-device, not account-synced** (localStorage), matching the app's other client prefs.
 - **Future ideas (unbuilt):** streaks + first-of-day greeting, state-aware tips, ambient
   micro-animations, empathetic reactions, centralizing triggers into a reaction registry.
-- Spec/plan: `docs/superpowers/specs/2026-06-21-turing-quiet-setting-design.md`,
-  `docs/superpowers/plans/2026-06-21-turing-quiet-setting.md`
 - Commits: this branch. Shipped as a PR from `worktree-feat+turing-quiet-setting`.
 
 ## 2026-08-12 — Weekly focus week-start versioning — MIGRATION VERIFICATION
@@ -1001,8 +936,6 @@ advancement, and safety decisions, including legacy focus compatibility use.
   compatibility branches.
 - Out of scope for Gate 1: Gate 2 dashboards, custom-skill suggestions, and
   Behavior Brief integration.
-- Spec/plan: `specs/2026-08-11-personalized-training-progress-design.md`,
-  `plans/2026-08-11-personalized-training-gate-1.md`.
 - Commits: `9095ed4..HEAD` on `feat/personalized-training-gate-1`.
 
 ## 2026-08-15 — First-run guided setup — IMPLEMENTED
@@ -1028,8 +961,6 @@ one dog-existence row, backed by `dogs_owner_idx`.
 Playwright covers the complete owner journey at Desktop Chrome and Pixel 7
 viewports, plus a phone reload/resume training journey. Browser API traffic is
 verified through isolated same-origin Vite proxy servers on ports 3310/3311.
-- Spec/plan: `docs/superpowers/specs/2026-08-15-first-run-guided-setup-design.md`,
-  `docs/superpowers/plans/2026-08-15-first-run-guided-setup.md`
 - Commits: `d52d82b..34b25de` on `feat/first-run-guided-setup`.
 
 ## 2026-08-21 — Personalized training Gate 2 — contextual progress
@@ -1101,8 +1032,6 @@ Final feedback aligns documented evidence ordering with the occurrence-time and
 stable-row-ID implementation, specifies `safety.ruleId` in detail-result
 deduplication, adds its mounted regression, and removes redundant action-return
 and pre-lock-clock plumbing.
-- Spec/plan: `docs/superpowers/specs/2026-08-19-contextual-progress-insights-design.md`,
-  `docs/superpowers/plans/2026-08-20-contextual-progress-insights.md`
 - Code commits: `59c26a2..6b9d1b2` on `feat/contextual-progress-insights`.
 - Pull request: [#68](https://github.com/mcasillas17/TuringCare/pull/68).
 
@@ -1119,8 +1048,6 @@ regenerating a Brief revokes any active public link. Coverage spans
 multi-version lifecycle rules, queued share/generate/revoke concurrency,
 QueryClient cache-authority after share-state mutations, localized English and
 Spanish UX copy, and public-route whitelist/privacy assertions.
-- Spec/plan: `docs/superpowers/specs/2026-08-22-brief-share-privacy-design.md`,
-  `docs/superpowers/plans/2026-08-22-brief-share-privacy.md`
 - Commits: this branch (see `git log`).
 
 ## 2026-08-23 — End-to-end English/Spanish localization — IMPLEMENTED, PR #70
@@ -1184,8 +1111,6 @@ Repository, full-migration, deployment-contract, and production-image evidence i
 in PR #70.
 
 - Current guide: `docs/LOCALIZATION.md`
-- Spec/plan: `docs/superpowers/specs/2026-08-23-end-to-end-localization-design.md`,
-  `docs/superpowers/plans/2026-08-23-end-to-end-localization.md`
 - Published for review as [PR #70](https://github.com/mcasillas17/TuringCare/pull/70).
 
 ## 2026-09-05 — Verified email ownership — IMPLEMENTED, PRODUCTION CUTOVER PENDING
@@ -1234,3 +1159,28 @@ evidence remain required. The cutover runbook and state diagram are in
   deployment and request/process Sentry event references remain pending under
   [#98](https://github.com/mcasillas17/TuringCare/issues/98). Local/CI envelopes do not prove deployed
   capture; browser monitoring and email-ownership enforcement remain separate work.
+
+## 2026-10-04 — Over-engineering cleanup
+
+- Removed unused dependencies: `@react-pdf/renderer` (API); `@sentry/react`,
+  `@sentry/vite-plugin`, `tw-animate-css`, `next-themes` (web); `wrangler` (root; the Pages
+  deploy pins `wranglerVersion` 4.127.1 in the workflow). `@vitest/coverage-v8` aligned to
+  vitest 4.1.11.
+- Removed dead code: unwired web Sentry config and `VITE_SENTRY_*` vars, unused shadcn
+  form/accordion, Drizzle relations, the brief-lifecycle lock helper, unused shared exports,
+  and the historical `docs/superpowers` specs/plans (available in git history).
+- Removed Latest-Brief duplicate-version fail-closed handling: `briefs_dog_id_version_unique`
+  (migration 0023) makes duplicates impossible. `brief_version_conflict` is now only returned by
+  Brief send for a non-latest `briefId` (copy updated in en/es).
+- Replaced hand-rolled code with platform/stdlib: `AbortSignal.timeout`,
+  `Intl.RelativeTimeFormat`, `crypto.randomUUID` (Brief send now needs a secure context: HTTPS
+  or localhost, not plain-HTTP LAN dev), native `<details name>`, CSS scroll-driven
+  reveal; pgEnums reuse the shared value arrays (pinned by schema tests); shared
+  AppShell/AdminShell chrome in `NavShell`.
+- Visible simplifications: the language switch is a single button; relative times read
+  "3 days ago"; the landing reveal is CSS-only (no stagger); nested routes show the matching
+  section title; never-toggled dark-mode CSS removed.
+- Kept deliberately: predeploy migration rollout split, custom `Accept-Language` parser,
+  hand-rolled Sheet modal.
+- No schema migration. No API contract change other than the removed always-false ambiguity
+  fields (`latestBriefAmbiguous`/`briefAmbiguous`).

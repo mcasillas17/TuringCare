@@ -16,6 +16,7 @@ import { classifyExceptionValue } from "../monitoring/sanitize-event";
 import { loadContextualProgressSummaries } from "./contextual-progress-data";
 import type { TransactionType } from "./safety-lock";
 import { evaluateSafetyWithSharedLock } from "./safety-policy";
+import { DAY_MS } from "./time";
 
 export type FocusSession = {
   id: string;
@@ -38,27 +39,7 @@ export type FocusSkill = {
 };
 
 export class FocusSkillDogMismatchError extends Error {
-  declare readonly dogId: string;
-  declare readonly skillId: string;
-
-  constructor(dogId: string, skillId: string) {
-    super("focus skill does not belong to dog");
-    this.name = "FocusSkillDogMismatchError";
-    Object.defineProperties(this, {
-      dogId: {
-        value: dogId,
-        enumerable: false,
-        configurable: false,
-        writable: false,
-      },
-      skillId: {
-        value: skillId,
-        enumerable: false,
-        configurable: false,
-        writable: false,
-      },
-    });
-  }
+  override name = "FocusSkillDogMismatchError";
 }
 
 export function weekBoundsFromOffset(
@@ -67,7 +48,7 @@ export function weekBoundsFromOffset(
   weekEndTimezoneOffsetMinutes: number,
 ) {
   const startBase = Date.parse(`${weekKey}T00:00:00.000Z`);
-  const endBase = startBase + 7 * 24 * 60 * 60 * 1000;
+  const endBase = startBase + 7 * DAY_MS;
   return {
     startISO: new Date(startBase + timezoneOffsetMinutes * 60_000).toISOString(),
     endISO: new Date(endBase + weekEndTimezoneOffsetMinutes * 60_000).toISOString(),
@@ -232,7 +213,7 @@ export async function setWeeklyFocus(
     .innerJoin(trainingGoals, eq(trainingSkills.goalId, trainingGoals.id))
     .where(and(eq(trainingSkills.id, skillId), eq(trainingGoals.dogId, dogId)))
     .limit(1);
-  if (!ownedSkill) throw new FocusSkillDogMismatchError(dogId, skillId);
+  if (!ownedSkill) throw new FocusSkillDogMismatchError("focus skill does not belong to dog");
 
   await lockFocusWeek(executor, dogId, weekKey);
 

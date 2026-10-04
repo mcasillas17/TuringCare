@@ -1,6 +1,5 @@
 import { and, avg, count, desc, eq, inArray, max } from "drizzle-orm";
 import { db } from "../db";
-import { resolveLatestBriefRowsByKey } from "../db/latest-brief";
 import { briefs, dogs, journalEntries, trainingGoals, trainingSkills } from "../db/schema";
 
 export type DogSummary = {
@@ -11,7 +10,6 @@ export type DogSummary = {
   avgLevel: number | null;
   briefStatus: "draft" | "finalized" | null;
   briefVersion: number | null;
-  briefAmbiguous: boolean;
 };
 
 export type DogOverview = typeof dogs.$inferSelect & { summary: DogSummary };
@@ -57,7 +55,6 @@ export async function loadDogsOverview(ownerId: string): Promise<DogOverview[]> 
         dogId: briefs.dogId,
         status: briefs.status,
         version: briefs.version,
-        generatedAt: briefs.generatedAt,
       })
       .from(briefs)
       .innerJoin(
@@ -67,20 +64,18 @@ export async function loadDogsOverview(ownerId: string): Promise<DogOverview[]> 
           eq(briefs.version, latestBriefVersions.maxVersion),
         ),
       )
-      .where(inArray(briefs.dogId, ids))
-      .orderBy(desc(briefs.version), desc(briefs.generatedAt), desc(briefs.id)),
+      .where(inArray(briefs.dogId, ids)),
   ]);
 
   const jMap = new Map(journalAgg.map((r) => [r.dogId, r]));
   const gMap = new Map(goalAgg.map((r) => [r.dogId, r]));
   const sMap = new Map(skillAgg.map((r) => [r.dogId, r]));
-  const latestBriefByDog = resolveLatestBriefRowsByKey(briefRows, (brief) => brief.dogId);
+  const bMap = new Map(briefRows.map((r) => [r.dogId, r]));
 
   return rows.map((d) => {
     const j = jMap.get(d.id);
     const s = sMap.get(d.id);
-    const briefResolution = latestBriefByDog.get(d.id);
-    const b = briefResolution?.kind === "found" ? briefResolution.brief : undefined;
+    const b = bMap.get(d.id);
     return {
       ...d,
       summary: {
@@ -91,7 +86,6 @@ export async function loadDogsOverview(ownerId: string): Promise<DogOverview[]> 
         avgLevel: s?.avg != null ? Number(Number(s.avg).toFixed(1)) : null,
         briefStatus: b?.status ?? null,
         briefVersion: b?.version ?? null,
-        briefAmbiguous: briefResolution?.kind === "conflict",
       },
     };
   });

@@ -1,11 +1,5 @@
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { useI18n } from "@/i18n";
-import { Reveal } from "./reveal";
+import { ChevronDownIcon } from "lucide-react";
 
 export function Faq() {
   const { t } = useI18n();
@@ -21,19 +15,23 @@ export function Faq() {
   return (
     <section id="faq" className="bg-surface-sand px-5 py-24">
       <div className="mx-auto max-w-2xl">
-        <Reveal className="text-center">
+        <div className="reveal text-center">
           <h2 className="text-3xl font-bold text-slate md:text-4xl">{t("faq.title")}</h2>
-        </Reveal>
-        <Reveal delay={100} className="mt-10">
-          <Accordion type="single" collapsible className="w-full">
-            {QA.map((item) => (
-              <AccordionItem key={item.q} value={item.q}>
-                <AccordionTrigger className="text-left text-slate">{item.q}</AccordionTrigger>
-                <AccordionContent className="text-slate-soft">{item.a}</AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </Reveal>
+        </div>
+        <div className="reveal mt-10 w-full">
+          {QA.map((item) => (
+            <details key={item.q} name="faq" className="group not-last:border-b">
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-2 rounded-lg py-2.5 text-left text-sm font-medium text-slate outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+                {item.q}
+                <ChevronDownIcon
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+                />
+              </summary>
+              <p className="pb-2.5 text-sm text-slate-soft">{item.a}</p>
+            </details>
+          ))}
+        </div>
       </div>
     </section>
   );

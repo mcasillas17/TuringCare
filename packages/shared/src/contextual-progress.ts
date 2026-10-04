@@ -13,23 +13,18 @@ import { suggestionSafetySchema } from "./suggestion";
 export const CONTEXTUAL_PROGRESS_WINDOW_DAYS = 21 as const;
 
 export const contextualStatusValues = ["reliable", "developing", "not_observed"] as const;
-export type ContextualStatus = (typeof contextualStatusValues)[number];
 
 export const observedContextStatusValues = ["reliable", "developing"] as const;
-export type ObservedContextStatus = (typeof observedContextStatusValues)[number];
 
 export const nextPracticeDirectionValues = ["easier", "harder", "repeat"] as const;
-export type NextPracticeDirection = (typeof nextPracticeDirectionValues)[number];
 
 export const contextualProgressSurfaceValues = ["week", "skill_detail"] as const;
-export type ContextualProgressSurface = (typeof contextualProgressSurfaceValues)[number];
 
 export const nextPracticeRuleValues = [
   "ease_after_too_hard",
   "advance_reliable_context",
   "repeat_developing_context",
 ] as const;
-export type NextPracticeRuleId = (typeof nextPracticeRuleValues)[number];
 
 export const exactPracticeContextSchema = z.object({
   cueSupport: z.enum(cueSupportValues).nullable(),

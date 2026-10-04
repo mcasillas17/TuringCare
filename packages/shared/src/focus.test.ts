@@ -19,6 +19,8 @@ describe("weekKeySchema", () => {
     expect(weekKeySchema.safeParse(TUESDAY).success).toBe(false);
     expect(weekKeySchema.safeParse("2026-8-10").success).toBe(false);
     expect(weekKeySchema.safeParse("2026-13-45").success).toBe(false);
+    // Feb 30 rolls over to Monday 2026-03-02, so only real-date validation rejects it.
+    expect(weekKeySchema.safeParse("2026-02-30").success).toBe(false);
   });
 });
 

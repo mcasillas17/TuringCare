@@ -1,10 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { db, pool } from "../db";
 import { briefs, user } from "../db/schema";
-import { withBriefLifecycleLock } from "../lib/brief-lifecycle";
 import { createTestUser } from "../test-helpers";
 import { waitForBlockingChain } from "../test-pg-concurrency";
 
@@ -382,35 +381,6 @@ describe("brief share mint/revoke", () => {
         shareToken: thirdToken,
       }),
     ).rejects.toThrow();
-  });
-
-  it("rolls back a token clear when Brief insertion violates the summary constraint", async () => {
-    const email = `share-rollback_${Date.now()}@example.com`;
-    emails.push(email);
-    const cookie = await signedUpCookie(email);
-    const dogId = await createDogWithBrief(cookie);
-    const mint = await app.request(`/api/dogs/${dogId}/brief/share`, {
-      method: "POST",
-      headers: { cookie },
-    });
-    const { token } = (await mint.json()) as { token: string };
-
-    await expect(
-      withBriefLifecycleLock(dogId, async (tx) => {
-        await tx
-          .update(briefs)
-          .set({ shareToken: null })
-          .where(and(eq(briefs.dogId, dogId), isNotNull(briefs.shareToken)));
-        await tx.insert(briefs).values({
-          dogId,
-          summary: null as never,
-          version: 2,
-          status: "draft",
-        });
-      }),
-    ).rejects.toThrow();
-
-    expect((await app.request(`/api/share/brief/${token}`)).status).toBe(200);
   });
 
   it("clears every historical token when revoking a newer private Brief", async () => {
