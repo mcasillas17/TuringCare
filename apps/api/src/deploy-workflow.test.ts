@@ -52,6 +52,22 @@ describe("production deployment protocol", () => {
     expect(deployWeb).not.toContain("needs: ci");
   });
 
+  it("publishes the web with the lockfile-pinned root Wrangler", async () => {
+    const workflow = await readFile(deployWorkflowUrl, "utf8");
+    const deployWeb = workflow.match(
+      /\n {2}deploy-web:\n(?<body>[\s\S]*?)(?=\n {2}[a-z][\w-]*:\n|$)/,
+    )?.groups?.body;
+    const rootPackage = JSON.parse(
+      await readFile(new URL("../../../package.json", import.meta.url), "utf8"),
+    ) as { devDependencies?: Record<string, string> };
+
+    // wrangler-action installs a missing or mismatched Wrangler with `pnpm add`, which pnpm
+    // rejects at the workspace root, so the deploy must reuse the installed root dependency.
+    expect(deployWeb).toContain("cloudflare/wrangler-action@");
+    expect(deployWeb).not.toMatch(/^\s+wranglerVersion:/m);
+    expect(rootPackage.devDependencies).toHaveProperty("wrangler");
+  });
+
   it.each(["ci", "deploy"])("gates %s on the monitoring-enabled production image", async (name) => {
     const workflow = await readFile(
       new URL(`../../../.github/workflows/${name}.yml`, import.meta.url),
