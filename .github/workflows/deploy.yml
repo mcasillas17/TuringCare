@@ -162,10 +162,11 @@ jobs:
         run: pnpm --filter @turingcare/web build
         env:
           VITE_API_URL: https://api.turingcare.dog
+      # Uses the lockfile-pinned root `wrangler`. Do not set `wranglerVersion`: on a mismatch
+      # the action runs `pnpm add` at the workspace root, which pnpm rejects.
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.127.1"
           command: pages deploy apps/web/dist --project-name=turingcare-web --branch=main

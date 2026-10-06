@@ -1184,3 +1184,14 @@ evidence remain required. The cutover runbook and state diagram are in
   hand-rolled Sheet modal.
 - No schema migration. No API contract change other than the removed always-false ambiguity
   fields (`latestBriefAmbiguous`/`briefAmbiguous`).
+
+## 2026-10-05 — Restore the Cloudflare Pages deploy
+
+- The 2026-10-04 cleanup removed the root `wrangler` devDependency and set the deploy's
+  `wranglerVersion` input instead. With no installed Wrangler, `cloudflare/wrangler-action@v4` ran
+  `pnpm add wrangler@4.127.1` at the workspace root, which pnpm rejects
+  (`ERR_PNPM_ADDING_TO_ROOT`). The API deploy and migrations from that push succeeded, but the web
+  publish failed and production kept the previous web bundle.
+- Restored `wrangler` as an exact, lockfile-pinned root devDependency (4.127.1) and
+  `allowBuilds.workerd: false`, and removed `wranglerVersion` so the action uses the installed
+  version. A workflow contract test guards both.
