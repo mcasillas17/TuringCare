@@ -1192,6 +1192,7 @@ evidence remain required. The cutover runbook and state diagram are in
   `pnpm add wrangler@4.127.1` at the workspace root, which pnpm rejects
   (`ERR_PNPM_ADDING_TO_ROOT`). The API deploy and migrations from that push succeeded, but the web
   publish failed and production kept the previous web bundle.
-- Restored `wrangler` as an exact, lockfile-pinned root devDependency (4.127.1) and
-  `allowBuilds.workerd: false`, and removed `wranglerVersion` so the action uses the installed
-  version. A workflow contract test guards both.
+- Restored `wrangler` as an exact, lockfile-pinned root devDependency and `allowBuilds.workerd:
+  false`, and removed `wranglerVersion` so the action uses the installed version. A workflow
+  contract test guards both. The pin moved from 4.127.1 to 4.147.0, whose miniflare uses patched
+  `undici` 7.29.1 and `sharp` 0.35.4; 4.127.1 would have added 11 audit advisories.
