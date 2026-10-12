@@ -87,8 +87,7 @@ export function createI18n(locale: Locale): I18n {
   instance.init({
     lng: locale,
     fallbackLng: "en",
-    initImmediate: false,
-    showSupportNotice: false,
+    initAsync: false,
     interpolation: { escapeValue: false, prefix: "{", suffix: "}" },
     resources,
   });
