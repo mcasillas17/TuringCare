@@ -13,7 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "i18next": "^26.4.2"
+    "i18next": "^26.4.3"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
