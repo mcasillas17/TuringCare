@@ -18,7 +18,7 @@
     "@turingcare/api": "workspace:*",
     "@turingcare/i18n": "workspace:*",
     "@turingcare/shared": "workspace:*",
-    "better-auth": "~1.6.30",
+    "better-auth": "~1.7.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hono": "^4.13.7",
