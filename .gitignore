@@ -37,3 +37,6 @@ playwright-report/
 # etc. Nothing under .claude/ belongs in the repo. Other agent dirs
 # (.cursor/, .aider*, .continue/, .codeium/) can join when they appear.
 .claude/
+
+# Downloaded research papers (local only; LINKS.md files are the committed record)
+docs/research/**/sources/

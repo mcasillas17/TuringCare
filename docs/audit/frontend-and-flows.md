@@ -1,0 +1,171 @@
+# Frontend, Flows and UX Audit
+
+Scope: `apps/web/src` (React 19 / Vite / React Router v7 / TanStack Query), checked against `e2e/`, README, ROADMAP, LOCALIZATION and PROJECT-LOG. Static review; the only thing executed was the web unit tests (see section 6). All file:line references were read in code. Line numbers are approximate to the nearest few lines where a block is cited.
+
+Judged against the goal: a **full, personalized, deterministic (no-AI) training program per dog**.
+
+## 0. Headline
+
+TuringCare today is a **tracker with a deterministic next-exercise suggestion**, not a program generator. The engine pieces that matter already exist in the API and are good (reviewed curriculum, fixed-precedence rules, advancement proposals, safety suppression with referral). What is missing is (a) intake data that would personalize anything, (b) a program/plan object, and (c) a screen that tells the owner what to do today. The UI is organized around *logging* (journal, sessions, brief), and the one surface that guides action (`/my/dogs/:id/week`) is the fourth tab inside a dog.
+
+Key verified facts:
+
+- Dog intake collects name, breed, size, sex, source, vaccine stage, spayed/neutered, notes (`routes/dog-form.tsx:59-118`, `components/guided-setup/dog-basics-step.tsx`). **Date of birth, weight and adoption date exist in the schema (`packages/shared/src/dog.ts:13,15,19`; DB `schema.ts:132`) but no form collects them.** Age/life stage cannot drive anything today.
+- The curriculum is 5 templates, about 20 skills, 5 levels each, one authored description per level (`apps/api/src/data/training-catalog.ts:25-48`, `training-curriculum.ts`). There are no multi-step instructions, no "how to", no per-session plan.
+- Practice outcome is 3-state (`went_well | mixed | too_hard`, `lib/practice-options.ts` OUTCOME_KEYS). There is no rep counter, no success-rate number, and no timer anywhere (grep for timer/countdown only hits email-resend cooldown and the mascot bubble).
+- Rules (`apps/api/src/lib/suggestion-rules.ts`): cold start, step back after 2 of 3 `too_hard`, ease after "harder" check-in, ease after hard context, hold after 2 mixed, maintain. Advancement needs 3 consecutive `went_well` across at least 2 days (`lib/advancement.ts:17-18,38-48`). Safety policy suppresses exercises and shows a referral (`lib/safety-policy.ts`).
+- Guided Today (T8) is explicitly "not started" in the roadmap and is the planned replacement for `/my` (`docs/ROADMAP.md:56,367-397`).
+
+## 1. Route and screen inventory
+
+Router: `apps/web/src/main.tsx`. Admin pages are lazy-loaded. All API access is via typed Hono client `api` (`lib/api.ts`) and Better Auth client (`lib/auth-client.ts`).
+
+### Public
+
+| Route | Screen | What the user can do | API |
+|---|---|---|---|
+| `/` | `routes/landing.tsx` + `components/landing/*` (hero, how-it-works, brief-spotlight, philosophy, trainers-teaser, faq, footer) | Read pitch; go to register/login/trainers | `POST /api/events` (page view, `lib/track.ts`) |
+| `/login` (RedirectIfAuthed) | `login.tsx` | Email/password sign-in, link to forgot password | Better Auth sign-in |
+| `/register` (RedirectIfAuthed) | `register.tsx` | Name/email/password, ToS agreement text, then to `/verify-email` | Better Auth sign-up |
+| `/verify-email` | `verify-email.tsx` (434 lines), `verification-navigation-recovery.tsx` | Passive landing from email link; explicit "Verify email" confirm; resend with email+password; cooldown timer | `/api/verification/status`, `/confirm`, `/resend` |
+| `/forgot-password`, `/reset-password` | same-named routes | Request and complete password reset | Better Auth |
+| `/privacy`, `/terms` | static | Read | none |
+| `/b/:token` | `shared-brief.tsx` | Read a finalized Behavior Brief without login | `GET /api/share/brief/:token` |
+| `/trainers`, `/trainers/:id`, `/courses`, `/courses/:id` (DirectoryLayout) | directory pages | Filter by state/specialty (free-text inputs); view detail; contact details only for verified sessions; "Send Brief" CTA to `/my/brief?recipient=` | `GET /api/trainers[/:id]`, `/api/courses[/:id]` |
+| `*` | `not-found.tsx` | 404 | none |
+
+### Owner (RequireAuth)
+
+Guided setup layout (`GuidedSetupLayout`, no app nav):
+
+| Route | Screen | What the user can do | API |
+|---|---|---|---|
+| `/my/setup`, `/my/setup/new` | `guided-setup.tsx` + `components/guided-setup/*` | Step 1 dog basics, step 2 intent (understand behavior / train a skill / track progress), step 3 one first action (a behavior concern, a training template, or a progress skill), completion card with suggestion preview; skip; back; abandon | `GET/POST /api/guided-setup`, `PUT .../intent`, `POST .../action/{behavior,training,progress}`, `POST .../skip`, `POST .../abandon`, `GET /api/training/templates` |
+
+App shell (`AppShell`, `NavShell`, nav items `app-shell/nav-items.ts`: Overview, Dogs, Journal, Brief, Trainers, Courses, Profile, Settings, Admin):
+
+| Route | Screen | What the user can do | API |
+|---|---|---|---|
+| `/my` | `overview.tsx` | Redirects to setup if auto-start eligible; onboarding checklist; 3 stats (dogs, entries, brief status); nudges; recent activity; quick links (log, add dog, brief, trainers) | `GET /api/overview`, `GET /api/guided-setup`, `GET /api/onboarding` |
+| `/my/dogs` | `dogs-list.tsx` + `dogs/dog-card*.tsx` | Dog cards with stats, goal levels, recent activity, concerns add/remove, links to training/journal; add dog; start another guided setup | `GET /api/dogs`, `/api/dogs/overview`, concerns POST/DELETE |
+| `/my/dogs/new`, `/my/dogs/:id/edit` | `dog-form.tsx` | Create/edit profile (8 fields) | `POST/PUT /api/dogs[/:id]` |
+| `/my/dogs/:id` (DogLayout) | header + tabs; index redirects to `journal` | Edit, delete (with guard messages for active setup / brief delivery) | `GET/DELETE /api/dogs/:id` |
+| `.../journal` | `dog-journal.tsx` -> `components/journal/*` | Log moment (note, intensity 1-5, place, structured details), daily check-in (better/same/harder + note), delete entry, filter | `/api/journal`, `/api/dogs/:id/journal[/:entryId]` |
+| `.../training` | `dog-training.tsx` + `progress/progress-panel.tsx` | Add goal (free text), apply template (`TemplatePicker`), add custom skill, per skill: expand, log session (`SessionForm`), set level via `MilestoneStepper`, edit/remove, contextual progress detail | `/api/dogs/:id/goals`, `/skills`, `/skills/:id/level`, `/sessions`, `/progress`, `/contextual-progress`, `/api/training/templates` |
+| `.../week` | `dog-week.tsx` (486 lines) | Week nav; focus picker (`FocusPicker`); deterministic `SuggestionCard` (primary + one easier fallback, why-text, evidence counts, Started/Skipped/Useful/Not useful, advancement proposal accept/decline); 7-day `WeekGrid` tap to log; `OutcomeQuickCapture` after logging; `ContextualProgressSummaryCard`; mascot celebration on weekly completion | `/api/dogs/:id/focus`, `/suggestion`, `/suggestions/:id/actions`, `/advancement-proposals/:id/decision` |
+| `.../brief`, `/my/brief` | `brief.tsx` | Pick dog, window (7d/30d/90d/all), generate, regenerate (confirmation if shared), finalize, share sheet (email / copy link / PDF / stop sharing), send history | `/api/dogs/:id/brief[/share|/send|/sends]` |
+| `/my/journal` | `journal.tsx` | Cross-dog journal | `/api/journal` |
+| `/my/profile` | `profile.tsx` | Edit name (email read-only) | `GET/PUT /api/profile` |
+| `/my/settings` | `settings.tsx` | Language, mascot toggle, edit profile, feedback mail link, sign out, change password, delete account (type-to-confirm, readiness check) | `/api/profile/locale`, `/deletion-readiness`, Better Auth |
+
+### Admin (RequireAdmin, lazy)
+
+`/admin` dashboard (KPI strip, funnel, growth, active usage, feature usage, events over time, top pages), `/admin/trainers`, `/admin/courses` (CRUD). API: `/api/admin/metrics`, `/api/admin/trainers`, `/api/admin/courses`.
+
+### Cross-cutting components
+
+`LanguageToggle`, `ui/sheet.tsx` (bottom sheet used by journal composers and brief sharing), `turing/*` + `turing-companion.tsx` (mascot; `celebrate()`), `session-error.tsx`, `lib/track.ts` (first-party events).
+
+## 2. End-to-end flows with friction
+
+e2e map: `e2e/critical-owner-journey.spec.ts` (desktop + `[phone]` Pixel 7: register -> verify -> login -> setup -> journal -> training -> week -> brief -> share), `e2e/verification.spec.ts` (unverified denial, confirm, resend), `e2e/production-smoke.spec.ts` (health, landing, directories, sign-in).
+
+1. **Landing -> signup.** Landing sells the Brief and philosophy; "how it works" is 3 generic steps (`landing/how-it-works.tsx`). No hint of a training plan. Register is 3 fields and consent text (`register.tsx:56-81`). Friction: duplicate registration gives a neutral success by design (README), so a returning user may wait for mail that never comes.
+2. **Verification.** Register -> `/verify-email` (no session) -> open email link -> click explicit confirm -> manually sign in (no auto sign-in by design, README). This is secure but it is 4 steps and 2 context switches before the first value moment. e2e confirms the explicit confirm and a separate login (`critical-owner-journey.spec.ts:109-120`).
+3. **Guided setup (first value).** `/my` redirects to `/my/setup` when `autoStartEligible` (`overview.tsx:40-42`). Step 1 basics (name, breed, size, sex, source, vaccine stage). Step 2 intent: pick **one of three goals**. Step 3: exactly one first action. Training intent offers only the allow-listed templates (`training-action-step.tsx:21,40`). Completion shows a preview suggestion and a link to the week page (training) or journal (behavior/progress) (`completion-step.tsx:23-39`). Friction: the dog is described by 6 coarse fields, no age, no goals beyond one intent, no household/schedule/experience, no "what is the issue today". The "understand behavior" path ends in the journal with no plan; "track progress" same.
+4. **Dog profile.** `/my/dogs/:id` lands on **Journal**, not training or week (`main.tsx` index `Navigate to="journal"`). Tab order Journal, Training, Brief, This Week (`dog-layout.tsx` tabs). The actionable page is last.
+5. **Training / week / focus.** Owner must (a) apply a template or add a custom skill on Training, (b) go to This Week, (c) pick a focus skill in `FocusPicker`, and only then (d) see the suggestion (`needs_focus_skill` card prompts this, `suggestion-card.tsx:75-86`). Custom-named skills get `custom_skill_unsupported` and no suggestion (`suggestion-card.tsx:89-102`, rules). That is 3 screens before the first exercise is shown.
+6. **Practice logging.** Two paths: `SessionForm` on Training (datetime, duration minutes, notes, outcome select, optional context dimension selects, safety select, level-confirm checkbox) and tap-a-cell on `WeekGrid` followed by `OutcomeQuickCapture`. Friction: the full form is long and select-heavy (`session-form.tsx:200-330`); the grid path is faster but its cell is 32px (see 3).
+7. **Journal.** Bottom-sheet composers (`journal-view.tsx:135-170`). Moment needs a dog and a non-empty note (`quick-moment-composer.tsx:44-45`), so a quick log cannot be one tap. Journal is cleanly separated from practice; the two only meet in the Brief and in suggestion rules (check-in "harder", high-intensity entries feed safety).
+8. **Progress.** `ProgressPanel` per goal/skill with level badge, `MilestoneStepper` (owner can set level manually), contextual progress ("strongest context", "practice next"). Level is set both manually and via advancement proposals, which is two ways to change the same state.
+9. **Brief.** Pick dog -> window -> Generate -> review -> Share this brief (finalizes) -> sheet: email / private link / PDF (`share-sheet.tsx:114-191`). PDF is lazy-loaded react-pdf (`brief-download-button.tsx`). Friction: sharing finalizes, and regenerate after share requires a confirmation sheet (`brief.tsx:200-219`), which is correct but surprising on first use. Brief content is a journal summary; it does not include the training plan or evidence-based progress.
+10. **Trainer directory / courses.** Filters are two free-text inputs (state, specialty) with placeholder-only labels (`trainers.tsx:22-30`). Detail shows contact only when verified, plus "Send Brief" prefilled recipient (`trainer-detail.tsx:62`). Website is shown as plain text, not a link (`trainer-detail.tsx:43-47`). Courses link out.
+11. **Settings.** Language, mascot, password, account deletion with readiness check. Solid and heavily guarded. Profile (`/my/profile`) is a separate page for one field (name).
+12. **Admin.** Analytics dashboard and CRUD for trainers/courses. Gated by verified admin; not part of the owner experience.
+
+## 3. UX and product issues (verified in code)
+
+### Product and flow
+
+1. **No "today" surface.** `/my` is a dashboard of counters (`overview.tsx:70-95`): dogs, entries, brief status. Quick links (`overview.tsx:150-170`) are log, add dog, brief, trainers; none lead to training or the week plan. The roadmap already names this (T8).
+2. **Training is buried.** Dog index redirects to Journal and the week tab is last (see flow 4). Global nav has no training/week entry (`nav-items.ts`).
+3. **Intake is too thin and ignores available fields.** DOB/weight/adoption date unused in all web forms (grep: only PDF model references them). Setup intent is a single enum (`intent-step.tsx:25-45`).
+4. **Suggestion is single-skill and single-exercise.** The week page shows one primary + one fallback for the one focus skill (`suggestion-card.tsx:104-146`); no sequencing across skills, no day plan, no session length, no steps.
+5. **Success data is coarse.** 3-state outcome select; `durationMinutes` is optional free number (`session-form.tsx:215-219`). No reps, no success percentage, so "regression/advancement" messaging rests on 3 outcomes.
+6. **Regression messaging is mostly a one-line reason.** Step-back and ease rules are explained via `RULE_REASON_KEYS` text (`suggestion-card.tsx:128-130`), not a distinct state with encouragement. Advancement is a proposal card (`advancement-proposal-card.tsx`) only on the week page.
+7. **Custom skills dead-end.** Free-text goals/skills yield `custom_skill_unsupported` with no path to map to a catalog skill (`suggestion-card.tsx:89-102`).
+8. **Two entry points for the same job.** Dog creation exists as guided setup and as `DogForm` (`/my/dogs/new`); the two collect different fields (form adds spayed/neutered and notes; setup adds intent and a first action).
+9. **Brief omits the plan.** Brief is journal-centric; nothing connects it to level/progress/evidence for the trainer. (`brief.tsx` flow; PDF model `brief-pdf-model.ts`.)
+10. **Referral is external links only.** `SafetyNotice` lists external directories (`safety-notice.tsx:35-50`) and does not link to the in-app trainer directory or the Brief send. It also has no dismiss, which is right.
+
+### Empty states, loading, errors
+
+11. `DogLayout` returns `null` while loading (`dog-layout.tsx:47`): blank page, no skeleton.
+12. Loading/errors are bare `<p>` text with hardcoded `text-red-600` across routes (`overview.tsx:46`, `dog-form.tsx:63-66`, `trainer-detail.tsx:20`, `progress-panel.tsx:119`). No retry on most of them (guided-setup and week have retry).
+13. Empty states exist and are decent for dogs (`dogs-list.tsx:20-27`), journal (`journal-view.tsx:181`), brief (`brief.tsx:142`), trainers (`trainers.tsx:45-50`).
+14. Overview first-run for `new` stage shows only the onboarding checklist (`overview.tsx:57-62`) and no explanation of what the product does for a dog.
+
+### Accessibility
+
+15. `WeekGrid` log buttons are `h-8 w-8` (32px) (`week-grid.tsx:~104`), below the 44px touch target; empty cells use `text-silver` on light backgrounds (low contrast, `week-grid.tsx:~107`); the popover has no Escape/focus handling (the Sheet does, the grid popover does not). Rows lack a `scope` on headers; the corner `<th>` is a blank space.
+16. `ui/sheet.tsx` closes on Escape and locks scroll and focuses the panel, but has no focus trap and no focus return (only one `focus()` call, line ~33).
+17. Trainer filter inputs have placeholder-only labels (`trainers.tsx:22-30`). `dog-form.tsx` shows field errors in a span with no `aria-describedby`/`aria-invalid` (grep returned none), unlike guided-setup which uses explicit ids.
+18. Positives: guided setup announces steps (`guided-setup.tsx:~210` `aria-live`), `SafetyNotice` uses `role="alert"`, tests cover keyboard/phone/reduced motion (ROADMAP "Release QA").
+
+### i18n (EN/ES)
+
+19. Coverage is strong: catalogs in `packages/i18n/src/{en,es}.ts` with parity tests; `html lang` is updated at runtime (`i18n/index.tsx:78`); dates use shared helpers; curriculum and templates are localized API-side.
+20. Gaps found: admin-entered trainer fields (`specialties`, `methodologyTags`, `certifications`) are rendered raw (`trainer-detail.tsx:34-42`), so they will not translate; brand mark `TuringCare` hardcoded (fine); `brief.tsx:155`; static `<html lang="en">` in `index.html` until JS runs (affects first paint and screen readers); decorative emoji hardcoded in overview and journal (`overview.tsx` heading, `journal-view.tsx:145`). The state filter is free text, so "CA" vs "California" mismatch is unhandled.
+21. Plan content that would need ES: any new program text must go through the same typed catalogs; the project has an AST audit rejecting uncatalogued UI copy (README).
+
+### Mobile
+
+22. Overview stats use a fixed `grid-cols-3` with no breakpoint (`overview.tsx:70`), tight on small phones. `DogLayout` header is sticky with two buttons plus delete confirmation row, which can wrap to a tall header (`dog-layout.tsx:~95-120`). Journal composers and brief sharing are bottom sheets (good). The week grid scrolls horizontally via `overflow-x-auto` (`week-grid.tsx:27`), which hides days 5-7 on a phone and makes the cell popover (`absolute`, `w-44`) clip.
+
+### Code health relevant to UX work
+
+23. Large, ref-heavy components (`dog-week.tsx` 486, `progress-panel.tsx` 544, `verify-email.tsx` 434, `guided-setup.tsx` 269 with its 2659-line test) increase the cost of changing flows; the roadmap says not to add branches to the dog route monolith.
+
+## 4. What a personalized program experience needs in the UI
+
+Principle: the engine stays deterministic; the UI adds intake, a plan view, and a runner. Reuse as shown.
+
+| Need | What it is | Reuse today | New |
+|---|---|---|---|
+| **Intake questionnaire** | Multi-step: age (DOB), weight, adoption date, environment (apartment/yard), household (kids/other pets), experience, daily minutes available, top 1-3 concerns, triggers, reinforcers (treats/toys), safety screen | `SetupShell`, `DogBasicsStep` (extend with DOB/weight/adoptedAt), `BehaviorActionStep` (concern + severity + safety signal), `IntentStep` pattern, `useValidationMessage`, `AbandonSetupButton`, react-hook-form + zod from `packages/shared` | New questions, new shared schema fields, a "program intent" |
+| **Program overview** | "Your plan for Biscuit": phases/weeks, skills in order, level per skill, why each was chosen | `ProgressPanel`, `MilestoneStepper`, template names/levels from `useTrainingCatalog`, `ContextualProgressSummaryCard` | A plan object (ordered skills with week index), a timeline/phase component |
+| **Daily/weekly plan** | Today card with 1-3 exercises, estimated minutes, next-day preview; week strip | `SuggestionCard` (primary + fallback), `WeekGrid`, `WeekNav`, `FocusPicker` (becomes plan-driven instead of manual), T8 "Guided Today" spec | A Today view at `/my`, multi-skill suggestion composition |
+| **Session runner** | Step-by-step exercise instructions, timer, rep counter, per-rep success tap, end-of-session summary | `OutcomeQuickCapture` (summary step), `SessionForm` fields (duration, context dimensions via `DIMENSION_CONFIG`), `Sheet` for a full-screen runner, Turing mascot for encouragement | Timer and rep UI, authored step lists per level, wake-lock/large-target design |
+| **Success-rate logging** | Reps tried/succeeded -> percent, mapped to `went_well/mixed/too_hard` thresholds | Existing 3-state outcome and rules (`suggestion-rules.ts`, `advancement.ts`) | Counters in the session payload and a threshold mapping so rules stay deterministic |
+| **Regression / advancement messaging** | Distinct, kind copy for step back, hold, advance; show evidence ("3 good sessions on 2 days") | `AdvancementProposalCard`, `RULE_REASON_KEYS`, evidence line in `SuggestionCard`, `turing.celebrate*` | Dedicated regression card, level-change timeline, celebration on advance |
+| **Referral screens** | When safety rule fires: suppress plan, explain, offer a vet/behaviorist/trainer next step, attach Brief | `SafetyNotice` (no dismiss, role alert), trainer directory + `/my/brief?recipient=`, `ReferralCategory` | In-app links to directory filtered by category, "send Brief to professional" CTA inside the notice, program-paused banner |
+| **Brief integration** | Include plan, levels, evidence and referral reason | `brief-pdf-model.ts`, `share-sheet`, `send-panel` | Plan/progress section in Brief |
+
+Shared schema is the contract (`packages/shared`), and API rules/curriculum are already isolated pure modules (`lib/curriculum.ts`, `lib/suggestion-rules.ts`), so the plan builder can be another pure module beside them.
+
+## 5. Prioritized recommendations
+
+### Quick wins (days)
+
+1. **Collect DOB, weight, adoption date** in `DogBasicsStep` and `DogForm` (schema already supports them). Prereq for all personalization.
+2. **Make the week/plan the default dog tab** (change the index redirect in `main.tsx` and tab order in `dog-layout.tsx`) and add a "This week" link to `Overview` quick links and global nav.
+3. **Overview next-action card** using existing data: if no focus -> pick focus; if suggestion available -> show `SuggestionCard` preview mode (already supports `mode="preview"`).
+4. **Fix a11y basics:** 44px targets and contrast in `week-grid.tsx`, Escape/focus handling in its popover, labels on trainer filters, `aria-invalid`/`aria-describedby` in `dog-form.tsx`, focus return in `ui/sheet.tsx`.
+5. **Loading/error consistency:** skeleton for `DogLayout` (`dog-layout.tsx:47`), shared error component with retry replacing bare red `<p>`.
+6. **Trainer detail:** make the website a link; link the safety notice to `/trainers` and the Brief send.
+7. **Catalog-map custom skills** (offer "match to a catalog skill") so custom entries stop dead-ending in `custom_skill_unsupported`.
+8. **Phone fix for the week grid:** day-list layout under `sm` rather than horizontal scroll; `grid-cols-1 sm:grid-cols-3` for overview stats.
+
+### Larger bets (weeks)
+
+1. **Intake v2 and a `program` model:** shared Zod schema for extended intake; deterministic plan builder (pure module next to `curriculum.ts`) that orders catalog skills by concern, age/life stage, experience and available minutes; persists a plan with week indexes. Keep the rules engine as the per-session adapter.
+2. **Guided Today (roadmap T8)** as the home screen, driven by the plan, with a dog switcher and daily defer.
+3. **Session runner** with timer, rep counter and success-rate capture, feeding the existing outcome rules via a documented threshold mapping.
+4. **Authored content depth:** per level, steps, success criteria, common mistakes and equipment; ES translations. This is the real bottleneck for "full" programs (currently one description per level).
+5. **Regression/advancement UX** as first-class states with a level timeline; unify manual level setting (`MilestoneStepper`) and proposals so there is one source of truth.
+6. **Referral workflow** wiring safety suppression to directory filters and a one-tap Brief send; include plan evidence in the Brief.
+7. **Refactor `dog-week.tsx` and `progress-panel.tsx`** into smaller hooks/components before adding the above (roadmap already warns against growing the monolith).
+
+## 6. Test run (honest result)
+
+`pnpm --filter @turingcare/web test` was run. Result: **35 of 106 files failed; 338 of 939 tests failed; 601 passed.** The failures I inspected are environmental, not product regressions: the local Node is v26.10.0 while `.nvmrc` requires 22, and the dominant error (170 occurrences of `Cannot read properties of undefined (reading 'setItem')`, 33 of `'clear'`, 4 of `'getItem'`) is `localStorage` being undefined under the test environment. I did not switch Node versions or rerun, so I cannot say whether all 338 failures share that cause; 2 assertion failures (`expected '/my'` navigation calls, and a locale `'es'` vs `'en'` mismatch) may be downstream of the same missing storage but were not verified. Playwright e2e was not run.
