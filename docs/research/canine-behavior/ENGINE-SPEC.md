@@ -1,6 +1,6 @@
 # TuringCare deterministic training engine — specification
 
-Status: **authoritative engine spec**, revision 9 (2026-11-09; applies the round-table and review rounds 1–8; v2 deferrals in §14.3). It supersedes the "Engine specification" section of [README.md](README.md) and the design details in
+Status: **authoritative engine spec**, revision 10 (2026-11-10; applies the round-table and review rounds 1–9; v2 deferrals in §14.3). It supersedes the "Engine specification" section of [README.md](README.md) and the design details in
 [docs/audit/IMPROVEMENT-PLAN.md](../../audit/IMPROVEMENT-PLAN.md). Evidence base: the seven deep-read digests
 ([01](01-learning-theory/DIGEST.md), [02a](02-problem-behaviors/DIGEST-a.md),
 [02b](02-problem-behaviors/DIGEST-b.md), [03](03-development-life-stages/DIGEST.md),
@@ -96,10 +96,12 @@ type PlanInput = {
   profile: DogProfileFacts;      // existing `dogs` row (canonical store, §4.1)
   intake: Intake | null;         // latest version: dosing, anchors, heat, unknown-answer check
   intakeAtWeekStart: Intake | null; // version in force at weekStart: item-set selection (§3.6)
+  firstIntakeCreatedOn: string | null; // owner-local date of min(dog_intakes.created_at); adoption check-in cutoff (§7.2)
   reports: AggressionReport[];   // all rows, append-only (§4.2)
   history: PlanHistory;          // §4.4
   now: string;                   // server timestamp sampled under the shared lock: all windows, ages, week boundaries
-  localDate: string;             // owner-local date of `now` (route: now + timezoneOffsetMinutes); settling day, check-ins, display day
+  localDate: string;             // owner-local date of `now`: now − timezoneOffsetMinutes (getTimezoneOffset sign; the route
+                                 // reuses the `currentWeekKey`/practiceDay helpers, never a new derivation); settling day, check-ins, display day
   weekStart: string;             // owner-local Monday of localDate
   hotToday: boolean;             // owner tap (§8)
 };
@@ -131,8 +133,8 @@ It **absorbs and replaces** `lib/suggestion-rules.ts`, the rule path of `lib/sug
 | `packages/shared/src/journal.ts` | edit | `problemDomain` required on new moments and on any PUT that yields a high-intensity moment (§5 D keys, `aggression`, `other`) |
 | `packages/shared/src/practice-evidence.ts` | keep | owner-selectable `safetySignalValues` stays the 3 values; engine signal types live in `plan.ts` (`engineSignalType`); legacy schemas reject them (test) |
 | `apps/api/src/db/schema.ts` (`briefs`) | edit | + `plan_snapshot jsonb` nullable: the §12.4 allowlisted projection, frozen with the Brief version |
-| `routes/dogs.ts` (`POST /:id/brief`), `apps/api/src/lib/brief.ts` | edit | `briefGenerateSchema` gains a bounded `timezoneOffsetMinutes`; the snapshot is built with `buildPlan` inside the shared dog-safety lock transaction, with server `now`, and stored in `plan_snapshot` |
-| `apps/api/src/lib/time.ts` | edit | receives `practiceOccurredAt` and `MAX_FUTURE_CLOCK_SKEW_MS` (moved from `routes/dogs.ts`), imported by `routes/dogs.ts`, `routes/plan.ts` and `journal-writes.ts` |
+| `routes/dogs.ts` (`POST /:id/brief`), `apps/api/src/lib/brief.ts` | edit | `briefGenerateSchema` gains an **optional** bounded `timezoneOffsetMinutes` (absent → 0, UTC week, so stale bundles still generate; `parse({})` keeps passing; API test: a Brief generated without it stores a `plan_snapshot`); the snapshot is built with `buildPlan` inside the shared dog-safety lock transaction, with server `now`, and stored in `plan_snapshot` |
+| `apps/api/src/lib/time.ts` | edit | receives `practiceOccurredAt`, `practiceDay` and `MAX_FUTURE_CLOCK_SKEW_MS` (moved from `routes/dogs.ts`; the plan route derives `localDate` with `practiceDay` and `weekStart` with `currentWeekKey`), imported by `routes/dogs.ts`, `routes/plan.ts` and `journal-writes.ts` |
 | `apps/web/src/lib/plan.ts` | new (Phase 3) | TanStack query keys and the §12.7 invalidation table |
 | web quick composer + journal edit | edit (Phase 1) | `problemDomain` picker |
 | web "record a vet check" form | new (Phase 1) | minimal medical clearance form |
@@ -150,7 +152,8 @@ It **absorbs and replaces** `lib/suggestion-rules.ts`, the rule path of `lib/sug
    and `Date.UTC`/`Date.parse` on ISO strings are allowed (integer UTC-day arithmetic).
 2. Every sort ends with a codepoint key comparison. History is re-sorted by `(practiceDay | reportedAt, id)`.
 3. Integer percentage arithmetic (`successes * UNIT.PCT >= ADAPT.ADVANCE_PCT * trials`); day differences =
-   `Math.floor((Date.parse(b) − Date.parse(a)) / UNIT.MS_PER_DAY)`; explicit `Math.floor`.
+   `Math.floor((Date.parse(b) − Date.parse(a)) / DAY_MS)` (the `DAY_MS` constant imported from `lib/time.ts`; the
+   purity grep is per file, and the pure modules import only constants from it; calendar facts are not `RuleConstant`s); explicit `Math.floor`.
 4. JSON-serialisable output; no timestamps except dates derived from `localDate`.
 5. Tests: `buildPlan(x)` deep-equals `buildPlan(structuredClone(x))` and the result for shuffled history arrays. Nothing
    is persisted.
@@ -202,8 +205,12 @@ items, never add teaching items. The distress pause (§11.6) and the puppy fear 
   `unknown` → not met.
 - `intakeAtWeekStart`: one query, `dog_intakes where dog_id = $1 and created_at < $weekStartUtc order by version desc
   limit 1` (uses the `(dog_id, version)` unique index; `weekStartUtc` from `timezoneOffsetMinutes`).
-- **Validation:** `adoptedAt ≥ dateOfBirth` (refine on the shared `dogProfileSchema`); an existing violating row is
-  treated as `adoptedAt = null` with `NOTICE_PROFILE_DATES`.
+- **Validation:** `adoptedAt ≥ dateOfBirth`, `dateOfBirth ≤ today` and `adoptedAt ≤ today` (refines on the shared
+  `dogProfileSchema`, which carries no timezone, so "today" = UTC today + 1 day and a date set today passes in any
+timezone; the read-time rule below handles the exact owner-local case). At read
+  time an existing row with `adoptedAt < dateOfBirth` or `adoptedAt > localDate` is treated as `adoptedAt = null`, and
+  one with `dateOfBirth > localDate` as `dateOfBirth = null` (band `unknown`), each with `NOTICE_PROFILE_DATES`.
+  Tests: future DOB, future adoptedAt (no negative `ageWeeks`, no `settlingDay` ≤ 0).
 - **No intake / unanswered items:** never mapped to "no". Unanswered required safety items (§6.3 G30) make the mode
   at least CAUTION and are listed as `blockingQuestions`. C1/C2 answered "yes" with no matching report count as
   unanswered. B3/B5 "yes" signals are sticky like G14 (resolved only by a medical clearance). Non-safety defaults: no problems, traits null, baseline 0,
@@ -331,8 +338,9 @@ export const planSchema = z.object({
     keep `evaluateAdvancement` and `syncAdvancementProposalInTx` unchanged (3 `went_well` on ≥2 days).
 - **Protocol stage (one definition, used for prerequisites, the server cap and §11.3):** per (item,
   `body_area`/`soc_category`), derived stage = min(latest logged `protocol_stage`, highest stage with a non-failed
-  session); with no non-failed session it is the §9.2 start stage. Read with indexes `(skill_id, practice_day desc)`,
-  `(skill_id, body_area, practice_day desc)` and `(skill_id, soc_category, practice_day desc)`.
+  session); with no non-failed session it is the §9.2 start stage. Read with one grouped query per item over that
+  skill row's sessions, using the `(skill_id, practice_day desc)` index (no per-area indexes in v1; add them only if
+  EXPLAIN on real data shows a need).
   The server accepts `1 ≤ protocolStage ≤ min(derived + 1, ladder length)`, else 400; for a first `protocol.noise`
   session it accepts `1…NOISE.MAX_STEP`.
 - **Idempotency:** `POST …/aggression-reports` and `POST …/plan/sessions` require a client `idempotencyKey` (uuid);
@@ -349,7 +357,9 @@ type PlanHistory = {
   sessions: SessionLog[];     // last HIST.WINDOW_DAYS days by practiceDay (skill adaptation and completion)
   protocolLatest: { key: string; area: string | null; stage: number; stageAtWeekStart: number | null; recent: SessionLog[] }[]; // last DSCC.FAIL_SESSIONS_REGATE sessions
   skillLevels: { key: string; level: number; isPlanRow: boolean }[];
-  checkins: PlanCheckin[];    // last HIST.CHECKIN_WEEKS weeks
+  checkins: PlanCheckin[];    // weekly kind, last HIST.CHECKIN_WEEKS + 1 weeks (the extra week tells the §11.4 fold
+                              // whether its oldest week was paused)
+  adoptionCheckinsRecorded: CheckinKind[]; // unwindowed: adoption_dN kinds ever recorded (≤4 rows, partial unique index)
   signals: { type: SafetySignalType; source: SafetySignalSource; reportedAt: string; problemKey: string | null }[];
   journal: { problemDomain: string | null; intensity: number | null; kind: "moment" | "daily_checkin";
              trend: "better" | "same" | "harder" | null; occurredAt: string }[];  // last WORSENING_WINDOW_DAYS
@@ -400,12 +410,12 @@ Safety triggers read `signals` and `reports` (§6.5), except G22 and the VET par
 |---|---|
 | `dog_intakes` | `id`, `dog_id → dogs cascade`, `version`, `schema_version`, `answers jsonb` (Zod on write and read), `created_at`; unique `(dog_id, version)`; append-only |
 | `dog_aggression_reports` | `id`, `dog_id → dogs cascade`, `kind`, bite columns, warning columns, `context`/`contexts`, `predictable`, `reported_at timestamptz default now()`; CHECKs per kind; `idempotency_key uuid not null`, `payload_hash text not null`, unique `(dog_id, idempotency_key)`. **No API can edit or delete a row**; rows disappear only when the dog itself is deleted (existing account/dog deletion cascade, which is already guarded by `brief_sends` claims). Corrections via the safety-correction runbook (extended in Phase 1 to cover reports and clearances). Index `(dog_id, reported_at)`. |
-| `plan_checkins` | `id`, `dog_id`, `kind enum(weekly, adoption_d7, adoption_d30, adoption_d90, adoption_d180)`, `week_start date` CHECK isodow = 1, `distress smallint 0–3` (weekly), `skip_reason enum(no_time, dog_unwell, owner_away, plan_too_hard, other)` nullable, `created_at`; unique `(dog_id, kind, week_start)`; partial unique `(dog_id, kind) where kind <> 'weekly'` |
+| `plan_checkins` | `id`, `dog_id`, `kind enum(weekly, adoption_d7, adoption_d30, adoption_d90, adoption_d180)`, `week_start date` CHECK isodow = 1, `distress smallint 0–3`, CHECK `(kind = 'weekly') = (distress IS NOT NULL)`, `created_at`; unique `(dog_id, kind, week_start)`; partial unique `(dog_id, kind) where kind <> 'weekly'` |
 | `dog_safety_clearances` | `id`, `dog_id`, `cleared_by_role enum(veterinarian, veterinary_behaviorist, credentialed_behavior_consultant)`, `scope enum[](medical, behavior)`, `constraint enum(full_plan, low_impact_only)`, `professional_name`, `organisation`, `country char(2)`, `credential_ref` nullable, `cleared_on`, `created_at`; CHECK medical scope ⇒ veterinary role; no API edit/delete; index `(dog_id, created_at)` |
 | `training_skills` | unique `(goal_id, catalog_skill_key)` (verify no duplicates first) |
 | `training_goals` | partial unique `(dog_id) where catalog_goal_key = 'plan'` |
 | `advancement_proposals` | + `item_version` (§4.3) |
-| `practice_sessions` | + §4.5 columns, `idempotency_key uuid`, `payload_hash text` nullable (set by the plan route); indexes `(skill_id, practice_day desc)`, `(skill_id, body_area, practice_day desc)`, `(skill_id, soc_category, practice_day desc)`; unique `(skill_id, idempotency_key)` |
+| `practice_sessions` | + §4.5 columns, `idempotency_key uuid`, `payload_hash text` nullable (set by the plan route); index `(skill_id, practice_day desc)`; unique `(skill_id, idempotency_key)` |
 | `journal_entries` | + `problem_domain` (§5 D keys, `aggression`, `other`); required on new moments by the shared schema (missing → 400 with stable code `problem_domain_required`; the web keeps the draft and prompts a reload, covering stale bundles during rollout), null on legacy rows and check-ins (a null high-intensity moment is treated as G21, §11.5) |
 | `safety_signal_type` | + `self_injury_or_panic_escape, repetitive_behavior, rehoming_or_euthanasia_considered, pain_signs, sudden_onset_change, medical_change, late_onset_change, dishaa_signs, adult_house_soiling, separation_severe, separation_signs, separation_mild, noise_panic, noise_mild, reactivity, fear_problem, aversive_history, puppy_fear, no_progress, plan_distress, household_child, household_vulnerable, worsening_behavior`; plus a nullable `problem_key` column (§5 D keys or `aggression`) used by pauses (`aggression_or_bite_risk`, `severe_fear_or_panic`, `injury_or_pain`, `severe_behavior_concern` exist) |
 | `safety_signal_source` | + `intake, plan_checkin, journal_entry` |
@@ -431,7 +441,6 @@ at least CAUTION (G30).
 
 | Field | Question | Scale | Feeds | Evidence |
 |---|---|---|---|---|
-| A1 dobEstimated | "Is the birth date an estimate?" | yes/no | copy | — |
 | A3 bodyCondition9 | "Which picture looks most like your dog?" | 1–9 | heat, vet note | Packer 2015; Tomlinson 2026 |
 | A4 heatBreeds | "Is your dog one of these breeds, or mostly one of them?" | ≤3 of `heatBreedKey` | heat only | Hall 2020; Packer 2015 |
 | A5 flatFaced (+ muzzle/skull cm) | "Is your dog's face flat or short-nosed?" | yes/no/unsure; cm | brachy flag | Packer 2015 |
@@ -442,13 +451,11 @@ at least CAUTION (G30).
 
 | Field | Question | Scale | S | Feeds | Evidence |
 |---|---|---|---|---|---|
-| B1 vetSeen12mo | "Has a vet examined your dog in the last 12 months?" | yes/no/unsure | | notice | D02a G-01 |
 | B2 conditions | joint/mobility, heart/breathing, skin/ear, stomach/gut, seizures, thyroid, eye/hearing loss, other | multi | | low-impact, heat | Camps 2019; Mills 2020 |
 | B3 medicationChange | "Has your dog started, stopped or changed any medicine in the last 8 weeks?" | yes/no | S | G17 | D02a G-04 |
 | B4 painSigns | slow to get up; avoids stairs or jumping; limps; flinches or snaps when touched; licks one spot a lot; slips on floors; restless at night; "none of these" | multi | S | G14 | partly Mills 2020; list and count conv (D04 R11) |
 | B5 changeOnset | "Did a behaviour you're worried about start or get much worse within the last 4 weeks?" + which problem | yes/no + problem key | S | G15 | D02a G-02 |
 | B7 dishaa (≥`STAGE.SENIOR_SCREEN_Y`, senior, or DOB unknown) | gets lost or stuck; less interested in people; sleep–wake changed; new indoor accidents; less active; new worries | 0–4 each | S when shown | G18 | AAHA 2023 |
-| B9 hearingVision | "Has your dog's hearing or eyesight changed?" | none/hearing/vision/both | | cues | Hopper 2024 |
 
 **C. Safety.** C1/C2 incidents are **append-only reports** (`POST …/aggression-reports`); the intake only stores
 whether the owner answered "no incidents". "Yes" with no matching report counts as unanswered (G30) until a report
@@ -471,7 +478,8 @@ guarding_food, guarding_items, guarding_resting_place, separation, noise, house_
 fear_dogs, fear_handling, fear_new_places). Per problem: frequency 0–4; intensity 1–5; **onset band**
 (`before_6mo, 6mo_to_2y, 2y_to_7y, 7y_or_older, unknown`) for G16; `startDistanceM` (reactivity); separation
 `aloneSigns` (vocalising <5 / 5–15 / >15 min, pacing, panting, drooling, destruction, soiling occasional / every
-absence, scratching exits, self-injury) and `firstSignAfterS` (owner-measured on video, nullable; null → absence
+absence, scratching exits, self-injury, `unsure`; refine: ≥1 when separation frequency ≥1, so a separation problem
+always matches a §6.4 row) and `firstSignAfterS` (owner-measured on video, nullable; null → absence
 stage 1); noise: recovery (minutes / hours / next day / days or more), hides, escape attempt; guarding: resource and
 context (McGuire 2020: capture the specific case).
 
@@ -488,11 +496,9 @@ calmly → `self.settle`; harness/collar → `handle.collar_harness`; brushed/pa
 |---|---|---|---|
 | minutesPerDay | 0–60 | dosing | D06 D1 (conv) |
 | anchors | 1–3 of after_breakfast, after_walk, lunchtime, before_dinner, evening | schedule | Gollwitzer & Sheeran 2006 (smaller after bias correction, D06 C18) |
-| experience | first dog / had dogs / trained dogs before | coaching copy only | covariate |
+| experience | first dog / had dogs / trained dogs before | §7.2 first-time-adopter expectations card | Powell 2022 |
 | household: other dogs, cats/small pets, home type, garden, trainers 1/several | enums | §10.8 | D06 HH (conv) |
 | exerciseBand, aloneHoursBand | bands | separation questions shown | Sulkama 2021; Tiira 2015 |
-| rewards | ranked | §10.7 | Feuerbacher 2012; Lazaro 2023 |
-| equipment | collar, harnesses, long line, crate, basket muzzle (+ trained?) | notes | Cavalli 2025 (D06 S25) |
 | goals | ≤3, ordered | P3 | Daniels 2023 |
 | puppy (age <`VAX.ASK_MAX_AGE_WK`): firstVaccineOn, dewormed | date; yes/no/unsure | vaccine gate | AVSAB 2008 |
 
@@ -559,8 +565,8 @@ HD = human-directed: any person-target bite report or any warning report. Paused
 | G18 | read time: (senior band, age ≥`STAGE.SENIOR_SCREEN_Y`, or DOB unknown) and signal `dishaa_signs` (any DISHAA item ≥`SAFE.DISHAA_ITEM_MIN`); or signal `adult_house_soiling` (written only when the house_soiling answer becomes yes while the dog is in the adult or senior band) | VET_CHECK | no | house_training | `SAFE.DISHAA_ITEM_MIN` | position high (AAHA 2023: CCD "may be a diagnosis of exclusion") / conv | D03 R-CCD |
 | G19 | signal `no_progress` with `problem_key` (written on the session write when the item's last `DSCC.FAIL_SESSIONS_REGATE` sessions after the latest resolving clearance all failed, **only for items selected by a P2 problem**; one signal per current problem whose P2 targets include the item) | VET_CHECK; **plus a non-clearable REFER_BEHAVIOR floor if any such problem is guarding_* or fear_*** | no | each `problem_key` | `DSCC.FAIL_SESSIONS_REGATE` | conv, low | D02a G-05, P-04 |
 | G20 | signal `plan_distress` (weekly distress ≥`ADAPT.DISTRESS_PAUSE` in `ADAPT.DISTRESS_REFER_WEEKS` consecutive weeks) | VET_CHECK | no | all teaching (0 sessions) | — | conv, low (extrapolated from LAIR) | D06 A8 |
-| G21 | §11.5 pattern with a qualifying moment whose `problem_domain` is outside the trainer allowlist (jumping, mouthing, pulling, barking, chasing), including `other` and null: read-time, clearable VET part; for aggression/guarding_*/fear_* only, also the sticky `worsening_behavior` signal (problem_key) written by the journal hook when that condition goes false→true = non-clearable REFER_BEHAVIOR floor | VET_CHECK (+ floor) | no | that domain | `WORSENING_*` | conv, low | D02b 2.4 |
-| G22 | read time: today's rule (any high-intensity entries + harder check-ins) when every qualifying moment is in the trainer allowlist (jumping, mouthing, pulling, barking, chasing); lapses after 14 days; never routes any other domain to a trainer | CAUTION + trainer suggestion | no | — | `WORSENING_*` | position, med | AAHA |
+| G21 | §11.5 pattern that is not G22 (a qualifying moment outside the trainer allowlist, including `other` and null, or any aggression-class evidence): read-time, clearable VET part; for aggression/guarding_*/fear_* only, also the sticky `worsening_behavior` signal (problem_key) written by the journal hook when the **per-key** condition (§11.5) goes false→true = non-clearable REFER_BEHAVIOR floor | VET_CHECK (+ floor) | no | union of the qualifying moments' domains outside the allowlist (§11.5) | `WORSENING_*` | conv, low | D02b 2.4 |
+| G22 | read time: today's rule (any high-intensity entries + harder check-ins) when every qualifying moment is in the trainer allowlist (jumping, mouthing, pulling, barking, chasing) **and the dog has no aggression-class evidence** (any report, or any `aggression_or_bite_risk`, `reactivity` or `worsening_behavior` signal, which covers high-tier aggression flags), so an aggression episode labelled "barking" never reaches a trainer; lapses after 14 days; never routes any other domain to a trainer | CAUTION + trainer suggestion | no | — | `WORSENING_*` | position, med | AAHA |
 | G23 | signal `aversive_history` | CAUTION + `TRUST_REBUILD` | no | — | — | position, med | D01 R4 |
 | G24 | signal `puppy_fear` (fear flag in socialisation in ≥`SAFE.PUPPY_FEAR_SESSIONS` sessions within `STAGE.PUPPY_FEAR_WINDOW_DAYS`, counted after the latest resolving clearance); a single fear session only pauses that category (§7.5) | VET_CHECK | no | socialization | `SAFE.PUPPY_FEAR_SESSIONS` | position high / conv | AVSAB 2008; AAHA |
 | G26 | signal `reactivity` (leash_reactivity_* frequency ≥`SAFE.REACTIVITY_MIN_FREQ`) | CAUTION + "mention to your vet" | no | — | `SAFE.REACTIVITY_MIN_FREQ` | position, low-med | AAHA Table 5; D02 R-REACT-01 |
@@ -609,7 +615,7 @@ for children ≤6 only).
 | 1 | self-injury, escape, vocalising >`SAFE.SEP_VOCAL_SEVERE_MIN` min, or soiling every absence | `separation_severe` → REFER_BEHAVIOR (G11) |
 | 2 | age < `SAFE.SEP_PUPPY_MAX_AGE_MO` mo, vocalising <`SAFE.SEP_MILD_VOCAL_MIN` min only | `separation_mild` → CAUTION (`SAFE_CAUTION_PUPPY_SEPARATION`), graded absence allowed |
 | 3 | older, vocalising <`SAFE.SEP_MILD_VOCAL_MIN` min only | `separation_mild` → CAUTION (`SAFE_CAUTION_ADULT_SEPARATION`, "mention to your vet"); `protocol.absence` locked until a medical clearance |
-| 4 | any other alone sign | `separation_signs` → VET_CHECK on separation (G29); unlocks after medical clearance |
+| 4 | any other alone sign, including `unsure` (the §5 D refine makes this table exhaustive; golden 83) | `separation_signs` → VET_CHECK on separation (G29); unlocks after medical clearance |
 
 Basis: AAHA Table 5, D02a G-11 (DIY only for puppy adjustment; "mild" = quiet <5 min, conv), Dale 2024. No graded
 absence while an uncontrolled longer absence is unavoidable daily, unless cover is confirmed (Feuerbacher 2020).
@@ -628,7 +634,7 @@ One mechanism: every safety-relevant fact is persisted as a non-deletable `dog_s
 | PUT intake (`intake`) | fact true in the new version and false/absent in the previous one | C3 → `household_child`, C4 → `household_vulnerable`, C5, C6, C7, C8, C9, B3, B4, B5, onset band (G16), DISHAA (`dishaa_signs`), house_soiling (`adult_house_soiling`), problem rows (§6.4, G10, G12, G26–G28); `problem_key` set where the fact names a problem |
 | plan session (`practice_session`) | high-tier flag (§4.5); G24 condition; G19 condition (P2 items, checked on each session write) | aggression, fear, panic, `injury_or_pain` (pain flag), `reactivity`, `puppy_fear`, `no_progress` (one per targeting problem) |
 | plan check-in (`plan_checkin`) | G20 condition | `plan_distress` |
-| journal create/update (`journal_entry`) | `syncWorseningBehaviorSignal`: per clinical key (aggression, guarding_*, fear_*), the G21 condition for that key is false before the write and true after | one `worsening_behavior` per key, `problem_key` = that `problem_domain` |
+| journal create/update (`journal_entry`) | `syncWorseningBehaviorSignal`: per clinical key (aggression, guarding_*, fear_*), the per-key condition (§11.5: ≥`WORSENING_MIN_HIGH_INTENSITY_ENTRIES` moments with exactly that `problem_domain` plus the domainless harder check-ins) is false before the write and true after | one `worsening_behavior` per key, `problem_key` = that `problem_domain` |
 
 Signals persist **facts**; anything age-dependent (G18 senior/≥7 y, §6.4 puppy vs adult rows) is evaluated at read
 time from the current age and the persisted fact. Transition helpers are pure (`plan-engine.ts`) and run inside the
@@ -696,8 +702,11 @@ muzzle only if already trained, else ask a professional (D02a P-08); no head hal
 | worsening → `credentialed_trainer` | G21/G22 by domain |
 
 **Legacy adapter** (`toLegacySafety`, used by `/suggestion`, weekly focus, contextual progress and
-`decideAdvancementProposal` until they are removed): `loadSafetyInputs` additionally loads `reports`, the latest
-intake, clearances and signals with source (no session history; triggers read signals). Mapping:
+`decideAdvancementProposal` until they are removed): `loadSafetyInputs` delegates to the **same** plan-store safety
+loader that GET plan uses (profile facts, reports, latest intake, clearances, signals with source, and the journal
+rows of §4.4 with domain, intensity, kind and trend in the window; no session history, since triggers read signals),
+so both paths decide on identical facts. API tests: two `jumping` moments plus two harder check-ins →
+`credentialed_trainer` through `GET /suggestion`; two `other` moments → `veterinarian`. Mapping:
 
 | Mode / top trigger | `SuggestionSafety` |
 |---|---|
@@ -750,8 +759,8 @@ Without weight, map `dogs.size` (small/medium/large/giant) to the same rows.
 | `STAGE.SETTLE_DAYS` / `STAGE.SETTLE_DAYS_LONG` | 7; 14 if originDetail ∈ {street, ex_breeding, unknown} or fear est ≥`TRAIT.FEAR_HIGH` | conv, low (shelter-housing analogy, van der Laan press release) |
 | settling day | `localDate − adoptedOn + 1`, active ≤ settle days | definition |
 | content | `protocol.settling`, `protocol.house_training`, rest, enrichment, management; teaching only `eng.name` | conv |
-| check-ins | `adoption_dN` (N in `STAGE.ADOPTION_CHECKIN_DAYS`) due while N ≤ `settlingDay − 1` < the next milestone's N (no upper bound for d180) and not recorded; none at all when the first intake was created after `adoptedOn` + the last milestone (e.g. BASE_ADULT); "behaviour keeps changing" copy | Bohland 2023 vs Powell 2022; med |
-| early return | expectations card for first-time adopters | Powell 2022 |
+| check-ins | `adoption_dN` (N in `STAGE.ADOPTION_CHECKIN_DAYS`) due while N ≤ `settlingDay − 1` < the next milestone's N (no upper bound for d180) and N ∉ `history.adoptionCheckinsRecorded` (unwindowed, so a recorded check-in never comes back); none at all when `firstIntakeCreatedOn` is null (no intake) or later than `adoptedOn` + the last milestone (BASE_ADULT: `[]`; golden 6: `[adoption_d7]`; test: d180 recorded on day 181 is not due on day 300); "behaviour keeps changing" copy | Bohland 2023 vs Powell 2022; med |
+| early return | expectations card when `experience = first_dog` during settling (`STAGE_FIRST_TIME_EXPECTATIONS`, golden 5) | Powell 2022 |
 
 ### 7.3 Adolescence
 Card: "Teenage dogs often respond less reliably to their own people for a while. It's common and it isn't your
@@ -999,8 +1008,8 @@ dog has no plan session yet). While G21 or G22 holds, the new cap is 0 if plan s
 Fearful or all-baseline-0, non-puppy: `min(band, DOSE.FEARFUL_MAX_MIN)`. Basis: Fear Free handout (3 min; puppies
 1 min; no data); D01 R15 differs (3–5 min); all conv, low. `planMin = floor(DOSE.BUDGET_FACTOR × minutesPerDay)`;
 `sessionsToday = clamp(floor(planMin / sessionMin), 1, MAX_SESSIONS_PER_DAY)`, then capped by legal placements
-(§10.10). `minutesPerDay < DOSE.MIN_BUDGET` → micro plan: first teaching item, one `DOSE.MICRO_SESSION_MIN`-minute
-session/day. Sessions every day; the factor is the only slack.
+(§10.10). `minutesPerDay < DOSE.MIN_BUDGET` → micro plan: first teaching item (or `protocol.socialization` when it is in P1,
+§11.4), one `DOSE.MICRO_SESSION_MIN`-minute session/day. Sessions every day; the factor is the only slack.
 
 ### 10.7 Reinforcement (copy, with params)
 Small soft food by default (high); praise alone weak (Feuerbacher 2015 abstract; med); reward every success while
@@ -1045,7 +1054,7 @@ Sessions in `HIST.WINDOW_DAYS` with the item's current version, sorted `(practic
 |---|---|---|
 | **window**: walk back whole `primary` sessions at the stored level within `HIST.WINDOW_DAYS`, skipping sessions that ended with ≥`ADAPT.STRESS_LOW_END_COUNT` distinct low flags, until Σtrials ≥`ADAPT.WINDOW_TRIALS` **and** ≥`ADAPT.MIN_SESSIONS` sessions **and** ≥`ADAPT.MIN_DAYS` distinct practice days (not reached → no proposal); rate = Σsuccesses / Σtrials ≥`ADAPT.ADVANCE_PCT` %; no medium/high flag in the window; stage < `topStage` | propose +1 (owner confirms; §4.3) | `ADAPT_ADVANCE_PROPOSED` |
 | 60–79 % | hold; reward-rate tip / ease the step's dimension | `ADAPT_HOLD` |
-| <`ADAPT.STEP_BACK_PCT` % in `ADAPT.STEP_BACK_CONSECUTIVE` consecutive sessions (all sessions of the item, primary and fallback, newest first) | `stepBack` = `ADAPT.STEP_BACK_SIZE` (next `sessionStage` = max(1, stored − 1)); a later fallback session ≥`ADAPT.ADVANCE_PCT` % resets it to 0 (test: P 50 %, P 55 %, F 85 % → 0, next session primary) | `ADAPT_STEP_BACK` |
+| <`ADAPT.STEP_BACK_PCT` % in `ADAPT.STEP_BACK_CONSECUTIVE` consecutive sessions (all sessions of the item, primary and fallback, newest first) | `stepBack` = `ADAPT.STEP_BACK_SIZE` (next `sessionStage` = max(1, stored − 1)); any later session (primary or fallback) at the current `sessionStage` with ≥`ADAPT.ADVANCE_PCT` % resets it to 0 (tests: P 50 %, P 55 %, F 85 % → 0, next session primary; at stored level 1, where every session is primary: P 50 %, P 55 %, P 85 % → 0) | `ADAPT_STEP_BACK` |
 | <`ADAPT.END_PCT` % or medium flag | end session; `stepBack` = 1 | `ADAPT_STEP_BACK` |
 | `ADAPT.END_PCT`–(`ADAPT.STEP_BACK_PCT` − 1) % in a single session | hold; next session eases the step's dimension via `context-adjacency` (no stage change) | `ADAPT_HOLD` |
 | `ADAPT.STEP_BACKS_BEFORE_EASE` step-backs at one stage | ease via `context-adjacency` first | D01 R21 |
@@ -1067,37 +1076,66 @@ A session **failed** if its server-derived `outcome` is `too_hard` (§4.5). Firs
 | 1 | last `DSCC.FAIL_SESSIONS_REGATE` failed | `no_progress` (G19, P2 items only); stage max(1, s − `DSCC.DROP_STAGES`) |
 | 2 | last `DSCC.FAIL_SESSIONS_DROP` failed | max(1, s − `DSCC.DROP_STAGES`) |
 | 3 | latest failed | max(1, s − 1) |
-| 4 | latest session: `trials ≥ DSCC.ADVANCE_SUCCESSES` and `successes = trials` and not failed | s + 1 (≤ ladder length) |
+| 4 | the last `DSCC.ADVANCE_SESSIONS` sessions were all at stage s, each with `successes = trials` and not failed (a failed or lower-stage session breaks the streak) | s + 1 (≤ ladder length) |
 | 5 | otherwise | s |
 
 Prerequisites use the §4.3 derived stage; `stageAtWeekStart` = the same over the week snapshot's sessions (§3.6). The §11.2 "one step back" rule is for skills; protocols drop one stage per
 failed session and `DSCC.DROP_STAGES` after repeated failures (rows 1–2).
 Start stages (no sessions): §9.2 (absence from `firstSignAfterS`; noise owner-chosen on the first session within
 1…`NOISE.MAX_STEP`; others 1). Feuerbacher 2020's within-session rule (2 up, back to the last success; n=5, low) is
-the owner instruction in session copy. Unexpected above-threshold triggers are logged as failures; after a major
+the owner instruction in session copy; row 4 carries the same "2 clean in a row" idea across one-trial sessions
+(conv). Tests: two consecutive clean sessions at s → s+1; one → s; clean, failed, clean → s (streak reset); a clean
+session at s − 1 after a drop does not count toward s. Unexpected above-threshold triggers are logged as failures; after a major
 scare, copy says pause until appetite and play return.
 
 ### 11.4 Completion
 `completion(w)` = owner-local days in week w with ≥1 logged plan session ÷ `UNIT.DAYS_PER_WEEK`, for full weeks after
-the first plan session. One missed day → nothing (Lally 2010). <`ADAPT.SHRINK_PCT` % for `ADAPT.SHRINK_WEEKS`
-consecutive weeks → **minimum viable plan** (management, first teaching item at one micro session/day, enrichment;
-skip-reason question; new anchor offer; `ADAPT_SHRINK_LOW_COMPLETION`). Restore one item per week after a week
-≥`ADAPT.RESTORE_PCT` %. conv, low. Independent of the current plan, so the shrink is stable.
+the first plan session. One missed day → nothing (Lally 2010). **Shrink state** is a pure left-to-right fold over
+those full weeks inside `HIST.WINDOW_DAYS` (a deliberate horizon), starting from `{shrunk: false, low: 0, restored: 0}`.
+Weeks governed by a distress pause (§11.6) are skipped. For each week:
+- `completion < ADAPT.SHRINK_PCT` %: `low += 1`; if `low ≥ ADAPT.SHRINK_WEEKS`, set `shrunk = true, restored = 0`
+  (a new low streak always re-shrinks from the start).
+- otherwise `low = 0`; if `shrunk` and `completion ≥ ADAPT.RESTORE_PCT` %, `restored += 1`; a week between the two
+  thresholds holds.
+
+While `shrunk`, the plan is the **minimum viable plan**: management, the first `1 + restored` teaching items in
+output order (the first at one micro session/day, restored items at their normal dose), enrichment, a new anchor
+offer, `ADAPT_SHRINK_LOW_COMPLETION`. When `1 + restored` reaches the full teaching count the plan is the full plan
+and the code is dropped. For a dog with `protocol.socialization` (P1) the kept first item is socialisation (its age
+window is time-limited); the same holds for the §10.6 micro plan. conv, low. Tests: 40, 40, 85, 85, 70 → shrunk,
+restored 2; 85, 30, 30 → shrunk, restored 0; 40, 40, 60 → shrunk, restored 0.
 
 ### 11.5 Worsening
 Today's rule, with constants moved to `engine-rules.ts` (`WORSENING_WINDOW_DAYS`, `HIGH_INTENSITY_THRESHOLD`,
 `WORSENING_MIN_HIGH_INTENSITY_ENTRIES`, `WORSENING_MIN_HARDER_CHECKINS`): within the window before `now`, ≥ min
 high-intensity entries and ≥ min "harder" daily check-ins (check-ins have no domain). **G22** only if every qualifying
-high-intensity moment's `problem_domain` is in the trainer allowlist (jumping, mouthing, pulling, barking, chasing);
-otherwise **G21** (any other domain, `other` or null). G21's VET part and G22 lapse with the window; the journal hook writes the sticky `worsening_behavior` signal
-per key, only when G21 for that aggression/guarding/fear key goes false→true. Moments with `other` or null `problem_domain` (legacy)
+high-intensity moment's `problem_domain` is in the trainer allowlist (jumping, mouthing, pulling, barking, chasing)
+and the dog has no aggression-class evidence (G22 row); otherwise **G21**. The qualifying moments are all
+high-intensity moments in the window, whatever their domain. **G21 VET part** pauses the union of the qualifying
+moments' domains outside the allowlist (`other`/null pause nothing extra, §6.3a); when G21 holds only because of
+aggression-class evidence, it pauses `aggression`. **Per-key floor condition** (aggression, guarding_*, fear_*): ≥
+`WORSENING_MIN_HIGH_INTENSITY_ENTRIES` moments with exactly that `problem_domain` plus ≥ `WORSENING_MIN_HARDER_CHECKINS`
+harder check-ins. Example (golden 81): 1 aggression + 1 jumping moment + 2 harder check-ins → G21 VET part pausing
+`aggression`, no floor. G21's VET part and G22 lapse with the window; the journal hook writes the sticky
+`worsening_behavior` signal per key, only when that key's per-key condition goes false→true. Moments with `other` or null `problem_domain` (legacy)
 count as clinical for the VET part (no floor): a deliberate change from today's trainer routing, toward safety. No intensifying while G21 or G22 holds.
 
 ### 11.6 Weekly distress check
-"In the past week, did the training plan seem to upset your dog?" 0–3. Latest weekly check-in → this week: `ADAPT.DISTRESS_EASE` (1) → hold
-advances, band-minimum sessions (`ADAPT_DISTRESS_EASE`); ≥`ADAPT.DISTRESS_PAUSE` → teaching kept with 0 sessions
-(`ADAPT_DISTRESS_PAUSE`); ≥`ADAPT.DISTRESS_PAUSE` in `ADAPT.DISTRESS_REFER_WEEKS` consecutive weeks → `plan_distress`
-(G20). LAIR 2018: "distress to the animal over time" predicted client-rated end-of-treatment success (OR 8.05, n=42);
+"In the past week, did the training plan seem to upset your dog?" 0–3 (`distress` is required on a weekly check-in).
+- **Which week it governs:** a weekly check-in with `week_start` W rates week W and governs only plan week W + 7.
+  So the current plan reads only the check-in for `weekStart − 7`; older ones are ignored (no stale pause), and a
+  check-in for the current week takes effect next Monday.
+- **Effect:** `ADAPT.DISTRESS_EASE` (1) → hold advances, band-minimum sessions (`ADAPT_DISTRESS_EASE`);
+  ≥`ADAPT.DISTRESS_PAUSE` → every skill and protocol item, including the P1 `protocol.socialization`, kept with 0
+  sessions and no slot in `days` (`ADAPT_DISTRESS_PAUSE`; same "all teaching" set as §6.3a). A pause only schedules
+  0 sessions; logging stays allowed.
+- **Due:** `weekly` is in `checkInsDue` when the mode is not SAFETY_ONLY, no weekly check-in exists for
+  `weekStart − 7`, and that week had ≥1 plan session or was itself governed by an ease or pause (so an owner whose
+  plan was paused is still asked).
+- **G20:** check-ins for two consecutive `week_start`s (7 days apart) both ≥`ADAPT.DISTRESS_PAUSE`
+  (`ADAPT.DISTRESS_REFER_WEEKS`), whatever the pause state or sessions logged → `plan_distress`.
+Tests: a stale distress-2 check-in (week −14) is ignored; pause then a second high answer → G20; a weekly body
+without `distress` → 400. LAIR 2018: "distress to the animal over time" predicted client-rated end-of-treatment success (OR 8.05, n=42);
 no study of a weekly check; low.
 
 ---
@@ -1112,7 +1150,7 @@ no study of a weekly check; low.
 | GET / PUT | `/api/dogs/:dogId/intake` | `intakeSchema` | version + transition signals |
 | POST | `/api/dogs/:dogId/aggression-reports` | `aggressionReportSchema` + `idempotencyKey` | append-only row (replay → original) |
 | POST | `/api/dogs/:dogId/plan/sessions` | plan-session body (§4.3) + `idempotencyKey` | rows, session, flag signals, proposals |
-| POST | `/api/dogs/:dogId/plan/checkins` | `{kind, weekStart, timezoneOffsetMinutes, distress?, skipReason?}` (`skipReason` from the closed §4.6 enum, no free text); `weekStart` = the Monday of the current or previous owner-local week of server `now` | check-in + transition signal |
+| POST | `/api/dogs/:dogId/plan/checkins` | `{kind, weekStart, timezoneOffsetMinutes, distress?}` (`distress` required iff `kind = weekly`, else 400; no free text); `weekStart` = the Monday of the current or previous owner-local week of server `now` | check-in + transition signal |
 | POST | `/api/dogs/:dogId/clearances` | clearance schema | clearance |
 Writes that touch safety inputs run under the exclusive safety lock. `GET /suggestion` becomes a read-only adapter
 (§6.8), then is removed.
@@ -1209,7 +1247,8 @@ management, enrichment or legacy-aliased skills run in Phase 1; the rest run in 
 **BASE_ADULT:** DOB 2022-11-09, 44.1 lb (20 kg), medium, breeder,
 adopted 2023-01-09, vaccine complete; intake (one version, `created_at` 2026-10-01): every S item answered no (`noBites`, `noWarnings`), no problems, traits
 null, baseline 0, minutesPerDay 15, anchors [after_breakfast, evening], experience had_dogs, goals []; no reports,
-signals, clearances, sessions, check-ins; hotToday false. **BASE_PUPPY:** BASE_ADULT with DOB 2026-09-07 (9 wk), 11 lb,
+signals, clearances, sessions, check-ins; hotToday false; expected `checkInsDue` `[]` (first intake after
+adoption + 180 days). **BASE_PUPPY:** BASE_ADULT with DOB 2026-09-07 (9 wk), 11 lb,
 small, adopted 2026-11-02 (settling day 8), vaccine in_progress, puppy {firstVaccineOn 2026-11-06, dewormed yes}. A
 delta with a DOB later than the base adoption date also sets `adoptedAt` = DOB + 8 weeks unless stated. Signals named
 below are those the write routes produce for the stated inputs. Expected = mode (triggers) and first 3 items.
@@ -1220,8 +1259,8 @@ below are those the write routes produce for the stated inputs. Expected = mode 
 | 2 | pup_11w_vax_ok | DOB 2026-08-24, firstVaccineOn 2026-10-30 | CLEAR (STAGE_VAX_GATE_MET) | as 1 |
 | 3 | pup_12w_fearful | DOB 2026-08-17; socialization sessions (people) with `freezing` on 11-04 and 11-06 → `puppy_fear` | VET_CHECK (G24) | task.vet_visit · mgmt.puppy_fear_pause · protocol.house_training |
 | 4 | teen_lab_8mo | DOB 2026-03-09 (adopted 2026-05-04), 28 kg, goals [recall], baseline sit 3, down 2, come 2, harness 3 | CLEAR (STAGE_ADOLESCENT_TOLERANCE) | recall · lead.loose · enr.scent |
-| 5 | street_2y_day3 | DOB 2024-11-09, adopted 2026-11-07, originDetail street | CLEAR (STAGE_SETTLING) | protocol.settling · protocol.house_training · eng.name |
-| 6 | shelter_4y_day20 | source shelter, adopted 2026-10-21, goals [loose_lead], baseline harness 3, sit 3, down 3 | CLEAR (adoption_d7 due) | lead.loose · calm.settle_mat · enr.scent |
+| 5 | street_2y_day3 | DOB 2024-11-09, adopted 2026-11-07, originDetail street, experience first_dog | CLEAR (STAGE_SETTLING, STAGE_FIRST_TIME_EXPECTATIONS) | protocol.settling · protocol.house_training · eng.name |
+| 6 | shelter_4y_day20 | source shelter, adopted 2026-10-21, goals [loose_lead], baseline harness 3, sit 3, down 3 | CLEAR (`checkInsDue` = [adoption_d7]) | lead.loose · calm.settle_mat · enr.scent |
 | 7 | senior_12y_dishaa | DOB 2014-11-09, 12 kg, B7 sleep 3, soiling 3 → `dishaa_signs` | VET_CHECK (G18) | task.vet_visit · mgmt.senior_home_safety · eng.name |
 | 8 | senior_cleared | #7 + clearance vet, medical, full_plan, created after the signal | CLEAR | eng.name · food.take · enr.scent |
 | 9 | bite_T3_child6 | bite adult shallow 1 first_aid; C3 yes (6–9) | REFER urgent (G02, G05) | task.behavior_referral · mgmt.separate_vulnerable · mgmt.no_punish_warnings |
@@ -1242,7 +1281,7 @@ below are those the write routes produce for the stated inputs. Expected = mode 
 | 24 | rehoming | C7 yes | REFER (G13) | task.behavior_referral · mgmt.contain · enr.scent |
 | 25 | budget_4min | minutesPerDay 4 | CLEAR (DOSE_LOW_BUDGET) | eng.name · enr.scent · enr.sniff_walk |
 | 26 | low_completion | goals [loose_lead], baseline harness 3, sit 3; first plan session 2026-10-12; logged on 2 days (wk 10-26) and 3 days (wk 11-02) | CLEAR (ADAPT_SHRINK_LOW_COMPLETION) | lead.loose · enr.scent · enr.sniff_walk |
-| 27 | distress_twice | #26 with sessions on 7 days each week + weekly check-ins distress 2 (wk 10-26), 2 (wk 11-02) → `plan_distress` | VET_CHECK (G20, ADAPT_DISTRESS_PAUSE) | task.vet_visit · lead.loose (0 sessions) · pos.down (new, 0 sessions) |
+| 27 | distress_twice | #26 but sessions on 7 days in weeks 10-12, 10-19 and 10-26 and none in 11-02 (paused by the 10-26 check-in; skipped by the completion fold) + weekly check-ins distress 2 (wk 10-26), 2 (wk 11-02) → `plan_distress`; `checkInsDue` [] | VET_CHECK (G20, ADAPT_DISTRESS_PAUSE) | task.vet_visit · lead.loose (0 sessions) · pos.down (new, 0 sessions) |
 | 28 | worsening_jumping | jumping 3/3; 2 journal entries intensity 4 (jumping) + 2 harder check-ins in the last 14 days (read time) | CAUTION (G22) | eng.name · enr.scent · enr.sniff_walk |
 | 29 | worsening_fear | fear_strangers 3/3 → `fear_problem`; same journal pattern (fear_strangers), read time | REFER (G21 fear floor SAFE_REF_BEHAVIOR_FLOOR, G28) | task.behavior_referral · task.vet_visit · mgmt.avoid_triggers |
 | 30 | bite_T3_cleared | #9 without child + clearance vet behaviorist, behavior | REFER urgent (G02; clearance recorded, no effect) | task.behavior_referral · mgmt.avoid_triggers · mgmt.contain |
@@ -1264,7 +1303,7 @@ below are those the write routes produce for the stated inputs. Expected = mode 
 | 46 | resave_drops_answer | #24 + new intake with C7 = no | REFER (G13, sticky) | as 24 |
 | 47 | unknown_safety | BASE_ADULT with C3 unanswered, goals [loose_lead], baseline harness 3, sit 3 | CAUTION (G30; blockingQuestions [C3]) | lead.loose · pos.down (pulled for calm.settle_mat) · enr.scent |
 | 48 | lunge_flag_outside_protocol | #21 + one relaxation session with `lunge` (target animal) → `aggression_or_bite_risk` (relaxation is not an exposure protocol) | REFER (L1, G26) | task.behavior_referral · mgmt.avoid_triggers · mgmt.contain |
-| 50 | lunge_in_lat | #21 + relaxation sessions on all 7 days of last week reaching stage 3 (pattern.lat unlocked at weekStart) + one `pattern.lat` session with `lunge` (target animal, no contact) | CAUTION (G26); pattern.lat steps back | mgmt.walk_distance · protocol.relaxation · pattern.lat |
+| 50 | lunge_in_lat | #21 + 7 clean one-trial relaxation sessions last week at stages 1, 1, 2, 2, 3, 3, 3 (§11.3 row 4; derived stage 3, so pattern.lat is unlocked at weekStart) + one `pattern.lat` session with `lunge` (target animal, no contact) | CAUTION (G26); pattern.lat steps back | mgmt.walk_distance · protocol.relaxation · pattern.lat |
 | 51 | growl_at_person_in_lat | #50 but `growl`, target person | REFER (L1) | task.behavior_referral · mgmt.avoid_triggers · mgmt.contain |
 | 49 | med_change_sticky | intake created 2026-08-01 with B3 yes + jumping 1/1; signal `medical_change` 2026-08-01 | VET_CHECK (G17, sticky) | task.vet_visit · eng.name (pulled by greet.polite) · food.take |
 | 52 | escalating_warnings | warning adult [handling, resting] freq 2, escalating | REFER (G06) | task.behavior_referral · mgmt.avoid_triggers · mgmt.contain |
@@ -1295,6 +1334,10 @@ below are those the write routes produce for the stated inputs. Expected = mode 
 | 78 | hot_adult | hotToday | CLEAR (HEAT_CAUTION) | eng.name · food.take · enr.scent (none of these is outdoor; `enr.sniff_walk` shortened) |
 | 79 | growl_at_animal_in_lat | #50 but `growl`, target animal | REFER (L1, G26) | task.behavior_referral · mgmt.avoid_triggers · mgmt.contain |
 | 80 | worsening_other_domain | 2 journal moments intensity 4, `problem_domain` other, + 2 harder check-ins in 14 d | VET_CHECK (G21 other, no floor; new cap 1 as in 28); never `credentialed_trainer` | task.vet_visit · eng.name · enr.scent |
+| 81 | worsening_mixed_domain | 1 moment intensity 4 (aggression) + 1 (jumping) + 2 harder check-ins in 14 d | VET_CHECK (G21, paused [aggression]; no `worsening_behavior` written) | as 80 |
+| 82 | mislabelled_barking | warning adult [resting] freq 1 predictable; 2 moments intensity 4 labelled barking + 2 harder check-ins | VET_CHECK (G21: G22 blocked by the report; G07); `toLegacySafety` → `veterinarian`, never `credentialed_trainer` | task.vet_visit · mgmt.avoid_triggers · mgmt.no_punish_warnings |
+| 83 | sep_alone_unsure | separation 1/1, aloneSigns [unsure] | VET_CHECK (G29) | task.vet_visit · mgmt.absence_cover · protocol.relaxation |
+| 84 | puppy_distress_pause | BASE_PUPPY + one socialization session in wk 11-02 + weekly check-in distress 2 (wk 11-02) | CLEAR (ADAPT_DISTRESS_PAUSE) | protocol.socialization (0 sessions, no slot in `days`) · protocol.house_training · routine.rest_alone |
 
 Goldens change only with a reviewed diff and an `ENGINE_VERSION` bump.
 
@@ -1304,8 +1347,11 @@ never exceed `topStage`; first log keeps the baseline start stage; a node at ver
 proposed and confirmed; protocol items never create proposals; adding a node keeps other items' evidence; ancestor
 rule; nearest-prereq order; handling stage per area; socialisation per category; outcome derivation incl. opt-out
 limits; one trial per protocol; per-key `worsening_behavior` transitions (second clinical key writes its own signal;
-`other`/null-domain moments → G21 VET part without floor; G22 only for allowlisted domains; missing `problemDomain` → 400 `problem_domain_required`); all windows/ages use `now`; the same UTC `now` under offsets −600 and +600 at a day boundary gives different
-`localDate`/`settlingDay` (midnight test); a Wednesday report changes mode and safety items immediately (golden 76).
+`other`/null-domain moments → G21 VET part without floor; G22 only for allowlisted domains; missing `problemDomain` → 400 `problem_domain_required`); all windows/ages use `now`; midnight test with `localDate = now − offset`: now 2026-11-10T01:00Z with offset 300
+→ 2026-11-09, +600 → 2026-11-09, −600 → 2026-11-10 (and `settlingDay`, `weekStart` follow);
+protocol advancement on two clean one-trial sessions (§11.3); step-back reset at stored level 1 (§11.2); the
+shrink fold sequences (§11.4); weekly check-in due, staleness and G20 (§11.6); adoption check-ins never return
+after recording (§7.2); future profile dates (§4.1); a Wednesday report changes mode and safety items immediately (golden 76).
 
 ### 13.4 Rule-constant coverage
 1. Every constant has sources; convention ⇒ confidence ≠ high. 2. Every constant is imported by some `apps/api` source file and by some test; constants without a value are not
@@ -1373,7 +1419,9 @@ thresholds with client weather input; `migrateIntake` (with intake-2); house-tra
 notice; plan snapshot table; regress proposals (v1 uses the derived `sessionStage`); level reconstruction from
 milestones; protocol replay from history; the 4-week no-progress branch of G19; stranger-watch notice; 3-3-3 notice;
 adult 5-minute opt-in; socialisation exposures/day; vet cognition scores (CCDR/CADES, B8) and `STAGE_CCD_SUPPORT`; a stored child age band; a verified professional-resolution
-workflow (§14.2 item 1); clearance of CAUTION signals.
+workflow (§14.2 item 1); clearance of CAUTION signals; intake fields with no v1 consumer (DOB-estimated flag,
+vet-seen-in-12-months with a `NOTICE_VET_EXAM_OVERDUE`, hearing/vision change, reward ranking, equipment) and the
+check-in skip reason, each re-added in a later intake schema version together with the rule that reads it.
 
 ---
 
@@ -1386,7 +1434,6 @@ workflow (§14.2 item 1); clearance of CAUTION signals.
 | UNIT.DAYS_PER_WEEK | 7 | definition | high | calendar |
 | UNIT.PCT | 100 | definition | high | percent |
 | UNIT.DAYS_PER_MONTH | 30.44 | definition | high | mean month |
-| UNIT.MS_PER_DAY | 86400000 | definition | high | calendar |
 | UNIT.MONTHS_PER_YEAR | 12 | definition | high | calendar |
 | UNIT.LB_PER_KG | 2.2046 | definition | high | unit |
 | UNIT.KG_DECIMALS | 1 | definition | high | display rounding |
@@ -1492,7 +1539,7 @@ workflow (§14.2 item 1); clearance of CAUTION signals.
 | ADAPT.DISTRESS_EASE | 1 | convention | low | from LAIR |
 | ADAPT.DISTRESS_PAUSE | 2 | convention | low | from LAIR |
 | ADAPT.DISTRESS_REFER_WEEKS | 2 | convention | low | from LAIR |
-| DSCC.ADVANCE_SUCCESSES ★ | 2 | study | low | Feuerbacher 2020 |
+| DSCC.ADVANCE_SESSIONS ★ | 2 | convention | low | Feuerbacher 2020 within-session "2 up", applied across one-trial sessions |
 | DSCC.START_FRACTION ★ | 0.5 | convention | low | D02 NOTES 3.4 |
 | DSCC.DISTANCE_START_FACTOR ★ | 1.5 | convention | low | D02 NOTES 3.4 |
 | DSCC.DISTANCE_STEP_PCT ★ | 10 | convention | low | conv |
@@ -1524,6 +1571,7 @@ Combined position+convention bases are recorded as `convention` with `low` confi
 `SAFE.CHILD_WARNING_WINDOW_MO`, `SAFE.CHILD_MAX_AGE_Y`, `SAFE.NO_PROGRESS_WEEKS`, `SOC.EXPOSURES_PER_DAY`,
 `SEL.NEW_REQUIRES_COMPLETION_PCT`, `DOSE.ADULT_OPT_IN_MIN`, `ADAPT.REGRESS_PROPOSE_WEEKS`, `SAFE.ROLLOUT_DATE`,
 `SAFE.SIGNAL_WINDOW_DAYS`, `STAGE.CCDR_*`, `SEP.ISOLATION_PREREQ_S`, `SAFE.BITE_TIER_MAP`, `HEAT.TIERS_AND_TAP` (§14.3).
+Revision 10: `UNIT.MS_PER_DAY` removed (reuse `DAY_MS`); `DSCC.ADVANCE_SUCCESSES` renamed `DSCC.ADVANCE_SESSIONS`.
 
 ### 15.2 Rationale codes → emitter
 
@@ -1541,7 +1589,7 @@ Combined position+convention bases are recorded as `convention` with `low` confi
 | SAFE_WORSENING_NONCLINICAL | G22 |
 | STAGE_SOCIAL_WINDOW, _VAX_GATE_PENDING, _VAX_GATE_MET, _FEAR_PAUSE | §7.5 |
 | STAGE_ADOLESCENT_TOLERANCE | §7.3 |
-| STAGE_SETTLING | §7.2 |
+| STAGE_SETTLING, STAGE_FIRST_TIME_EXPECTATIONS | §7.2 |
 | STAGE_SENIOR_SUPPORT | §7.4 |
 | HEAT_CAUTION, HEAT_NO_EXERTION, BRACHY_HARNESS | §8 |
 | HEALTH_LOW_IMPACT | §8 |
@@ -1613,3 +1661,6 @@ Combined position+convention bases are recorded as `convention` with `low` confi
 | 50 | Regress proposals, level reconstruction from milestones, protocol replay, 4-week no-progress branch | Removed (§14.3) | review round 4 |
 | 52 | DIGEST-a G-08 CAUTION = management + trade/avoid only | CAUTION keeps teaching, but G07/G04a/G30 remove all exposure-flag items (handling, socialisation, noise, absence, LAT) | review round 8; ★ advisor |
 | 53 | Worsening with null/"other" domain → trainer (today) | G21 VET part (clinical by default); trainer route only for jumping, mouthing, pulling, barking, chasing | review round 8 |
+| 54 | Protocol advance on one session with ≥2 trials (unreachable with one trial per session) | 2 consecutive clean one-trial sessions at the stage | review round 9 |
+| 55 | G22 trusted the owner's domain label | G22 blocked by any aggression-class evidence; per-key floor counts only that key's moments | review round 9 |
+| 56 | `localDate = now + offset`; stateless shrink/restore; no weekly due rule | `now − offset`; shrink fold; weekly check-in governs the next week, with due and staleness rules | review round 9 |
