@@ -1,7 +1,7 @@
-import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it } from "vitest";
+import { LocaleProvider } from "@/i18n";
 import { LanguageToggle } from "./LanguageToggle";
 
 afterEach(() => localStorage.clear());

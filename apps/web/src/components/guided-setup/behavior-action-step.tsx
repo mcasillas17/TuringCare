@@ -1,3 +1,11 @@
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  type GuidedSetupBehaviorAction,
+  guidedSetupBehaviorActionSchema,
+  safetySignalValues,
+} from "@turingcare/shared";
+import { useRef, useState } from "react";
+import { type FieldError, useForm } from "react-hook-form";
 import { AbandonSetupButton } from "@/components/guided-setup/abandon-setup-button";
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
@@ -10,14 +18,6 @@ import {
   useCompleteBehaviorSetup,
 } from "@/lib/guided-setup";
 import { SAFETY_SIGNAL_KEYS } from "@/lib/practice-options";
-import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  type GuidedSetupBehaviorAction,
-  guidedSetupBehaviorActionSchema,
-  safetySignalValues,
-} from "@turingcare/shared";
-import { useRef, useState } from "react";
-import { type FieldError, useForm } from "react-hook-form";
 
 const inputClassName =
   "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-copper";

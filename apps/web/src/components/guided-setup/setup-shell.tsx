@@ -1,6 +1,6 @@
-import { useI18n } from "@/i18n";
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
+import { useI18n } from "@/i18n";
 
 type SetupShellProps = {
   step: 1 | 2 | 3;

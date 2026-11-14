@@ -1,12 +1,12 @@
-import { LocaleProvider } from "@/i18n/index";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { en, es } from "@turingcare/i18n";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TuringCompanion } from "./turing-companion";
-import { TURING_TIP_BUCKETS, TURING_TIP_KEYS } from "./turing-tips";
+import { LocaleProvider } from "@/i18n/index";
 import * as turingCtx from "./turing/turing-context";
 import { TuringProvider } from "./turing/turing-context";
+import { TuringCompanion } from "./turing-companion";
+import { TURING_TIP_BUCKETS, TURING_TIP_KEYS } from "./turing-tips";
 
 const EN_TIPS = Object.values(TURING_TIP_BUCKETS)
   .flat()

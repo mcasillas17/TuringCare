@@ -1,10 +1,10 @@
-import { LocaleProvider } from "@/i18n";
-import * as progressLib from "@/lib/progress";
-import type { ProgressSkill } from "@/lib/progress";
-import * as catalogLib from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import type { ProgressSkill } from "@/lib/progress";
+import * as progressLib from "@/lib/progress";
+import * as catalogLib from "@/lib/training-catalog";
 import { MilestoneStepper } from "./milestone-stepper";
 
 vi.mock("@/lib/progress", async () => {

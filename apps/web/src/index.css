@@ -243,7 +243,9 @@
   border-radius: 15px;
   background: #ffffff;
   color: #28323d;
-  font: 600 13px / 1.35 "Hanken Grotesk", sans-serif;
+  font:
+    600 13px / 1.35 "Hanken Grotesk",
+    sans-serif;
   text-align: left;
   white-space: normal;
   box-shadow: 0 8px 20px rgba(28, 25, 22, 0.22);

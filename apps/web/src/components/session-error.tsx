@@ -1,7 +1,7 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useSession } from "@/lib/auth-client";
-import { useState } from "react";
 
 export function SessionError() {
   const { t } = useI18n();

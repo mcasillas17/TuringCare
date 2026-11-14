@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
-import { pool } from ".";
 import { waitForBlockingChain } from "../test-pg-concurrency";
+import { pool } from ".";
 
 const migrationUrl = new URL("../../drizzle/0023_third_madripoor.sql", import.meta.url);
 const schemasToDrop: string[] = [];

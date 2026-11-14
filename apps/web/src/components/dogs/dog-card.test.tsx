@@ -1,9 +1,9 @@
-import { LocaleProvider } from "@/i18n";
-import type { DogOverview } from "@/lib/dogs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import type { DogOverview } from "@/lib/dogs";
 import { DogCard } from "./dog-card";
 
 // Body is lazy + fetches; stub it so this test focuses on the header/toggle.

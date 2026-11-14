@@ -1,5 +1,5 @@
-import { cn } from "@/lib/utils";
 import { PawPrint } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function BrandMark({ className }: { className?: string }) {
   return (

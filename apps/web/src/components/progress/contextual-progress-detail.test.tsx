@@ -1,5 +1,3 @@
-import { LocaleProvider } from "@/i18n";
-import * as contextualProgressLib from "@/lib/contextual-progress";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type {
   ContextualProgress,
@@ -8,6 +6,8 @@ import type {
   ObservedExactContextEvidence,
 } from "@turingcare/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import * as contextualProgressLib from "@/lib/contextual-progress";
 import { ContextualProgressDetail } from "./contextual-progress-detail";
 
 vi.mock("@/lib/contextual-progress", async () => {

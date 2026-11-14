@@ -9,9 +9,9 @@ import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import { advancementProposals, practiceSessions, trainingSkills } from "../db/schema";
-import { MAX_LEVEL, clampLevel } from "./curriculum";
+import { clampLevel, MAX_LEVEL } from "./curriculum";
 import { EVIDENCE_WINDOW_DAYS } from "./practice-evidence";
-import { type TransactionType, lockDogSafety } from "./safety-lock";
+import { lockDogSafety, type TransactionType } from "./safety-lock";
 import { decideSafety, loadSafetyInputs } from "./safety-policy";
 import { setSkillLevel } from "./skill-level";
 

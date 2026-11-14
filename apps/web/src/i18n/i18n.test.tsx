@@ -4,7 +4,7 @@ import { en, es } from "@turingcare/i18n";
 import { useTranslation } from "react-i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetActiveLocale } from "./active-locale";
-import { LocaleProvider, detectInitialLocale, translate, useI18n } from "./index";
+import { detectInitialLocale, LocaleProvider, translate, useI18n } from "./index";
 
 function keyPaths(o: Record<string, unknown>, prefix = ""): string[] {
   return Object.entries(o).flatMap(([key, value]) =>
@@ -58,6 +58,10 @@ function ReactI18nextProbe() {
   );
 }
 
+function FirstRenderProbe() {
+  return <span data-testid="first-render-language">{document.documentElement.lang}</span>;
+}
+
 const task18Sections = ["suggestion", "practice", "safety"] as const;
 
 function placeholders(value: string): string[] {
@@ -105,7 +109,7 @@ it("uses a validated app continuation locale when browser storage is unavailable
   expect(detectInitialLocale()).toBe("es");
 });
 
-describe("i18n catalogs", () => {
+describe("i18n catalog parity", () => {
   it("es has exactly the same keys as en", () => {
     expect(keyPaths(es).sort()).toEqual(keyPaths(en).sort());
   });
@@ -336,20 +340,13 @@ describe("translate", () => {
 describe("useI18n + LocaleProvider", () => {
   it("sets the initial document language before its first child render", () => {
     vi.stubGlobal("navigator", { language: "es-MX", languages: ["es-MX"] });
-    let childRenderLanguage = "";
-
-    function FirstRenderProbe() {
-      childRenderLanguage = document.documentElement.lang;
-      return null;
-    }
-
     render(
       <LocaleProvider>
         <FirstRenderProbe />
       </LocaleProvider>,
     );
 
-    expect(childRenderLanguage).toBe("es");
+    expect(screen.getByTestId("first-render-language")).toHaveTextContent("es");
   });
 
   it("sets html lang from the initial spanish locale", () => {

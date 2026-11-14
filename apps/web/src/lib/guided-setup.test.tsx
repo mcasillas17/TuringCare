@@ -68,10 +68,16 @@ const setupId = "00000000-0000-4000-8000-000000000001";
 const dogId = "dog-1";
 const weekKey = "2026-08-10";
 
+let activeQueryClient: QueryClient | null = null;
+
+function TestQueryClientProvider({ children }: { children: ReactNode }) {
+  if (!activeQueryClient) throw new Error("test_query_client_not_initialized");
+  return <QueryClientProvider client={activeQueryClient}>{children}</QueryClientProvider>;
+}
+
 function makeWrapper(queryClient: QueryClient) {
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-  };
+  activeQueryClient = queryClient;
+  return TestQueryClientProvider;
 }
 
 function makeQueryClient() {

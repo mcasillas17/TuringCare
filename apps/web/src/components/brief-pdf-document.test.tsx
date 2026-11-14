@@ -1,6 +1,6 @@
-import { buildBriefPdfModel } from "@/lib/brief-pdf-model";
-import { Children, type ReactNode, isValidElement } from "react";
+import { Children, isValidElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
+import { buildBriefPdfModel } from "@/lib/brief-pdf-model";
 import { BriefPdfDocument } from "./brief-pdf-document";
 
 // jsdom cannot render real @react-pdf primitives to PDF bytes; this only

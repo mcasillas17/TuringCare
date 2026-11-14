@@ -1,9 +1,9 @@
+import { Outlet } from "react-router-dom";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { SiteFooter } from "@/components/landing/site-footer";
 import { SiteNav } from "@/components/landing/site-nav";
 import { useSessionQueriesReady, useSessionResolvedOnce } from "@/lib/session-query-boundary";
 import { useHasVerifiedSession } from "@/lib/verified-session";
-import { Outlet } from "react-router-dom";
 
 /**
  * Chrome for the public directory routes (/trainers, /courses, + :id).

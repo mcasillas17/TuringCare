@@ -1,7 +1,7 @@
-import { useI18n } from "@/i18n";
-import { type CourseFilters, useCourses } from "@/lib/courses";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useI18n } from "@/i18n";
+import { type CourseFilters, useCourses } from "@/lib/courses";
 
 const input = "rounded border border-silver bg-white px-2 py-1 text-sm";
 

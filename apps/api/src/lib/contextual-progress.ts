@@ -1,4 +1,3 @@
-import { CONTEXTUAL_PROGRESS_WINDOW_DAYS } from "@turingcare/shared";
 import type {
   ContextualProgress,
   ContextualProgressSummary,
@@ -11,6 +10,7 @@ import type {
   SkillDimensionMetadata,
   SuggestionSafety,
 } from "@turingcare/shared";
+import { CONTEXTUAL_PROGRESS_WINDOW_DAYS } from "@turingcare/shared";
 import { adjacentContext, isContextNoHarderThan } from "./context-adjacency";
 import { DAY_MS } from "./time";
 

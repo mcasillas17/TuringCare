@@ -1,7 +1,7 @@
 import { isValidationMessageCode } from "@turingcare/shared";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "./app";
-import { type TestUser, createTestUser } from "./test-helpers";
+import { createTestUser, type TestUser } from "./test-helpers";
 
 type ValidationIssue = {
   message: string;

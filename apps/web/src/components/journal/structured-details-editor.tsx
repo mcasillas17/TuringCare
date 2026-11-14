@@ -1,10 +1,10 @@
+import { zodResolver } from "@hookform/resolvers/zod";
+import { type JournalEntryUpdateInput, journalEntryUpdateSchema } from "@turingcare/shared";
+import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useValidationMessage } from "@/i18n/validation";
 import type { JournalEntry } from "@/lib/journal";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { type JournalEntryUpdateInput, journalEntryUpdateSchema } from "@turingcare/shared";
-import { useForm } from "react-hook-form";
 
 const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
 

@@ -1,5 +1,5 @@
-import { useI18n } from "@/i18n";
 import { Check } from "lucide-react";
+import { useI18n } from "@/i18n";
 
 export function BriefSpotlight() {
   const { t } = useI18n();

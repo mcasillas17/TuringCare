@@ -60,19 +60,23 @@ does not authorize account/data transfer. MFA, auth audit logging, secret hygien
 session-expiry tuning remain separate work below.
 
 ## P2 — Multi-factor auth (2FA)
+
 - Better Auth TOTP/2FA plugin for opt-in MFA.
 
 ## P3 — Audit logging
+
 - Record auth events (login success/failure, password change, session revoke)
   for traceability.
 
 ## P4 — Operational secret hygiene
+
 - Verify the production `BETTER_AUTH_SECRET` Fly secret is a real
   `openssl rand -base64 32` value, not the `.env.example` dev placeholder.
 - Periodic secret rotation policy (BETTER_AUTH_SECRET, DATABASE_URL).
 - Consider session inactivity/absolute expiry tuning.
 
 ## Shipped — Postgres exposure / Row Level Security (2026-06-09)
+
 - ✅ **RLS enabled on all 17 public tables** (migration `0011_enable_rls`).
   Supabase's PostgREST "Data API" exposes the `public` schema and grants
   `anon`/`authenticated` access by default — meaning the public anon key could
@@ -97,6 +101,7 @@ session-expiry tuning remain separate work below.
     policies if we ever want RLS to be the primary enforcement layer.
 
 ## Shipped (was P1 — brute-force / abuse protection)
+
 - ✅ **Rate limiting** — Better Auth DB-backed limiter on `/api/auth/*`
   (sign-in/sign-up 5/60s, password-reset requests 3/60s) + in-memory global net,
   keyed on Fly-forwarded client IP. Shipped 2026-05-17 (sub-project A; see
@@ -104,6 +109,7 @@ session-expiry tuning remain separate work below.
   defense-in-depth remain optional, not blocking.
 
 ## Already in place (for context — see the security walkthrough)
+
 - Passwords hashed by Better Auth (scrypt, salted), stored in `account.password`.
 - DB-backed sessions; opaque token in an httpOnly cookie.
 - Prod cookies: `Secure` + `SameSite=None` + `domain=.turingcare.dog`

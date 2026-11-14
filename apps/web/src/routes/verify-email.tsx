@@ -1,3 +1,8 @@
+import { useQueryClient } from "@tanstack/react-query";
+import type { MessageKey } from "@turingcare/i18n";
+import { safeAuthReturnPath } from "@turingcare/shared";
+import { useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { SessionError } from "@/components/session-error";
@@ -12,18 +17,13 @@ import { authContinuationPath, authPagePath } from "@/lib/auth-navigation";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { useSignOut } from "@/lib/sign-out";
 import {
-  VerificationRequestError,
   confirmVerification,
   resendVerification,
   useVerificationStatus,
+  VerificationRequestError,
   verificationStatusKey,
 } from "@/lib/verification";
 import { useHasVerifiedSession } from "@/lib/verified-session";
-import { useQueryClient } from "@tanstack/react-query";
-import type { MessageKey } from "@turingcare/i18n";
-import { safeAuthReturnPath } from "@turingcare/shared";
-import { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
 
 /** The public route never needs an authenticated layout or persisted credentials. */
 export function VerifyEmail() {

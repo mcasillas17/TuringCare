@@ -1,14 +1,14 @@
-import { LocaleProvider } from "@/i18n";
-import { suggestionKey } from "@/lib/suggestion";
-import { weekKeyOf } from "@/lib/week";
-import { focusKey } from "@/lib/weekly-focus";
-import type { FocusSkill } from "@/lib/weekly-focus";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { TrainingSuggestion } from "@turingcare/shared";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import { suggestionKey } from "@/lib/suggestion";
+import { weekKeyOf } from "@/lib/week";
+import type { FocusSkill } from "@/lib/weekly-focus";
+import { focusKey } from "@/lib/weekly-focus";
 import { DogWeek } from "./dog-week";
 
 const { getFocus, getSuggestion, patchEvidence, postSession } = vi.hoisted(() => ({

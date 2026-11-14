@@ -1,11 +1,11 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { deleteUser } from "@/lib/auth-client";
 import { type AccountDeletionReadiness, getAccountDeletionReadiness } from "@/lib/profile";
 import { useSignOut } from "@/lib/sign-out";
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { toast } from "sonner";
 
 const inputCls = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
 

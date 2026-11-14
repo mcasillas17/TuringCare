@@ -1,3 +1,17 @@
+import { zodResolver } from "@hookform/resolvers/zod";
+import { formatDateInUtc } from "@turingcare/i18n";
+import {
+  type ExactPracticeContext,
+  type PracticeDimension,
+  practiceDimensionValues,
+  type SuggestionSafety,
+  type TrainingSkillInput,
+  trainingSkillSchema,
+} from "@turingcare/shared";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { useLocation } from "react-router-dom";
+import { toast } from "sonner";
 import { ContextualProgressDetail } from "@/components/progress/contextual-progress-detail";
 import { MilestoneStepper } from "@/components/progress/milestone-stepper";
 import { SessionForm } from "@/components/progress/session-form";
@@ -19,20 +33,6 @@ import {
   useUpdateSkill,
 } from "@/lib/progress";
 import { findCatalogSkill, useTrainingCatalog } from "@/lib/training-catalog";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { formatDateInUtc } from "@turingcare/i18n";
-import {
-  type ExactPracticeContext,
-  type PracticeDimension,
-  type SuggestionSafety,
-  type TrainingSkillInput,
-  practiceDimensionValues,
-  trainingSkillSchema,
-} from "@turingcare/shared";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
-import { useLocation } from "react-router-dom";
-import { toast } from "sonner";
 
 const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
 
@@ -481,12 +481,10 @@ function SkillFields({
 }) {
   const { t } = useI18n();
   return (
-    <>
-      <label className="block">
-        <span className="text-sm">{t("progress.skillName")}</span>
-        <input className={input} placeholder={t("progress.skillNamePh")} {...register("name")} />
-      </label>
-    </>
+    <label className="block">
+      <span className="text-sm">{t("progress.skillName")}</span>
+      <input className={input} placeholder={t("progress.skillNamePh")} {...register("name")} />
+    </label>
   );
 }
 

@@ -1,8 +1,3 @@
-import { LocaleProvider } from "@/i18n";
-import * as briefLib from "@/lib/brief";
-import { BriefRequestError } from "@/lib/brief-errors";
-import * as sendLib from "@/lib/brief-send";
-import * as dogsLib from "@/lib/dogs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -10,6 +5,11 @@ import type { BriefWindow } from "@turingcare/shared";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import * as briefLib from "@/lib/brief";
+import { BriefRequestError } from "@/lib/brief-errors";
+import * as sendLib from "@/lib/brief-send";
+import * as dogsLib from "@/lib/dogs";
 import { Brief } from "./brief";
 
 vi.mock("@/lib/dogs", () => ({ useDogs: vi.fn() }));

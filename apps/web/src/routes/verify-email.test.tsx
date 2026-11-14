@@ -1,11 +1,11 @@
-import { LocaleProvider } from "@/i18n";
-import { LocaleAccountBoundary } from "@/i18n/locale-account-bridge";
-import { SessionQueryBoundary } from "@/lib/session-query-boundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import { LocaleAccountBoundary } from "@/i18n/locale-account-bridge";
+import { SessionQueryBoundary } from "@/lib/session-query-boundary";
 import { Login } from "./login";
 import { RequireAuth } from "./require-auth";
 import { VerifyEmail } from "./verify-email";

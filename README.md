@@ -295,9 +295,9 @@ GitHub Actions runs this automatically after each deploy, on a daily schedule
 requires two **repository secrets** for a dedicated, verified non-admin smoke
 account:
 
-| Secret | Purpose |
-|---|---|
-| `SMOKE_EMAIL` | Email of the smoke account |
+| Secret           | Purpose                       |
+| ---------------- | ----------------------------- |
+| `SMOKE_EMAIL`    | Email of the smoke account    |
 | `SMOKE_PASSWORD` | Password of the smoke account |
 
 Do not commit credentials; configure them in **Settings → Secrets and

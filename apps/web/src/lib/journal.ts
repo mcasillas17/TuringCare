@@ -1,4 +1,3 @@
-import { useTuring } from "@/components/turing/turing-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   JournalEntryCreateInput,
@@ -6,6 +5,7 @@ import type {
   JournalEntryUpdateInput,
   JournalTrend,
 } from "@turingcare/shared";
+import { useTuring } from "@/components/turing/turing-context";
 import { api } from "./api";
 import { invalidateTrainingSafetyData } from "./training-safety-cache";
 

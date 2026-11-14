@@ -1,11 +1,11 @@
-import type { useI18n } from "@/i18n";
-import { DIMENSION_CONFIG } from "@/lib/practice-options";
 import type {
   ExactContextEvidence,
   ExactPracticeContext,
   NextPracticeAction,
   PracticeDimension,
 } from "@turingcare/shared";
+import type { useI18n } from "@/i18n";
+import { DIMENSION_CONFIG } from "@/lib/practice-options";
 
 export const CONTEXT_DIMENSIONS = [
   { dimension: "cue_support", field: "cueSupport", labelKey: "contextProgress.cueSupport" },

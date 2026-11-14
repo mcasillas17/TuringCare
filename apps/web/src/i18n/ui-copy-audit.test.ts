@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type ts from "typescript";
@@ -122,7 +122,7 @@ function stringLiteralValue(expression: ts.Expression | undefined): string | nul
 }
 
 function staticInitializerDeclaration(symbol: ts.Symbol | undefined): StaticDeclaration | null {
-  if (!symbol || symbol.declarations?.length !== 1) return null;
+  if (symbol?.declarations?.length !== 1) return null;
   const declaration = symbol.declarations[0];
   if (declaration && tsCompiler.isBindingElement(declaration) && declaration.initializer) {
     return declaration;
@@ -161,7 +161,7 @@ function shorthandFunctionDeclaration(
   checker: ts.TypeChecker,
 ): ts.FunctionDeclaration | null {
   const symbol = checker.getShorthandAssignmentValueSymbol(property);
-  if (!symbol || symbol.declarations?.length !== 1) return null;
+  if (symbol?.declarations?.length !== 1) return null;
   const declaration = symbol.declarations[0];
   return declaration && tsCompiler.isFunctionDeclaration(declaration) && declaration.body
     ? declaration
@@ -565,7 +565,7 @@ function localCalledFunction(
   }
   if (!tsCompiler.isIdentifier(callee)) return null;
   const symbol = context.checker.getSymbolAtLocation(callee);
-  if (!symbol || symbol.declarations?.length !== 1) return null;
+  if (symbol?.declarations?.length !== 1) return null;
   const declaration = symbol.declarations[0];
   if (!declaration || resolving.has(declaration)) return null;
   if (tsCompiler.isFunctionDeclaration(declaration)) return declaration.body ? declaration : null;

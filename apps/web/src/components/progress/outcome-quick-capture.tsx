@@ -1,15 +1,15 @@
-import { Button } from "@/components/ui/button";
-import { useI18n } from "@/i18n";
-import { DIMENSION_CONFIG, OUTCOME_KEYS, SAFETY_SIGNAL_KEYS } from "@/lib/practice-options";
 import {
   type PracticeDimension,
   type PracticeEvidenceInput,
   type PracticeOutcome,
-  type SafetySignalType,
   practiceOutcomeValues,
+  type SafetySignalType,
   safetySignalValues,
 } from "@turingcare/shared";
 import { useEffect, useId, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n";
+import { DIMENSION_CONFIG, OUTCOME_KEYS, SAFETY_SIGNAL_KEYS } from "@/lib/practice-options";
 
 export function OutcomeQuickCapture({
   onSave,

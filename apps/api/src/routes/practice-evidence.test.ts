@@ -8,10 +8,9 @@ import {
   advancementProposals,
   dogSafetySignals,
   practiceSessions,
-  trainingSuggestionActions,
   trainingSuggestions,
 } from "../db/schema";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 
 const practiceAnchorMock = vi.hoisted(() => ({ unavailable: false }));
 vi.mock("../lib/practice-anchor", async (importOriginal) => {

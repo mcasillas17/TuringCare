@@ -1,4 +1,4 @@
-import { type Locale, type Messages, en, es, isLocale } from "@turingcare/i18n";
+import { en, es, isLocale, type Locale, type Messages } from "@turingcare/i18n";
 import type { AuthoredCatalogTemplate } from "@turingcare/shared";
 
 type TrainingCatalogShape = typeof en.trainingCatalog;

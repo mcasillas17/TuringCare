@@ -16,7 +16,7 @@ vi.mock("./api", () => ({
 }));
 vi.mock("./session-query-boundary", () => ({ useSessionQueriesReady: () => true }));
 
-import { VerificationRequestError, confirmVerification, resendVerification } from "./verification";
+import { confirmVerification, resendVerification, VerificationRequestError } from "./verification";
 
 beforeEach(() => {
   confirmPost.mockReset();

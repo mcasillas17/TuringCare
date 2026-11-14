@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Link, MemoryRouter, Route, Routes, matchRoutes } from "react-router-dom";
+import { Link, MemoryRouter, matchRoutes, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PageViewTracker } from "./track";
 

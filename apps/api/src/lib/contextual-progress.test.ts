@@ -7,9 +7,9 @@ import { CONTEXTUAL_PROGRESS_WINDOW_DAYS } from "@turingcare/shared";
 import { describe, expect, it } from "vitest";
 import { skillDimensionMetadata } from "../data/training-curriculum";
 import {
+  applyContextualSafety,
   CONTEXTUAL_PROGRESS_POLICY_VERSION,
   type ContextualProgressRow,
-  applyContextualSafety,
   deriveContextualProgress,
 } from "./contextual-progress";
 

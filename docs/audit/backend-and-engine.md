@@ -8,7 +8,7 @@ Scope: `apps/api` (Hono, Drizzle/Postgres, Better Auth) plus `packages/shared` s
 Bottom line: today's "engine" is a **per-skill, evidence-reactive next-exercise picker**. It
 is deterministic and well audited, but it has **no per-dog program/plan entity, no use of any
 dog attribute, no scheduling, and a 21-skill, one-sentence-per-level catalog**. The distance
-to "full personalized program, deterministically" is mostly missing *domain model and content*,
+to "full personalized program, deterministically" is mostly missing _domain model and content_,
 not missing infrastructure: the safety, audit, evidence and advancement plumbing is reusable.
 
 ---
@@ -20,25 +20,25 @@ not missing infrastructure: the safety, audit, evidence and advancement plumbing
 All owner routes sit behind `requireUser` (`middleware/require-user.ts:6-14`): session required
 and `emailVerified === true`, else 401/403.
 
-| Mount | File | What it does | Tables touched |
-|---|---|---|---|
-| `/health`, `/ready` | `app.ts:60-90` | Liveness; readiness probe that selects schema columns added by recent migrations | many (limit 0) |
-| `/me` | `app.ts:94` | Session user + resolved admin role | `user` |
-| `/api/validate/*` | `app.ts:101-106` | Stateless zod validation for client forms | none |
-| `/api/events` | `app.ts:112` | Public bounded telemetry ingest, server-derived identity | `events` |
-| `/api/dogs` | `routes/dogs.ts` (1715 lines) | Dog CRUD; concerns; goals + from-template; skills CRUD; skill level; practice sessions (create/evidence patch/delete); weekly focus (new + legacy-compat API); suggestion read + actions; advancement decision; contextual progress; journal CRUD; Brief generate/finalize/share/send/sends; progress; overview | `dogs`, `behavior_concerns`, `training_goals`, `training_skills`, `practice_sessions`, `skill_milestones`, `dog_safety_signals`, `weekly_focus`, `focus_compatibility_weeks`, `legacy_focus_claims`, `training_suggestions`, `training_suggestion_actions`, `advancement_proposals`, `journal_entries`, `briefs`, `brief_sends`, `guided_setups`, `user` |
-| `/api/journal` | `routes/journal.ts` | Cross-dog journal list (optional `dogId`) | `journal_entries`, `dogs` |
-| `/api/share/brief/:token` | `routes/share.ts` | Public read of a finalized shared Brief (whitelisted fields) | `briefs`, `dogs` |
-| `/api/onboarding` | `routes/onboarding.ts` | Activation checklist booleans | `dogs`, `journal_entries`, `training_goals`, `briefs`, `brief_sends` |
-| `/api/guided-setup` | `routes/guided-setup.ts` (840 lines) | One-active-per-owner setup wizard: start (creates dog), intent, skip, abandon, three first actions (training template + focus + first suggestion; behavior concern; daily check-in) | `guided_setups`, `dogs`, `behavior_concerns`, `journal_entries`, `training_goals`, `training_skills`, `weekly_focus`, plus suggestion audit tables |
-| `/api/overview` | `routes/overview.ts` | Dashboard counts, latest Brief, 5 recent entries | `dogs`, `journal_entries`, `briefs` |
-| `/api/training/templates` | `routes/training.ts:8` | Returns the localized enriched catalog | none (static data) |
-| `/api/trainers`, `/api/courses` | `routes/trainers.ts`, `courses.ts` | Public directories; trainer email/phone only for verified sessions on detail, never in list | `trainers`, `courses` |
-| `/api/admin/*` | `admin.ts`, `admin-trainers.ts`, `admin-courses.ts` | Admin metrics and trainer/course CRUD | `events`, `trainers`, `courses`, `user` |
-| `/api/profile` | `routes/profile.ts` | Profile/locale update, deletion-readiness | `user`, `dogs`, `brief_sends` |
-| `/api/verification` | `routes/verification.ts` | Email-ownership status/confirm/resend | auth tables |
-| `/api/test/emails` | `routes/test-email.ts` | Test-only outbox (disabled in production) | none |
-| `/api/auth/*` | `auth/request-handler.ts` | Better Auth handler, DB-backed rate limits | `user`, `session`, `account`, `verification`, `rate_limit` |
+| Mount                           | File                                                | What it does                                                                                                                                                                                                                                                                                                    | Tables touched                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/health`, `/ready`             | `app.ts:60-90`                                      | Liveness; readiness probe that selects schema columns added by recent migrations                                                                                                                                                                                                                                | many (limit 0)                                                                                                                                                                                                                                                                                                                                           |
+| `/me`                           | `app.ts:94`                                         | Session user + resolved admin role                                                                                                                                                                                                                                                                              | `user`                                                                                                                                                                                                                                                                                                                                                   |
+| `/api/validate/*`               | `app.ts:101-106`                                    | Stateless zod validation for client forms                                                                                                                                                                                                                                                                       | none                                                                                                                                                                                                                                                                                                                                                     |
+| `/api/events`                   | `app.ts:112`                                        | Public bounded telemetry ingest, server-derived identity                                                                                                                                                                                                                                                        | `events`                                                                                                                                                                                                                                                                                                                                                 |
+| `/api/dogs`                     | `routes/dogs.ts` (1715 lines)                       | Dog CRUD; concerns; goals + from-template; skills CRUD; skill level; practice sessions (create/evidence patch/delete); weekly focus (new + legacy-compat API); suggestion read + actions; advancement decision; contextual progress; journal CRUD; Brief generate/finalize/share/send/sends; progress; overview | `dogs`, `behavior_concerns`, `training_goals`, `training_skills`, `practice_sessions`, `skill_milestones`, `dog_safety_signals`, `weekly_focus`, `focus_compatibility_weeks`, `legacy_focus_claims`, `training_suggestions`, `training_suggestion_actions`, `advancement_proposals`, `journal_entries`, `briefs`, `brief_sends`, `guided_setups`, `user` |
+| `/api/journal`                  | `routes/journal.ts`                                 | Cross-dog journal list (optional `dogId`)                                                                                                                                                                                                                                                                       | `journal_entries`, `dogs`                                                                                                                                                                                                                                                                                                                                |
+| `/api/share/brief/:token`       | `routes/share.ts`                                   | Public read of a finalized shared Brief (whitelisted fields)                                                                                                                                                                                                                                                    | `briefs`, `dogs`                                                                                                                                                                                                                                                                                                                                         |
+| `/api/onboarding`               | `routes/onboarding.ts`                              | Activation checklist booleans                                                                                                                                                                                                                                                                                   | `dogs`, `journal_entries`, `training_goals`, `briefs`, `brief_sends`                                                                                                                                                                                                                                                                                     |
+| `/api/guided-setup`             | `routes/guided-setup.ts` (840 lines)                | One-active-per-owner setup wizard: start (creates dog), intent, skip, abandon, three first actions (training template + focus + first suggestion; behavior concern; daily check-in)                                                                                                                             | `guided_setups`, `dogs`, `behavior_concerns`, `journal_entries`, `training_goals`, `training_skills`, `weekly_focus`, plus suggestion audit tables                                                                                                                                                                                                       |
+| `/api/overview`                 | `routes/overview.ts`                                | Dashboard counts, latest Brief, 5 recent entries                                                                                                                                                                                                                                                                | `dogs`, `journal_entries`, `briefs`                                                                                                                                                                                                                                                                                                                      |
+| `/api/training/templates`       | `routes/training.ts:8`                              | Returns the localized enriched catalog                                                                                                                                                                                                                                                                          | none (static data)                                                                                                                                                                                                                                                                                                                                       |
+| `/api/trainers`, `/api/courses` | `routes/trainers.ts`, `courses.ts`                  | Public directories; trainer email/phone only for verified sessions on detail, never in list                                                                                                                                                                                                                     | `trainers`, `courses`                                                                                                                                                                                                                                                                                                                                    |
+| `/api/admin/*`                  | `admin.ts`, `admin-trainers.ts`, `admin-courses.ts` | Admin metrics and trainer/course CRUD                                                                                                                                                                                                                                                                           | `events`, `trainers`, `courses`, `user`                                                                                                                                                                                                                                                                                                                  |
+| `/api/profile`                  | `routes/profile.ts`                                 | Profile/locale update, deletion-readiness                                                                                                                                                                                                                                                                       | `user`, `dogs`, `brief_sends`                                                                                                                                                                                                                                                                                                                            |
+| `/api/verification`             | `routes/verification.ts`                            | Email-ownership status/confirm/resend                                                                                                                                                                                                                                                                           | auth tables                                                                                                                                                                                                                                                                                                                                              |
+| `/api/test/emails`              | `routes/test-email.ts`                              | Test-only outbox (disabled in production)                                                                                                                                                                                                                                                                       | none                                                                                                                                                                                                                                                                                                                                                     |
+| `/api/auth/*`                   | `auth/request-handler.ts`                           | Better Auth handler, DB-backed rate limits                                                                                                                                                                                                                                                                      | `user`, `session`, `account`, `verification`, `rate_limit`                                                                                                                                                                                                                                                                                               |
 
 ### 1.2 Data model summary (`db/schema.ts`)
 
@@ -104,7 +104,7 @@ Trace through `lib/suggestion.ts:244 loadSuggestion`:
    `evaluateSafety` (`:258-261`).
 4. **Safety gate** (`lib/safety-policy.ts:33-80`): suppress everything if any of: injury/pain signal in last 90 days;
    aggression/bite-risk, severe fear/panic, or a `severe` behavior concern (these never expire); or
-   >=2 journal entries with intensity >=4 AND >=2 "harder" check-ins within 14 days (`:69-78`). Referral target is
+   > =2 journal entries with intensity >=4 AND >=2 "harder" check-ins within 14 days (`:69-78`). Referral target is
    vet, veterinary behaviorist, or credentialed trainer. Inputs are structured only; free text is never inspected.
 5. Else load evidence for the skill (`lib/practice-evidence.ts:69-125`): sessions in last 21 days
    (`EVIDENCE_WINDOW_DAYS`, `:14`) at the current or one-lower level, current curriculum version, with practice day
@@ -124,6 +124,7 @@ variant, plus a rule id and evidence summary.
 ### 2.3 Inputs actually used vs collected-and-ignored
 
 Used by the engine:
+
 - Focus skill and its catalog key and current level (`training_skills.confidence`).
 - Practice outcomes and two context dimensions (environment busy_outdoor, distraction strong) for the hard-context
   rule (`practice-evidence.ts:118-120`).
@@ -151,7 +152,7 @@ and practice `notes`. `contextual-progress` uses all five context dimensions but
   `stayed`/`rejected`/`insufficient_evidence` change nothing. Level writes go through `setSkillLevel`
   (`lib/skill-level.ts:12-30`), which also records milestones for levels 2..n.
 - Advancement is never automatic, and there is **no automatic regression**: `step_back` rules only change the
-  *suggested* level for the session, never the stored skill level. Separately the owner can set any level 1-5 directly
+  _suggested_ level for the session, never the stored skill level. Separately the owner can set any level 1-5 directly
   (`PUT /skills/:id/level`, `dogs.ts:538-553`), bypassing evidence.
 - `skill-level.ts`: lowering keeps earned milestone dates.
 
@@ -171,12 +172,13 @@ conflicts with a program generator unless the generator replaces rather than add
 ### 2.6 Is there a per-dog program or plan?
 
 No. The closest constructs:
+
 - `training_goals` + `training_skills`: a bag of skills copied from a template (`lib/training-template-writes.ts:9-35`),
   all at level 1, ordered by `position`, with no sequencing, prerequisites, or target dates.
 - `weekly_focus`: one skill per dog per week, chosen manually by the owner (`focus.ts:204-245`, unique
   `(dog_id, week_start)` at `schema.ts` `weekly_focus_dog_week`). Guided setup picks the template's first skill
   (`guided-setup.ts:589-607`).
-- Nothing selects *which* template or skill a dog needs, orders skills, schedules sessions, or generates a multi-week
+- Nothing selects _which_ template or skill a dog needs, orders skills, schedules sessions, or generates a multi-week
   structure. ROADMAP.md:11 states the north star ("one humane, understandable training plan") but no roadmap item
   implements it; T8 "Guided Today" is a next-action card, not a plan.
 
@@ -192,6 +194,7 @@ the same shared lock to keep "suppressed means suppressed" linearizable.
 ## 3. Gaps against "full deterministic personalized program per dog"
 
 Intake / data
+
 1. **Dog attributes are not inputs.** Age/life stage (puppy vs adolescent vs adult vs senior) is the most
    important selector and is stored but unused. Also unused: weight/size, neuter status, vaccine stage (gates
    outdoor/social work), source/adoption date (decompression period, "3-3-3" window).
@@ -205,46 +208,46 @@ Intake / data
 
 Domain model
 4. **No plan entity** (program, phases/weeks, scheduled sessions, planned vs completed, plan version, regeneration
-   history). `weekly_focus` is one skill per week.
+history). `weekly_focus` is one skill per week.
 5. **No sequencing**: no prerequisite graph between skills (e.g. name-recognition before recall, settle before
-   reactivity work), no phase gating, no age-appropriate ordering.
+reactivity work), no phase gating, no age-appropriate ordering.
 6. **No scheduling**: no cadence, session length, sessions-per-week, reminders, rest days, or plan-to-calendar
-   mapping; `practice_sessions.durationMinutes` is recorded but not used.
+mapping; `practice_sessions.durationMinutes` is recorded but not used.
 7. **Single focus skill** at a time; no way to represent parallel tracks (life skill + behavior protocol + enrichment).
 
 Content
 8. **Catalog size and depth**: 21 skills, one sentence per level, no how-to, rewards, criteria for "done",
-   proofing steps, troubleshooting, or contraindications. A personalized program needs hundreds of authored
-   exercise cards or composable parameters. Missing whole domains the research docs cover (see
-   `docs/research/canine-behavior/01..06`: socialization, handling/vet care, crate/potty, impulse control,
-   leash skills beyond loose-leash, enrichment, fear-period management, adolescent protocols) are not in the catalog.
-   Essential puppy content like potty training schedule, crate acclimation, handling/grooming, and socialization
-   checklists is absent (only a `potty-signal` skill).
+proofing steps, troubleshooting, or contraindications. A personalized program needs hundreds of authored
+exercise cards or composable parameters. Missing whole domains the research docs cover (see
+`docs/research/canine-behavior/01..06`: socialization, handling/vet care, crate/potty, impulse control,
+leash skills beyond loose-leash, enrichment, fear-period management, adolescent protocols) are not in the catalog.
+Essential puppy content like potty training schedule, crate acclimation, handling/grooming, and socialization
+checklists is absent (only a `potty-signal` skill).
 9. Authoring pipeline: content is TypeScript `Messages` keyed by level in `i18n` plus a hand-maintained metadata
-   file; no schema validation of level-prose vs dimension metadata, no editorial review state, no content versioning
-   beyond a single `CURRICULUM_VERSION` string that invalidates evidence wholesale when bumped
-   (`practice-evidence.ts:101`, `contextual-progress-data.ts:51`).
+file; no schema validation of level-prose vs dimension metadata, no editorial review state, no content versioning
+beyond a single `CURRICULUM_VERSION` string that invalidates evidence wholesale when bumped
+(`practice-evidence.ts:101`, `contextual-progress-data.ts:51`).
 
 Rules
 10. **Rule set is tiny** (8 rule ids, `suggestion-rules.ts`): no age/stage rules, no fear-period rules, no
-    time-since-last-practice decay (`lastPracticeAt` computed but no rule uses staleness), no rest/maintenance
-    scheduling, no spaced-repetition, no multi-skill balancing, no cap on weekly load.
+time-since-last-practice decay (`lastPracticeAt` computed but no rule uses staleness), no rest/maintenance
+scheduling, no spaced-repetition, no multi-skill balancing, no cap on weekly load.
 11. **No automatic regression** of stored level; regression is owner-only (`regressed` decision) or a transient
-    suggested step-back. No plateau detection (many `mixed` just holds forever, `hold_after_mixed`).
+suggested step-back. No plateau detection (many `mixed` just holds forever, `hold_after_mixed`).
 12. Advancement is purely success-count based; it ignores generalization breadth (contextual-progress has it but
-    isn't wired to advancement), and has no maximum-time-at-level handling.
-13. Safety policy is binary suppression for *everything*. A program needs graded modification: e.g. injury ->
-    vet-clearance then low-intensity only; fear/reactivity -> pause exposure but keep husbandry and settle skills;
-    puppy < vaccine completion -> indoor-only plan. Severe concern and bite/fear signals suppress forever with no
-    resolution workflow (acknowledged in `schema.ts` comment above `dog_safety_signals`).
+isn't wired to advancement), and has no maximum-time-at-level handling.
+13. Safety policy is binary suppression for _everything_. A program needs graded modification: e.g. injury ->
+vet-clearance then low-intensity only; fear/reactivity -> pause exposure but keep husbandry and settle skills;
+puppy < vaccine completion -> indoor-only plan. Severe concern and bite/fear signals suppress forever with no
+resolution workflow (acknowledged in `schema.ts` comment above `dog_safety_signals`).
 14. Evidence quality: outcomes are three-valued, owner-reported, no counts of repetitions/rewards/latency, no
-    success rate per session; 21-day window with 3 outcomes is thin for sequencing decisions.
+success rate per session; 21-day window with 3 outcomes is thin for sequencing decisions.
 
 Platform
 15. No explanation/rationale surface for a whole plan (rule ids exist per suggestion only), no plan export in the
-    Brief, no trainer-edit path (trainer accounts do not exist).
+Brief, no trainer-edit path (trainer accounts do not exist).
 16. Suggestions are computed on read inside a locked transaction with writes (`GET` mutates); a plan generator
-    should be a pure function of (dog profile, intake, evidence, catalog version) to be testable and cacheable.
+should be a pure function of (dog profile, intake, evidence, catalog version) to be testable and cacheable.
 
 ---
 
@@ -325,6 +328,7 @@ passed, 1 failed**; the one failure
 So the engine's pure logic is green; the route/DB layer is unverified by me.
 
 Coverage observations (from file inventory, not from a coverage run):
+
 - Pure rules, adjacency, contextual progress and advancement evaluation have dedicated tests; routes have large
   integration suites (dogs 2841 lines, guided-setup 2643, focus 1418, contextual 1404).
 - No test asserts catalog prose against dimension metadata (4.1 / 2.1 bite-inhibition mismatch).
@@ -338,10 +342,11 @@ Coverage observations (from file inventory, not from a coverage run):
 
 ## 5. Prioritized recommendations
 
-Principle: reuse the existing safety, audit, evidence and advancement machinery; add a *plan layer on top*; do not add
+Principle: reuse the existing safety, audit, evidence and advancement machinery; add a _plan layer on top_; do not add
 a third recommender. Keep the plan generator a **pure function** so it is unit-testable and deterministic.
 
 P0 (unblock the vision, small)
+
 1. **Decide the product contract**: write a short spec of "program" = ordered phases of skills with weekly targets,
    generated from `(dog profile, intake, safety state, evidence, catalog version)`. Reconcile with the ROADMAP non-goal
    ("another suggestion engine") by declaring the plan generator the single source and having suggestions read from it.
@@ -354,30 +359,30 @@ P0 (unblock the vision, small)
 
 P1 (model + content)
 4. **Add intake**: a small structured `dog_intake` (household, schedule/time budget, primary goal, trigger list as
-   enums, experience, equipment, health flags) captured in guided setup; keep it enum/boolean-only for the same privacy
-   posture as the audit tables.
+enums, experience, equipment, health flags) captured in guided setup; keep it enum/boolean-only for the same privacy
+posture as the audit tables.
 5. **Add plan tables**: `training_plans` (dog, version, generated-from inputs hash, catalog/curriculum version,
-   status) and `training_plan_items` (skill key, phase, target level, week index, session target, rationale code).
-   Store rationale codes, not prose, matching `training_suggestions`.
+status) and `training_plan_items` (skill key, phase, target level, week index, session target, rationale code).
+Store rationale codes, not prose, matching `training_suggestions`.
 6. **Prerequisite graph and phases** as data (skill key -> prerequisites, min age, contraindicated safety states),
-   validated by a unit test that the graph is acyclic and every key has metadata.
+validated by a unit test that the graph is acyclic and every key has metadata.
 7. **Grow and restructure the catalog**: 21 skills -> target 60-100 with per-level steps, rewards, criteria, and
-   troubleshooting; consolidate duplicate keys (`sit`); add potty/crate/handling/socialization/impulse-control/enrichment
-   domains from `docs/research/canine-behavior`. Add a test that level prose count, dimension metadata length and
-   strategy arrays are consistent for every skill.
+troubleshooting; consolidate duplicate keys (`sit`); add potty/crate/handling/socialization/impulse-control/enrichment
+domains from `docs/research/canine-behavior`. Add a test that level prose count, dimension metadata length and
+strategy arrays are consistent for every skill.
 
 P2 (behavior of the plan)
 8. **Graded safety modes** instead of all-or-nothing suppression (vet-clearance mode, husbandry-only mode), still
-   evaluated under the shared safety lock.
+evaluated under the shared safety lock.
 9. **Scheduling**: sessions per week and minutes from intake, rest days, maintenance revisits (use
-   `lastPracticeAt`, already computed), plus plateau handling (cap on `hold_after_mixed` streak) and automatic
-   *proposed* regression (owner-confirmed, like advancement).
+`lastPracticeAt`, already computed), plus plateau handling (cap on `hold_after_mixed` streak) and automatic
+_proposed_ regression (owner-confirmed, like advancement).
 10. **Merge recommenders**: feed contextual-progress adjacency (`context-adjacency.ts` is solid) into plan item
-    generation and retire the parallel `nextPracticeAction` path.
+generation and retire the parallel `nextPracticeAction` path.
 
 P3 (hygiene)
 11. Remove legacy focus compat tables/routes after rollout window; stop calling `claimLegacyFocus` per read.
 12. Split `routes/dogs.ts` into sub-apps (training, journal, brief) as ROADMAP T8 already requires.
 13. Make suggestion/plan reads side-effect-free (generate on write events or via explicit "refresh plan"), and add a
-    pglite or testcontainer path so the suite can run without a manual Postgres.
+pglite or testcontainer path so the suite can run without a manual Postgres.
 14. Paginate and validate public directory queries.

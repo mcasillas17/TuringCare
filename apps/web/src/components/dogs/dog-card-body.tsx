@@ -1,3 +1,12 @@
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  type BehaviorConcernInput,
+  type SafetySignalType,
+  safetySignalValues,
+} from "@turingcare/shared";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { DailyCheckInComposer } from "@/components/journal/daily-check-in-composer";
 import { QuickMomentComposer } from "@/components/journal/quick-moment-composer";
 import { Sheet } from "@/components/ui/sheet";
@@ -8,15 +17,6 @@ import { SAFETY_SIGNAL_KEYS } from "@/lib/practice-options";
 import { useProgress } from "@/lib/progress";
 import { timeAgo } from "@/lib/time-ago";
 import { humanTime } from "@/lib/when";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  type BehaviorConcernInput,
-  type SafetySignalType,
-  safetySignalValues,
-} from "@turingcare/shared";
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { toast } from "sonner";
 
 export function DogCardBody({ dog }: { dog: DogOverview }) {
   const { t, locale } = useI18n();

@@ -35,10 +35,16 @@ vi.mock("./api", () => ({
 
 import { useAddEntry, useDeleteEntry, useUpdateEntry } from "./journal";
 
+let activeQueryClient: QueryClient | null = null;
+
+function TestQueryClientProvider({ children }: { children: ReactNode }) {
+  if (!activeQueryClient) throw new Error("test_query_client_not_initialized");
+  return <QueryClientProvider client={activeQueryClient}>{children}</QueryClientProvider>;
+}
+
 function makeWrapper(queryClient: QueryClient) {
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-  };
+  activeQueryClient = queryClient;
+  return TestQueryClientProvider;
 }
 
 function makeQueryClient() {

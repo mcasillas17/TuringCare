@@ -1,12 +1,12 @@
+import { safeAuthReturnPath } from "@turingcare/shared";
+import type { ReactNode } from "react";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { SessionError } from "@/components/session-error";
 import { useI18n } from "@/i18n";
 import { useSession } from "@/lib/auth-client";
 import { authPagePath } from "@/lib/auth-navigation";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { useHasVerifiedSession } from "@/lib/verified-session";
-import { safeAuthReturnPath } from "@turingcare/shared";
-import type { ReactNode } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
 
 /** Mirror of RequireAuth: keeps already-authenticated users out of the auth
  * pages (login/register) by sending them to the app. */

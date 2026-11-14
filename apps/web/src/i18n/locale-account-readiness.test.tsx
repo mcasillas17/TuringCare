@@ -1,8 +1,8 @@
-import { useBrief } from "@/lib/brief";
-import { useTrainingCatalog } from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useBrief } from "@/lib/brief";
+import { useTrainingCatalog } from "@/lib/training-catalog";
 import { LocaleProvider, useI18n } from ".";
 import { LocaleAccountBoundary, useLocaleAccountReadiness } from "./locale-account-bridge";
 
@@ -75,7 +75,9 @@ function setupSignedIn(profileResponse: "defer" | "empty-account" | "error") {
       const request = input instanceof Request ? input : null;
       const url = request?.url ?? String(input);
       const headers = new Headers(request?.headers);
-      new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+      new Headers(init?.headers).forEach((value, key) => {
+        headers.set(key, value);
+      });
       const path = new URL(url, "http://localhost").pathname;
       requests.push({ locale: headers.get("X-TuringCare-Locale"), path });
 

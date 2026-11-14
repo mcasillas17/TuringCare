@@ -1,9 +1,9 @@
-import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 
 // Mock the typed hc<AppType> client. Each call returns an ok Response-like
 // object with a json() resolving to the relevant payload.

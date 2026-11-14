@@ -1,14 +1,14 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DirectoryLayout } from "@/components/DirectoryLayout";
 import { LocaleProvider } from "@/i18n";
 import { LocaleAccountBoundary } from "@/i18n/locale-account-bridge";
 import { RequireAuth } from "@/routes/require-auth";
 import { TrainerDetail } from "@/routes/trainer-detail";
 import { VerifyEmail } from "@/routes/verify-email";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SessionQueryBoundary } from "./session-query-boundary";
 
 const { session } = vi.hoisted(() => ({

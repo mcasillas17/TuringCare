@@ -1,8 +1,8 @@
-import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 import { RequireAdmin } from "./require-admin";
 
 const { session } = vi.hoisted(() => ({

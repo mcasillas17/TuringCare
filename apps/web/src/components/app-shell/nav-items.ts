@@ -1,4 +1,3 @@
-import type { MessageKey } from "@/i18n/types";
 import {
   ClipboardList,
   Cog,
@@ -10,6 +9,7 @@ import {
   User,
   Users,
 } from "lucide-react";
+import type { MessageKey } from "@/i18n/types";
 
 export type NavItem = {
   to: string;

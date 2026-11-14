@@ -28,7 +28,10 @@ vi.mock("@/lib/auth-client", () => ({
 function BoundaryTree({
   children,
   queryClient,
-}: { children: ReactNode; queryClient: QueryClient }) {
+}: {
+  children: ReactNode;
+  queryClient: QueryClient;
+}) {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionQueryBoundary>{children}</SessionQueryBoundary>
@@ -60,6 +63,10 @@ function TrainerContactProbe() {
 
 function AnonymousIdentityProbe() {
   return <p>{useSessionQueryReady(null) ? "anonymous-ready" : "anonymous-not-ready"}</p>;
+}
+
+function AccessProbe() {
+  return <p>{useHasVerifiedSession() ? "verified-access" : "verification-wall"}</p>;
 }
 
 beforeEach(() => {
@@ -107,9 +114,6 @@ describe("SessionQueryBoundary", () => {
     await screen.findByText("private-cache-empty");
   });
   it("recovers a stale verified tab on an authoritative 403 and only unlocks after a fresh verified session", async () => {
-    function AccessProbe() {
-      return <p>{useHasVerifiedSession() ? "verified-access" : "verification-wall"}</p>;
-    }
     const queryClient = new QueryClient();
     render(
       <BoundaryTree queryClient={queryClient}>

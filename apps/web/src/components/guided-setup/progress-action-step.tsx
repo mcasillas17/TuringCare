@@ -1,3 +1,11 @@
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  type GuidedSetupProgressAction,
+  guidedSetupProgressActionSchema,
+  journalTrendValues,
+} from "@turingcare/shared";
+import { useRef, useState } from "react";
+import { type FieldError, useForm } from "react-hook-form";
 import { AbandonSetupButton } from "@/components/guided-setup/abandon-setup-button";
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
@@ -9,14 +17,6 @@ import {
   isGuidedSetupReconciliationConflict,
   useCompleteProgressSetup,
 } from "@/lib/guided-setup";
-import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  type GuidedSetupProgressAction,
-  guidedSetupProgressActionSchema,
-  journalTrendValues,
-} from "@turingcare/shared";
-import { useRef, useState } from "react";
-import { type FieldError, useForm } from "react-hook-form";
 
 const inputClassName =
   "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-copper";
@@ -111,15 +111,15 @@ export function ProgressActionStep({
       <form onSubmit={handleSubmit(submit)} className="space-y-5">
         <input type="hidden" {...register("setupId")} />
         <p className="text-sm text-slate-soft">{t("guidedSetup.progressGuidance")}</p>
-        <fieldset
+        <div
           role="radiogroup"
           aria-labelledby="guided-setup-progress-trend-label"
           aria-describedby={trendError ? "guided-setup-trend-error" : undefined}
           className="space-y-3"
         >
-          <legend id="guided-setup-progress-trend-label" className="text-sm font-medium text-slate">
+          <p id="guided-setup-progress-trend-label" className="text-sm font-medium text-slate">
             {t("guidedSetup.progressTrendLabel")}
-          </legend>
+          </p>
           {journalTrendValues.map((trend) => (
             <label
               key={trend}
@@ -135,7 +135,7 @@ export function ProgressActionStep({
               <span className="text-sm text-slate">{t(trendLabels[trend])}</span>
             </label>
           ))}
-        </fieldset>
+        </div>
         {trendError && (
           <p id="guided-setup-trend-error" role="alert" className="text-sm text-red-600">
             {trendError}

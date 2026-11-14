@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { ChangePasswordForm } from "@/components/settings/change-password-form";
 import { DeleteAccountButton } from "@/components/settings/delete-account-button";
@@ -5,8 +7,6 @@ import { useTuring } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useSignOut } from "@/lib/sign-out";
-import { Link } from "react-router-dom";
-import { toast } from "sonner";
 
 export function Settings() {
   const { t } = useI18n();

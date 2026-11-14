@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
-import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import {
   advancementProposals,
@@ -13,7 +12,7 @@ import {
   trainingSuggestions,
   weeklyFocus,
 } from "../db/schema";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 import { currentWeekKey, loadSuggestion, recordSuggestionAction } from "./suggestion";
 
 const NOW = new Date("2026-08-13T12:00:00.000Z");

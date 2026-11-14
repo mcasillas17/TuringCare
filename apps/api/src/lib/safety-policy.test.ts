@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { type SafetyInputs, decideSafety, evaluateSafetyWithLock } from "./safety-policy";
+import { decideSafety, evaluateSafetyWithLock, type SafetyInputs } from "./safety-policy";
 
 const NOW = new Date("2026-08-13T12:00:00.000Z");
 

@@ -1,10 +1,10 @@
-import { LocaleProvider } from "@/i18n";
-import * as dogsLib from "@/lib/dogs";
-import type { DogOverview } from "@/lib/dogs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import type { DogOverview } from "@/lib/dogs";
+import * as dogsLib from "@/lib/dogs";
 import { DogsList } from "./dogs-list";
 
 vi.mock("@/lib/dogs", async () => {

@@ -1,5 +1,5 @@
-import { useI18n } from "@/i18n";
 import { ChevronDownIcon } from "lucide-react";
+import { useI18n } from "@/i18n";
 
 export function Faq() {
   const { t } = useI18n();

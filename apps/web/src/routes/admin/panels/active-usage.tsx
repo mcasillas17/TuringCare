@@ -1,4 +1,3 @@
-import { useI18n } from "@/i18n";
 import {
   CartesianGrid,
   Line,
@@ -8,13 +7,17 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useI18n } from "@/i18n";
 import type { Metrics } from "../use-metrics";
 import { formatAdminChartDate } from "./chart-date";
 
 export function ActiveUsage({
   active,
   kpis,
-}: { active: Metrics["active"]; kpis: Metrics["kpis"] }) {
+}: {
+  active: Metrics["active"];
+  kpis: Metrics["kpis"];
+}) {
   const { locale, t } = useI18n();
   const dateLabel = (dateBucket: unknown) => formatAdminChartDate(locale, dateBucket);
 

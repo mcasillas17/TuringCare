@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import {
@@ -7,8 +9,6 @@ import {
   useAbandonGuidedSetup,
   useGuidedSetup,
 } from "@/lib/guided-setup";
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 export function AbandonSetupButton({
   setupId,

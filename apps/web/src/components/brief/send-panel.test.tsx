@@ -1,9 +1,9 @@
-import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { BriefSendInput } from "@turingcare/shared";
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 import { SendPanel } from "./send-panel";
 
 afterEach(() => {
@@ -129,7 +129,7 @@ describe("SendPanel", () => {
 
   it("submits a valid send and clears the form", async () => {
     const calls: Array<{ method?: string }> = [];
-    stubFetch(async (url, init) => {
+    stubFetch(async (_url, init) => {
       calls.push({ method: init?.method });
       if (init?.method === "POST") {
         return new Response(

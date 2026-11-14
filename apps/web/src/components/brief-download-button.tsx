@@ -1,8 +1,8 @@
+import { PDFDownloadLink } from "@react-pdf/renderer";
 import { BriefPdfDocument } from "@/components/brief-pdf-document";
 import { buttonVariants } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { type BriefForPdf, type DogForPdf, buildBriefPdfModel } from "@/lib/brief-pdf-model";
-import { PDFDownloadLink } from "@react-pdf/renderer";
+import { type BriefForPdf, buildBriefPdfModel, type DogForPdf } from "@/lib/brief-pdf-model";
 
 /**
  * Self-contained "Download PDF" control. Bundles @react-pdf/renderer so the

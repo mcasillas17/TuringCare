@@ -1,6 +1,6 @@
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
-import { Link } from "react-router-dom";
 
 export function NotFound() {
   const { t } = useI18n();

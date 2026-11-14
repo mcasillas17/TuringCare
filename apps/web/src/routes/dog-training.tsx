@@ -1,10 +1,10 @@
+import { useState } from "react";
+import { useParams } from "react-router-dom";
 import { ProgressPanel } from "@/components/progress/progress-panel";
 import { TemplatePicker } from "@/components/training/template-picker";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useAddGoal } from "@/lib/dogs";
-import { useState } from "react";
-import { useParams } from "react-router-dom";
 
 const inputCls = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
 

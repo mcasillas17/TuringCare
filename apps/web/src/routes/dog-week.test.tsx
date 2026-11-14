@@ -1,15 +1,15 @@
-import { LocaleProvider } from "@/i18n";
-import * as contextualProgressLib from "@/lib/contextual-progress";
-import * as progressLib from "@/lib/progress";
-import * as suggestionLib from "@/lib/suggestion";
-import { weekKeyOf } from "@/lib/week";
-import * as focusLib from "@/lib/weekly-focus";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ContextualProgressSummary, TrainingSuggestion } from "@turingcare/shared";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import * as contextualProgressLib from "@/lib/contextual-progress";
+import * as progressLib from "@/lib/progress";
+import * as suggestionLib from "@/lib/suggestion";
+import { weekKeyOf } from "@/lib/week";
+import * as focusLib from "@/lib/weekly-focus";
 import { DogWeek } from "./dog-week";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));

@@ -1,7 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Locale } from "@turingcare/i18n";
 import {
-  VALIDATION_MESSAGE_CODES,
   advancementDecisionSchema,
   behaviorConcernSchema,
   briefGenerateSchema,
@@ -21,10 +20,11 @@ import {
   suggestionQuerySchema,
   trainingGoalSchema,
   trainingSkillSchema,
+  VALIDATION_MESSAGE_CODES,
 } from "@turingcare/shared";
 import { and, count, desc, eq, gte, isNotNull, isNull, lt, max, or, sql } from "drizzle-orm";
-import { Hono } from "hono";
 import type { Context } from "hono";
+import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { createTrainingCatalogLabelResolver } from "../data/training-catalog";
@@ -65,7 +65,7 @@ import {
   weekBoundsFromOffset,
   withFocusWeekLock,
 } from "../lib/focus";
-import { InvalidJournalOccurredAtError, createJournalEntry } from "../lib/journal-writes";
+import { createJournalEntry, InvalidJournalOccurredAtError } from "../lib/journal-writes";
 import {
   isSuggestionSkipped,
   lockSuggestionAnchor,
@@ -78,7 +78,7 @@ import { setSkillLevel } from "../lib/skill-level";
 import { currentWeekKey, loadSuggestion, recordSuggestionAction } from "../lib/suggestion";
 import { DAY_MS } from "../lib/time";
 import { applyTrainingTemplate } from "../lib/training-template-writes";
-import { type Vars, requireUser } from "../middleware/require-user";
+import { requireUser, type Vars } from "../middleware/require-user";
 import { stableZValidator } from "../middleware/validation";
 import { recordEvent } from "../telemetry/record-event";
 

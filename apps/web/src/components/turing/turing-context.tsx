@@ -1,8 +1,7 @@
-import type { MessageKey } from "@/i18n/types";
 // apps/web/src/components/turing/turing-context.tsx
 import {
-  type ReactNode,
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
@@ -10,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { MessageKey } from "@/i18n/types";
 
 export type EventPose = "wag" | "celebrate";
 

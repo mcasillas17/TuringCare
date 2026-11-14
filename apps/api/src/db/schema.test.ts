@@ -196,7 +196,7 @@ describe("telemetry schema", () => {
   });
 });
 
-describe("guided setup schema", () => {
+describe("guided setup guardrail schema", () => {
   it("pins the guided setup enum vocabularies", () => {
     expect(guidedSetupIntentEnum.enumValues).toEqual([
       "understand_behavior",

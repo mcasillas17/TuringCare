@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { db } from "../db";
 import { practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 
 const lockGate = vi.hoisted(() => ({
   hold: Promise.resolve(),

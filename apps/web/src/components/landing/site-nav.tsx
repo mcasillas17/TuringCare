@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
@@ -7,8 +9,6 @@ import { authPagePath } from "@/lib/auth-navigation";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { cn } from "@/lib/utils";
 import { useHasVerifiedSession } from "@/lib/verified-session";
-import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
 
 export function SiteNav() {
   const { t, locale } = useI18n();

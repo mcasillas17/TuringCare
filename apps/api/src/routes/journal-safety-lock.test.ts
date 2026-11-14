@@ -4,7 +4,7 @@ import { app } from "../app";
 import { db, pool } from "../db";
 import { journalEntries } from "../db/schema";
 import type { TransactionType } from "../lib/safety-lock";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 
 const { guardedWrites } = vi.hoisted(() => ({
   guardedWrites: [] as { dogId: string; lockHeldDuringWrite: boolean }[],

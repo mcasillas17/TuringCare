@@ -1,9 +1,9 @@
-import { LocaleProvider, useI18n } from "@/i18n";
-import * as catalogLib from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { CatalogTemplate } from "@turingcare/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider, useI18n } from "@/i18n";
+import * as catalogLib from "@/lib/training-catalog";
 import { TemplatePicker } from "./template-picker";
 
 vi.mock("@/lib/training-catalog", async (importOriginal) => ({

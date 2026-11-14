@@ -1,11 +1,11 @@
-import { LocaleProvider } from "@/i18n";
-import * as guidedSetupLib from "@/lib/guided-setup";
-import * as catalogLib from "@/lib/training-catalog";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { CatalogTemplate, GuidedSetupRecord } from "@turingcare/shared";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import * as guidedSetupLib from "@/lib/guided-setup";
+import * as catalogLib from "@/lib/training-catalog";
 import { TrainingActionStep } from "./training-action-step";
 
 vi.mock("@/lib/training-catalog", () => ({

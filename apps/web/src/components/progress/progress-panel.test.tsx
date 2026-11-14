@@ -1,15 +1,15 @@
-import { LocaleProvider } from "@/i18n";
-import * as contextualProgressLib from "@/lib/contextual-progress";
-import * as dogsLib from "@/lib/dogs";
-import * as progressLib from "@/lib/progress";
-import type { ProgressGoal } from "@/lib/progress";
-import * as catalogLib from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { CatalogTemplate, ContextualProgress, SuggestionSafety } from "@turingcare/shared";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import * as contextualProgressLib from "@/lib/contextual-progress";
+import * as dogsLib from "@/lib/dogs";
+import type { ProgressGoal } from "@/lib/progress";
+import * as progressLib from "@/lib/progress";
+import * as catalogLib from "@/lib/training-catalog";
 import { ProgressPanel } from "./progress-panel";
 
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
@@ -242,14 +242,14 @@ function setup({
     isLoading: false,
     isError: false,
   } as unknown as ReturnType<typeof progressLib.useProgress>);
-  for (const h of [
-    "useAddSkill",
-    "useUpdateSkill",
-    "useDeleteSkill",
-    "useDeleteSession",
-    "useSetSkillLevel",
-  ] as const) {
-    vi.mocked(progressLib[h]).mockReturnValue({
+  for (const hook of [
+    progressLib.useAddSkill,
+    progressLib.useUpdateSkill,
+    progressLib.useDeleteSkill,
+    progressLib.useDeleteSession,
+    progressLib.useSetSkillLevel,
+  ]) {
+    vi.mocked(hook).mockReturnValue({
       mutate: vi.fn(),
       mutateAsync: vi.fn(),
       isPending: false,

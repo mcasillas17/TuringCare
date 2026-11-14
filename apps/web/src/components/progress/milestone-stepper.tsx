@@ -1,7 +1,7 @@
+import { formatDateInUtc } from "@turingcare/i18n";
 import { useI18n } from "@/i18n";
 import { LEVEL_KEYS, type ProgressSkill, useSetSkillLevel } from "@/lib/progress";
 import { findCatalogSkill, useTrainingCatalog } from "@/lib/training-catalog";
-import { formatDateInUtc } from "@turingcare/i18n";
 
 const LEVELS = [1, 2, 3, 4, 5] as const;
 

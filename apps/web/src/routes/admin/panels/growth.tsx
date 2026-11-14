@@ -1,5 +1,5 @@
-import { useI18n } from "@/i18n";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useI18n } from "@/i18n";
 import type { Metrics } from "../use-metrics";
 import { formatAdminChartDate } from "./chart-date";
 

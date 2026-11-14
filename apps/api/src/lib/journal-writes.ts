@@ -1,6 +1,6 @@
 import type { JournalEntryCreateInput } from "@turingcare/shared";
 import { journalEntries } from "../db/schema";
-import { type TransactionType, lockDogSafety } from "./safety-lock";
+import { lockDogSafety, type TransactionType } from "./safety-lock";
 
 export class InvalidJournalOccurredAtError extends Error {
   override name = "InvalidJournalOccurredAtError";

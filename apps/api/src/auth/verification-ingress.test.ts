@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { type DB, db as defaultDb, pool as observerPool } from "../db";
 import { rateLimit } from "../db/schema";
-import { type TestUser, createUnverifiedTestUser } from "../test-helpers";
+import { createUnverifiedTestUser, type TestUser } from "../test-helpers";
 import { waitForBlockingChain } from "../test-pg-concurrency";
 import { createRateLimitTestDatabase } from "../test-rate-limit-db";
 import { consumeVerificationLimit, verificationLimitKey } from "./verification-rate-limit";

@@ -1,9 +1,8 @@
-import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { db } from "../db";
 import { briefs, journalEntries, trainingGoals, trainingSkills } from "../db/schema";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 import { loadDogsOverview } from "./dogs-overview";
 
 const validDog = {

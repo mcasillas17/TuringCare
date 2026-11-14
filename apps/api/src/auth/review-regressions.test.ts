@@ -9,7 +9,7 @@ import { sendEmail } from "../email/send-email";
 import { captureTestEmail, findLatestTestEmail } from "../email/test-outbox";
 import { env, readEnv } from "../env";
 import { createTestEmailApp } from "../routes/test-email";
-import { type TestUser, createUnverifiedTestUser, nextTestIp } from "../test-helpers";
+import { createUnverifiedTestUser, nextTestIp, type TestUser } from "../test-helpers";
 import { resendVerification } from "./resend-verification";
 import { confirmVerification } from "./verification-proof";
 import * as limits from "./verification-rate-limit";

@@ -1,5 +1,3 @@
-import type { MessageKey } from "@/i18n/types";
-import { api } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   DogProfile,
@@ -12,6 +10,8 @@ import type {
 } from "@turingcare/shared";
 import type { InferResponseType } from "hono/client";
 import type { z } from "zod";
+import type { MessageKey } from "@/i18n/types";
+import { api } from "@/lib/api";
 import { suggestionKey } from "./suggestion-key";
 import { invalidateTrainingSafetyData } from "./training-safety-cache";
 import { focusKey } from "./weekly-focus";

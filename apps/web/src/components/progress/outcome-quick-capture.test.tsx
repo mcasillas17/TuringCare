@@ -1,6 +1,6 @@
-import { LocaleProvider } from "@/i18n";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 import { OutcomeQuickCapture } from "./outcome-quick-capture";
 
 function setup({

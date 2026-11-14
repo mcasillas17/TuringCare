@@ -1,5 +1,5 @@
-import { JournalView } from "@/components/journal/journal-view";
 import { useParams, useSearchParams } from "react-router-dom";
+import { JournalView } from "@/components/journal/journal-view";
 
 export function DogJournal() {
   const { id = "" } = useParams();

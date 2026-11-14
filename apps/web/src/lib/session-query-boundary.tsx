@@ -1,7 +1,7 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import { useSession } from "@/lib/auth-client";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
-import { useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from "react";
 import { EMAIL_UNVERIFIED_EVENT, VERIFIED_SESSION_EVENT } from "./auth-access-events";
 import { VerificationDeniedContext } from "./verified-session";
 

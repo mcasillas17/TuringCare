@@ -1,8 +1,8 @@
-import { TuringCompanion } from "@/components/turing-companion";
+import { Outlet } from "react-router-dom";
 import { TuringProvider } from "@/components/turing/turing-context";
+import { TuringCompanion } from "@/components/turing-companion";
 import { useI18n } from "@/i18n";
 import { useMe } from "@/lib/me";
-import { Outlet } from "react-router-dom";
 import { NavShell } from "./NavShell";
 import { NAV_ITEMS } from "./nav-items";
 

@@ -1,7 +1,7 @@
-import { api } from "@/lib/api";
-import type { Course } from "@/lib/courses";
 import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CourseInput } from "@turingcare/shared";
+import { api } from "@/lib/api";
+import type { Course } from "@/lib/courses";
 
 // List (["courses", filters]) and detail (["course", id]) caches in lib/courses.
 function invalidateCourses(qc: QueryClient) {

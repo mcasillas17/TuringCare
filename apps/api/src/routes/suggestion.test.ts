@@ -12,7 +12,7 @@ import {
 import { lockSuggestionAnchor } from "../lib/practice-anchor";
 import { lockDogSafety } from "../lib/safety-lock";
 import { currentWeekKey } from "../lib/suggestion";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 
 const users: TestUser[] = [];
 const WEEK_KEY = currentWeekKey(new Date(), 0);

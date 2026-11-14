@@ -1,3 +1,7 @@
+import { safeAuthReturnPath } from "@turingcare/shared";
+import { useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
@@ -7,10 +11,6 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n";
 import { signUp } from "@/lib/auth-client";
 import { authPagePath, verificationCallbackUrl } from "@/lib/auth-navigation";
-import { safeAuthReturnPath } from "@turingcare/shared";
-import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { toast } from "sonner";
 
 export function Register() {
   const { t, locale } = useI18n();

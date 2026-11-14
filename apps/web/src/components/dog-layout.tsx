@@ -1,9 +1,9 @@
-import { Button } from "@/components/ui/button";
-import { useI18n } from "@/i18n";
-import { useDeleteDog, useDog } from "@/lib/dogs";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n";
+import { useDeleteDog, useDog } from "@/lib/dogs";
 
 type DeleteRequest = {
   token: number;

@@ -1,12 +1,12 @@
-import { Button } from "@/components/ui/button";
-import { useI18n } from "@/i18n";
-import { useValidationMessage } from "@/i18n/validation";
-import { changePassword } from "@/lib/auth-client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { VALIDATION_MESSAGE_CODES } from "@turingcare/shared";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n";
+import { useValidationMessage } from "@/i18n/validation";
+import { changePassword } from "@/lib/auth-client";
 
 // Inline because this payload belongs to Better Auth rather than the TuringCare API.
 function makeSchema() {
