@@ -3,6 +3,7 @@
 Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against `NOTES.md` and `../README.md`. Rule IDs (R1-R27) are from NOTES.md.
 
 **Read status (updated after the follow-up pass).**
+
 - **Full text, local file (18 rows, 19 files):** rows 1, 5-10, 20, 21, 31, 38-45. Reference lists and big tables were skimmed. The VdC PMC html duplicates the PDF plus the peer-review history.
 - **Full text via WebFetch summary (3 rows):** 19 Kis, 24 Lazaro, 33 Thrailkill. These are summaries of the page, not verbatim reads.
 - **Partial full text (1 row):** 2 Herron (abstract, methods, limitations from the PDF).
@@ -10,11 +11,13 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Row 47 (AKC web article) was read in full; it is a web article, not a study.
 
 ---
+
 ## 1. Per-source notes
 
 ### Local sources, read in full
 
 **Hiby, Rooney & Bradshaw 2004, Anim Welf 13:63-69.**
+
 - Design: owner questionnaire (26 items), cross-sectional, UK. 600 distributed, 364 returned (61%), **326 analysed** (the rest were incomplete or the dog was under 1 year). Dogs were 1-15 years old. Owners were recruited at dog-walking sites plus vet and pet-store pick-up.
 - Methods: owners reported how they trained 7 tasks, rated obedience 1-5 on 8 items, and ticked 16 problem behaviours (reduced to 13).
 - Results:
@@ -28,6 +31,7 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: supports R1 (weak-moderate) and R5 (play/praise work for some tasks). Contradicts nothing.
 
 **Casey et al. 2021, Sci Rep 11:19023.**
+
 - Design: matched-pair judgement-bias test, one home visit per dog. 113 tested, 100 analysed (**50 pairs**, aversive ≥2 methods vs none). Matched on breed, age band and sex/neuter status. Dogs were 6 months to 12 years old; dogs with human-directed aggression were excluded.
 - Groups were defined by owner report of ≥2 listed tools or methods (citronella, e-collar, pet corrector, smacking, water pistol, choke chain, rattle can). Both groups also used rewards.
 - Results:
@@ -38,6 +42,7 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: supports R1 and R4 (moderate).
 
 **China, Mills & Cooper 2020, Front Vet Sci 7:508.**
+
 - Design: field comparison of 63 dogs with off-lead problems (mostly chasing; 81%). Three groups of 21: e-collar by manufacturer-nominated trainers (EC), the same trainers without e-collars (C1), and APDT reward-focused trainers (C2). EC and C1 were randomly allocated, apart from 2 owner-requested swaps. **C2 was trained 4 months later, at a different site, by different trainers.**
 - Dose: 2 sessions/day for up to 5 days, about 28.5 min/day. Data come from days 1, 3 and 5. Day 5 was run by owners (per Sargisson).
 - Results:
@@ -50,10 +55,12 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: supports R1; efficacy equal or better for reward-focused training. Contradicts nothing.
 
 **Sargisson & McLean 2021, Front Vet Sci 8:629746 (commentary).**
+
 - Argues that China et al.'s conclusions go beyond the data. Specifics: C2 differs in time, place and trainer; day 5 was owner-run and the two key results appear to depend on day 5; the stats are inappropriate and a Bonferroni correction would probably remove the first significant result in Table 5; no baseline compliance was recorded; and the results say nothing about predation control.
 - Engine: caps China 2020 at "supportive, not definitive". Also a reminder that some professionals defend e-collars for predation, which is outside engine scope.
 
 **Cooper et al. 2014, PLoS ONE 9:e102722.**
+
 - Design: preliminary study of 9 dogs, then the same 63-dog study as China, with welfare outcomes. **2 × 15 min/day for 4-5 days.**
 - Preliminary study: 8 of 9 dogs were trained by e-collar at high settings without warning cues. They showed 13 yelps and 5 whines, tense 50% of the time (vs 10% before), and salivary cortisol up from sample 1 to sample 2 (T = 2.89, p = 0.042).
 - Main study (Benjamini-Hochberg FDR corrected):
@@ -65,6 +72,7 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: supports R1 modestly. The effect on welfare indicators is small when "best practice" e-collars are used. It does not prove harm in all cases.
 
 **Vieira de Castro et al. 2020, PLoS ONE 15:e0225023 (PDF and PMC html).**
+
 - Design: quasi-experimental, 7 schools near Porto. **92 dogs**, mean age 11.9 months, attending less than 2 months, free of aggression and fear problems. Groups:
   - **Reward n = 42** (3 schools, 0% aversive techniques).
   - **Mixed n = 22** (2 schools, 22% and 37% intended aversive techniques).
@@ -72,16 +80,16 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Measures: first 15 min of 3 sessions on video (265 videos); saliva at baseline and 20 min post-training; cognitive bias test (79 started, 73 completed).
 - Stress behaviours (mean count, Aversive vs Reward):
 
-| Behaviour | Aversive | Reward | Effect |
-|---|---|---|---|
-| Lip lick | 55.90 | 4.11 | d = 3.91 |
-| Yawn | 2.30 | 0.28 | d = 1.37 |
-| Crouch | 3.56 | 0.59 | d = 1.10 |
-| Body turn | 3.14 | 0.39 | d = 1.77 |
+| Behaviour | Aversive | Reward | Effect   |
+| --------- | -------- | ------ | -------- |
+| Lip lick  | 55.90    | 4.11   | d = 3.91 |
+| Yawn      | 2.30     | 0.28   | d = 1.37 |
+| Crouch    | 3.56     | 0.59   | d = 1.10 |
+| Body turn | 3.14     | 0.39   | d = 1.77 |
 
-  - Mixed vs Reward: lip lick 17.84 vs 4.11 (d = 1.99, p < 0.001); tense state p < 0.001 (d = 1.72); panting p = 0.042.
-  - Cortisol rise (post - baseline): Aversive > Reward (U = 107, p = 0.003). Mixed vs Reward ns (p = 0.183). **Only 31 dogs were assayed (8 Aversive, 8 Mixed, 15 Reward)**, so power is very low. Baseline cortisol was equal across groups.
-  - Bias test: Aversive slower to all bowls (t = 2.6, p = 0.032). Mixed vs Reward ns.
+- Mixed vs Reward: lip lick 17.84 vs 4.11 (d = 1.99, p < 0.001); tense state p < 0.001 (d = 1.72); panting p = 0.042.
+- Cortisol rise (post - baseline): Aversive > Reward (U = 107, p = 0.003). Mixed vs Reward ns (p = 0.183). **Only 31 dogs were assayed (8 Aversive, 8 Mixed, 15 Reward)**, so power is very low. Baseline cortisol was equal across groups.
+- Bias test: Aversive slower to all bowls (t = 2.6, p = 0.032). Mixed vs Reward ns.
 - Limitations (authors and reviewers):
   - Not randomized. Groups differed in dog age, FCI breed group, age at separation from the mother, owner gender, children in the home and how the owner chose the school.
   - Volunteer bias. Efficacy not measured.
@@ -91,6 +99,7 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: supports R1, R4, R5 (reinforcer value matters). Note that "Mixed" being harmless is not supported (stress behaviours up) but not proven harmful on cortisol or bias either.
 
 **Fernandes, Olsson & Vieira de Castro 2017, Appl Anim Behav Sci 196:1-12 (postprint).**
+
 - Design: literature review. Web of Science search, 913 hits, **14 articles** (9 direct observation, the rest owner-report). It deliberately reviewed only statistically significant findings.
 - **Conclusion:** "the evidence at present is not as clear as some advocates in the contemporary dog training discussion claim"; "limited scientific evidence." Aversive methods "generate stress at some level" but "further studies are needed."
 - Efficacy: 3 studies favour reward (Blackwell 2012, Haverbeke 2010, Hiby 2004), 1 opposite (Salgirli 2012), 1 no difference (Cooper 2014).
@@ -99,6 +108,7 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: supports a precautionary R1, **not** "strong convergent" evidence.
 
 **Kutsumi et al. 2013, J Vet Med Sci 75:141-149.**
+
 - Design: quasi-experimental, 142 dogs recruited via the author's SIRIUS school. Groups: PC puppy class (n = 44; 1 h/week × 6 weeks), PP single puppy party (39), AC adult class (27), NC no class (32).
 - PC puppies were **10-18 weeks old at class start with 2 DHLPP vaccinations**, using Dunbar's force-free methods. Dogs were tested at home when **6-36 months old (means 17.6-23.8 months)**.
 - Results (MANOVA, Bonferroni):
@@ -110,6 +120,7 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: weak support for puppy classes (R25 context); also shows adult classes teach commands equally well. It does not support "start at 7-8 weeks".
 
 **Feuerbacher & Wynne 2012, JEAB 98:105-129 (PMC html).**
+
 - Design: 5 single-subject experiments, nose-touch operant, food (about 10 mm piece) vs 4 s petting and verbal praise vs extinction. About 38 animals: shelter dogs 9 + 6 + 7, owned dogs 6, hand-reared wolves 9. Shelter dogs had been fasted more than 14 hours in most cases.
 - Results (median nose touches per session):
   - Experiment 1: food **15** vs social **3** (cap of 15). 5 of 9 dogs were clearly food-driven, 1 (Dog S) was equal, 3 responded low and variably.
@@ -121,6 +132,7 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: supports R5 (food > petting+praise) with a large individual variability caveat. It does not isolate "praise alone".
 
 **Feng, Howell & Bennett 2017, Pet Behav Sci 3:1-18.**
+
 - Design: qualitative content analysis. **25 sources (13 trainer interviews, 5 websites, 7 books)**. Strongly pro-clicker sample (8 of 13 interviewees identified as clicker trainers).
 - Findings:
   - Trainers recommend the signal for new behaviours; many drop it once learned.
@@ -131,12 +143,14 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: R10 pairing count "10-20" is not from this paper. Supports "every marker is followed by reward" (relevant to R13).
 
 **Hakanen et al. 2020, Sci Rep 10:13774.**
+
 - Design: online Finnish owner survey, about 13,700 dogs surveyed. Analysis sets: fireworks n = 9,613, thunder 9,513, novel situations 6,945, surfaces/heights 2,932. Logistic regression with FDR control.
 - Results: less puppy socialisation (7 weeks to 4 months), fewer activities or training, living without other dogs, inexperienced owners and urban living were each linked to more non-social fear. Training or activities "seldom/never" vs weekly: OR 1.36 (thunder), 1.41 (fireworks), 1.84 (novel situations). Neutered dogs were more fearful (OR about 1.5 for noise). More than 3 h exercise per day was linked to more thunder fear.
 - Limitations: cross-sectional, owner-reported, social-media sampling. Not a training-method study.
 - Engine: context for lifestyle and socialisation modules; the direction of causation is unknown.
 
 **AVSAB 2021 Humane Dog Training.**
+
 - Position statement. Reward-based for all training, and "no evidence that aversive methods are more effective ... in any context."
 - Avoid: pain tools (choke, prong, shock), intimidation (squirt bottles, shaker cans, shouting, staring, alpha rolls), physical correction (leash jerks), flooding. "The learner must always feel safe and have the ability to 'opt out'."
 - Refer aggression to a vet, DACVB or CAAB. Do not treat medication as a last resort.
@@ -144,6 +158,7 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: R1, R2, R3, R4.
 
 **AVSAB 2008 Puppy Socialization.**
+
 - The first three months are the primary window. Socialization before full vaccination should be "standard of care".
 - Classes can start at **7-8 weeks** with at least one vaccine set **at least 7 days** before the first class plus a first deworming.
 - Avoid dog parks and areas with dogs of unknown vaccination status. Do not force fearful puppies; seek veterinary guidance.
@@ -151,10 +166,12 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: R25 (high).
 
 **AVSAB dominance statement (file `avsab-dominance-2008.pdf`).**
+
 - Rejects dominance theory. Behaviours owners want to change are mostly accidentally reinforced. Confrontational techniques often elicit aggression (cites Herron 2008). Refer only to trainers who use learning theory.
 - The text cites Yin 2009, so the file is probably a later revision than 2008 (the LINKS year may be off).
 
 **AAHA 2015 Behavior Management Guidelines (JAAHA 51:205-221).**
+
 - Take-home: "culture of kindness"; avoid forced restraint and punitive training. Opposes aversive techniques (prong, choke, cattle prods, alpha rolls, dominance downs, shock, starving, beating).
 - "**Punishment should not be used in aggression cases**"; **aggression must never be referred to a trainer for primary treatment**; refer deep bites and bites to immunocompromised people. "Flooding is never recommended."
 - Learning theory (in a short list): "New behaviors are learned best if they are rewarded each time they occur. After a behavior has been acquired, it is best maintained if it is rewarded randomly and intermittently." This supports R12 and R13 as expert consensus.
@@ -162,12 +179,14 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - The document's own definitions of negative reinforcement (it gives an example of withholding attention) are wrong; do not quote them.
 
 **CCPDT Position Statement on Behavior Change Procedures (adopted 11/20/25).**
+
 - Endorses reinforcement-based strategies as primary. The Humane Hierarchy is mandatory for certificants: health, antecedents, management, positive reinforcement first.
 - **It permits positive punishment and negative reinforcement in documented safety cases**, with conditions: less intrusive options documented with data, management judged riskier, and a conditioning process.
 - Quote: "in specific situations, studies have demonstrated that the use of negative reinforcement and positive punishment can contribute to improved outcomes related to safety and long-term welfare."
 - Engine: R1 is a stricter product policy than CCPDT. Needs to be stated as a policy decision, not as professional consensus.
 
 **IAABC LIMA position + Humane Hierarchy + Friedman article (`iaabc-position-lima.pdf`).**
+
 - Hierarchy: 1 health/nutrition/physical; 2 antecedents; 3 positive reinforcement; 4 DRA; 5 negative punishment, negative reinforcement or extinction (unordered); 6 positive punishment.
 - Level 5 "may occasionally be the ethical, effective choice"; level 6 is "rarely necessary".
 - LIMA "does not justify punishment in lieu of" reinforcement and does not justify e-collar, choke or prong use in place of positive reinforcement strategies.
@@ -178,6 +197,7 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 ### Fetched or secondary sources
 
 **Kis et al. 2017, Sci Rep 7:41873 (WebFetch of PMC5292958).**
+
 - Experiment 1: 15 dogs; 3 h of polysomnography after learning new commands. Non-REM delta rose (t = 2.94, p = 0.011); retest improved (**t(14) = 3.83, p = 0.002**).
 - **Experiment 2: 53 dogs in four 1-hour groups** (sleep in car n = 14, walk n = 14, learn unrelated task n = 12, play with Kong n = 13). Occasion × condition χ²(4) = 14.4, p = 0.006.
   - **At the 1-hour retest no benefit appeared for sleep or walk.** The play group got worse (p < 0.001). The learn group showed no improvement at all.
@@ -186,23 +206,27 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 - Engine: R18 is supported only for "no new unrelated skill within 1 h" (interference). "Sleep, walk or play" is not supported (play was worse).
 
 **Lazaro et al. 2023, Animals 13:3073.**
+
 - 10 pet dogs aged 11 months to 8 years. Paired-stimulus preference assessment of 6 foods and 6 leisure items, **15 trials per item**. Then an ABCABC reinforcer test and a progressive-ratio phase.
 - **9 of 10 dogs responded more for food** (only 7 of 10 significantly). Paired t(30) = -6.32 (pooled observations). Leisure items beat extinction for many dogs.
 - Limitations: n = 10, convenience sample, single-operant (no concurrent choice), one food and one leisure item per dog, play lasted about 10 s.
 - Engine: R5, R6.
 
 **Thrailkill et al. 2016, Behav Process 129:44-53 (rats).**
+
 - 32 female rats per experiment (Exp 3: 13 after dropouts). Partial reinforcement (10 of 30 trials) and longer search intervals raised persistence in extinction. Extinction followed the number of non-reinforced searches.
 - Free "noncontingent" pellets had mixed effects.
 - Engine: R13 at best low-evidence by analogy. It is not dog data.
 
 **Herron, Shofer & Reisner 2009, Appl Anim Behav Sci 117:47-54.**
+
 - 140 owners (64% response) at a **referral behavior clinic**; a 30-item survey of past interventions.
 - Aggressive response (share of dogs on which the method was tried): hit or kick **43%**, growl **41%**, forced release of an item 39%, alpha roll 31%, stare-down 30%, dominance down 29%, grab and shake 26%. Dogs presenting with aggression to family members responded more to alpha roll and yelling (P < 0.001).
 - Limitations (authors): referral population only; no time sequence; subjective effect ratings.
 - Engine: R1 (aversives provoke aggression in clinic dogs). Resolves the "exact % varies" note.
 
 **Abstract or secondary only:**
+
 - **Meyer & Ladewig 2008:** 18 beagles. Once-a-week group needed fewer sessions to criterion (6.6-6.7) than the 5-times-a-week group (9.0); the trainer was not blind to group (secondary).
 - **Demant et al. 2011:** 44 beagles (per the popular press). Four schedules crossing frequency (1-2 per week vs daily) with duration (1 session vs 3 in a row). **A frequency × duration interaction was reported**, and retention lasted at least 4 weeks regardless of schedule. The direction "one per day beats three in a row" and "spacing did not help retention" come only from secondary summaries.
 - **Bentosela 2009:** successive negative contrast, a small sample (about 13 dogs, 7 shifted). A 2016 replication (Riemer et al.) failed to find the effect, per secondary sources. The specific foods (liver to pellets) could not be confirmed.
@@ -217,6 +241,7 @@ Scope: all 19 files in `sources/` and all 47 rows of `LINKS.md`, checked against
 **Not accessed (no content read):** Blackwell 2008, Masson 2018, Schilder 2004, Rooney 2011, Deldalle 2014, Arhant 2010, Casey 2014, Feuerbacher 2014 and 2015, Feng 2016, Fugazza 2015, Fukuzawa 2005, Dinwoodie 2019, Pryor 1969, and the AKC pages.
 
 ---
+
 ## 1b. Follow-up pass: abstract-only and secondary sources
 
 Every item here is **abstract or secondary only** unless it says otherwise. None could be read as full text.
@@ -248,6 +273,7 @@ Every item here is **abstract or secondary only** unless it says otherwise. None
 - **AKC "3 Ds" article (row 47), read in full.** Work on one D at a time and combine them only after each is mastered; duration first, then distance, distraction last; duration starts at about 1 s and grows by 1 s; for long holds reward during the hold (e.g. every 20 s in a 60 s sit); no success percentage is given and **no research is cited**. It does not state the 80% rule, a 20-50% increment or a "reset the others" rule.
 
 ---
+
 ## 2. Corrections to NOTES.md, LINKS.md and README.md
 
 1. **LINKS row 43 / NOTES provenance: `sources/iaabc-lima.html` is a 404 page** ("Page Not Found"). The real content is in `iaabc-position-lima.pdf`, which has the LIMA statement, the Humane Hierarchy and Friedman's article. **Row 45 ("Friedman 2010 not obtained") is wrong**: the article is in that PDF (no journal or year printed in the file). Fix: mark row 43 as the PDF only and row 45 as "read, in PDF".
@@ -288,43 +314,45 @@ Every item here is **abstract or secondary only** unless it says otherwise. None
 35. **LINKS row 37 Dinwoodie.** Not "title only": about 3,201 owners and 5,018 dogs (counts vary by source), prevalence of any problem about 85%.
 
 ---
+
 ## 3. Evidence-graded rules for this domain
 
 Confidence is high, medium or low. "Convention" means no study supports the number.
 
-| ID | IF / THEN | Parameters | Sources | Conf. |
-|---|---|---|---|---|
-| R1 | Any dog or goal: emit only R+, negative punishment (sparingly), DRA/DRI/DRO, counter-conditioning, management, environment change. Never prong, choke, shock, spray, alpha roll, leash pop, flooding or shouting. | policy | AVSAB 2021, AAHA 2015, Herron 2009, VdC 2020, Casey 2021, China 2020. Note CCPDT and IAABC allow documented exceptions. | High (as policy). Evidence for harm is moderate and correlational. |
-| R2 | Always allow the dog to leave or decline. If the dog disengages or leaves 2 times in a session, end it. | "twice" | AVSAB 2021 (opt out); the count is convention | Med / convention |
-| R3 | Bite history, severe fear, panic, self-injury, separation anxiety: no training-only plan; management plus referral. Aggression is never routed to a trainer as primary treatment. | n/a | AAHA 2015, AVSAB 2021 | High |
-| R4 | Past aversive tool use or fear of owner or equipment: add a "rebuild trust" module, lower initial criteria, new cues. | n/a | AVSAB 2021, VdC 2020 (cue itself becomes aversive) | Med |
-| R5 | Default reinforcer is small food. Petting, play and praise are secondary; use them for dogs that rank them high. Do not rely on praise alone. | n/a | Feuerbacher 2012, Lazaro 2023, VdC 2020 (petting-only school had the highest stress), Hiby 2004, Feuerbacher 2015 (abstract: praise drew no more proximity than no interaction) | High for food; Med-High that praise alone is weak |
-| R6 | Per-dog reinforcer ranking: owner-run paired choices of 6 foods, 2-3 trials per pair (lab used 15 per item); keep top 3 foods and top 2 toys; re-run every 4 weeks or on disengagement. | 6 items; 2-3 trials; 4 weeks | Vicars 2014, Lazaro 2023 | Med; 4-week interval is convention |
-| R7 | Reward tier by distraction (1-2 T1/T2, 3 T2, 4-5 T3). Do not drop tier within a session. | tiers | convention; Bentosela 2009 not replicated | Low |
-| R8 | Treats pea-sized, ≤10% of calories; health flags use part of ration. | 10% | convention | Med / convention |
-| R9 | Food refusal in 3 consecutive sessions: flag; stop the session on a single refusal. | 3 | convention | Med / convention |
-| R10 | Marker is optional; verbal "yes" by default, clicker as option. Pair 5-20 times, until the dog orients to the marker when it is sounded, then use. Food within about 1-2 s. | 5-20 pairings | Chiandetti 2016 (abstract), Feng 2017/2018 (secondary), Feng 2017 (advice varies) | Med for optional marker; Low for pairing count |
-| R11 | Reward within 1-2 s of the behaviour, at the criterion position. | 1-2 s | convention; unpublished 1 s-delay thesis (via Feng 2017) | Med |
-| R12 | New behaviour or criterion: reward every success (continuous). | 6-12 rewards/min | AAHA 2015 | Med; rate is convention |
-| R13 | Thin only after R19 is met: FR1, then FR2, then VR2-3, then VR3-5, steps ≤25%. Safety-critical skills keep high-value variable rewards. Never leave a marker unrewarded. | 25% steps | AAHA 2015 (intermittent maintenance), Thrailkill 2016 (rats), Feng 2017 (unpublished 50% result) | Low-Med; parameters convention |
-| R14 | No extinction-only plan for self-rewarding or dangerous behaviours; pair with DRA and management. If aggression or self-injury appears, stop and refer. | n/a | AAHA 2015 (no punishment for aggression); burst warning unsourced | Med (policy); Low (burst content) |
-| R15 | Sessions per skill per day: 1-3. No more than 1 block per skill in a row. Keep ≥1 h gap. Length 3-5 min (puppy under 16 weeks, senior or fearful 2-3 min; experienced adults up to 5-10 min). | 1-3/day, 3-5 min, 1 h | Demant 2011 (daily 3-in-a-row group worst, abstract/secondary), Meyer 2008 (weekly needed fewer sessions); China/Cooper (professional dose 2 × 15 min/day for 4-5 days); minutes convention | Frequency Med-Low; minutes Low |
-| R16 | Time budget T min/day: sessions = ceil(T/5), cap 3 per skill, 2-3 skills/day; puppies ≤15-20 min. T<5: one micro-session plus "reward calm in routine". | cap 3 | convention | Low-Med |
-| R17 | 10-20 rewarded reps per session; end on a success; stop if stress or disengagement, or <60% on the last 5 trials. | 10-20, 60% | convention | Low |
-| R18 | Do not start an unrelated new skill within 1 h after a session. Offer rest, sleep or a calm walk. | 1 h | Kis 2017 (Experiment 2: learning an unrelated task blocked gains; sleep/walk helped only at ~7.6 days) | Low-Med |
-| R19 | Advance when success ≥80% over the last 10 trials in 2 consecutive sessions; hold at 60-79%; regress one step if <60% for 2 sessions; <40% or any stress flag: regress 2 steps and end the session. | 80%, 60%, 40% | convention only | Med as engine logic, Low as evidence; **convention** |
-| R20 | 3 Ds: change one at a time, reset the others; order duration, distance, distraction; distraction graded 1-5; increments 20-50% (smaller for fearful dogs). | 20-50% | AKC article gives order only (duration, distance, distraction last) and 1 s duration steps; no % and no research | Low / convention |
-| R21 | 2 regressions at a step: halve the step or change environment/reinforcer first. | halve | convention | Low-Med |
-| R22 | Mark "reliable" only after ≥3 locations, ≥2 handlers, ≥2 times of day. | 3×2×2 | convention | Low / convention |
-| R23 | Fluent = ≥90% in 3 sessions, latency ≤3 s, ≥2 contexts, on VR; only then fade cues or chain. | 90%, 3 s | convention | Low / convention |
-| R24 | Lure simple positions; capture offered behaviours; shape novel or complex ones. Raise criterion after 3-5 successes. Drop the prompt after ≥5 successful pairings. | 3-5; 5 | AVSAB 2021 (names the methods); no comparative trials | Low-Med |
-| R25 | Puppy classes or socialization from 7-8 weeks only after ≥1 vaccine set ≥7 days earlier and deworming; avoid dog parks. Stop exposure if a puppy shows fear and seek veterinary guidance. | 7-8 wk, 7 days | AVSAB 2008, AAHA 2015 (more permissive on timing; forced exposure sensitizes) | High |
-| R26 | Joint pain, brachycephalic, cardiac, post-surgery or cognitive decline: drop demanding behaviours, shorten sessions, health-clearance prompt. | n/a | AAHA 2015 (senior monitoring) plus convention | Med |
-| R27 | No outdoor training on hot surfaces or in high heat. | n/a | convention (no source) | Low |
-| R28 (new) | A trainer-hiring or help-screening step flags any use of prong, shock, jerks, "dominance" explanations or throwing things. | n/a | AAHA 2015, AVSAB 2008/2021 | High |
-| R29 (new) | Teach novice owners with food-only or a verbal marker; never present the clicker as required. | n/a | Feng 2018 (secondary), Chiandetti 2016, Feng 2017 (handlers find clickers cumbersome) | Med |
+| ID        | IF / THEN                                                                                                                                                                                                         | Parameters                   | Sources                                                                                                                                                                                     | Conf.                                                              |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| R1        | Any dog or goal: emit only R+, negative punishment (sparingly), DRA/DRI/DRO, counter-conditioning, management, environment change. Never prong, choke, shock, spray, alpha roll, leash pop, flooding or shouting. | policy                       | AVSAB 2021, AAHA 2015, Herron 2009, VdC 2020, Casey 2021, China 2020. Note CCPDT and IAABC allow documented exceptions.                                                                     | High (as policy). Evidence for harm is moderate and correlational. |
+| R2        | Always allow the dog to leave or decline. If the dog disengages or leaves 2 times in a session, end it.                                                                                                           | "twice"                      | AVSAB 2021 (opt out); the count is convention                                                                                                                                               | Med / convention                                                   |
+| R3        | Bite history, severe fear, panic, self-injury, separation anxiety: no training-only plan; management plus referral. Aggression is never routed to a trainer as primary treatment.                                 | n/a                          | AAHA 2015, AVSAB 2021                                                                                                                                                                       | High                                                               |
+| R4        | Past aversive tool use or fear of owner or equipment: add a "rebuild trust" module, lower initial criteria, new cues.                                                                                             | n/a                          | AVSAB 2021, VdC 2020 (cue itself becomes aversive)                                                                                                                                          | Med                                                                |
+| R5        | Default reinforcer is small food. Petting, play and praise are secondary; use them for dogs that rank them high. Do not rely on praise alone.                                                                     | n/a                          | Feuerbacher 2012, Lazaro 2023, VdC 2020 (petting-only school had the highest stress), Hiby 2004, Feuerbacher 2015 (abstract: praise drew no more proximity than no interaction)             | High for food; Med-High that praise alone is weak                  |
+| R6        | Per-dog reinforcer ranking: owner-run paired choices of 6 foods, 2-3 trials per pair (lab used 15 per item); keep top 3 foods and top 2 toys; re-run every 4 weeks or on disengagement.                           | 6 items; 2-3 trials; 4 weeks | Vicars 2014, Lazaro 2023                                                                                                                                                                    | Med; 4-week interval is convention                                 |
+| R7        | Reward tier by distraction (1-2 T1/T2, 3 T2, 4-5 T3). Do not drop tier within a session.                                                                                                                          | tiers                        | convention; Bentosela 2009 not replicated                                                                                                                                                   | Low                                                                |
+| R8        | Treats pea-sized, ≤10% of calories; health flags use part of ration.                                                                                                                                              | 10%                          | convention                                                                                                                                                                                  | Med / convention                                                   |
+| R9        | Food refusal in 3 consecutive sessions: flag; stop the session on a single refusal.                                                                                                                               | 3                            | convention                                                                                                                                                                                  | Med / convention                                                   |
+| R10       | Marker is optional; verbal "yes" by default, clicker as option. Pair 5-20 times, until the dog orients to the marker when it is sounded, then use. Food within about 1-2 s.                                       | 5-20 pairings                | Chiandetti 2016 (abstract), Feng 2017/2018 (secondary), Feng 2017 (advice varies)                                                                                                           | Med for optional marker; Low for pairing count                     |
+| R11       | Reward within 1-2 s of the behaviour, at the criterion position.                                                                                                                                                  | 1-2 s                        | convention; unpublished 1 s-delay thesis (via Feng 2017)                                                                                                                                    | Med                                                                |
+| R12       | New behaviour or criterion: reward every success (continuous).                                                                                                                                                    | 6-12 rewards/min             | AAHA 2015                                                                                                                                                                                   | Med; rate is convention                                            |
+| R13       | Thin only after R19 is met: FR1, then FR2, then VR2-3, then VR3-5, steps ≤25%. Safety-critical skills keep high-value variable rewards. Never leave a marker unrewarded.                                          | 25% steps                    | AAHA 2015 (intermittent maintenance), Thrailkill 2016 (rats), Feng 2017 (unpublished 50% result)                                                                                            | Low-Med; parameters convention                                     |
+| R14       | No extinction-only plan for self-rewarding or dangerous behaviours; pair with DRA and management. If aggression or self-injury appears, stop and refer.                                                           | n/a                          | AAHA 2015 (no punishment for aggression); burst warning unsourced                                                                                                                           | Med (policy); Low (burst content)                                  |
+| R15       | Sessions per skill per day: 1-3. No more than 1 block per skill in a row. Keep ≥1 h gap. Length 3-5 min (puppy under 16 weeks, senior or fearful 2-3 min; experienced adults up to 5-10 min).                     | 1-3/day, 3-5 min, 1 h        | Demant 2011 (daily 3-in-a-row group worst, abstract/secondary), Meyer 2008 (weekly needed fewer sessions); China/Cooper (professional dose 2 × 15 min/day for 4-5 days); minutes convention | Frequency Med-Low; minutes Low                                     |
+| R16       | Time budget T min/day: sessions = ceil(T/5), cap 3 per skill, 2-3 skills/day; puppies ≤15-20 min. T<5: one micro-session plus "reward calm in routine".                                                           | cap 3                        | convention                                                                                                                                                                                  | Low-Med                                                            |
+| R17       | 10-20 rewarded reps per session; end on a success; stop if stress or disengagement, or <60% on the last 5 trials.                                                                                                 | 10-20, 60%                   | convention                                                                                                                                                                                  | Low                                                                |
+| R18       | Do not start an unrelated new skill within 1 h after a session. Offer rest, sleep or a calm walk.                                                                                                                 | 1 h                          | Kis 2017 (Experiment 2: learning an unrelated task blocked gains; sleep/walk helped only at ~7.6 days)                                                                                      | Low-Med                                                            |
+| R19       | Advance when success ≥80% over the last 10 trials in 2 consecutive sessions; hold at 60-79%; regress one step if <60% for 2 sessions; <40% or any stress flag: regress 2 steps and end the session.               | 80%, 60%, 40%                | convention only                                                                                                                                                                             | Med as engine logic, Low as evidence; **convention**               |
+| R20       | 3 Ds: change one at a time, reset the others; order duration, distance, distraction; distraction graded 1-5; increments 20-50% (smaller for fearful dogs).                                                        | 20-50%                       | AKC article gives order only (duration, distance, distraction last) and 1 s duration steps; no % and no research                                                                            | Low / convention                                                   |
+| R21       | 2 regressions at a step: halve the step or change environment/reinforcer first.                                                                                                                                   | halve                        | convention                                                                                                                                                                                  | Low-Med                                                            |
+| R22       | Mark "reliable" only after ≥3 locations, ≥2 handlers, ≥2 times of day.                                                                                                                                            | 3×2×2                        | convention                                                                                                                                                                                  | Low / convention                                                   |
+| R23       | Fluent = ≥90% in 3 sessions, latency ≤3 s, ≥2 contexts, on VR; only then fade cues or chain.                                                                                                                      | 90%, 3 s                     | convention                                                                                                                                                                                  | Low / convention                                                   |
+| R24       | Lure simple positions; capture offered behaviours; shape novel or complex ones. Raise criterion after 3-5 successes. Drop the prompt after ≥5 successful pairings.                                                | 3-5; 5                       | AVSAB 2021 (names the methods); no comparative trials                                                                                                                                       | Low-Med                                                            |
+| R25       | Puppy classes or socialization from 7-8 weeks only after ≥1 vaccine set ≥7 days earlier and deworming; avoid dog parks. Stop exposure if a puppy shows fear and seek veterinary guidance.                         | 7-8 wk, 7 days               | AVSAB 2008, AAHA 2015 (more permissive on timing; forced exposure sensitizes)                                                                                                               | High                                                               |
+| R26       | Joint pain, brachycephalic, cardiac, post-surgery or cognitive decline: drop demanding behaviours, shorten sessions, health-clearance prompt.                                                                     | n/a                          | AAHA 2015 (senior monitoring) plus convention                                                                                                                                               | Med                                                                |
+| R27       | No outdoor training on hot surfaces or in high heat.                                                                                                                                                              | n/a                          | convention (no source)                                                                                                                                                                      | Low                                                                |
+| R28 (new) | A trainer-hiring or help-screening step flags any use of prong, shock, jerks, "dominance" explanations or throwing things.                                                                                        | n/a                          | AAHA 2015, AVSAB 2008/2021                                                                                                                                                                  | High                                                               |
+| R29 (new) | Teach novice owners with food-only or a verbal marker; never present the clicker as required.                                                                                                                     | n/a                          | Feng 2018 (secondary), Chiandetti 2016, Feng 2017 (handlers find clickers cumbersome)                                                                                                       | Med                                                                |
 
 Changes recommended to existing rules:
+
 - R7: downgrade to Low.
 - R10: change the pairing count to "5-20, until the dog orients to the marker".
 - R12/R13: add AAHA 2015 as the source.
@@ -334,6 +362,7 @@ Changes recommended to existing rules:
 - R17/R19: drop Chiandetti as a source.
 
 ---
+
 ## 4. Gaps and open questions
 
 - No dog trials support the 80% criterion, the 3 Ds, session minutes, thinning ratios, lure-fade or cue transfer. They need TuringCare practice-log calibration.

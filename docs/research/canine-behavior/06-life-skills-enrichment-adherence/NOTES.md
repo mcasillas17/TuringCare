@@ -5,31 +5,38 @@ Scope: everyday skills (house-training, crate, loose leash, recall, settle, alon
 ## 1. Key findings
 
 **Learning dose and spacing**
+
 - Demant 2011 (44 beagles): weekly single sessions acquired a task better than daily sessions, and one session beat three in a row; long-term retention at 4 weeks was unaffected by schedule [#2, secondary summary]. Practical reading: do not stack many sessions back to back; distributed practice is at least as good.
 - Kis 2017: dogs that slept or took a leash walk in the hour after learning new cues did better a week later; dogs that did more learning, or played, did not gain at the immediate retest [#1, verified]. Sleep-dependent consolidation is plausible but the design cannot rule out walking effects, and n is ~12-14 per group.
 - Fear Free (hosted by AVSAB) guidance: ~3 min sessions, puppies ~1 min, new dogs shorter; end sessions with something enjoyable; set a timer or pre-count 10-20 treats [#40, expert guidance, no trial behind the exact numbers].
 - Recall dose in the one controlled trial: two sessions/day over 5 days, ~28 min of video per day, reward-trained dogs on a 10 m line within ~1 m of trainer, food on return, fewer cues than e-collar groups [#9].
 
 **Equipment / leash**
+
 - Back-clip harness did not reduce pulling vs collar when food was the lure (more force and duration), toy lure no difference; no stress-behaviour difference [#5]. 2025 review: non-tightening front-clip harness for pullers, flat collar for non-pullers, caution with tightening harness/martingale/head collar [#7]. PeerJ 2024 compared four devices; martingale differed in impulse; no device eliminated pulling [#6]. Conclusion: equipment manages, training solves.
 - Owner surveys: pulling and recall problems top the owner-reported list through 18 months, peaking around 12 months [#24].
 
 **Aversive vs reward methods**
+
 - Observational and review evidence consistently links aversives with worse welfare markers (cortisol, stress behaviour, pessimistic bias) and no efficacy advantage [#10, #11, #13, #12, #9]. Causality is inferred, not proven (no randomised long-term pet-dog trials).
 
 **Alone time / separation**
+
 - Desensitisation + counter-conditioning with gradual absence is the best-supported approach; start at seconds, return before distress, retreat a step if signs return, no punishment [#18]. A food-stuffed toy was the instruction owners most reliably followed [#18]. Owners given >5 instructions had worse outcomes [#17]. Compliance fell during graded-absence work [#20].
 - No validated "hours alone" welfare threshold; one small study saw altered greeting/activity after 2 h [#21]. Treat any hours cap as a design heuristic.
 
 **Crate / house-training**
+
 - No good controlled evidence on housetraining methods or crate welfare. Owner surveys: ~25% of owners crate, mostly puppies <6 months; distress higher when crating is used to manage behaviour rather than train; average use ~4+ h/day in Denmark; authors say welfare impact is unknown [#36, #37]. Crate use falls from 67% (16 wk) to 36% (12 mo) [#26]. House soiling shows up as an *association* with puppy-class attendance (OR 1.56) most likely because soiling is why people enrol [#25]. => Housetraining/crate rules below are low confidence and come from standard force-free practice, not trials.
 
 **Enrichment, optimism, sleep**
+
 - Nosework for 2 weeks shifted judgment bias optimistic vs heelwork (n=20) [#3]; a 2024 paper cautions bias tests can reflect learning history [#4]. Toy provision alone did not change welfare measures [#30]; food puzzles produced the smallest behavioural changes in one pilot [#31]; stuffed toys help short-term in kennels [#29]. Sniff-walk duration has no evidence base [#43].
 - Sleep: owner-reported ~11 h/24 h in young dogs (7 h night + 3-3.5 h day) [#26]; "12-14 h" is a popular figure, owner-report data run lower [#28]. Shelter dogs: daytime rest may be a welfare signal [#27].
 - Exercise: the "5 min per month of age" rule has no research basis; avoid both heavy repetitive high-impact exercise in growing large-breed puppies and overly strict restriction [#42, C-]. No evidence-based exercise minutes by breed group were found in this pass (open question).
 
 **Owner side**
+
 - Adherence in human medicine is ~64% overall and 20-30% when lifestyle change is needed [#16, quoting human/AAHA data]. Dog-behaviour adherence is under-studied. Predictors: trust in advisor, co-created plan, concern about distress to the dog, feeling not judged [#15, #16].
 - Dropout: free face-to-face class 43% dropout, online-only 100% (tiny pilot), paid class 24%; reasons include illness, work, dog problems [#22]. 67% of puppy owners attended a class; many prefer to train themselves [#23]. Home-only trainers report more problems and inconsistent owner-dog interaction than class attenders [#13] (confounded).
 - Habit formation: median 66 days (18-254) to automaticity; a single missed day did not matter; complex behaviours take longer [#38]. Implementation intentions (if-then plans) d~0.65 [#39]. These are general-psychology findings, not dog-specific, but they are the best evidence for plan design.
@@ -48,6 +55,7 @@ Scope: everyday skills (house-training, crate, loose leash, recall, settle, alon
 Confidence tags: high = multiple converging sources; med = one decent source or strong general-science analogue; low = practice consensus or design heuristic. All numeric defaults should be configuration constants, not hard-coded logic, so they can be tuned from real usage data.
 
 **A. Weekly load by owner time budget** (DESIGN HEURISTIC anchored on [#16, #17, #38, #40]; confidence med)
+
 1. Count what the owner can actually do, not what is ideal: budget_minutes_per_day from onboarding, default 10 if unknown. Weekly plan minutes = 0.6 x declared budget x 7 (leave 40% slack so a missed day does not break the plan). Fear Free-style sessions are 1-3 min, so 10 min/day = 3-5 micro-sessions at most.
 2. Session length by dog: puppy / new-to-training / fearful: 1-2 min; adult: 3 min; experienced adult: up to 5 min; senior or low-stamina: 2-3 min. Hard max 5 min per skill block in v1 [#40, low-med].
 3. Max 1 new skill + up to 2 maintenance skills per week; max 5 actionable instructions total per week including management tips. [#17 >5 instructions hurt outcome; med]
@@ -99,14 +107,15 @@ Confidence tags: high = multiple converging sources; med = one decent source or 
 ## 4. Progress-logging metrics the app should capture
 
 Per session (all optional except first three, keep it < 20 s):
+
 - date/time, planned vs done, duration (minutes) — completion and dose.
 - trials attempted and successful (success counts -> % success; most reliable owner metric; use 5-10 trials).
 - criterion variable currently being worked on: distance (m), duration (s), distraction level (1-3 or named), latency to respond (s; bucket <1, 1-3, >3 s).
 - reward type used; location (indoor, garden, street, park).
 - dog readiness: energy before (low/normal/high); stress flags seen (see §5); ended on success (y/n).
-Daily: walk minutes, sniff/search minutes, chew/puzzle (y/n), alone-time minutes and dog behaviour while alone (video check optional), toilet accidents (count + location), sleep quality (good/restless), pulling episodes.
-Per problem behaviour: frequency per week, intensity (1-5), distance-to-trigger at first reaction (m), recovery time (s). Show 2-week trend not single-day noise.
-Owner: who trained (member), mood/time-pressure note, reason for skipping (fixed list: time, tired, dog off, weather, forgot, other) [#16, #22].
+  Daily: walk minutes, sniff/search minutes, chew/puzzle (y/n), alone-time minutes and dog behaviour while alone (video check optional), toilet accidents (count + location), sleep quality (good/restless), pulling episodes.
+  Per problem behaviour: frequency per week, intensity (1-5), distance-to-trigger at first reaction (m), recovery time (s). Show 2-week trend not single-day noise.
+  Owner: who trained (member), mood/time-pressure note, reason for skipping (fixed list: time, tired, dog off, weather, forgot, other) [#16, #22].
 
 ## 5. Safety / welfare red flags (surface to owner; stop-and-review triggers)
 

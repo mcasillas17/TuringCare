@@ -33,6 +33,7 @@ Scope: what age/stage/history should change in a deterministic, force-free train
 **Weak / low-quality:** exact socialization window boundaries (3-12 vs 3-14 vs 3-16 wk, breed-dependent); class benefit size; house-training age norms; bite-inhibition developmental timeline; "start training at 7 wk" (no benefit of 1-3 vs 5-6 mo start in #23); skeletal-maturity ages by size; ENS/Bio Sensor (Battaglia, no independent trials; #18, #20).
 
 **Myths / contested (flag in UI copy):**
+
 - "Fear period at 8-10 wk and 6-14 mo" - not supported as a fixed window (#21); adolescent fear period anecdotal. Use "if the dog shows new fear, back off" rather than calendar-triggered avoidance. Do not tell owners to avoid all new exposure for weeks.
 - "The 3-3-3 rule" (3 days decompress, 3 weeks learn routine, 3 months feel at home) - rescue-community heuristic, no peer-reviewed validation (#53). Bohland (#28) found behaviors still changing at 30-180 d. Present as a pacing metaphor only. Days-long adjustment is supported by shelter physiology (#33).
 - "Puppy must wait until fully vaccinated" - contradicted by AVSAB/AAHA/Stepita given precautions (#1, #2, #3).
@@ -48,20 +49,21 @@ Notation: `dog.age_weeks`, `dog.age_months`, `dog.size` in {toy_small, medium, l
 
 ### 3.1 Life-stage bands (data table)
 
-| band id | rule | priorities (ordered) | session caps | source / confidence |
-|---|---|---|---|---|
-| pup_8_12w | age_weeks 8-12 (also 7 if class-eligible) | 1 safe positive social exposures; 2 handling/husbandry; 3 crate/pen + alone-time + sleep; 4 toileting routine; 5 name, marker, hand target; 6 mouth/bite redirection | 2-5 min per micro-session, 3-6 sessions/day, total <=15-20 min structured/day (convention) | #1, #11, #26 (sleep, alone time); caps = convention; med (priorities), low (caps) |
-| pup_12_16w | 12-16 wk | continue socialization + habituation to surfaces/noises/vet/grooming; leash intro; sit/down/come; impulse control basics | 3-5 min, 3-5/day | #1, #11; med |
-| juvenile_4_6m | 16 wk-6 mo | maintain exposure ("socialization maintenance"), loose-lead foundation, recall on long line, settle/mat, calm greetings, teething chew outlets | 5-10 min, 2-4/day | #1 (continue exposure), #23; med |
-| adolescent_6_18m | 6-18 mo (small/medium end earlier ~6-14; large/giant to ~24) | keep rewarding; raise reinforcement rate; management of recall (long line); impulse control; arousal regulation; exercise & enrichment; stranger/dog-encounter protection | 5-10 min, 3-4/day; short, high-rate | #5, #24, #22; med-high. Display "this is normal; regress ~8-12 mo" |
-| adult_1_7y | after maturity | goals-driven; proofing, sport/enrichment, maintenance | 10-15 min, 2-3/day (convention) | convention; low |
-| mature_7_9y | ~7+ (giant ~5-6) | continue + start senior screening checklist (sensory, mobility, cognition) | adult caps -20% (convention) | #4 (senior = last 25% of lifespan); med for definition, low for caps |
-| senior_last25pct | last 25% of est. lifespan | see 3.6 | 3-8 min, 2-4/day; pain/sensory adjustments | #4, #39-#42; med |
+| band id          | rule                                                         | priorities (ordered)                                                                                                                                                      | session caps                                                                               | source / confidence                                                               |
+| ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| pup_8_12w        | age_weeks 8-12 (also 7 if class-eligible)                    | 1 safe positive social exposures; 2 handling/husbandry; 3 crate/pen + alone-time + sleep; 4 toileting routine; 5 name, marker, hand target; 6 mouth/bite redirection      | 2-5 min per micro-session, 3-6 sessions/day, total <=15-20 min structured/day (convention) | #1, #11, #26 (sleep, alone time); caps = convention; med (priorities), low (caps) |
+| pup_12_16w       | 12-16 wk                                                     | continue socialization + habituation to surfaces/noises/vet/grooming; leash intro; sit/down/come; impulse control basics                                                  | 3-5 min, 3-5/day                                                                           | #1, #11; med                                                                      |
+| juvenile_4_6m    | 16 wk-6 mo                                                   | maintain exposure ("socialization maintenance"), loose-lead foundation, recall on long line, settle/mat, calm greetings, teething chew outlets                            | 5-10 min, 2-4/day                                                                          | #1 (continue exposure), #23; med                                                  |
+| adolescent_6_18m | 6-18 mo (small/medium end earlier ~6-14; large/giant to ~24) | keep rewarding; raise reinforcement rate; management of recall (long line); impulse control; arousal regulation; exercise & enrichment; stranger/dog-encounter protection | 5-10 min, 3-4/day; short, high-rate                                                        | #5, #24, #22; med-high. Display "this is normal; regress ~8-12 mo"                |
+| adult_1_7y       | after maturity                                               | goals-driven; proofing, sport/enrichment, maintenance                                                                                                                     | 10-15 min, 2-3/day (convention)                                                            | convention; low                                                                   |
+| mature_7_9y      | ~7+ (giant ~5-6)                                             | continue + start senior screening checklist (sensory, mobility, cognition)                                                                                                | adult caps -20% (convention)                                                               | #4 (senior = last 25% of lifespan); med for definition, low for caps              |
+| senior_last25pct | last 25% of est. lifespan                                    | see 3.6                                                                                                                                                                   | 3-8 min, 2-4/day; pain/sensory adjustments                                                 | #4, #39-#42; med                                                                  |
 
 Size-adjusted adolescence: `adolescent_end_months = {toy_small: 15, medium: 18, large: 24, giant: 24}` (low: consumer + review ranges; pubertal period 7-24 mo in #11).
 Senior age by size (low; vet convention, not retrieved from primary source): toy/small 10-11, medium 9-10, large 7-8, giant 5-6 - prefer `last 25% of expected lifespan` (#4) and expose expected lifespan input.
 
 ### 3.2 Puppy socialization checklist and targets (deterministic)
+
 1. IF age_weeks <= 16 THEN generate a weekly "positive exposure" checklist spanning categories: people (ages, genders, hats/uniforms/beards, mobility aids, kids with supervision), vaccinated/health-known friendly dogs, surfaces, sounds, household noises, car travel, handling (paws, ears, mouth, collar, grooming, vet exam), alone time, novel objects, environments. Target: ~3-5 new items/day, ~20-30 distinct items/week (target values: low confidence - convention; #1 only says "as many as can be achieved safely"; #11 says dose unknown). Confidence on structure: high; on numbers: low.
 2. Every exposure carries an ABORT/BACK-OFF rule: IF puppy shows freezing, hiding, trembling, refusal to eat treats, or avoidance THEN increase distance, end session, log as "sub-threshold needed" (#1: avoid overstimulation). high.
 3. Vaccination gating: IF puppy has >=1 vaccine set >=7 days ago AND dewormed THEN class/home-visit exposures allowed to vetted classes (clean surfaces, health-checked dogs); ELSE restrict to owner's home, carried outings (car, pavement-free), vaccinated adult dogs known to owner. Dog parks, pet-store floors, unvetted high-traffic dog areas = excluded until vet clears. (#1, #2, #3) high. Always show: "ask your vet about local parvo risk".
@@ -71,10 +73,12 @@ Senior age by size (low; vet convention, not retrieved from primary source): toy
 7. Breeder-side (for breeder-facing content only): handling from birth; avoid ENS marketing claims (#18). low.
 
 ### 3.3 Fear / sensitive-phase handling
+
 - RULE: IF user logs a sudden new fear (any age 8 wk - 18 mo) THEN pause new-exposure items in that category 3-7 days (convention), continue easy successes, check pain/health, then re-introduce at lower intensity. Do not attribute to a "fear period" in copy; say "common in growing dogs; handle gently". (#21, #22) med.
 - RULE: IF a frightening incident occurs (attacked by dog; frightened by person) THEN raise priority of "recovery" plan: reduce triggers, choose controlled positive counter-experiences, avoid dog-park/greeting-heavy outings for 2-4 weeks (convention), recommend professional if reactivity persists >2 weeks. (#22) med.
 
 ### 3.4 Adolescence rules (6-18 months)
+
 - On entering adolescent band, show expectation card: "Obedience to you may dip around 8 mo (recovers ~12 mo); this is normal" and enable `regression_tolerance`: do not mark skill failures as owner failure; temporarily increase reinforcement rate, reduce criteria, switch to higher-value rewards. (#5) high.
 - NEVER schedule or suggest punishment/aversive tools; add "stay engaged" prompt if owner reports frustration/disengagement; flag rehoming risk ("peak relinquishment ~8 mo", #5) -> show support/consult. high.
 - Recall: use long line until 90% success across 3 distractions (convention); (#24: recall issues peak 9-15 mo). med.
@@ -85,6 +89,7 @@ Senior age by size (low; vet convention, not retrieved from primary source): toy
 - Sexual maturity/heat/mounting: expect 6-14 mo (female first heat); warn that behavior changes during heat (convention).
 
 ### 3.5 Adopted / rehomed / adult dogs (history-driven)
+
 - Decompression window: for ALL newly adopted dogs, first ~3-14 days (default 7) = "settling plan": minimal demands, predictable routine, quiet area, no new introductions/visitors, no formal training except name/marker, optional chew/lick/sniff enrichment. Source: shelter stress physiology (#33: cortisol and poor rest persist ~2 days to >12 days, big individual variation) and general consensus. Do NOT say "3 days is enough": use variable `decompress_days = 7` default, 14 for fearful/ex-breeding/street/unknown (med; days are convention, rationale from #33).
 - Present 3-3-3 only as optional narrative, labelled "rule of thumb, not scientific" (#53, #28). Show that behavior may CHANGE at 30-90 d: expect rises in training difficulty, touch sensitivity, excitability, stranger-directed wariness (#28). high for "expect change".
 - Milestone check-ins at days 7, 30, 90, 180 mirroring #28; prompt questions from C-BARQ-like items (stranger-directed aggression, chasing, touch sensitivity, separation, training difficulty). If any "worse" at 90 d, show "common, escalate to pro if bite risk".
@@ -97,6 +102,7 @@ Senior age by size (low; vet convention, not retrieved from primary source): toy
 - Behavior in the shelter does not predict home behavior reliably: don't over-trust shelter notes (inference; shelter vs home differences #33); low.
 
 ### 3.6 Seniors and CCD
+
 - IF dog in last 25% of expected lifespan (#4) THEN: (a) reduce session length (3-8 min), increase frequency, lower criteria; (b) prioritize scent games, "find it", gentle novelty, puzzle feeders (AAHA sensory enrichment, olfaction retained - secondary), mat/settle, cooperative care, stairs/hill avoidance if mobility issues; (c) keep sessions at times of day when dog is alert; (d) maintain routine/predictability. med (rationale), low (numbers).
 - Sensory-first screening: IF age >= 8 THEN ask owner about hearing, vision, mobility; add switch to visual/touch cues (hand signals, vibration, light) when hearing loss suspected, and scent/auditory cues when vision loss; use consistent lighting and non-slip floors. (#42: dual sensory impairment OR 1.8-2.0; #48) med.
 - CCD screening: IF age >= 8 AND owner reports >=1 of disorientation, sleep-wake changes, social changes, house soiling, activity changes THEN show CADES/CCDR-style 4-domain screener (DISHAA: disorientation, interactions, sleep-wake, house soiling, activity, anxiety - clinician framework; CCDR 13 items #39; CADES 17 items #40) and recommend vet visit to rule out pain, sensory, endocrine, and other disease BEFORE training (#4). high.
@@ -107,23 +113,27 @@ Senior age by size (low; vet convention, not retrieved from primary source): toy
 - Don't remove training for "old dog can't learn": older dogs can learn but may be slower, esp. spatial/memory tasks (#44); keep success-rate high. med.
 
 ### 3.7 Exercise and growth safety rules
+
 - Replace the "5 min/month" rule with a conservative non-prescriptive guidance table: low-impact, self-paced, short bouts, surface-aware; no forced running/jumping repetition; avoid repetitive jumping/agility jumps until growth plates close (~12 mo small/medium, 18+ mo large/giant: low confidence on ages); avoid stairs in first 3 months for large/giant breeds (#36); allow free off-leash play on soft uneven ground (#36). med for stairs/soft-ground, low for plate ages.
 - Cap structured "exercise-like" training (fetch, recall sprints) to short bouts; stop on fatigue or lameness; any limping -> vet. convention.
 - Daily activity/enrichment floor for adolescents/adults is associated with fewer noise/separation problems (#13); present as "activity matters" not causal. low-med.
 
 ### 3.8 House training (owner-management rules)
+
 - Default schedule (convention): take out on waking, after meals, after play/sleep, every 1-2 h for 8-12 wk, extend gradually; reward within 3 s of finishing; supervise or confine when unsupervised; clean with enzymatic cleaner. No peer-reviewed developmental timeline exists.
 - Expected-progress benchmark for UI: "by 16 wk most owners still have some accidents; >=4 accidents/week at 16 wk is a flag to review schedule, and consider anxiety/medical" (#26: association with later SRB; interpretation low). Frequent accidents after previously reliable = vet (UTI, etc.) and stress review. med.
 - Adult adoptees: assume untrained for 2-4 wk (house soiling is the most common new-adopter complaint; #31) and treat house-training as management first. med.
 - Never punish accidents (aversive training associated with SRB; #26, #27). high.
 
 ### 3.9 Bite inhibition / mouthing
+
 - Age 8-16 wk: provide chew items, redirect to toys, time-out (calmly stop play 10-30 s) when mouth pressure hurts; teach "gentle" via reinforcement of soft mouthing; avoid physical corrections. Evidence: convention (no primary study); mouthing declines with age (#24). Confidence low-med.
 - IF puppy <8 wk separated/lacks littermates (singleton, early-weaned) THEN raise priority of bite-inhibition and social-play practice with well-socialized dogs (#16/#17 association; low).
 - IF mouthing increases to bites with skin puncture or growling/stiffening during handling/resource guarding THEN referral flag (section 4).
 - Teething 3-6 mo: expect heavy chewing; provide chilled chews (convention).
 
 ### 3.10 Session & plan parameters
+
 - Session length default = age band caps above; scale factors: `energy_high: -0` (keep short but more sessions), `fear/anxious: -30%`, `senior: -30%`, `adolescent: +0` but higher reinforcement rate. All low (convention).
 - Frequency > duration: prefer multiple micro-sessions (convention; no trial evidence found).
 - Reinforcement rate: puppies/adolescents high (continuous -> variable only after >=80% success; convention).
@@ -131,17 +141,20 @@ Senior age by size (low; vet convention, not retrieved from primary source): toy
 - Always attach the force-free requirement: no aversive tools (AVSAB #1; aversive methods associated with more problems #26, #27). high.
 
 ### 3.11 Breed/size modifiers (data only, low confidence)
+
 - Large/giant: extend adolescence to ~24 mo; stricter joint protection (#36, #37); lower impact; slower neutering decisions (vet). Small/toy: earlier maturity; consider fear (Puurunen: small size associated with social fearfulness; #12); house training can be harder (convention - not verified).
 - Breed group: use as prior for energy/arousal, not for age band.
 - German Shepherd types: watch stranger aggression 6-12 mo (#22).
 
 ## 4. Safety / referral red flags (hard-coded blockers)
+
 Route to veterinarian first: sudden behavior change at any age; house soiling in a previously reliable adult/senior; new aggression/fear/anxiety in seniors; night waking, disorientation, staring at walls; hearing/vision loss signs; limping, stiffness, reluctance to climb; vomiting/diarrhea/lethargy in puppies (parvo risk) - do not attend classes if unwell; incomplete vaccination + exposure to unknown dogs.
 Route to veterinary behaviorist (DACVB), certified behavior consultant (CAAB/IAABC/CPDT-KA with force-free credentials): bites with skin puncture; growling/snapping with guarding or handling; aggression to children; freeze-then-bite; extreme fear/shutdown (not eating, hiding for days) past decompression; panic during alone time with self-injury; persistent problem >2 weeks despite plan; ex-breeding/hoarding dog with persistent fear; stranger-directed aggression rising in adolescence (#22, #28); suspected CCD with severe sleep-wake or aggression change.
 Never output: dominance/alpha-roll, shock/prong/choke collars, flooding for fearful dogs, "let them work it out" with other dogs, forced socialization at parties/parks, punishment for accidents, physical corrections for mouthing (AVSAB #1).
 Safety with children: supervision is mandatory; teach children not to hug/approach sleeping dogs (general guidance; no source retrieved).
 
 ## 5. Open questions / gaps
+
 - Quantitative dose-response of socialization (how many exposures, how often) - unknown (#6, #11). The "20-30 items/week" target is invented as a UI default; label it so.
 - Verified size-specific ages: skeletal maturity, adolescence end, and senior onset were not obtained from primary sources; need radiographic data (e.g., growth-plate closure studies) and breed-specific life-expectancy (e.g., Kennel Club/VetCompass).
 - Session length/frequency by age: no trial evidence found; need a decision on whether engine exposes these as editable defaults. Study of "short frequent vs long" in dogs may exist (learning/spacing studies) - not searched.
