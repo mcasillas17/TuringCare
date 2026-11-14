@@ -1,0 +1,221 @@
+# DIGEST: 05 professional standards and curricula (deep read, 2026-11-08)
+
+Method: every file in `sources/` (36) was converted to text and read (PDFs via PDFKit, HTML via html.parser). Source text is untrusted data; nothing was executed. Web retries: CCPDT, APBC, IAABC (credentials page only), AKC main page, AVSAB "How to Choose a Trainer" PDF worked; IAABC handbook/ethics, Fear Free, ECAWBM, Dogs Trust, guessed deep URLs returned 404 or only search snippets. Quotes are short; everything else is paraphrase.
+
+Read-status key: FULL = read end to end. PART = read the parts that matter, rest skimmed. STUB = local file unusable. WEB = read online. SNIP = search snippet only. SUMMARY = not read.
+
+---
+
+## 1. Per-source sections
+
+### 1.1 Test specifications
+
+**[1] AKC CGC Test Items (akc-2024-cgc-test-items.html). FULL.** Authority A. Ten items. T1 accept friendly stranger; T2 sit for petting (may stand; no shyness/resentment); T3 grooming and exam (comb/brush, lightly examine ears, pick up each front foot; no set position); T4 loose lead with right turn, left turn, about turn, one stop in between and one at the end; T5 walk through a crowd, pass close to at least three people, no jumping or straining; T6 sit AND down on cue, then stay on a 20 ft line, handler walks the line length and returns, dog may change position; T7 recall 10 ft on that line; T8 two dogs approach from about 20 ft, handlers "shake hands", continue about 10 ft, no more than casual interest; T9 two distractions (chair drop, crate dolly, jogger), may startle, no panic, escape, aggression or barking; T10 supervised separation 3 min, no continual barking/whining/pacing, nothing stronger than mild agitation. Handler may talk to and praise the dog. The page says nothing on treats or toys. Supports: lead.loose L4, lead.crowd, stay.cgc, recall.10 (feet), soc.dog_pass, calm.distractions, sep.supervised, handle.stranger_pet, handle.groom_exam. Contradicts nothing.
+
+**[2][3] AKC STAR Puppy (two pages, identical list). FULL.** Authority A. Six owner items (1 health, 2 pledge, 3 describes play/exercise plan, 4 six classes with an AKC evaluator, 5 bags, 6 ID), five puppy items (7 no aggression to people over 6 weeks of class, 8 none to puppies, 9 tolerates collar/harness, 10 owner can hug/hold, 11 allows owner to take a treat or toy), nine pre-CGC items (12 petting by non-owner in any position, 13 owner handling and brief ear/feet exam, 14 straight-line lead 15 steps, 15 walks past people 5 ft away, 16 sit with lure allowed, 17 down with lure allowed, 18 comes from 5 ft when name called, 19 distractions presented 15 ft away, 20 stay on leash with another person, owner walks 10 steps and returns). Assessed across a 6-week class, not a one-shot test. [3] adds the Responsible Dog Owner's Pledge (health, safety, quality of life, waste, supervise kids). Supports handle.*, res.give, lead.loose L1, lead.crowd, recall.puppy, calm.distractions, resp.owner, mgmt.*.
+
+**[4] KC GCDS Puppy Foundation (kc-gcds-puppy.pdf). FULL.** Authority A. **12 exercises**: 1 responsibility talk, 2 cleanliness and ID, 3 attentive response to name (brief attention, on lead), 4 play, 5 socialisation (placid dog; unknown adult; noise at several paces), 6 handling and inspection (mild fidgeting OK), 7 recall 2-3 paces in enclosed area, 8 stand/sit/down briefly, 9 walk about 20 paces including a turn (tight lead OK), 10 stay about 10 s at 1 pace, 11 give up an article (not food; pass if no interest), 12 food manners (take a treat without snatching). Up to 12 months, minimum four weekly sessions; "Passed"/"Not Ready" per exercise; aggression or undue fear = Not Ready; must be Passed on every exercise within one course. Clubs may enrol from about 10 weeks or after second vaccination. Incentives encouraged.
+
+**[5] KC Bronze (kc-gcds-bronze.pdf). FULL.** 10 exercises: 1 ID/bags, 2 collar/lead/equipment, 3 walk about 30 paces with turns, 4 door/gate control, 5 walk among people and dogs about 30 paces plus 1 min conversation, 6 stay on lead 1 min at 5 paces (no beds/mats), 7 grooming, 8 exam of mouth, teeth, throat, eyes, ears, stomach, tail, feet (no restraint by lead), 9 return to handler from 10 paces, 10 responsibility quiz 3 of 6 from section one. One attempt per exercise; all passed in one session; "uncontrolled mouthing, barking, growling or other threatening behaviour" blocks a pass. Handout item 6 says "Leadership... Leaders should not include the dog" (contradicts AVSAB). Item 23 etc. are owner-care text.
+
+**[6] KC Silver. FULL.** Requires Bronze. 1 play, 2 road walk (kerb stop, vehicles, prams), 3 off-lead rejoin from about 10 paces (steady until called), 4 stay 2 min at 5 paces on lead, 5 vehicle control (engine run "a short time"), 6 come away from distractions (group of dogs on lead), 7 controlled greeting (no jump), 8 food manners (no begging/stealing), 9 stranger exam, 10 responsibility quiz 6 of 8. Responsibility text #41 says withdrawing a dog from something frightening "will only make apprehension worse" and "never make eye contact with an unfamiliar dog" (conflicts with distance-increase protocols and with LIMA exposure practice).
+
+**[7] KC Gold. FULL (legal tail skimmed).** Min 12 months, requires Silver. 1 road walk with pace changes, 2 return to walking handler's side from at least 10 paces, continue about 10 paces, 3 free walk about 40 paces off lead with two turns and a passing dog, 4 down stay off lead 2 min at 10 paces, 5 send to bed from about 10 paces, no inducement, indoors where possible, 6 stop the dog at 10 paces or more, 7 relaxed isolation 2 min out of sight (no whine, howl, bark), 8 food manners: wait 3-5 s then released, 9 stranger exam, 10 quiz 8 of 10. Text #102-107 includes "discourage the bad habits" and "repeat commands ... teach disobedience".
+
+**[8] KC "Taking part" page (kc-gcds-taking-part.html). FULL on the scheme text.** Site is now branded Royal Kennel Club. Four levels. Puppy Foundation enrolment "from 8 weeks of age, depending on the club", up to 12 months, instructor-assessed over at least 4 weeks; Bronze/Puppy courses typically 6-8 weeks of weekly one-hour classes. **Errata list: "Page 61 - 6 - Stay one Minute Handler in Sight - Exercise has been removed - (effective 01.01.21)"**. The Bronze PDF we hold is dated 02/20, so the Bronze 1-minute stay may no longer be a current Bronze item.
+
+**[9] Irish KC Good Citizen Test 2023. FULL.** Authority A. Puppy Foundation **from 14 weeks to 12 months**, 10 exercises: 1 ID, 2 name (not a recall), 3 play with article give-up, 4 socialisation (dog, adult, noise; "the puppy is allowed to react... It is the speed of recovery that is important"), 5 handling/inspection, 6 recall 2-3 paces in enclosed area, 7 positions, 8 walk about 5 m and turn, 9 stay about 10 s at about 1 m (changing position ok, approaching not), 10 give up article. Food, toys, praise allowed throughout. Bronze: distractions about 3 m, 1-min conversation, stay 3 m for 1 min, recall or stop. Silver: heel at normal/slow/fast pace in 5 m straight segments, cones, greeting, recall about 10 paces to heel, vehicle (engine at least 15 s), stay 2 min at 10 paces with something passing 3-5 m away, food manners including lifting the dog's bowl, exam. Gold: down stay 30 steps, 1.5 min in sight plus 0.5 min out of sight; bed about 7 paces; stop at about 10 paces; isolation up to 2 min. Caution: IKC food-manners part B (lift bowl, dog "ideally should move away") is a guarding provocation test; do not copy.
+
+**[10] Dogs NZ exercise list. FULL, but it is an index only.** 36 exercises numbered continuously: Foundation 1-12 (incl. 5 door, 6 restrained return, 7 walk on lead, 9 stay tied on lead, 11 supervised separation), Bronze 13-19 (17 steps, 18 public-area walk, 19 cafe), Silver 20-27 (21 stranger exam, handler at a distance; 23 stop; 24 advanced vehicle; 26 busy public area; 27 cafe), Gold 28-36 (29 walk beside without lead; 30 send to article; 32 deliver dropped article; 33 another person walks the dog; 34 stop in public; 36 cafe). No criteria, distances or durations are in the file.
+
+### 1.2 Ethics, evidence, handling
+
+**[12] AVSAB Humane Dog Training 2021. FULL.** Reward-based only; "no evidence that aversive training is necessary"; avoid choke/prong/shock, squirt bottles, shaker cans, shouting, staring, alpha rolls, leash jerks, flooding; learner "must always... have the ability to 'opt out'"; serious fear/aggression/anxiety needs management, behavior modification and sometimes medication, evaluated by a vet; medication should not be a "last resort"; systematic desensitization not flooding. Names "balanced" as the label for mixed methods. Evidence is largely observational and the statement concedes survey correlation vs causation. Supports rules 5, 19, 22; contradicts KC Bronze/Silver "leadership"/"admonish" text.
+
+**[13] AVSAB Puppy Socialization (2008, PDF dated 2014). FULL.** Primary window first 3 months; standard of care is socialization before fully vaccinated; classes from 7-8 weeks with at least one vaccine set at least 7 days before and a first deworming; avoid dog parks; crate/alone time; puppies showing fear should get veterinary guidance. No exposure counts. Supports rules 1-2. Note IKC puppy test starts at 14 weeks and KC clubs at 8-10 weeks: curricula do not follow the AVSAB window.
+
+**[14] AVSAB Selecting a Behavior Consultant 2020. FULL.** Titles "behaviorist"/"behavior consultant" unprotected. DACVB: 2-3 yr residency, over 400 supervised cases, three peer-reviewed case reports, a published paper, board exam. CAAB: PhD + 5 yr, or veterinary degree + 2 yr residency + 3 yr experience. DVM only profession that may diagnose and prescribe. IAABC: 500 hr consulting, 3 case studies, exam; associate 300 hr; LIMA ethics, but "some behavior consultants may use aversive training". Stop signs: vague "balanced", dominance/pack leader, discouraging food, guarantees, no referral partner. IAABC numbers are contradicted by the current IAABC site (see 2).
+
+**[15] AVSAB statements index. FULL.** Lists a 2025 Board Statement (AVSAB endorses no specific trainer organization, an old document suggesting aversives was rescinded) and a new "How to Choose a Trainer" statement. Not in LINKS. I fetched it (WEB, 3 pages, saved only in the tool-results folder): Red flags: prong/shock, leash jerks, alpha rolls, rattle can, water spray, "boss, alpha, pack leader, dominant/submissive, respect, obey, command", "Balanced training", "punish/correct". Green flags: rewards, clicker, force-free, "prevent unwanted behavior and teach a replacement behavior", choice. Credentials: cites Karen Pryor Academy, Academy for Dog Trainers, Victoria Stilwell Academy, PPG, IAABC and Fear Free as likelier to be positive, but "credentials alone do not guarantee quality". CCPDT is not named. Use these exact vocabulary lists for the directory screen.
+
+**[16] Klebba cooperative care. FULL.** Chin rest on a towel/pillow on a stool, dog standing preferred, lure then fade, mark and treat, build duration, then raise hand, then touch the shoulder; "predictor cues" (shoulder, pinch, poke); glide, then second hand ("One hand means petting while two hands mean an exam"), then pinch/tent, then syringe. Opt-out: lifting head or moving away gets no reinforcement; invite back, restart with an easier rep; if repeated "slow down, return to the last successful step" and split criteria; end session if dog does not return; keep reinforcement rate high; relaxed body, takes treats, no avoidance are go signals. No numbers. Supports rules 7-9, 26 and nodes coop.*.
+
+**[17] CCPDT Hierarchy. FULL.** Six levels exactly as in NOTES; level 5 lists negative punishment, negative reinforcement, extinction "not listed in any order of preference". The PDF contains no author name, date or adoption statement: "Friedman" and "adopted 2025" are not in the text.
+
+**[18] "Joint" standards (joint-2023). FULL.** The PDF states only that the policy is "adopted by" CCPDT, "Updated 4/30/23". The IAABC/APDT approval appears only in the URL filename. Content: LIMA (3.1), no outcome guarantees (3.5), truthful advertising (3.4, 6.x), work within competence and seek help (3.7-3.9), do not advise on veterinary medicine (3.9), vet feedback (2.3), bite-reporting laws (1.2), liability insurance (4.2).
+
+**[19] CCPDT how-to-choose. FULL (menu heavy).** CPDT-KA "at least 300 hours of dog training experience"; CPDT-KSA adds a skills assessment; CBCC-KA "300 hours of dog behavior consulting experience". Red flag: "dominant", "alpha" or primarily punishment methods. The page does not say 3 years, 200 questions or recert. Page copyright 2014.
+
+**[20][21] CBCC-KA logs. FULL.** At least 300 hours within the last 3 years, at least 225 individual hours on fear, phobia, compulsive, anxiety, aggression; at most 75 group hours in specialised classes (not basic obedience); own dog hours do not count. The 2025 file is titled "Training Log" but describes the behavior log.
+
+**[24] ACVB packet. FULL.** It is the Resident Packet effective 1 Sep 2026 to 31 Aug 2031 and still contains tracked "Commented [LF1]" drafting notes. Requirements: registered approved residency, one published research paper, one published case report/series, completed residency, 3-5 evaluator forms (at least one DACVB), exam. No "three case reports", residency years or case counts in this document (those are in a separate Residency Policy). "Board eligible" designation is prohibited. Authority A, but not a consumer document.
+
+**[26] ABS CAAB. FULL.** ACAAB: Master's with research thesis, 30 semester credits behavioral science (12 graduate), 9 in ethology/animal behavior/comparative psychology, at least 2 yr professional experience, three letters, present at an ABS meeting within 5 years, liability insurance, $100 fee, $50 yearly dues, recertification. CAAB: doctorate + 5 yr, or DVM + 2-yr residency + 3 yr.
+
+**[27][28] ABTC referral docs. FULL.** CAB, VB and AAB "will only see clients on veterinary referral"; ABT does preventative and first-aid advice and works with AAB/CAB/VB on their plans; ABTC also registers Animal Trainer (AT) and Animal Training Instructor (ATI), post-nominals ABTC-AT/ATI/ABT/AAB/CAB/VB/EW; only a VB may discuss specific medications with clients; registrants need insurance and CPD. **[29] ABTC home. FULL.** Practitioners "must use science-led, compassionate and non-punitive methods"; "must not be based on Positive Punishment or the creation of anxiety or fear".
+
+**[31][32] KPA. FULL (two one-page files).** Dog Trainer Foundations is a self-paced online course, 6-12 weeks (up to 1 hr/week, or 5 hr immersion), $249/$599; Comprehensive 4-8 months; Professional 6 months, $5600-6600, workshops, training assessment and teaching assessment, CTP designation. 23 lessons in 4 units. These are human education programs, not dog-skill ladders.
+
+**[34] Low Stress Handling article. FULL.** Author is Christine Calder DVM DACVB (10 Mar 2023) summarizing Yin's Ten Handling Principles: wait until relaxed, minimal and appropriate restraint, avoid prolonged struggling ("more than two seconds for cats and three seconds for dogs"), use distractions and rewards. It is a restraint-and-handling framework for veterinary staff, not consent-based; it also recommends early medication/sedation plans.
+
+**[35] Chin rest start button (Brehaut, 7 Aug 2025). FULL.** Chin goes in the handler's hand (not a towel); behavior never cued; duration from 1 s; lifting the chin is the "stop button" and "It is important to acknowledge and reward this stop behavior". This conflicts with Klebba (no reinforcement on opt-out) and with the Bucket Game rule (stop, resume when dog re-engages).
+
+**[36] WDJ cooperative care. FULL.** Author Pat Miller (20 Jan 2021) summarizing Deborah Jones's 10 essentials: 1 chin rest/bucket, 2 lie on side, 3 restraint, 4 muzzle, 5 foot, 6 mouth, 7 medication, 8 injection/blood draw, 9 eye, 10 ear. Bucket Game numbers: hold 10 s gaze before moving a hand; 10-15 s while touching. Directory list notes APDT/CCPDT/IAABC members "do not necessarily strictly adhere" to LIMA. The only dissent is one reader comment (anecdote, not evidence).
+
+### 1.3 Peer-reviewed and secondary
+
+**[38] Hiby 2004. FULL (references skimmed).** 600 questionnaires distributed, **364 returned, 326 analysed**; dogs over 1 yr; owner-reported. Reward frequency vs obedience rho 0.26; punishment frequency vs problem count rho 0.17; reward-only dogs highest obedience; authors say correlation, direction uncertain. Medians 4 vs 5 problems.
+
+**[39] Vieira de Castro 2020. STUB.** The local file is a 169-character reCAPTCHA page. Read online (WEB): 92 dogs in seven schools in Porto (42 reward, 22 low-aversive, 28 high-aversive); more stress behaviors in aversive groups; cortisol rise higher in high-aversive vs reward only (saliva subset); pessimistic bias only in the high-aversive group (79 completed); quasi-experimental, owners chose schools.
+
+**[41] Howell 2015. FULL.** Socialization period about 3-12 weeks, not later than 14; classes: "the jury is still out"; minimum and maximum amounts of socialization unknown; one study linked noise fear to thunder exposure before 4 months (uncontrolled exposure can backfire). **[42] Kutsumi 2013. FULL (abstract page).** 142 dogs, class started around 4 months, 6 weekly sessions; command response higher in puppy-class and adult-class groups alike; stranger response higher in puppy class. **[43] DeLeeuw & Williams 2026. PART (intro, methods, 3.7-3.9, 4.3-4.5).** 35 trainers sampled from IACP/IAABC/CCPDT directories and **screened for current or past aversive use**; 17 reward-based, 18 mixed; all 17 reward-based held independent-body credentials, but **7 of 18 mixed-method trainers (39%) also did**. Says only one RCT exists (Johnson and Wynne, e-collar, small, confounded). **[50] PreventiveVet credentials (updated 4 Mar 2026). FULL.** Category C. Says CPDT-KA: 300 hr in 3 yr, reference, 180-question exam, recert every 3 yr; CDBC: about 3 yr and 500 hr consulting, 400 hr coursework, 3 case studies + 4 case discussions, exam; IAABC-ADT: 36 CE hr per 3 yr; CBCC-KA 180 questions. CCPDT's site says 200 questions for CPDT-KA, so secondary numbers disagree.
+
+### 1.4 Rows not downloaded (web status)
+
+| # | Status |
+|---|---|
+| 11 AKC Community Canine / Urban CGC | WEB: main page only confirms "no age minimums or limits"; item lists not found. SUMMARY. |
+| 22, 23 IAABC | WEB partial (credentials page): see section 3. Handbook, ethics, LIMA pages 404. |
+| 25 ECAWBM | SNIP: 5-year recertification under EBVS rules; fee 100 EUR (2020 page); residency details unavailable. |
+| 30 APBC | WEB read: members work only on vet referral; Full members assessed against ABTC CAB or ABT criteria; Associate members work on referral; 30 hr CPD per year. |
+| 33 Fear Free trainer | SNIP only: six modules in order, annual renewal fee $59 plus annual CE. Prerequisites unverified. |
+| 37, 40, 44, 45, 46, 47, 48, 49 | SUMMARY only (book, paywall or blocked; Dogs Trust URL 404). |
+
+---
+
+## 2. Corrections (source text does not support the claim)
+
+NOTES.md
+1. §3 "KC Puppy Foundation (>=4 weekly sessions, <=12 mo): 10 exercises" and LINKS-derived "10 exercises": KC puppy is **12** exercises; the 10-exercise puppy test is the **Irish KC**. Fix.
+2. Exercise cross-refs for KC Puppy: pos.sit/pos.stand "KCP ex7" is **ex8**; recall is **ex7** (not 6); res.give "KCP ex10" is **ex11** (ex10 is the 10 s stay); add KC ex9 (20 paces + turn) and ex12 (food manners). Name ex3, play ex4, handling ex6 are right.
+3. stay.short: "STAR: ... position may change but not approach" is CGC T6/IKC wording; STAR #20 says only "Stay on leash with another person (owner walks 10 steps and returns)". Add KC puppy ex10: about 10 s at 1 pace.
+4. §3 caveats "AKC CGC permits praise but forbids treats during testing" and header "no food/toys during test in AKC": **not in any file or page read**. Mark unverified. IKC and KC puppy explicitly allow food/toys.
+5. Skill table mixes units: CGC recall is 10 **feet**, KC/IKC 10 **paces**; recall.10 and stay thresholds must store unit and value separately. "5 paces" (KC Bronze/Silver stay) vs IKC Bronze 3 **metres**.
+6. stay.1min (KCB ex6): KC site erratum says a "Stay one Minute Handler in Sight" exercise was removed effective 01.01.21. Bronze PDF is dated 02/20. Verify before using this as a Bronze criterion.
+7. soc.checklist cites IKC ex4 (correct) but [13] gives no counts; "wks 4-8" is synthesis. Note IKC puppy starts at **14 weeks**, KC clubs 8-10 weeks, so no curriculum test aligns with the AVSAB 7-8 week window.
+8. §1 "Behavior consultant: IAABC CDBC/CBCC (full); associate tier ... 500 hrs + 3 case studies (associate 300 hrs)": CBCC is a **CCPDT** credential. The current IAABC credentials page lists Certifications (CDBC etc.): recommended 3+ yr experience and 400+ hr education, $225, "earned by exam"; Accreditations (ADT): recommended 2+ yr and 100+ hr; no associate-consultant tier appears. The 500/300-hour figures come only from AVSAB 2020 and a 2026 consumer blog. Mark unverified.
+9. §1 "CPDT-KA 300 hrs/3 yrs + 200-Q exam (search-only)": now verified on ccpdt.org: 300 hours logged within 3 years, 200 multiple-choice questions, recertify every 3 years by CEUs or retaking the exam. (PreventiveVet says 180; prefer ccpdt.org.) CPDT-KSA requires four video-recorded hands-on exercises.
+10. §1 "CAAB: PhD + 5 yrs (or DVM + residency + 3 yrs)": residency is **2 years** (ABS, AVSAB). ACAAB also needs 2 yr experience and 30 credits.
+11. §1 "DACVB ... case reports, publication": the 2026 ACVB packet requires one published case report/series and one published research paper plus three to five evaluators. "Three case reports" and "400 cases" come from AVSAB 2020, not ACVB.
+12. §1 "KPA assesses online knowledge + teaching + training": correct for DTP; but §3 uses "KPA Foundations 6-12 weeks" as support for dog weeks-to-fluency. It is a human course duration; remove it.
+13. §1 "Fear Free ... Education certificates": unverified beyond the six modules and annual $59 renewal + CE (snippet).
+14. §2 "[34] ... avoid struggles >3 s in dogs": correct, but author is Calder (2023), principles are Yin's, and it is a restraint framework (do not present as consent-based).
+15. Rule 8 "no reward for escape ... [16][34]": only [16] (and WDJ Bucket Game) say this. [35] says reward the stop behavior. Engine must pick one: recommended = no reward for the opt-out itself, resume only when the dog re-offers the chin rest, then reward the re-offer.
+16. §2 "Hiby 2004, N=364": 364 returned, **326 analysed**; dogs over one year; rho 0.26/0.17.
+17. §2 "Vieira de Castro, N=92, physiological measures": N=92 is right but the local capture is a reCAPTCHA stub, and cortisol was a subset and only high-aversive vs reward.
+18. §2 "Humane Hierarchy (Friedman; adopted by CCPDT 2025)": neither fact is in the PDF. Keep the six levels, drop the attribution unless [44] is read.
+19. §2/LINKS #18 "Joint IAABC/APDT/CCPDT code ... Joint code Principle 3.1": the text says "adopted by CCPDT" only. Principle numbers 3.1, 3.5, 2.3 are right.
+20. §3 recall.restrained "Partner holds, handler 10 paces, dog released to return": NZ file is an index with title only; the criteria are not sourced. recall.stop and lead.door "NZ #23/#5" are title-only support.
+21. Rule 10/11/25/28 use "Gold age >=12 months" as a safety gate: it is only KC Gold eligibility; Silver has off-lead recall with no age limit. Treat age gating of off-lead work as engine policy (L), not a published standard.
+22. Rule 24 (do not teach consent-only in puppies <16 wk) is sourced to one reader comment; keep as L.
+23. §3 greet.polite "CGC T1-2": T1/T2 test accepting a stranger, not jumping; the no-jump criterion is KC Silver ex7 and CGC T5 only.
+24. §5 "training-catalog.ts (5 templates, 20 skills)": file defines 5+5+4+3+4 = **21** skill entries (README says 21). Bite-inhibition, stay-alone-duration, name-response, recall-through-distractions and recall-at-distance single-axis ramps are confirmed.
+25. §3 muzzle.train "4-8 wks" and every "wks" column: no source gives weeks to fluency; KC "6-8 weeks" is class length, STAR is 6 classes, Kutsumi 6 weekly sessions.
+26. Evidence caveat in §3: curricula test outcome in one session (KC) or across 6 classes (STAR); the KC puppy test is NOT single attempt, only Bronze/Silver/Gold are.
+
+LINKS.md
+27. #4 "Passed/Not Ready ... aggression or undue fear" ok; add 12 exercises. #9 add "from 14 weeks". #8 add erratum and 8-week enrolment.
+28. #18 title ("IAABC / APDT / CCPDT Joint ...") unsupported by the PDF text (see 19). #17 attribution (see 18).
+29. #24 is the "ACVB Resident Packet" (draft comments present), "Verified (skimmed)" is now FULL.
+30. #34 "Yin S." should be Calder CD, "Ten Handling Principles by Yin". #36 author is Pat Miller. #39 capture is a stub. #43 sample is screened for aversive use. #10 index only: also LINKS "Foundation 36 exercises" is 12+7+8+9.
+31. #15 add the 2025 Board Statement and AVSAB "How to Choose a Trainer" (https://avsab.org/wp-content/uploads/2026/08/How-to-Choose-a-Trainer-final-final.pdf).
+32. #19 says "Menu-heavy"; the CPDT-KA hour figure is 300 h but no 3-year window on that page.
+33. #30 APBC now WEB-read (not search-only). #22/#23/#33 remain partially or not verifiable.
+
+../README.md
+34. "46 nodes" matches the NOTES table (46 rows); "50 sources / 36 downloaded" is also correct. Only the node content needs the fixes above.
+35. "current catalog has 5 templates and 21 skills": correct (NOTES says 20).
+36. Engine §2 "REFER_BEHAVIORIST (DACVB/ECAWBM/CAAB, via vet)": fine for US/UK, but ABTC says CAB/VB/AAB take only vet referrals while CAAB (ABS) has no such rule; directory logic must branch by country.
+37. §4 Skill selection says skill graph has "observable pass criteria from STAR/CGC/KC": criteria for coop.*, pattern.*, muzzle.train and the "wks" column are not from those tests.
+
+---
+
+## 3. Verified skill graph
+
+Level scale as NOTES (L0 mgmt, L1 puppy-ready, L2 home, L3 public low distraction, L4 real world, L5 advanced). "Pub" = published number; "Syn" = synthesis, no source number. Catalog = existing key in `training-catalog.ts`. Weeks are removed (no published source); keep as tunable engine constants.
+
+| id | prereqs | lvl | Observable pass criteria (published numbers) | Source | Catalog |
+|---|---|---|---|---|---|
+| mgmt.health_gate | none | 0 | Vaccines/exams current; owner reviews pain and medical flags (Syn for flags; STAR #1) | STAR #1, [17] step 1 | NEW |
+| mgmt.id_poop | none | 0 | ID tag/microchip; bags carried | STAR #5-6, KCB ex1, IKC ex1 | NEW |
+| resp.owner | none | 0 | Describes daily play/exercise plan (STAR #3); quiz 3 of 6 (KC Bronze), 6 of 8 (Silver), 8 of 10 (Gold) | STAR #3, KCB/S/G ex10 | NEW |
+| soc.checklist | health_gate | 1 | Calm exposures to unknown placid dog, unknown adult (not overbearing), noise at several paces; recovery speed, not absence of startle; undue fear = Not Ready. Counts: none published (Syn) | KCP ex5, IKC ex4, [13] | NEW |
+| eng.name | none | 1 | Brief attention to name, on lead, no return required | KCP ex3, IKC ex2 | partial: puppy-fundamentals.name-recognition, recall-reliability.name-response |
+| handle.collar_harness | none | 1 | Tolerates owner's choice of collar/harness | STAR #9, KCB ex2 | NEW |
+| handle.hold | collar_harness | 1 | Owner can hug or hold, size permitting | STAR #10 | NEW |
+| res.give | none | 1 | Gives up toy or non-food article to owner without fuss; pass even if puppy not interested (KC/IKC); treat or toy (STAR) | STAR #11, KCP ex11, IKC ex3/ex10 | NEW |
+| food.take | none | 1 | Takes treat without snatching | KCP ex12 | NEW (was "eng.treat_take", Syn) |
+| play.handler | none | 1 | Plays under handler control; releases articles; no play-fighting | KCP ex4, KCS ex1, IKC ex3 | NEW |
+| pos.sit | eng.name | 1 | Sits; lure allowed; brief | STAR #16, KCP ex8, IKC ex7 | basic-manners.sit, puppy-fundamentals.sit |
+| pos.down | pos.sit | 1 | Downs; lure allowed; brief | STAR #17, KCP ex8, CGC T6 | basic-manners.down |
+| pos.stand | pos.sit | 1-2 | Stands briefly on cue (KC puppy ex8); stands for inspection (KC Bronze ex8) | KCP ex8, KCB ex8 | NEW |
+| lead.loose L1 | collar_harness, eng.name | 1 | 15 steps straight (STAR #14); KC puppy about 20 paces + one turn; IKC about 5 m + turn; tight lead not an automatic fail | STAR #14, KCP ex9, IKC ex8 | basic-manners.loose-leash |
+| lead.loose L3 | L1 | 3 | About 30 paces with turns, no pulling forward or back, occasional tight lead ok; plus 1-min conversation with people and dogs nearby, calm | KCB ex3, ex5 | same |
+| lead.loose L4 | L3 | 4 | Right, left, about turn; one stop between and one at end | CGC T4 | same |
+| lead.crowd | lead.loose L1 | 3 | Passes at least 3 people close by without jumping or straining (CGC T5); STAR version: passes people 5 ft away | CGC T5, STAR #15 | NEW |
+| lead.door | lead.loose L3 | 3 | Waits while door/gate opened, goes through unpulled, recalled through, stays settled while gate secured | KCB ex4 (NZ #5 title only) | NEW |
+| lead.road | lead.crowd | 4 | Pavement walk, turn, kerb stop, cross, passing vehicles/bikes/prams; Gold adds pace changes | KCS ex2, KCG ex1 | NEW |
+| stay.puppy | pos.sit | 1 | About 10 s at 1 pace (KC) / about 1 m (IKC), on lead, any position; STAR: owner 10 steps with another person holding | KCP ex10, IKC ex9, STAR #20 | basic-manners.stay |
+| stay.1min | stay.puppy | 3 | 5 paces (KC) or 3 m (IKC), 1 min, lead dropped, same position; verify KC erratum 01.01.21 | KCB ex6, IKC Bronze ex5 | basic-manners.stay |
+| stay.2min | stay.1min | 4 | 5 paces 2 min on lead (KC Silver); IKC 10 paces 2 min with passing distraction at 3-5 m; Gold down off lead 10 paces 2 min (min 12 mo) | KCS ex4, IKC Silver ex6, KCG ex4 | basic-manners.stay |
+| stay.cgc | stay.1min | 4 | Sit AND down on cue; stay on 20 ft line, handler walks length and returns; may shift position | CGC T6 | basic-manners.stay |
+| recall.puppy | eng.name | 1 | 2-3 paces, enclosed area, happy return; STAR 5 ft on name | KCP ex7, IKC ex6, STAR #18 | basic-manners.recall |
+| recall.10 | recall.puppy | 2-3 | Handler 10 **paces** (KC) or 10 **ft** on 20 ft line (CGC); stops close, lead replaced | KCB ex9, KCS ex3, CGC T7 | recall-reliability.recall-on-cue |
+| recall.distraction | recall.10 | 3-4 | Off lead near group of leashed dogs; handler walks/runs away; dog returns without delay | KCS ex6, IKC Silver ex5 | recall-reliability.recall-through-distractions |
+| recall.side | recall.distraction | 4 | Off lead, at least 10 paces away, returns to walking handler's side, continue about 10 paces | KCG ex2 | partial |
+| recall.stop | recall.10, stay.1min | 4 | Dog moving, at least about 10 paces, stops in any position (reasonable distance if fast) | KCG ex6, IKC Gold ex6 | NEW |
+| recall.distance | recall.distraction | 5 | No published distance; Syn | catalog | recall-reliability.recall-at-distance |
+| walk.free | recall.side | 5 | About 40 paces off lead, two direction changes, another handler passes with dog on lead | KCG ex3 (min 12 mo) | NEW |
+| handle.stranger_pet | soc.checklist | 2 | Allows petting by non-owner in any position; no shyness or resentment (CGC); stranger on lead intro (KC puppy) | STAR #12, CGC T1-2 | NEW |
+| handle.groom_exam | handle.hold | 2 | Owner brushes, inspects ears, lifts each front foot (CGC T3/STAR #13); KC Bronze: groom whole body, exam of mouth, teeth, throat, eyes, ears, stomach, tail, feet on lead, mild avoidance ok | STAR #13, CGC T3, KCP ex6, KCB ex7-8, IKC ex5/6-7 | NEW |
+| coop.chin_rest | food.take | 2 | Chin rests on target 1 s upward (Syn); fades lure; hand moves in view (Klebba). No numbers published | [16][35] | NEW |
+| coop.touch_ladder | chin_rest | 3 | Shoulder, predictor cue, glide, second hand, then instrument; opt-out stops procedure | [16] | NEW |
+| coop.vet_exam | groom_exam, touch_ladder | 3 | Stranger inspects mouth, teeth, throat, eyes, ears, stomach, tail, feet; lead not used to restrain; handler may help open mouth | KCS ex9, KCG ex9, NZ #21 title | NEW |
+| muzzle.train | food.take | 2 | Voluntary nose-in, wears calmly; no published criteria | WDJ (Jones #4) | NEW |
+| calm.settle_mat | pos.down | 3 | Sent to bed about 10 paces (KC; IKC 7), remains until examiner satisfied, no inducement | KCG ex5, IKC Gold ex5 | puppy-fundamentals.settle-on-mat |
+| calm.distractions | eng.name | 3 | Two distractions (chair drop, crate dolly, jogger, cane); may startle, no panic/escape/aggression/barking; STAR presented 15 ft; IKC about 3 m | CGC T9, STAR #19, IKC Bronze ex2 | reactivity-work.settle-in-distractions (partial) |
+| calm.settle_public | settle_mat, lead.crowd | 4 | Calm in cafe/busy public area: Dogs NZ titles only; no criteria | NZ #19, #26, #27 | partial |
+| soc.dog_pass | lead.loose L3, calm.distractions | 4 | Approach from about 20 ft, handlers greet, continue about 10 ft, no more than casual interest | CGC T8, IKC Bronze ex3-4 | partial threshold-awareness |
+| greet.polite | pos.sit | 3 | Examiner greets as entering a house; no jumping, or handler recovers quickly | KCS ex7, IKC Silver ex2B | NEW |
+| food.manners | pos.sit | 3 | Near food on loose lead: no begging or stealing (Silver); Gold: wait 3-5 s, released by cue. Do NOT adopt IKC bowl-lift | KCS ex8, KCG ex8 | NEW |
+| veh.control | lead.door | 4 | Waits at open door, enters on cue, quiet while engine runs (IKC: at least 15 s); lift small or unfit dogs | KCS ex5, IKC Silver ex4 | NEW |
+| sep.supervised | greet.polite | 4 | Owner out of sight 3 min; not continually barking, whining, pacing; nothing beyond mild agitation | CGC T10, NZ #11 title | separation-comfort.calm-departures (partial) |
+| sep.isolation | sep.supervised | 5 | 2 min out of sight alone; no whine, howl, bark; mild excitement on return ok (IKC) but no jumping | KCG ex7, IKC Gold ex7 | separation-comfort.stay-alone-duration |
+| pattern.lat / 1-2-3 / turn | threshold-aware / eng.name | 2-4 | No published criteria ([45] SUMMARY only) | [45] | reactivity-work.look-at-that, engage-disengage |
+
+Row count: 46 rows incl. the three pattern rows folded into one (NOTES had 46 rows). Added/changed: res.give, food.take (replaces eng.treat_take), walk.free (KC Gold ex3 missing), stay.puppy split from stay.short, KC puppy ex8/9/12 refs.
+
+### Verified credential tiers for the trainer directory
+
+| Tier | Credential | Verified requirement | Status |
+|---|---|---|---|
+| Medical | DACVB | Veterinarian, approved residency, 1 published research paper, 1 published case report/series, 3-5 evaluator forms, exam ([24]); AVSAB adds 2-3 yr, 400 cases, 3 case reports | FULL |
+| Medical (EU) | ECAWBM/EBVS | 5-year recertification; entry rules not read | SNIP |
+| Doctoral | CAAB | Doctorate + 5 yr, or DVM + 2 yr residency + 3 yr; 3 letters; ABS meeting presentation; insurance; recert | FULL |
+| Masters | ACAAB | Master's with thesis, 30 credits, 2 yr experience | FULL |
+| Behavior consultant | IAABC CDBC and species certifications | Exam-earned; recommended 3+ yr, 400+ hr education; $225; recert not verified; AVSAB/blog 500 hr + case studies unverified | WEB partial |
+| Trainer accreditation | IAABC ADT | Recommended 2+ yr, 100+ hr; (blog: 36 CE hr / 3 yr) | WEB partial |
+| Behavior consultant | CCPDT CBCC-KA | 300 hr within 3 yr, at least 225 individual, at most 75 group, on fear/phobia/compulsive/anxiety/aggression; exam | FULL (logs) |
+| Trainer | CPDT-KA | 300 hr within 3 yr, 200 MCQ, recert 3 yr | WEB |
+| Trainer | CPDT-KSA | KA plus four video-recorded hands-on exercises | WEB |
+| Trainer | KPA-CTP | 6-month DTP with workshop training and teaching assessments | FULL (KPA is first-party) |
+| UK | ABTC register: AT, ATI, ABT, AAB, CAB, VB | CAB/VB/AAB only on vet referral; insurance and CPD; non-punitive pledge | FULL |
+| UK | APBC | Full (ABTC CAB/ABT assessed), Associate; vet referral only; 30 hr CPD per year | WEB |
+| Add-on | Fear Free trainer, Low Stress Handling | Six modules, $59 renewal + CE (snippet); LSH is a vet-staff handling course | SNIP |
+
+Directory rules supported by text: show tier and verification state; "behaviorist" unprotected (AVSAB, ABS); credential is not method proof (DeLeeuw: 7 of 18 mixed-method trainers held independent credentials; AVSAB 2026 "credentials alone do not guarantee quality"), so require a declared tool list plus a vocabulary screen using the AVSAB 2026 red-flag list; CCPDT and IAABC list LIMA members who may still use aversives.
+
+---
+
+## 4. Gaps and open questions
+
+- IAABC handbook (hours, case studies, recertification), ECAWBM entry rules, Fear Free prerequisites: still unverified; contact the orgs or find non-blocked mirrors before showing numbers.
+- Vieira de Castro 2020 is not captured locally; re-download via PMC.
+- AKC Community Canine / Urban CGC item lists and the AKC treat/toy rule: not found.
+- KC erratum: confirm whether the Bronze 1-minute stay exercise still exists (download current KC guidelines).
+- Dogs NZ criteria (distances/durations) are in the full PDF, not the 3-page index; the index only gives titles.
+- Dogs Trust 4-week classes: page 404; unverified.
+- Pattern games, bucket game and cooperative-care steps have no published numeric criteria; all thresholds for these must be engine constants (L).
+- No source ties age to criterion distances; KC/IKC are age-generic and IKC puppy test starts at 14 weeks (after the AVSAB window).
+- Safety: do not copy IKC "lift the dog's bowl" test or KC "withdrawing ... makes apprehension worse" text into the engine; both conflict with force-free guarding and fear protocols.
+- Legal review of credential display remains open (UK ABTC vs US).

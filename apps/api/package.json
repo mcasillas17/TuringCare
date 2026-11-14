@@ -22,14 +22,14 @@
     "telemetry:purge": "tsx src/telemetry/retention-cli.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.5",
+    "@hono/node-server": "^2.1.6",
     "@hono/zod-validator": "^0.9.1",
     "@sentry/node": "^10.69.0",
     "@turingcare/i18n": "workspace:*",
     "@turingcare/shared": "workspace:*",
     "better-auth": "~1.6.30",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.13.7",
+    "hono": "^4.13.16",
     "pg": "^8.23.1",
     "resend": "^6.12.3",
     "zod": "^4.6.5"
