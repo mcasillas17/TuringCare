@@ -1,8 +1,8 @@
-import { LocaleProvider, useI18n } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider, useI18n } from "@/i18n";
 
 const { getFocus, addFocus, removeFocus } = vi.hoisted(() => ({
   getFocus: vi.fn(),
@@ -29,10 +29,16 @@ vi.mock("./api", () => ({
 import { suggestionKey } from "./suggestion-key";
 import { focusKey, useAddFocus, useFocusWeek, useRemoveFocus } from "./weekly-focus";
 
+let activeQueryClient: QueryClient | null = null;
+
+function TestQueryClientProvider({ children }: { children: ReactNode }) {
+  if (!activeQueryClient) throw new Error("test_query_client_not_initialized");
+  return <QueryClientProvider client={activeQueryClient}>{children}</QueryClientProvider>;
+}
+
 function makeWrapper(queryClient: QueryClient) {
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-  };
+  activeQueryClient = queryClient;
+  return TestQueryClientProvider;
 }
 
 function makeQueryClient() {

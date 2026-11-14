@@ -1,12 +1,7 @@
-import { useSession } from "@/lib/auth-client";
-import { useProfile, useUpdateProfileLocale } from "@/lib/profile";
-import { useSessionQueryReady } from "@/lib/session-query-boundary";
-import { isNonemptySessionUserId } from "@/lib/session-user-id";
-import { useHasVerifiedSession } from "@/lib/verified-session";
 import type { Locale } from "@turingcare/i18n";
 import {
-  type ReactNode,
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
@@ -16,6 +11,11 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import { useSession } from "@/lib/auth-client";
+import { useProfile, useUpdateProfileLocale } from "@/lib/profile";
+import { useSessionQueryReady } from "@/lib/session-query-boundary";
+import { isNonemptySessionUserId } from "@/lib/session-user-id";
+import { useHasVerifiedSession } from "@/lib/verified-session";
 import { useI18n } from ".";
 
 export type LocaleAccountReadinessStatus = "pending" | "signed-out" | "account" | "local-fallback";
@@ -168,7 +168,10 @@ export function LocaleAccountBridge() {
 function AuthenticatedLocaleAccountBoundary({
   children,
   userId,
-}: { children: ReactNode; userId: string }) {
+}: {
+  children: ReactNode;
+  userId: string;
+}) {
   const { t } = useI18n();
   const [readinessStatus, setReadinessStatus] = useState<LocaleAccountReadinessStatus>("pending");
   const readiness = useMemo<LocaleAccountReadiness>(

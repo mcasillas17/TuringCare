@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { DailyCheckInComposer } from "@/components/journal/daily-check-in-composer";
 import { EntryCard } from "@/components/journal/entry-card";
 import { QuickMomentComposer } from "@/components/journal/quick-moment-composer";
@@ -7,8 +9,6 @@ import { useI18n } from "@/i18n";
 import { useDogs } from "@/lib/dogs";
 import { type JournalEntry, useJournal } from "@/lib/journal";
 import { dateLabel, groupByDay } from "@/lib/when";
-import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
 
 const input = "w-full rounded border border-silver bg-white px-3 py-2 text-sm text-slate";
 

@@ -1,7 +1,7 @@
-import { LocaleProvider } from "@/i18n";
-import type { FocusSkill } from "@/lib/weekly-focus";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import type { FocusSkill } from "@/lib/weekly-focus";
 import { WeekGrid } from "./week-grid";
 
 function renderGrid(locale: "en" | "es", sessionCount: number) {

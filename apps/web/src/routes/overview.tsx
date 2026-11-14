@@ -1,9 +1,9 @@
+import { formatDateInUtc, type MessageKey } from "@turingcare/i18n";
+import { Link, Navigate } from "react-router-dom";
 import { OnboardingChecklist } from "@/components/onboarding/checklist";
 import { useI18n } from "@/i18n";
 import { useGuidedSetup } from "@/lib/guided-setup";
 import { useOverview } from "@/lib/overview";
-import { type MessageKey, formatDateInUtc } from "@turingcare/i18n";
-import { Link, Navigate } from "react-router-dom";
 
 type FirstRunStage = "new" | "noEntries" | "noBrief" | "ready";
 
@@ -129,14 +129,14 @@ export function Overview() {
               <p className="text-slate-soft">{t("overview.noActivity")}</p>
             ) : (
               <ul className="rounded border border-silver bg-white p-3 text-sm">
-                {o.recentActivity.map((a, idx) => {
+                {o.recentActivity.map((a) => {
                   const activityDate = formatDateInUtc(locale, a.occurredAt, {
                     day: "numeric",
                     month: "long",
                     year: "numeric",
                   });
                   return (
-                    <li key={`${a.dogName}-${a.occurredAt}-${idx}`}>
+                    <li key={a.id}>
                       <span className="font-medium text-slate">{a.dogName}</span>: {a.behavior}
                       {activityDate ? (
                         <span className="text-slate-soft"> · {activityDate}</span>

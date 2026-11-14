@@ -1,6 +1,6 @@
+import { useState } from "react";
 import { useI18n } from "@/i18n";
 import type { DogOverview } from "@/lib/dogs";
-import { useState } from "react";
 import { DogCardBody } from "./dog-card-body";
 
 export function DogCard({ dog }: { dog: DogOverview }) {

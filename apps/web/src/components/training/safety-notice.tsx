@@ -1,7 +1,7 @@
-import { useI18n } from "@/i18n";
-import { REFERRAL_DIRECTORIES, REFERRAL_KEYS, SAFETY_BODY_KEYS } from "@/lib/practice-options";
 import type { SuggestionSafety } from "@turingcare/shared";
 import { useId } from "react";
+import { useI18n } from "@/i18n";
+import { REFERRAL_DIRECTORIES, REFERRAL_KEYS, SAFETY_BODY_KEYS } from "@/lib/practice-options";
 
 export type SafetyNoticeHeadingLevel = "h2" | "h3" | "h4" | "h5" | "h6";
 

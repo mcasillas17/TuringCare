@@ -1,8 +1,8 @@
-import { NavShell } from "@/components/app-shell/NavShell";
-import { useI18n } from "@/i18n";
 import { ArrowLeft } from "lucide-react";
 import { Suspense } from "react";
 import { Link, Outlet } from "react-router-dom";
+import { NavShell } from "@/components/app-shell/NavShell";
+import { useI18n } from "@/i18n";
 import { ADMIN_NAV_ITEMS } from "./admin-nav-items";
 
 export function AdminShell() {

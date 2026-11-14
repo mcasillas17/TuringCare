@@ -1,11 +1,11 @@
-import { LocaleProvider } from "@/i18n";
-import * as dogsLib from "@/lib/dogs";
-import * as progressLib from "@/lib/progress";
-import * as catalogLib from "@/lib/training-catalog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import * as dogsLib from "@/lib/dogs";
+import * as progressLib from "@/lib/progress";
+import * as catalogLib from "@/lib/training-catalog";
 import { DogTraining } from "./dog-training";
 
 vi.mock("@/lib/dogs", () => ({ useAddGoal: vi.fn() }));
@@ -34,14 +34,14 @@ function setup() {
     isLoading: false,
     isError: false,
   } as unknown as ReturnType<typeof progressLib.useProgress>);
-  for (const h of [
-    "useAddSkill",
-    "useUpdateSkill",
-    "useDeleteSkill",
-    "useDeleteSession",
-    "useSetSkillLevel",
-  ] as const) {
-    vi.mocked(progressLib[h]).mockReturnValue({
+  for (const hook of [
+    progressLib.useAddSkill,
+    progressLib.useUpdateSkill,
+    progressLib.useDeleteSkill,
+    progressLib.useDeleteSession,
+    progressLib.useSetSkillLevel,
+  ]) {
+    vi.mocked(hook).mockReturnValue({
       mutate: vi.fn(),
       mutateAsync: vi.fn(),
       isPending: false,

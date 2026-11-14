@@ -1,3 +1,14 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { formatDateInUtc } from "@turingcare/i18n";
+import type {
+  AdvancementDecision,
+  PracticeDimension,
+  PracticeEvidenceInput,
+  SuggestionAction,
+} from "@turingcare/shared";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import { OutcomeQuickCapture } from "@/components/progress/outcome-quick-capture";
 import { SafetyNotice } from "@/components/training/safety-notice";
 import { SuggestionCard } from "@/components/training/suggestion-card";
@@ -22,17 +33,6 @@ import {
   weekKeyOf,
 } from "@/lib/week";
 import { type FocusSkill, focusKey, useFocusWeek } from "@/lib/weekly-focus";
-import { useQueryClient } from "@tanstack/react-query";
-import { formatDateInUtc } from "@turingcare/i18n";
-import type {
-  AdvancementDecision,
-  PracticeDimension,
-  PracticeEvidenceInput,
-  SuggestionAction,
-} from "@turingcare/shared";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { toast } from "sonner";
 
 type AuditedAnchorOmissionReason = "cache_pending" | "cache_ineligible";
 

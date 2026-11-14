@@ -1,3 +1,7 @@
+import { type BriefWindow, briefWindows } from "@turingcare/shared";
+import { useEffect, useRef, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { BriefShareSheet } from "@/components/brief/share-sheet";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
@@ -10,10 +14,6 @@ import {
   normalizeBriefLocale,
 } from "@/lib/brief-chrome";
 import { useDogs } from "@/lib/dogs";
-import { type BriefWindow, briefWindows } from "@turingcare/shared";
-import { useEffect, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
-import { toast } from "sonner";
 
 export function Brief() {
   const { t } = useI18n();

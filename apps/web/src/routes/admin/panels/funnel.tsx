@@ -10,7 +10,7 @@ const FUNNEL_STEP_LABEL_KEYS = {
 } as const satisfies Record<string, MessageKey>;
 
 function getFunnelStepLabelKey(step: string): MessageKey | null {
-  return Object.prototype.hasOwnProperty.call(FUNNEL_STEP_LABEL_KEYS, step)
+  return Object.hasOwn(FUNNEL_STEP_LABEL_KEYS, step)
     ? FUNNEL_STEP_LABEL_KEYS[step as keyof typeof FUNNEL_STEP_LABEL_KEYS]
     : null;
 }

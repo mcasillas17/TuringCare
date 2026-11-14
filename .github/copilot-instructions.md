@@ -13,6 +13,7 @@ pnpm --filter @turingcare/api db:push
 ```
 
 The API and Drizzle do not auto-load `.env`. API tests use the root `.env` through `apps/api/vitest.setup.ts` and exercise a real Postgres database.
+
 - Run both apps with `pnpm dev` (web `:3000`, API `:3001`). The standard repository checks are:
 
 ```bash
@@ -23,6 +24,7 @@ pnpm build
 ```
 
 CI additionally runs `pnpm --filter @turingcare/api db:migrate` before tests.
+
 - Scope a command with a workspace filter, for example `pnpm --filter @turingcare/web test` or `pnpm --filter @turingcare/api typecheck`.
 - Run one Vitest file with:
 

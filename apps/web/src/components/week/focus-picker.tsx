@@ -1,9 +1,9 @@
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useProgress } from "@/lib/progress";
 import type { FocusSkill } from "@/lib/weekly-focus";
 import { useAddFocus, useRemoveFocus } from "@/lib/weekly-focus";
-import { toast } from "sonner";
 
 type Props = {
   dogId: string;

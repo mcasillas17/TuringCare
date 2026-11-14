@@ -1,9 +1,9 @@
-import { LocaleProvider } from "@/i18n";
-import * as progressLib from "@/lib/progress";
 import { createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { PracticeEvidenceInput } from "@turingcare/shared";
 import { toast } from "sonner";
 import { describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import * as progressLib from "@/lib/progress";
 import { SessionForm } from "./session-form";
 
 vi.mock("@/lib/progress", () => ({ useLogSession: vi.fn() }));

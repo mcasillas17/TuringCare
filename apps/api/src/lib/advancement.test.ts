@@ -9,7 +9,7 @@ import {
   trainingGoals,
   trainingSkills,
 } from "../db/schema";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 import {
   ADVANCEMENT_MIN_DAYS,
   ADVANCEMENT_MIN_SESSIONS,

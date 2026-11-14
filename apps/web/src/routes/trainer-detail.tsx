@@ -1,11 +1,11 @@
+import { useEffect } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { authPagePath } from "@/lib/auth-navigation";
 import { track } from "@/lib/track";
 import { useTrainer } from "@/lib/trainers";
 import { useHasVerifiedSession } from "@/lib/verified-session";
-import { useEffect } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
 
 export function TrainerDetail() {
   const { t, locale } = useI18n();

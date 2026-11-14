@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type Page, expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 export function localClientHeaders() {
   const hex = randomUUID().replaceAll("-", "");

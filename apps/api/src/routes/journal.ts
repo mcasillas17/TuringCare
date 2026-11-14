@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { dogs, journalEntries } from "../db/schema";
-import { type Vars, requireUser } from "../middleware/require-user";
+import { requireUser, type Vars } from "../middleware/require-user";
 
 export const journalApp = new Hono<{ Variables: Vars }>()
   .use("*", requireUser)

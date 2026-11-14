@@ -1,6 +1,6 @@
-import { api } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TrainerInput } from "@turingcare/shared";
+import { api } from "@/lib/api";
 
 export function useCreateTrainer() {
   const qc = useQueryClient();

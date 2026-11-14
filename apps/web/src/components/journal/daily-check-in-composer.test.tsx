@@ -1,8 +1,8 @@
-import { LocaleProvider } from "@/i18n";
-import * as journalLib from "@/lib/journal";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import * as journalLib from "@/lib/journal";
 import { DailyCheckInComposer } from "./daily-check-in-composer";
 
 vi.mock("@/lib/journal", () => ({ useAddEntry: vi.fn() }));

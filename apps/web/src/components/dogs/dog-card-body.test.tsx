@@ -1,13 +1,13 @@
-import { LocaleProvider } from "@/i18n";
-import * as dogsLib from "@/lib/dogs";
-import type { DogOverview } from "@/lib/dogs";
-import * as journalLib from "@/lib/journal";
-import * as progressLib from "@/lib/progress";
-import type { ProgressGoal } from "@/lib/progress";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import type { DogOverview } from "@/lib/dogs";
+import * as dogsLib from "@/lib/dogs";
+import * as journalLib from "@/lib/journal";
+import type { ProgressGoal } from "@/lib/progress";
+import * as progressLib from "@/lib/progress";
 import { DogCardBody } from "./dog-card-body";
 
 vi.mock("@/lib/dogs", async () => {

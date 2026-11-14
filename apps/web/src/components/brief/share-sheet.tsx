@@ -1,12 +1,12 @@
+import type { Locale } from "@turingcare/i18n";
+import { lazy, Suspense, useState } from "react";
+import { toast } from "sonner";
 import { SendPanel } from "@/components/brief/send-panel";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { useI18n } from "@/i18n";
 import { useFinalizeBrief, useRevokeShare, useShareBrief } from "@/lib/brief";
 import type { DogForPdf } from "@/lib/brief-pdf-model";
-import type { Locale } from "@turingcare/i18n";
-import { Suspense, lazy, useState } from "react";
-import { toast } from "sonner";
 
 const BriefDownloadButton = lazy(() => import("@/components/brief-download-button"));
 

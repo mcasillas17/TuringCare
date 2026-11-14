@@ -1,7 +1,7 @@
-import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 
 const { sessionState } = vi.hoisted(() => ({
   sessionState: { userId: "u1" as unknown, emailVerified: true, isRefetching: false },

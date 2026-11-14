@@ -1,6 +1,6 @@
 import type { BehaviorConcernInput, SafetySignalType } from "@turingcare/shared";
 import { behaviorConcerns, dogSafetySignals } from "../db/schema";
-import { type TransactionType, lockDogSafety } from "./safety-lock";
+import { lockDogSafety, type TransactionType } from "./safety-lock";
 
 export async function createBehaviorConcern(
   executor: TransactionType,

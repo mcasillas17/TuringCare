@@ -1,7 +1,7 @@
-import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 import type { Metrics } from "../use-metrics";
 import { ActiveUsage } from "./active-usage";
 import { FeatureUsage } from "./feature-usage";
@@ -19,13 +19,7 @@ vi.mock("recharts", () => {
     return null;
   }
 
-  function Series({
-    dataKey,
-    name,
-  }: {
-    dataKey: string;
-    name?: string;
-  }) {
+  function Series({ dataKey, name }: { dataKey: string; name?: string }) {
     return <div data-testid={`series-${dataKey}`} data-series-name={name ?? dataKey} />;
   }
 

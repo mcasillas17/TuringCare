@@ -1,3 +1,6 @@
+import { safeAuthReturnPath } from "@turingcare/shared";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
@@ -5,9 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/i18n";
 import { authPagePath } from "@/lib/auth-navigation";
 import { useSignOut } from "@/lib/sign-out";
-import { safeAuthReturnPath } from "@turingcare/shared";
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 /** Failure-only navigation state; no old receipt is queried or treated as proof. */
 export function VerificationNavigationRecovery({ hasSession }: { hasSession: boolean }) {

@@ -1,4 +1,4 @@
-import { type Locale, formatDateInUtc } from "@turingcare/i18n";
+import { formatDateInUtc, type Locale } from "@turingcare/i18n";
 
 export function formatAdminChartDate(locale: Locale, dateBucket: unknown): string {
   if (typeof dateBucket !== "string") return "";

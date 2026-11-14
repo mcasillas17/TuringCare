@@ -1,7 +1,7 @@
-import { LocaleProvider } from "@/i18n";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { TrainingSuggestion } from "@turingcare/shared";
 import { describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 import { SafetyNotice } from "./safety-notice";
 import { SuggestionCard } from "./suggestion-card";
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 
 describe("overview", () => {
   const users: TestUser[] = [];
@@ -56,7 +56,7 @@ describe("overview", () => {
       dogCount: number;
       journalEntryCount: number;
       latestBrief: { dogId: string; dogName: string; status: string } | null;
-      recentActivity: { dogName: string; behavior: string }[];
+      recentActivity: { id: string; dogName: string; behavior: string }[];
     };
     expect(body.dogCount).toBe(1);
     expect(body.journalEntryCount).toBe(1);
@@ -65,6 +65,10 @@ describe("overview", () => {
       dogName: "Biscuit",
       status: "finalized",
     });
-    expect(body.recentActivity[0]).toMatchObject({ dogName: "Biscuit", behavior: "Barked" });
+    expect(body.recentActivity[0]).toMatchObject({
+      id: expect.any(String),
+      dogName: "Biscuit",
+      behavior: "Barked",
+    });
   });
 });

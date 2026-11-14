@@ -1,6 +1,6 @@
-import { useI18n } from "@/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ContextualProgressSummary, PracticeDimension } from "@turingcare/shared";
+import { useI18n } from "@/i18n";
 import { api } from "./api";
 import { suggestionKey } from "./suggestion-key";
 

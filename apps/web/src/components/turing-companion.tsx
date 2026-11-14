@@ -1,11 +1,11 @@
-import { useI18n } from "@/i18n/index";
-import type { MessageKey } from "@/i18n/types";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { TuringArt } from "./turing-art";
-import { TURING_TIP_BUCKETS, tipContextForPath } from "./turing-tips";
+import { useI18n } from "@/i18n/index";
+import type { MessageKey } from "@/i18n/types";
 import { useTuring } from "./turing/turing-context";
 import type { TuringPose } from "./turing/turing-poses";
+import { TuringArt } from "./turing-art";
+import { TURING_TIP_BUCKETS, tipContextForPath } from "./turing-tips";
 
 /**
  * Turing — the TuringCare companion mascot.

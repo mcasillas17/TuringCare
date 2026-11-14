@@ -1,3 +1,9 @@
+import {
+  type CatalogTemplate,
+  type GuidedSetupRecord,
+  guidedSetupTrainingTemplateKeyValues,
+} from "@turingcare/shared";
+import { useRef, useState } from "react";
 import { AbandonSetupButton } from "@/components/guided-setup/abandon-setup-button";
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
@@ -11,12 +17,6 @@ import {
 } from "@/lib/guided-setup";
 import { useTrainingCatalog } from "@/lib/training-catalog";
 import { weekKeyAtOffset } from "@/lib/week";
-import {
-  type CatalogTemplate,
-  type GuidedSetupRecord,
-  guidedSetupTrainingTemplateKeyValues,
-} from "@turingcare/shared";
-import { useRef, useState } from "react";
 
 const allowedTemplateKeys = new Set<string>(guidedSetupTrainingTemplateKeyValues);
 
@@ -108,17 +108,14 @@ export function TrainingActionStep({
           void submit();
         }}
       >
-        <fieldset
+        <div
           role="radiogroup"
           aria-labelledby="guided-setup-training-template-label"
           className="space-y-3"
         >
-          <legend
-            id="guided-setup-training-template-label"
-            className="text-sm font-medium text-slate"
-          >
+          <p id="guided-setup-training-template-label" className="text-sm font-medium text-slate">
             {t("guidedSetup.trainingSelectLabel")}
-          </legend>
+          </p>
           {catalogQuery.isLoading ? (
             <output className="rounded border border-silver bg-white p-4 text-sm text-slate">
               {t("guidedSetup.trainingCatalogLoading")}
@@ -156,7 +153,7 @@ export function TrainingActionStep({
               </label>
             ))
           )}
-        </fieldset>
+        </div>
         {errorMessage && (
           <p role="alert" className="text-sm text-red-600">
             {errorMessage}

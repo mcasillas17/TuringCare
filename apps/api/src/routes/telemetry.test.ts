@@ -5,7 +5,7 @@ import { app } from "../app";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import { events, trainingSuggestions } from "../db/schema";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 
 const validDog = {
   name: "Biscuit",

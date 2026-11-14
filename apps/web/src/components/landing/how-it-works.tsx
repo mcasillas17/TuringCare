@@ -1,5 +1,5 @@
-import { useI18n } from "@/i18n";
 import { ClipboardList, FileText, NotebookPen } from "lucide-react";
+import { useI18n } from "@/i18n";
 
 export function HowItWorks() {
   const { t } = useI18n();

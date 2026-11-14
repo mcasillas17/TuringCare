@@ -7,11 +7,11 @@
  */
 
 import {
-  type Locale,
-  type MessageKey,
   createI18n,
   formatDateInUtc,
   isLocale,
+  type Locale,
+  type MessageKey,
   translate,
 } from "@turingcare/i18n";
 

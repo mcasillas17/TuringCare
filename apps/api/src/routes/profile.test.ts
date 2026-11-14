@@ -4,7 +4,7 @@ import { app } from "../app";
 import { auth } from "../auth";
 import { db } from "../db";
 import { briefSends, user } from "../db/schema";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 
 const validDog = {
   name: "Biscuit",

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
+import { posePresentation, type TuringPose } from "./turing/turing-poses";
 import { TuringHead } from "./turing-head";
-import { type TuringPose, posePresentation } from "./turing/turing-poses";
 
 /**
  * Turing's artwork — a single inline SVG copied verbatim from the design handoff

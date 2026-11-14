@@ -1,5 +1,5 @@
+import { formatDateInUtc, isLocale, type Locale } from "@turingcare/i18n";
 import { translate } from "@/i18n";
-import { type Locale, formatDateInUtc, isLocale } from "@turingcare/i18n";
 
 export function normalizeBriefLocale(locale: unknown): Locale {
   return isLocale(locale) ? locale : "en";

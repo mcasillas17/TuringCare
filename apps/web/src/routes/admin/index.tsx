@@ -1,5 +1,5 @@
-import { useI18n } from "@/i18n";
 import { useState } from "react";
+import { useI18n } from "@/i18n";
 import { ActiveUsage } from "./panels/active-usage";
 import { EventsOverTime } from "./panels/events-over-time";
 import { FeatureUsage } from "./panels/feature-usage";

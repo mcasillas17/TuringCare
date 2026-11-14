@@ -1,8 +1,8 @@
+import type { GuidedSetupRecord, TrainingSuggestion } from "@turingcare/shared";
+import { Link } from "react-router-dom";
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { SuggestionCard } from "@/components/training/suggestion-card";
 import { useI18n } from "@/i18n";
-import type { GuidedSetupRecord, TrainingSuggestion } from "@turingcare/shared";
-import { Link } from "react-router-dom";
 
 export type CompletionStepProps = {
   setup: GuidedSetupRecord;
@@ -60,7 +60,6 @@ export function CompletionStep({ setup, suggestion, actionDeleted = false }: Com
       )}
     >
       <div className="space-y-5">
-        {/* biome-ignore lint/a11y/useSemanticElements: completion announcements need an explicit status role. */}
         <div
           role="status"
           aria-live="polite"

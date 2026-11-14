@@ -43,39 +43,39 @@ separate outcome and does not substitute for weekly training activity.
 
 ## Current status
 
-| Area | Status | What is complete | Remaining gap |
-|---|---|---|---|
-| Work tracking | Partial - tracking established | T1-T11 have owned issues with dependencies and acceptance criteria. | Keep runtime, repository and production status truthful as each gate is delivered. |
-| Critical owner journey | Complete foundation | Desktop and Pixel 7 journeys cover denied access before explicit email confirmation, verified sign-in, guided setup, journaling, training, progress and Brief sharing. | Keep coverage current and complete final post-T8 release-candidate QA. |
-| Production smoke | Partial | Scheduled and post-deploy checks cover API health, landing, directories, sign-in, verified-account state, and the authenticated shell. | Add one stable authenticated owner-domain read and keep it running while the remaining gates land. |
-| Email ownership | Partial - implementation ready | Verified-only owner/admin gates, passive email landing with explicit confirmation, and en/es no-session/legacy recovery are implemented. | Authorized aggregate inventory, controlled admin/smoke ownership preparation, production cutover and recorded evidence remain blocking. |
-| Production monitoring | Partial - production acceptance pending, P0 | API image and support contract use Node 22; request IDs, sanitization, capture adapters, isolated API diagnostics, and real-SDK image gates are implemented. Web (browser) monitoring has not started; the earlier unused web configuration parsing was removed. | Approved running-release request/process capture is still unproven (#98). Browser capture, React recovery, hidden source maps, alerts, and browser diagnostics remain T3. |
-| Backup and restore | Not started | The recovery design and implementation plan were removed from the tree; they are available in git history. | Add the provider-confirmed runbook and verifier, then complete a measured isolated restore drill. |
-| In-app feedback | Not started | A feedback email link exists. | Add a privacy-bounded form, server persistence, durable prompt suppression, admin triage, and non-blocking milestone prompts. |
-| Beta analytics | Partial | First-party lifecycle events, DAU/WAU/MAU, event totals, and an admin dashboard are shipped. | Add signup cohorts, target-aligned activation and week-2/week-4 retention, distinct-owner lifecycle views, and actual trainer/course outbound-click events. |
-| Guided Today | Not started - foundation available | Guided setup, weekly focus, deterministic training suggestions, training deferral, and contextual progress are shipped. | Replace `/my` with one cross-domain next action, dog switching, durable daily deferral, stable reason codes, and compact weekly context. |
-| Release QA | Partial | Automated phone viewport, keyboard, localization, and reduced-motion coverage exists. | Extend continuous smoke early, then run and record final real-device, screen-reader, zoom/reflow, contrast, Spanish, verification, recovery, and monitoring QA after Guided Today. |
-| Professional network | Directory only | Public trainer/course browse, protected trainer contact details, course link-outs, and admin CRUD are shipped. | There are no trainer or shelter accounts, shared dog permissions, acknowledgments, assignments, rosters, booking, or payments. |
-| Four-week beta loop | Not started | Product targets and cohort size are defined. | Recruit the cohort, run weekly reviews, interview five owners, and record the week-4 decision. |
+| Area                   | Status                                      | What is complete                                                                                                                                                                                                                                                 | Remaining gap                                                                                                                                                                      |
+| ---------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Work tracking          | Partial - tracking established              | T1-T11 have owned issues with dependencies and acceptance criteria.                                                                                                                                                                                              | Keep runtime, repository and production status truthful as each gate is delivered.                                                                                                 |
+| Critical owner journey | Complete foundation                         | Desktop and Pixel 7 journeys cover denied access before explicit email confirmation, verified sign-in, guided setup, journaling, training, progress and Brief sharing.                                                                                           | Keep coverage current and complete final post-T8 release-candidate QA.                                                                                                             |
+| Production smoke       | Partial                                     | Scheduled and post-deploy checks cover API health, landing, directories, sign-in, verified-account state, and the authenticated shell.                                                                                                                           | Add one stable authenticated owner-domain read and keep it running while the remaining gates land.                                                                                 |
+| Email ownership        | Partial - implementation ready              | Verified-only owner/admin gates, passive email landing with explicit confirmation, and en/es no-session/legacy recovery are implemented.                                                                                                                         | Authorized aggregate inventory, controlled admin/smoke ownership preparation, production cutover and recorded evidence remain blocking.                                            |
+| Production monitoring  | Partial - production acceptance pending, P0 | API image and support contract use Node 22; request IDs, sanitization, capture adapters, isolated API diagnostics, and real-SDK image gates are implemented. Web (browser) monitoring has not started; the earlier unused web configuration parsing was removed. | Approved running-release request/process capture is still unproven (#98). Browser capture, React recovery, hidden source maps, alerts, and browser diagnostics remain T3.          |
+| Backup and restore     | Not started                                 | The recovery design and implementation plan were removed from the tree; they are available in git history.                                                                                                                                                       | Add the provider-confirmed runbook and verifier, then complete a measured isolated restore drill.                                                                                  |
+| In-app feedback        | Not started                                 | A feedback email link exists.                                                                                                                                                                                                                                    | Add a privacy-bounded form, server persistence, durable prompt suppression, admin triage, and non-blocking milestone prompts.                                                      |
+| Beta analytics         | Partial                                     | First-party lifecycle events, DAU/WAU/MAU, event totals, and an admin dashboard are shipped.                                                                                                                                                                     | Add signup cohorts, target-aligned activation and week-2/week-4 retention, distinct-owner lifecycle views, and actual trainer/course outbound-click events.                        |
+| Guided Today           | Not started - foundation available          | Guided setup, weekly focus, deterministic training suggestions, training deferral, and contextual progress are shipped.                                                                                                                                          | Replace `/my` with one cross-domain next action, dog switching, durable daily deferral, stable reason codes, and compact weekly context.                                           |
+| Release QA             | Partial                                     | Automated phone viewport, keyboard, localization, and reduced-motion coverage exists.                                                                                                                                                                            | Extend continuous smoke early, then run and record final real-device, screen-reader, zoom/reflow, contrast, Spanish, verification, recovery, and monitoring QA after Guided Today. |
+| Professional network   | Directory only                              | Public trainer/course browse, protected trainer contact details, course link-outs, and admin CRUD are shipped.                                                                                                                                                   | There are no trainer or shelter accounts, shared dog permissions, acknowledgments, assignments, rosters, booking, or payments.                                                     |
+| Four-week beta loop    | Not started                                 | Product targets and cohort size are defined.                                                                                                                                                                                                                     | Recruit the cohort, run weekly reviews, interview five owners, and record the week-4 decision.                                                                                     |
 
 The obsolete LLM Brief proposal in PR #23 is closed without merge.
 
 ## Program gates and parallel lanes
 
-| ID | Work item | Depends on | Can run in parallel with | Hard gate |
-|---|---|---|---|---|
-| T0 | Establish execution baseline | None | Initial research for every lane | Every remaining item has an owned GitHub issue and truthful status. |
-| T1 | Enforce verified email ownership | T0 | T2 | No unverified account reaches owner data or admin promotion. |
-| T2 | Restore API monitoring runtime truth | T0 | T1, T4 implementation, T5, T6 | A controlled production API failure is captured from the running image. |
-| T3 | Finish browser monitoring and operations | T2 | T4, T5, T6, T7 | API and browser failures are privacy-safe, symbolicated, and actionable. |
-| T4 | Prove backup and restore readiness | T0; drill after T2 | T1, T3, T5, T6 | A measured isolated restore is verified and destroyed. |
-| T5 | Add private in-app feedback | T1 | T3, T4, T6, T7 | Owners can submit bounded feedback and admins can triage it. |
-| T6 | Add beta cohorts and outcome measurement | T0 | T1-T5, T7 | All beta targets are readable as distinct-owner metrics before T8. |
-| T7 | Extend continuous production smoke | T1 | T3-T6 | Post-deploy smoke proves a verified authenticated domain read. |
-| T8 | Implement Guided Today | T1, T6 | Final work in T3-T5 | `/my` presents one explainable next action and measurable response. |
-| T9 | Complete final release-candidate QA | T1-T8 | None | The actual post-T8 release candidate has no blocking finding. |
-| T10 | Run the four-week beta | T9 | Small evidence-led fixes only | Four weeks of metrics, feedback, health data, and interviews exist. |
-| T11 | Select one next investment | T10 | None | A dated decision names one direction and rejects the alternatives. |
+| ID  | Work item                                | Depends on         | Can run in parallel with        | Hard gate                                                                |
+| --- | ---------------------------------------- | ------------------ | ------------------------------- | ------------------------------------------------------------------------ |
+| T0  | Establish execution baseline             | None               | Initial research for every lane | Every remaining item has an owned GitHub issue and truthful status.      |
+| T1  | Enforce verified email ownership         | T0                 | T2                              | No unverified account reaches owner data or admin promotion.             |
+| T2  | Restore API monitoring runtime truth     | T0                 | T1, T4 implementation, T5, T6   | A controlled production API failure is captured from the running image.  |
+| T3  | Finish browser monitoring and operations | T2                 | T4, T5, T6, T7                  | API and browser failures are privacy-safe, symbolicated, and actionable. |
+| T4  | Prove backup and restore readiness       | T0; drill after T2 | T1, T3, T5, T6                  | A measured isolated restore is verified and destroyed.                   |
+| T5  | Add private in-app feedback              | T1                 | T3, T4, T6, T7                  | Owners can submit bounded feedback and admins can triage it.             |
+| T6  | Add beta cohorts and outcome measurement | T0                 | T1-T5, T7                       | All beta targets are readable as distinct-owner metrics before T8.       |
+| T7  | Extend continuous production smoke       | T1                 | T3-T6                           | Post-deploy smoke proves a verified authenticated domain read.           |
+| T8  | Implement Guided Today                   | T1, T6             | Final work in T3-T5             | `/my` presents one explainable next action and measurable response.      |
+| T9  | Complete final release-candidate QA      | T1-T8              | None                            | The actual post-T8 release candidate has no blocking finding.            |
+| T10 | Run the four-week beta                   | T9                 | Small evidence-led fixes only   | Four weeks of metrics, feedback, health data, and interviews exist.      |
+| T11 | Select one next investment               | T10                | None                            | A dated decision names one direction and rejects the alternatives.       |
 
 T2 is the first operational implementation task. T1 is the independent security P0. T3-T7 are
 parallelizable after their stated dependencies. T8 cannot merge before T6 can measure it. T9 runs
@@ -108,19 +108,19 @@ matches repository and production evidence; no planning-only commit is stranded 
 **Owned issue map:** All items are assigned to `mcasillas17`; creating tracking does not
 complete their delivery or all remaining T0 obligations.
 
-| Item | Issue | Current delivery status |
-|---|---|---|
-| T1 | [#97](https://github.com/mcasillas17/TuringCare/issues/97) | Implementation ready; production cutover pending |
-| T2 | [#98](https://github.com/mcasillas17/TuringCare/issues/98) | Not started |
-| T3 | [#99](https://github.com/mcasillas17/TuringCare/issues/99) | Configuration foundation only |
-| T4 | [#100](https://github.com/mcasillas17/TuringCare/issues/100) | Not started; drill follows T2 |
-| T5 | [#101](https://github.com/mcasillas17/TuringCare/issues/101) | Not started; depends on T1 |
-| T6 | [#102](https://github.com/mcasillas17/TuringCare/issues/102) | Partial foundation |
-| T7 | [#103](https://github.com/mcasillas17/TuringCare/issues/103) | Partial foundation; depends on T1 |
-| T8 | [#104](https://github.com/mcasillas17/TuringCare/issues/104) | Not started; depends on T1 and T6 |
-| T9 | [#106](https://github.com/mcasillas17/TuringCare/issues/106) | Final post-T8 QA not started |
-| T10 | [#105](https://github.com/mcasillas17/TuringCare/issues/105) | Not started; depends on T9 |
-| T11 | [#107](https://github.com/mcasillas17/TuringCare/issues/107) | Blocked on T10 evidence |
+| Item | Issue                                                        | Current delivery status                          |
+| ---- | ------------------------------------------------------------ | ------------------------------------------------ |
+| T1   | [#97](https://github.com/mcasillas17/TuringCare/issues/97)   | Implementation ready; production cutover pending |
+| T2   | [#98](https://github.com/mcasillas17/TuringCare/issues/98)   | Not started                                      |
+| T3   | [#99](https://github.com/mcasillas17/TuringCare/issues/99)   | Configuration foundation only                    |
+| T4   | [#100](https://github.com/mcasillas17/TuringCare/issues/100) | Not started; drill follows T2                    |
+| T5   | [#101](https://github.com/mcasillas17/TuringCare/issues/101) | Not started; depends on T1                       |
+| T6   | [#102](https://github.com/mcasillas17/TuringCare/issues/102) | Partial foundation                               |
+| T7   | [#103](https://github.com/mcasillas17/TuringCare/issues/103) | Partial foundation; depends on T1                |
+| T8   | [#104](https://github.com/mcasillas17/TuringCare/issues/104) | Not started; depends on T1 and T6                |
+| T9   | [#106](https://github.com/mcasillas17/TuringCare/issues/106) | Final post-T8 QA not started                     |
+| T10  | [#105](https://github.com/mcasillas17/TuringCare/issues/105) | Not started; depends on T9                       |
+| T11  | [#107](https://github.com/mcasillas17/TuringCare/issues/107) | Blocked on T10 evidence                          |
 
 ### T1 - Enforce verified email ownership
 

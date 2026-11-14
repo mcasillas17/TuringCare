@@ -8,10 +8,10 @@ import { user } from "../db/schema";
 import { findLatestTestEmail } from "../email/test-outbox";
 import { env } from "../env";
 import {
-  type TestUser,
   createLegacySessionUser,
   createUnverifiedTestUser,
   nextTestIp,
+  type TestUser,
 } from "../test-helpers";
 import * as limits from "./verification-rate-limit";
 

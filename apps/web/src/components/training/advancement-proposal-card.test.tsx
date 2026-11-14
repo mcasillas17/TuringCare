@@ -1,7 +1,7 @@
-import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import type { AdvancementProposalDto } from "@turingcare/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 import { AdvancementProposalCard } from "./advancement-proposal-card";
 
 const proposal: AdvancementProposalDto = {

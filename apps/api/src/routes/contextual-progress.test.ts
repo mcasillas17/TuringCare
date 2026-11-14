@@ -64,9 +64,8 @@ import { app } from "../app";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db, pool } from "../db";
 import {
-  events,
   dogSafetySignals,
-  dogs,
+  events,
   journalEntries,
   practiceSessions,
   session,
@@ -74,7 +73,7 @@ import {
   trainingSkills,
 } from "../db/schema";
 import { lockDogSafety } from "../lib/safety-lock";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 
 const validDog = {
   name: "Biscuit",

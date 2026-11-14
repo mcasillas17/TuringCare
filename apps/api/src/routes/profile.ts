@@ -3,7 +3,7 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { briefSends, briefs, dogs, user } from "../db/schema";
-import { type Vars, requireUser } from "../middleware/require-user";
+import { requireUser, type Vars } from "../middleware/require-user";
 import { stableZValidator } from "../middleware/validation";
 
 export const profileApp = new Hono<{ Variables: Vars }>()

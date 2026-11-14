@@ -2,7 +2,7 @@ import type { CatalogTemplate } from "@turingcare/shared";
 import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { type getTrainingCatalog, trainingCatalog } from "../data/training-catalog";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 
 describe("training: GET /api/training/templates", () => {
   const users: TestUser[] = [];

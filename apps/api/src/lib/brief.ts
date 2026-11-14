@@ -1,10 +1,10 @@
 import {
-  type Locale,
-  type MessageKey,
-  type UtcDateFormatOptions,
   createI18n,
   formatDateInUtc,
+  type Locale,
+  type MessageKey,
   translate,
+  type UtcDateFormatOptions,
 } from "@turingcare/i18n";
 import type { ProgressGoal } from "./progress";
 

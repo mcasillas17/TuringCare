@@ -1,5 +1,3 @@
-import { useI18n } from "@/i18n";
-import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import {
   Area,
@@ -13,6 +11,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useI18n } from "@/i18n";
+import { cn } from "@/lib/utils";
 import type { Metrics } from "../use-metrics";
 import { formatAdminChartDate } from "./chart-date";
 import { CATEGORIES, type Category } from "./event-category";
@@ -25,7 +25,11 @@ function Segmented<T extends string>({
   value,
   onChange,
   options,
-}: { value: T; onChange: (v: T) => void; options: [T, string][] }) {
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: [T, string][];
+}) {
   return (
     <span className="inline-flex overflow-hidden rounded-md border border-silver">
       {options.map(([val, label]) => (

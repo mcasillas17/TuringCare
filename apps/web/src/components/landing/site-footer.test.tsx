@@ -1,7 +1,7 @@
-import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it } from "vitest";
+import { LocaleProvider } from "@/i18n";
 import { SiteFooter } from "./site-footer";
 
 afterEach(() => {

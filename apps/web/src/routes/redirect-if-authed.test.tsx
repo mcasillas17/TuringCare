@@ -1,7 +1,7 @@
-import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 
 const useSessionMock = vi.fn();
 vi.mock("@/lib/auth-client", () => ({

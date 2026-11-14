@@ -4,7 +4,6 @@ import {
   type GuidedSetupCompletionReason,
   type GuidedSetupRecord,
   type GuidedSetupStatus,
-  type TrainingSuggestion,
   guidedSetupBehaviorActionSchema,
   guidedSetupIntentInputSchema,
   guidedSetupMutationSchema,
@@ -12,6 +11,7 @@ import {
   guidedSetupStartSchema,
   guidedSetupTrainingActionSchema,
   guidedSetupTrainingTemplateKeyValues,
+  type TrainingSuggestion,
 } from "@turingcare/shared";
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
@@ -32,7 +32,7 @@ import { createJournalEntry } from "../lib/journal-writes";
 import type { TransactionType } from "../lib/safety-lock";
 import { currentWeekKey, loadSuggestion } from "../lib/suggestion";
 import { applyTrainingTemplate } from "../lib/training-template-writes";
-import { type Vars, requireUser } from "../middleware/require-user";
+import { requireUser, type Vars } from "../middleware/require-user";
 import { stableZValidator as zValidator } from "../middleware/validation";
 import { recordEvent } from "../telemetry/record-event";
 

@@ -1,6 +1,5 @@
-import type { BriefWindow } from "@turingcare/shared";
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { BriefWindow } from "@turingcare/shared";
 
 import { useTuring } from "@/components/turing/turing-context";
 import { api } from "./api";

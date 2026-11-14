@@ -4,10 +4,16 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getAccountDeletionReadiness, useProfile, useUpdateProfileLocale } from "./profile";
 
+let activeQueryClient: QueryClient | null = null;
+
+function QueryClientWrapper({ children }: { children: ReactNode }) {
+  if (!activeQueryClient) throw new Error("test_query_client_not_initialized");
+  return <QueryClientProvider client={activeQueryClient}>{children}</QueryClientProvider>;
+}
+
 function wrapper(queryClient: QueryClient) {
-  return function QueryWrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-  };
+  activeQueryClient = queryClient;
+  return QueryClientWrapper;
 }
 
 afterEach(() => {

@@ -1,4 +1,3 @@
-import type { MessageKey } from "@/i18n/types";
 import type {
   CueSupport,
   EasingStrategy,
@@ -13,6 +12,7 @@ import type {
   SafetySignalType,
   SuggestionRule,
 } from "@turingcare/shared";
+import type { MessageKey } from "@/i18n/types";
 
 export const OUTCOME_KEYS: Record<PracticeOutcome, MessageKey> = {
   went_well: "practice.outcomeWentWell",

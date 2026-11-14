@@ -1,5 +1,5 @@
-import type { MessageKey } from "@/i18n/types";
 import { GraduationCap, LayoutDashboard, Users } from "lucide-react";
+import type { MessageKey } from "@/i18n/types";
 
 export type AdminNavItem = {
   to: string;

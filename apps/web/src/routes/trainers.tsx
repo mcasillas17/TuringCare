@@ -1,7 +1,7 @@
-import { useI18n } from "@/i18n";
-import { useTrainers } from "@/lib/trainers";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useI18n } from "@/i18n";
+import { useTrainers } from "@/lib/trainers";
 
 const input = "rounded border border-silver bg-white px-2 py-1 text-sm";
 

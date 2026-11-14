@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { createTestUser, type TestUser } from "../test-helpers";
 import { db } from ".";
-import { type TestUser, createTestUser } from "../test-helpers";
 import { findOwnedSkill } from "./owned-skill";
 import { dogs, trainingGoals, trainingSkills } from "./schema";
 

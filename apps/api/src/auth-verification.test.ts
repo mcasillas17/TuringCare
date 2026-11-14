@@ -12,11 +12,11 @@ import * as emailSender from "./email/send-email";
 import { findLatestTestEmail } from "./email/test-outbox";
 import { env } from "./env";
 import {
-  type TestUser,
   createLegacySessionUser,
   createTestUser,
   createUnverifiedTestUser,
   nextTestIp,
+  type TestUser,
   verifyTestEmail,
 } from "./test-helpers";
 

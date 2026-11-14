@@ -1,3 +1,7 @@
+import type { NextPracticeAction, ObservedExactContextEvidence } from "@turingcare/shared";
+import { CONTEXTUAL_PROGRESS_WINDOW_DAYS } from "@turingcare/shared";
+import { useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import {
   ContextLabels,
   ContextStatusBadge,
@@ -9,10 +13,6 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useRecordContextualProgressEvent } from "@/lib/contextual-progress";
 import type { FocusSkill } from "@/lib/weekly-focus";
-import { CONTEXTUAL_PROGRESS_WINDOW_DAYS } from "@turingcare/shared";
-import type { NextPracticeAction, ObservedExactContextEvidence } from "@turingcare/shared";
-import { useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
 
 function StrongestContextCompact({
   evidence,

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type Locale, isLocale } from "@turingcare/i18n";
+import { isLocale, type Locale } from "@turingcare/i18n";
 import type { ProfileLocaleUpdateInput, ProfileUpdateInput } from "@turingcare/shared";
 import { api } from "./api";
 import { isNonemptySessionUserId } from "./session-user-id";

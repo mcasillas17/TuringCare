@@ -4,7 +4,7 @@ import { app } from "../app";
 import { auth } from "../auth";
 import { env } from "../env";
 import { globalRateLimit } from "../middleware/rate-limit";
-import { type TestUser, createLegacySessionUser, nextTestIp } from "../test-helpers";
+import { createLegacySessionUser, nextTestIp, type TestUser } from "../test-helpers";
 import { handleAuthRequest } from "./request-handler";
 
 const fixtures: TestUser[] = [];

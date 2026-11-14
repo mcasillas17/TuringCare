@@ -1,8 +1,8 @@
-import { LocaleProvider, useI18n } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider, useI18n } from "@/i18n";
 import { useApplyTemplate, useTrainingCatalog } from "./training-catalog";
 
 function localizedCatalog(locale: "en" | "es") {
@@ -20,7 +20,9 @@ function localizedCatalog(locale: "en" | "es") {
 
 function requestHeaders(input: RequestInfo | URL, init?: RequestInit) {
   const headers = new Headers(input instanceof Request ? input.headers : undefined);
-  new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+  new Headers(init?.headers).forEach((value, key) => {
+    headers.set(key, value);
+  });
   return headers;
 }
 

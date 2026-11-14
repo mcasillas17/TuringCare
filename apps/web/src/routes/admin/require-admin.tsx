@@ -1,10 +1,10 @@
+import type { ReactNode } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { authPagePath } from "@/lib/auth-navigation";
 import { useMe } from "@/lib/me";
 import { RequireAuth } from "@/routes/require-auth";
-import type { ReactNode } from "react";
-import { Navigate, useLocation } from "react-router-dom";
 
 export function RequireAdmin({ children }: { children: ReactNode }) {
   return (

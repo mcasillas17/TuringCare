@@ -28,6 +28,6 @@ export async function loadRecentObservation(dogId: string, now: Date): Promise<R
     )
     .orderBy(desc(journalEntries.occurredAt), desc(journalEntries.id))
     .limit(1);
-  if (!row || !row.trend) return null;
+  if (!row?.trend) return null;
   return { trend: row.trend, occurredAt: row.occurredAt };
 }

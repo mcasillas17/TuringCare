@@ -1,9 +1,9 @@
-import { LocaleProvider } from "@/i18n";
-import * as journalLib from "@/lib/journal";
-import type { JournalEntry } from "@/lib/journal";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import type { JournalEntry } from "@/lib/journal";
+import * as journalLib from "@/lib/journal";
 import { EntryCard } from "./entry-card";
 
 vi.mock("@/lib/journal", async () => {

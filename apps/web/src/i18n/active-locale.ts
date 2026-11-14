@@ -1,4 +1,4 @@
-import { type Locale, isLocale } from "@turingcare/i18n";
+import { isLocale, type Locale } from "@turingcare/i18n";
 
 let activeLocale: Locale | null = null;
 

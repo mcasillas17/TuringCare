@@ -134,13 +134,13 @@ endpoint. The request mode makes one in-memory Hono request through the existing
 request-ID/error-handler modules. It opens no listener, database, or email client.
 Startup and process modes fail only their own isolated CLI process, not the serving API.
 
-| Mode | Expected configured outcome |
-|---|---|
-| `status` | Prints Node version and `enabled: true`, sends no event, exits 0. This is not capture proof. |
-| `request` | One synthetic 500, request/event IDs and `flushSucceeded: true`, exits 0. Verify the event externally. |
-| `startup` | One fatal startup-tagged event, successful flush reports, exits 1 intentionally. |
-| `uncaught` | One fatal process event, fixed stderr message, bounded flush, exits 1 intentionally. |
-| `rejection` | Same fatal semantics for an unhandled promise rejection, one event, exits 1. |
+| Mode        | Expected configured outcome                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------ |
+| `status`    | Prints Node version and `enabled: true`, sends no event, exits 0. This is not capture proof.           |
+| `request`   | One synthetic 500, request/event IDs and `flushSucceeded: true`, exits 0. Verify the event externally. |
+| `startup`   | One fatal startup-tagged event, successful flush reports, exits 1 intentionally.                       |
+| `uncaught`  | One fatal process event, fixed stderr message, bounded flush, exits 1 intentionally.                   |
+| `rejection` | Same fatal semantics for an unhandled promise rejection, one event, exits 1.                           |
 
 Disabled monitoring or invalid usage exits 2. Request/startup diagnostic capture,
 acknowledgement, flush, or deadline failure exits 3. Uncaught/rejection failures keep
@@ -191,8 +191,8 @@ Do not inspect owner records or deliberately crash the serving process.
 
    Request exits 0 with a correlation/event ID; process diagnostic intentionally exits
    1. An SSH failure can also be nonzero: inspect the fixed diagnostic output and the
-   actual Sentry event. `startup` and `rejection` can be used similarly when separately
-   approved. Do not repeatedly send diagnostics to chase missing evidence.
+      actual Sentry event. `startup` and `rejection` can be used similarly when separately
+      approved. Do not repeatedly send diagnostics to chase missing evidence.
 5. In the API Sentry project, verify the request and process events from this run.
    Require the exact release, production environment, safe source stack, one event per
    diagnostic, and expected tags: request route `/operator-diagnostic`, status 500 and

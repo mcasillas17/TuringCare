@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EmailSendError, type ResendLike, sendEmail as deliverEmail } from "./send-email";
+import { sendEmail as deliverEmail, EmailSendError, type ResendLike } from "./send-email";
 
 // These unit tests exercise the provider seam, not the integration outbox.
 // Explicit injection takes precedence over global test capture configuration.

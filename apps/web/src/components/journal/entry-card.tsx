@@ -1,10 +1,10 @@
+import { useState } from "react";
+import { toast } from "sonner";
 import { StructuredDetailsEditor } from "@/components/journal/structured-details-editor";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { type JournalEntry, useDeleteEntry, useUpdateEntry } from "@/lib/journal";
 import { humanTime } from "@/lib/when";
-import { useState } from "react";
-import { toast } from "sonner";
 
 const trendDot: Record<string, string> = {
   better: "bg-green-400",

@@ -122,15 +122,15 @@ fly secrets set --app turingcare-api \
 
 **Fly secrets and optional admin bootstrap configuration:**
 
-| Secret | Value |
-|---|---|
-| `DATABASE_URL` | Supabase Session-pooler URL |
-| `BETTER_AUTH_SECRET` | 32+ random chars (`openssl rand -base64 32`) |
-| `BETTER_AUTH_URL` | `https://api.turingcare.dog` |
-| `FRONTEND_URL` | `https://turingcare.dog` |
-| `COOKIE_DOMAIN` | `.turingcare.dog` |
-| `RESEND_API_KEY` | Resend API key (domain `send.turingcare.dog` verified) |
-| `EMAIL_FROM` | `TuringCare <noreply@send.turingcare.dog>` |
+| Secret                    | Value                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`            | Supabase Session-pooler URL                                                                      |
+| `BETTER_AUTH_SECRET`      | 32+ random chars (`openssl rand -base64 32`)                                                     |
+| `BETTER_AUTH_URL`         | `https://api.turingcare.dog`                                                                     |
+| `FRONTEND_URL`            | `https://turingcare.dog`                                                                         |
+| `COOKIE_DOMAIN`           | `.turingcare.dog`                                                                                |
+| `RESEND_API_KEY`          | Resend API key (domain `send.turingcare.dog` verified)                                           |
+| `EMAIL_FROM`              | `TuringCare <noreply@send.turingcare.dog>`                                                       |
 | `ADMIN_EMAILS` (optional) | Existing comma-separated admin bootstrap allowlist; only controlled, ownership-verified accounts |
 
 > `COOKIE_DOMAIN` was added during the deploy audit. The frontend and API are
@@ -152,6 +152,7 @@ mode emits only a redacted diagnostic with no recipient or subject.
    (Resend's dashboard shows the exact record names/hostnames to enter).
    Wait until Resend shows the domain **Verified**.
 3. Set the Fly secrets:
+
    ```bash
    # (skip if you already set these in §2c)
    fly secrets set --app turingcare-api \
@@ -194,12 +195,12 @@ Repo → Settings → Secrets and variables → Actions → New repository secre
 
 **GitHub Actions secrets required:**
 
-| Secret | Value |
-|---|---|
-| `DATABASE_URL` | Supabase Session-pooler URL (used by both production migration phases) |
-| `FLY_API_TOKEN` | from `fly tokens create deploy` |
-| `CLOUDFLARE_API_TOKEN` | Pages-edit token |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
+| Secret                  | Value                                                                  |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `DATABASE_URL`          | Supabase Session-pooler URL (used by both production migration phases) |
+| `FLY_API_TOKEN`         | from `fly tokens create deploy`                                        |
+| `CLOUDFLARE_API_TOKEN`  | Pages-edit token                                                       |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID                                                  |
 
 CLI:
 
@@ -218,17 +219,17 @@ gh secret set CLOUDFLARE_ACCOUNT_ID
 concurrency/delivery migrations append to that history; never restore the old
 colliding `0013–0015` filenames or rewrite an already-applied migration.
 
-| Phase | Migration / action | Compatibility rule |
-|---|---|---|
-| Drained pre-deploy | Apply `0013–0021` | Personalized training, guided setup, contextual progress, and initial Brief-share privacy changes are schema-incompatible with the legacy API, so all old Fly machines stay drained. |
-| Drained pre-deploy | Apply `0022_panoramic_skullbuster` | Adds the `locale` enum, nullable `user.locale`, and non-null/default-English `briefs.locale`. |
-| Drained pre-deploy | Apply `0023_third_madripoor` | Repairs duplicate per-dog Brief versions under writer-blocking locks, then adds the `(dog_id, version)` unique constraint. |
-| Drained pre-deploy | Apply `0024_brief_share_telemetry_privacy` | Broadens `0021`'s cleanup to encoded/case-variant public Brief bearer paths and mislabeled client events. |
-| Drained pre-deploy | Apply `0025_petite_guardian` | Adds `brief_sends.delivered_at` and treats historical completed audits as delivered. |
-| Drained pre-deploy | Apply `0026_first_nitro` | Adds durable delivery claims and a fail-closed delete trigger for claimed sends. |
-| API | Deploy and verify `/ready` | Starts the locale-aware API with exact Brief binding, provider-idempotent retry recovery, and narrow legacy-payload compatibility. |
-| Verify | Run full `db:migrate` | Idempotently proves the complete history is installed; no post-deploy tail is expected. |
-| Web | Publish Cloudflare Pages | New clients require exact Brief and idempotency IDs; the already-deployed API keeps old tabs safe until this bundle replaces them. |
+| Phase              | Migration / action                         | Compatibility rule                                                                                                                                                                   |
+| ------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Drained pre-deploy | Apply `0013–0021`                          | Personalized training, guided setup, contextual progress, and initial Brief-share privacy changes are schema-incompatible with the legacy API, so all old Fly machines stay drained. |
+| Drained pre-deploy | Apply `0022_panoramic_skullbuster`         | Adds the `locale` enum, nullable `user.locale`, and non-null/default-English `briefs.locale`.                                                                                        |
+| Drained pre-deploy | Apply `0023_third_madripoor`               | Repairs duplicate per-dog Brief versions under writer-blocking locks, then adds the `(dog_id, version)` unique constraint.                                                           |
+| Drained pre-deploy | Apply `0024_brief_share_telemetry_privacy` | Broadens `0021`'s cleanup to encoded/case-variant public Brief bearer paths and mislabeled client events.                                                                            |
+| Drained pre-deploy | Apply `0025_petite_guardian`               | Adds `brief_sends.delivered_at` and treats historical completed audits as delivered.                                                                                                 |
+| Drained pre-deploy | Apply `0026_first_nitro`                   | Adds durable delivery claims and a fail-closed delete trigger for claimed sends.                                                                                                     |
+| API                | Deploy and verify `/ready`                 | Starts the locale-aware API with exact Brief binding, provider-idempotent retry recovery, and narrow legacy-payload compatibility.                                                   |
+| Verify             | Run full `db:migrate`                      | Idempotently proves the complete history is installed; no post-deploy tail is expected.                                                                                              |
+| Web                | Publish Cloudflare Pages                   | New clients require exact Brief and idempotency IDs; the already-deployed API keeps old tabs safe until this bundle replaces them.                                                   |
 
 `pnpm --filter @turingcare/api db:migrate:predeploy` builds a temporary migration
 set containing the complete journal. Its empty post-deploy allowlist is a fail-closed
@@ -430,7 +431,7 @@ fly certs add api.turingcare.dog --app turingcare-api
 
 In Cloudflare DNS for `turingcare.dog`:
 
-- `CNAME  api  turingcare-api.fly.dev`  — **proxy status: DNS only (grey
+- `CNAME  api  turingcare-api.fly.dev` — **proxy status: DNS only (grey
   cloud)**. Fly terminates TLS; the orange cloud would break cert issuance.
 
 Wait for `fly certs show api.turingcare.dog` to report the cert as issued.
@@ -511,14 +512,14 @@ auth, Resend, and Brief safeguards in the rollback section above.
 
 ## Quick reference
 
-| Where | Secrets |
-|---|---|
-| GitHub Actions | `DATABASE_URL`, `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
+| Where                  | Secrets                                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub Actions         | `DATABASE_URL`, `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`                                                                  |
 | Fly (`turingcare-api`) | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `FRONTEND_URL`, `COOKIE_DOMAIN`, `RESEND_API_KEY`, `EMAIL_FROM`; optional `ADMIN_EMAILS` |
 
-| Name | Must equal |
-|---|---|
-| Fly app | `turingcare-api` (in `apps/api/fly.toml`) |
-| Pages project | `turingcare-web` (in `deploy.yml`) |
-| API domain | `api.turingcare.dog` |
-| Frontend domains | `turingcare.dog`, `www.turingcare.dog` |
+| Name             | Must equal                                |
+| ---------------- | ----------------------------------------- |
+| Fly app          | `turingcare-api` (in `apps/api/fly.toml`) |
+| Pages project    | `turingcare-web` (in `deploy.yml`)        |
+| API domain       | `api.turingcare.dog`                      |
+| Frontend domains | `turingcare.dog`, `www.turingcare.dog`    |

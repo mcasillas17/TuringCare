@@ -1,5 +1,3 @@
-import { LocaleProvider } from "@/i18n";
-import * as contextualProgressLib from "@/lib/contextual-progress";
 import { fireEvent, render, screen } from "@testing-library/react";
 import {
   CONTEXTUAL_PROGRESS_WINDOW_DAYS,
@@ -7,6 +5,8 @@ import {
 } from "@turingcare/shared";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import * as contextualProgressLib from "@/lib/contextual-progress";
 import { ContextualProgressSummaryCard } from "./contextual-progress-summary";
 
 vi.mock("@/lib/contextual-progress", async () => {

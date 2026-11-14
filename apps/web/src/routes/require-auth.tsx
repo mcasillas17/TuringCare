@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { SessionError } from "@/components/session-error";
 import { useI18n } from "@/i18n";
 import { useLocaleAccountReadiness } from "@/i18n/locale-account-bridge";
@@ -6,8 +8,6 @@ import { authPagePath } from "@/lib/auth-navigation";
 import { useSessionQueryReady } from "@/lib/session-query-boundary";
 import { isNonemptySessionUserId } from "@/lib/session-user-id";
 import { useHasVerifiedSession } from "@/lib/verified-session";
-import type { ReactNode } from "react";
-import { Navigate, useLocation } from "react-router-dom";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { data, isPending, error } = useSession();

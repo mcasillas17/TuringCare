@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { db } from "../db";
 import { skillMilestones, trainingGoals, trainingSkills } from "../db/schema";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 import { loadProgress } from "./progress";
 import { setSkillLevel } from "./skill-level";
 

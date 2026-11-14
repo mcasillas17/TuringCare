@@ -1,4 +1,4 @@
-import { type Locale, createI18n, translate } from "@turingcare/i18n";
+import { createI18n, type Locale, translate } from "@turingcare/i18n";
 import type { EmailBody } from "./templates";
 
 export interface BriefEmailInputs {

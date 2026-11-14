@@ -1,8 +1,8 @@
+import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { findCatalogTemplate, useApplyTemplate, useTrainingCatalog } from "@/lib/training-catalog";
-import { useState } from "react";
-import { toast } from "sonner";
 
 type Props = { dogId: string };
 

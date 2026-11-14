@@ -1,3 +1,8 @@
+import { zodResolver } from "@hookform/resolvers/zod";
+import { type DogProfile, dogProfileSchema, type GuidedSetupRecord } from "@turingcare/shared";
+import { useState } from "react";
+import { type FieldError, useForm } from "react-hook-form";
+import type { z } from "zod";
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
@@ -8,11 +13,6 @@ import {
   useGuidedSetup,
   useStartGuidedSetup,
 } from "@/lib/guided-setup";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { type DogProfile, type GuidedSetupRecord, dogProfileSchema } from "@turingcare/shared";
-import { useState } from "react";
-import { type FieldError, useForm } from "react-hook-form";
-import type { z } from "zod";
 
 type DogBasicsStepProps = {
   onStarted: (setup: GuidedSetupRecord | null) => void;

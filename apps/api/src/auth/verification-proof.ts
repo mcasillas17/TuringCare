@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import {
-  type VerificationStatus,
   safeAuthReturnPath,
+  type VerificationStatus,
   verificationStatusSchema,
 } from "@turingcare/shared";
 import { symmetricDecrypt, symmetricEncrypt, verifyJWT } from "better-auth/crypto";

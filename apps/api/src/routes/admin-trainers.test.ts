@@ -3,7 +3,7 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { db } from "../db";
 import { trainers, user } from "../db/schema";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 
 const adminEmail = `trainer_adm_${Date.now()}@example.com`;
 const createdTrainerIds: string[] = [];

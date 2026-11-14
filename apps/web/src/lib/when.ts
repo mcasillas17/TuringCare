@@ -1,6 +1,6 @@
 // Local-time humanized date/time helpers for the journal timeline and capture.
 
-import { type Locale, formatDate } from "@turingcare/i18n";
+import { formatDate, type Locale } from "@turingcare/i18n";
 import { dayKey } from "./week";
 
 export type DayKind = "today" | "yesterday" | "date";

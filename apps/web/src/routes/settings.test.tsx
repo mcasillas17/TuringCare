@@ -1,9 +1,9 @@
-import * as turingCtx from "@/components/turing/turing-context";
-import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
+import * as turingCtx from "@/components/turing/turing-context";
+import { LocaleProvider } from "@/i18n";
 
 vi.mock("@/lib/auth-client", () => ({
   signOut: vi.fn(),

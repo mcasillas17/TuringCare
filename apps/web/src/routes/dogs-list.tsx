@@ -1,8 +1,8 @@
+import { Link, useNavigate } from "react-router-dom";
 import { DogCard } from "@/components/dogs/dog-card";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useDogsOverview } from "@/lib/dogs";
-import { Link, useNavigate } from "react-router-dom";
 
 export function DogsList() {
   const { t } = useI18n();

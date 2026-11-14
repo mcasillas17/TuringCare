@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { type ReactNode, createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider, useI18n } from "../i18n";
 import { api, localeFetch } from "./api";

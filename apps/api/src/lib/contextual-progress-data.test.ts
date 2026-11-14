@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { CURRICULUM_VERSION } from "../data/training-curriculum";
 import { db } from "../db";
 import { dogs, practiceSessions, trainingGoals, trainingSkills } from "../db/schema";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 import { loadContextualProgress } from "./contextual-progress-data";
 import { DAY_MS } from "./time";
 

@@ -1,4 +1,4 @@
-import { type APIRequestContext, type Page, expect, test } from "@playwright/test";
+import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
 import { confirmEmailOwnership, localClientHeaders } from "./verification-helpers";
 
 /**

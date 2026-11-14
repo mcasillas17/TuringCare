@@ -1,8 +1,8 @@
-import { LocaleProvider } from "@/i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/track", () => ({ track: (...a: unknown[]) => track(...a) }));

@@ -38,7 +38,7 @@ import {
 import { loadContextualProgressSummaries } from "../lib/contextual-progress-data";
 import { claimLegacyFocus, legacyFocusWeekKey, rememberLegacyFocusWeek } from "../lib/focus";
 import { lockDogSafety } from "../lib/safety-lock";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 
 const validDog = {
   name: "Biscuit",

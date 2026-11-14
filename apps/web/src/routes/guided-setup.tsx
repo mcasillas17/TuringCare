@@ -1,3 +1,6 @@
+import type { GuidedSetupRecord, GuidedSetupStatus, TrainingSuggestion } from "@turingcare/shared";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { BehaviorActionStep } from "@/components/guided-setup/behavior-action-step";
 import { CompletionStep } from "@/components/guided-setup/completion-step";
 import { DogBasicsStep } from "@/components/guided-setup/dog-basics-step";
@@ -16,9 +19,6 @@ import {
   useGuidedSetup,
   useSkipGuidedSetup,
 } from "@/lib/guided-setup";
-import type { GuidedSetupRecord, GuidedSetupStatus, TrainingSuggestion } from "@turingcare/shared";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Navigate } from "react-router-dom";
 
 type CompletionState =
   | {

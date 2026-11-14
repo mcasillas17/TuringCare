@@ -1,4 +1,4 @@
-import { type Locale, isLocale, supportedLocaleFromBrowserLanguage } from "@turingcare/i18n";
+import { isLocale, type Locale, supportedLocaleFromBrowserLanguage } from "@turingcare/i18n";
 import { createMiddleware } from "hono/factory";
 
 export type LocaleEnv = { Variables: { locale: Locale } };

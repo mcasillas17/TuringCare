@@ -54,13 +54,18 @@ import { useAddGoal, useCreateDog } from "./dogs";
 import { useAddEntry } from "./journal";
 import { useSetSkillLevel } from "./progress";
 
+let activeQueryClient: QueryClient | null = null;
+
+function TestQueryClientProvider({ children }: { children: ReactNode }) {
+  if (!activeQueryClient) throw new Error("test_query_client_not_initialized");
+  return <QueryClientProvider client={activeQueryClient}>{children}</QueryClientProvider>;
+}
+
 function makeWrapper() {
-  const qc = new QueryClient({
+  activeQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
-  };
+  return TestQueryClientProvider;
 }
 
 afterEach(() => vi.clearAllMocks());

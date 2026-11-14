@@ -2,7 +2,7 @@ import type { SafetySignalType, SuggestionSafety } from "@turingcare/shared";
 import { and, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { dogSafetySignals, journalEntries } from "../db/schema";
-import { type TransactionType, lockDogSafetyShared, withDogSafetyLock } from "./safety-lock";
+import { lockDogSafetyShared, type TransactionType, withDogSafetyLock } from "./safety-lock";
 import { DAY_MS } from "./time";
 
 /** Time-bounded medical reports stay in policy for this long. */

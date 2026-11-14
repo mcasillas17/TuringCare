@@ -1,10 +1,10 @@
+import type { AdvancementDecision, SuggestionAction, TrainingSuggestion } from "@turingcare/shared";
 import { AdvancementProposalCard } from "@/components/training/advancement-proposal-card";
 import { SafetyNotice } from "@/components/training/safety-notice";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import type { MessageKey } from "@/i18n/types";
 import { EASING_STRATEGY_KEYS, RULE_REASON_KEYS } from "@/lib/practice-options";
-import type { AdvancementDecision, SuggestionAction, TrainingSuggestion } from "@turingcare/shared";
 
 export type SuggestionSuppressionReason = "fetching" | "error" | "safety";
 

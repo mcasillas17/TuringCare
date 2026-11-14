@@ -1,6 +1,10 @@
-import { DirectoryLayout } from "@/components/DirectoryLayout";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AdminShell } from "@/components/admin-shell/AdminShell";
 import { AppShell } from "@/components/app-shell/AppShell";
+import { DirectoryLayout } from "@/components/DirectoryLayout";
 import { DogLayout } from "@/components/dog-layout";
 import { GuidedSetupLayout } from "@/components/guided-setup/guided-setup-layout";
 import { Toaster } from "@/components/ui/sonner";
@@ -36,10 +40,6 @@ import { Terms } from "@/routes/terms";
 import { TrainerDetail } from "@/routes/trainer-detail";
 import { Trainers } from "@/routes/trainers";
 import { VerifyEmail } from "@/routes/verify-email";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { StrictMode, lazy } from "react";
-import { createRoot } from "react-dom/client";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./index.css";
 
 const AdminDashboard = lazy(() =>

@@ -1,3 +1,7 @@
+import { type LucideIcon, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import { toast } from "sonner";
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
@@ -5,10 +9,6 @@ import { useI18n } from "@/i18n";
 import type { MessageKey } from "@/i18n/types";
 import { useSignOut } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
-import { type LucideIcon, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { type ReactNode, useState } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
-import { toast } from "sonner";
 
 export type ShellNavItem = { to: string; labelKey: MessageKey; icon: LucideIcon; end?: boolean };
 

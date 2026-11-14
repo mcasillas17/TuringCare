@@ -1,5 +1,5 @@
-import type { BriefPdfModel } from "@/lib/brief-pdf-model";
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import type { BriefPdfModel } from "@/lib/brief-pdf-model";
 
 /* TuringCare brand palette (mirrors src/index.css tokens). */
 const COLOR = {

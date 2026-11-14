@@ -49,10 +49,10 @@ vi.mock("../lib/suggestion", async (importOriginal) => {
 import { app } from "../app";
 import { db, pool } from "../db";
 import {
-  events,
   behaviorConcerns,
   dogSafetySignals,
   dogs,
+  events,
   guidedSetups,
   journalEntries,
   practiceSessions,
@@ -62,7 +62,7 @@ import {
   weeklyFocus,
 } from "../db/schema";
 import { currentWeekKey } from "../lib/suggestion";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 import { durationBucket } from "./guided-setup";
 
 const validDog = {

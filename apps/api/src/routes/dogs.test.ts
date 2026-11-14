@@ -5,9 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../app";
 import { db, pool } from "../db";
 import {
-  events,
   briefSends,
   briefs,
+  events,
   guidedSetups,
   practiceSessions,
   trainingGoals,
@@ -15,8 +15,8 @@ import {
 } from "../db/schema";
 import { createMonitoringErrorHandler } from "../monitoring/error-handler";
 import { type ApiEnv, requestIdMiddleware } from "../monitoring/request-id";
-import { type TestUser, createTestUser } from "../test-helpers";
-import { waitForBlockingChain, waitForSessionBlocked } from "../test-pg-concurrency";
+import { createTestUser, type TestUser } from "../test-helpers";
+import { waitForBlockingChain } from "../test-pg-concurrency";
 import { resolveBriefSendIntent, sendFailedException } from "./dogs";
 
 // Wraps the real `sendEmail` so its normal (log-mode, no RESEND_API_KEY)

@@ -1,11 +1,11 @@
-import { LocaleProvider } from "@/i18n";
-import * as dogsLib from "@/lib/dogs";
-import * as journalLib from "@/lib/journal";
-import type { JournalEntry } from "@/lib/journal";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import * as dogsLib from "@/lib/dogs";
+import type { JournalEntry } from "@/lib/journal";
+import * as journalLib from "@/lib/journal";
 import { JournalView } from "./journal-view";
 
 vi.mock("@/lib/dogs", () => ({ useDogs: vi.fn() }));

@@ -1,10 +1,3 @@
-import { SafetyNotice } from "@/components/training/safety-notice";
-import { Button } from "@/components/ui/button";
-import { useI18n } from "@/i18n";
-import { useRecordContextualProgressEvent } from "@/lib/contextual-progress";
-import { OUTCOME_KEYS } from "@/lib/practice-options";
-import { LEVEL_KEYS } from "@/lib/progress";
-import { dateLabel } from "@/lib/when";
 import type {
   ContextualProgress,
   ExactContextEvidence,
@@ -13,6 +6,13 @@ import type {
   SuggestionSafety,
 } from "@turingcare/shared";
 import { useEffect, useRef } from "react";
+import { SafetyNotice } from "@/components/training/safety-notice";
+import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n";
+import { useRecordContextualProgressEvent } from "@/lib/contextual-progress";
+import { OUTCOME_KEYS } from "@/lib/practice-options";
+import { LEVEL_KEYS } from "@/lib/progress";
+import { dateLabel } from "@/lib/when";
 import {
   ContextLabels,
   ContextStatusBadge,

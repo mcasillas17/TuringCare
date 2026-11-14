@@ -1,10 +1,10 @@
+import { lazy, Suspense } from "react";
+import { useParams } from "react-router-dom";
 import { BrandMark } from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { briefVersionLabel, normalizeBriefLocale, sharedBriefTitle } from "@/lib/brief-chrome";
 import { useSharedBrief } from "@/lib/shared-brief";
-import { Suspense, lazy } from "react";
-import { useParams } from "react-router-dom";
 
 const BriefDownloadButton = lazy(() => import("@/components/brief-download-button"));
 

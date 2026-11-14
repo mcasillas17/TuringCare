@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, max } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { briefs, dogs, journalEntries } from "../db/schema";
-import { type Vars, requireUser } from "../middleware/require-user";
+import { requireUser, type Vars } from "../middleware/require-user";
 
 export const overviewApp = new Hono<{ Variables: Vars }>()
   .use("*", requireUser)
@@ -65,6 +65,7 @@ export const overviewApp = new Hono<{ Variables: Vars }>()
           }
         : null,
       recentActivity: entries.slice(0, 5).map((e) => ({
+        id: e.id,
         dogName: nameById.get(e.dogId) ?? "",
         behavior: e.note,
         occurredAt: e.occurredAt.toISOString(),

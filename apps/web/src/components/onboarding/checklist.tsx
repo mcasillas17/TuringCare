@@ -1,10 +1,10 @@
+import type { GuidedSetupStatus } from "@turingcare/shared";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useTuring } from "@/components/turing/turing-context";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { type OnboardingStatus, useOnboardingStatus } from "@/lib/onboarding";
-import type { GuidedSetupStatus } from "@turingcare/shared";
-import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 
 const DISMISSED_KEY = "turingcare.onboarding.celebrationDismissed";
 

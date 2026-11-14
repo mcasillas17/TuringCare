@@ -1,10 +1,10 @@
-import { LocaleProvider } from "@/i18n";
-import * as onboardingLib from "@/lib/onboarding";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { GuidedSetupStatus } from "@turingcare/shared";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
+import * as onboardingLib from "@/lib/onboarding";
 import { OnboardingChecklist } from "./checklist";
 
 vi.mock("@/lib/onboarding", () => ({

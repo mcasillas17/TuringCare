@@ -1,8 +1,8 @@
-import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 import { EventsOverTime } from "./events-over-time";
 
 vi.mock("recharts", () => {
@@ -14,13 +14,7 @@ vi.mock("recharts", () => {
     return null;
   }
 
-  function Series({
-    dataKey,
-    name,
-  }: {
-    dataKey: string;
-    name?: string;
-  }) {
+  function Series({ dataKey, name }: { dataKey: string; name?: string }) {
     const tooltipName = name ?? dataKey;
 
     return (

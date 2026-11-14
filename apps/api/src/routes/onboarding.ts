@@ -2,7 +2,7 @@ import { and, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db";
 import { briefSends, briefs, dogs, journalEntries, trainingGoals } from "../db/schema";
-import { type Vars, requireUser } from "../middleware/require-user";
+import { requireUser, type Vars } from "../middleware/require-user";
 
 export const onboardingApp = new Hono<{ Variables: Vars }>()
   .use("*", requireUser)

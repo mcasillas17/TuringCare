@@ -1,8 +1,8 @@
-import { LocaleProvider } from "@/i18n";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { LocaleProvider } from "@/i18n";
 
 const { signInEmailMock, toastErrorMock } = vi.hoisted(() => ({
   signInEmailMock: vi.fn(),

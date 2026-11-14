@@ -1,3 +1,5 @@
+import type { GuidedSetupIntent, GuidedSetupRecord } from "@turingcare/shared";
+import { type FormEvent, useRef, useState } from "react";
 import { AbandonSetupButton } from "@/components/guided-setup/abandon-setup-button";
 import { SetupShell } from "@/components/guided-setup/setup-shell";
 import { Button } from "@/components/ui/button";
@@ -8,8 +10,6 @@ import {
   isGuidedSetupReconciliationConflict,
   useSaveGuidedSetupIntent,
 } from "@/lib/guided-setup";
-import type { GuidedSetupIntent, GuidedSetupRecord } from "@turingcare/shared";
-import { type FormEvent, useRef, useState } from "react";
 
 type IntentStepProps = {
   setup: GuidedSetupRecord;
@@ -99,18 +99,15 @@ export function IntentStep({
       description={t("guidedSetup.intentDescription")}
     >
       <form onSubmit={handleSubmit} className="space-y-6">
-        <fieldset
+        <div
           role="radiogroup"
           aria-labelledby="guided-setup-intent-question"
           aria-describedby={requiredError ? "guided-setup-intent-error" : undefined}
           className="space-y-3"
         >
-          <legend
-            id="guided-setup-intent-question"
-            className="mb-3 text-lg font-semibold text-slate"
-          >
+          <p id="guided-setup-intent-question" className="mb-3 text-lg font-semibold text-slate">
             {t("guidedSetup.question", { dog: setup.dogName ?? "" })}
-          </legend>
+          </p>
           {intents.map((option, index) => (
             <label
               key={option.value}
@@ -134,7 +131,7 @@ export function IntentStep({
               </span>
             </label>
           ))}
-        </fieldset>
+        </div>
         {requiredError && (
           <p id="guided-setup-intent-error" role="alert" className="text-sm text-red-600">
             {t("guidedSetup.selectionRequired")}

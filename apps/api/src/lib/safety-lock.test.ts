@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { app } from "../app";
 import { db, pool } from "../db";
 import { dogSafetySignals } from "../db/schema";
-import { type TestUser, createTestUser } from "../test-helpers";
+import { createTestUser, type TestUser } from "../test-helpers";
 import { withDogSafetyLock } from "./safety-lock";
 import { evaluateSafetyWithSharedLock } from "./safety-policy";
 
