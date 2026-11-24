@@ -15,12 +15,14 @@ they can share with a trainer.
 
 ## Local setup
 
+Already have a local database? [Back it up before starting PostgreSQL 19](#upgrading-an-existing-local-database).
+
 ```bash
 git clone https://github.com/mcasillas17/TuringCare.git
 cd TuringCare
 pnpm install --frozen-lockfile
 test -e .env || cp .env.example .env
-docker compose up -d --wait                # Postgres 18 on :5432 (waits for healthy)
+docker compose up -d --wait                # Postgres 19 on :5432 (waits for healthy)
 # For synthetic no-provider email, set E2E_TEST_MODE=true in .env first (see below).
 set -a && . ./.env && set +a               # export env for this shell
 pnpm --filter @turingcare/api db:migrate   # apply committed migrations
@@ -40,6 +42,34 @@ pnpm dev                                   # api :3001, web :3000
 
 Use an isolated local database and a development auth secret, never production credentials.
 Do not overwrite an existing `.env` or remove shared database volumes.
+
+### Upgrading an existing local database
+
+PostgreSQL 19 uses a new named volume. It does not import data from previous volumes.
+To keep your local data, stop the app and back up the running old database before
+starting the new container:
+
+```bash
+(
+  umask 077
+  set -C
+  docker compose exec -T postgres pg_dump -U postgres --format=custom turingcare \
+    > "$HOME/turingcare-before-pg19.dump"
+)
+```
+
+If the old database cannot start, use the PostgreSQL major version and volume that last
+worked to make the backup. Continue only after the backup succeeds. With the new
+Compose configuration, start PostgreSQL 19 and restore into the empty database before
+running `db:migrate`:
+
+```bash
+docker compose up -d --wait postgres &&
+  docker compose exec -T postgres pg_restore -U postgres --dbname=turingcare \
+    --single-transaction --exit-on-error < "$HOME/turingcare-before-pg19.dump"
+```
+
+Keep the backup and previous volumes until you have checked the restored data.
 
 ### Signup and verified access
 
